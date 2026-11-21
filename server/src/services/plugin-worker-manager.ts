@@ -59,6 +59,7 @@ import type {
   InitializeParams,
 } from "@paperclipai/plugin-sdk";
 import { getActiveStepContext } from "@paperclipai/adapter-utils/acpx-engine/startup-timing";
+import { guardChildStdin } from "@paperclipai/adapter-utils/child-stdin";
 import {
   isLoginCommandKey,
   validateLoginSessionHome,
@@ -793,6 +794,8 @@ export interface WorkerDiagnostics {
  * for starting/stopping all workers and routing RPC calls.
  */
 export interface PluginWorkerManager {
+  /** Subscribe after a worker successfully applies company configuration. */
+  onConfigApplied?(listener: () => void): () => void;
   /**
    * Register and start a worker for a plugin.
    *
@@ -2900,9 +2903,12 @@ export function createPluginWorkerHandle(
     }
 
     // The `error` listener stops an unhandled EPIPE from a child that closed its
-    // stdin.
+    // stdin; the exit handler decides what that means. Other stdin errors are
+    // logged, never thrown.
     if (child.stdin) {
-      child.stdin.on("error", () => {});
+      guardChildStdin(child, {
+        onError: (err) => log.warn({ err }, "worker stdin error"),
+      });
       child.stdin.on("close", () => {});
     }
 
@@ -3627,6 +3633,7 @@ export function createPluginWorkerManager(
 ): PluginWorkerManager {
   const log = logger.child({ service: "plugin-worker-manager" });
   const workers = new Map<string, PluginWorkerHandle>();
+  const configApplied = new Set<() => void>();
   /** Per-plugin startup locks to prevent concurrent spawn races. */
   const startupLocks = new Map<string, Promise<PluginWorkerHandle>>();
   // The one shared, process-scoped aggregate route-slot controller. The manager
@@ -3637,6 +3644,10 @@ export function createPluginWorkerManager(
   );
 
   return {
+    onConfigApplied(listener) {
+      configApplied.add(listener);
+      return () => { configApplied.delete(listener); };
+    },
     async startWorker(
       pluginId: string,
       options: WorkerStartOptions,
@@ -3759,7 +3770,13 @@ export function createPluginWorkerManager(
           new Error(`No worker registered for plugin "${pluginId}"`),
         );
       }
-      return handle.call(method, params, timeoutMs, executeLogSink);
+      const result = handle.call(method, params, timeoutMs, executeLogSink);
+      if (method === "configChanged") void result.then(() => {
+        for (const listener of configApplied) {
+          try { listener(); } catch { log.warn({ pluginId }, "Plugin configuration listener failed"); }
+        }
+      }, () => {});
+      return result;
     },
 
     openLoginPtySession(pluginId: string, input: LoginPtyOpenInput) {

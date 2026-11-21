@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ExportFidelityReport } from "@paperclipai/shared/portability-fidelity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CompanyExport, resolveExportPreviewImageSrc } from "./CompanyExport";
+import { i18n } from "../i18n";
 
 const mockCompaniesApi = vi.hoisted(() => ({
   exportPreview: vi.fn(),
@@ -238,7 +239,7 @@ describe("CompanyExport", () => {
     await flushReact();
   }
 
-  it("loads the no-task export automatically without an interstitial", async () => {
+  it("loads the export with Task history automatically without an interstitial", async () => {
     await renderPage();
 
     expect(container.textContent).not.toContain("Prepare export preview");
@@ -247,9 +248,28 @@ describe("CompanyExport", () => {
     expect(mockProjectsApi.list).toHaveBeenCalledWith("company-1");
     expect(mockCompaniesApi.exportPreview).toHaveBeenCalledTimes(1);
     expect(mockCompaniesApi.exportPreview.mock.calls[0]?.[1]).toMatchObject({
-      include: { company: true, agents: true, projects: true, issues: false, skills: true },
+      include: { company: true, agents: true, projects: true, issues: true, skills: true },
     });
     expect(mockCompaniesApi.exportFidelity).toHaveBeenCalledWith("company-1");
+  });
+
+  it("keeps support history opt-in and adds its separate informational archive only on download", async () => {
+    await i18n.changeLanguage("en");
+    mockAuthApi.getSession.mockResolvedValue({ user: { id: "user-1", name: null, email: null, image: null }, session: { id: "session-1", userId: "user-1" }, sentryDsn: null });
+    await renderPage();
+    const input = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+      .find(entry => entry.parentElement?.textContent?.includes("Include support cases"));
+    expect(input).toBeTruthy();
+    expect(input!.checked).toBe(false);
+    expect(input!.disabled).toBe(false);
+    expect(mockCompaniesApi.exportPreview.mock.calls[0]?.[1].include.supportCases).not.toBe(true);
+    await clickElement(input!);
+    expect(mockCompaniesApi.exportPreview).toHaveBeenCalledTimes(1);
+    await clickElement(exportButton());
+    const request = mockCompaniesApi.exportBundle.mock.calls[0]![1];
+    expect(request.include.supportCases).toBe(true);
+    expect(request.expectedUserId).toBe("user-1");
+    expect(request.selectedFiles).toContain("blentera-support-cases-v1.json");
   });
 
   it("shows a retryable error instead of a false loading state", async () => {
@@ -302,17 +322,18 @@ describe("CompanyExport", () => {
     })).toBe("/api/companies/company-1/org.svg");
   });
 
-  it("keeps task history opt-in, then requests all selected files on download", async () => {
+  it("includes Task history by default (EXIT-R1), then requests all selected files on download", async () => {
     mockCompaniesApi.exportPreview.mockResolvedValue(buildRichExportPreviewResult());
 
     await renderPage();
 
     expect(mockCompaniesApi.exportPreview.mock.calls[0]?.[1]).toMatchObject({
-      include: { issues: false, skills: true },
+      include: { issues: true, skills: true },
     });
-    expect(container.textContent).toContain("Exporting 3 of 6 files");
+    expect(categoryInput("tasks").checked).toBe(true);
+    expect(categoryInput("routines").checked).toBe(false);
+    expect(container.textContent).toContain("Exporting 4 of 6 files");
 
-    await clickElement(categoryInput("tasks"));
     await clickElement(categoryInput("routines"));
     await clickElement(categoryInput("attachments"));
 
@@ -335,7 +356,7 @@ describe("CompanyExport", () => {
     ]);
   });
 
-  it("keeps controls mounted and aborts a slow task refetch when Tasks is unticked", async () => {
+  it("keeps controls mounted and aborts a slow refetch when Tasks is ticked again", async () => {
     let requestCount = 0;
     let slowRequestSignal: AbortSignal | undefined;
     mockCompaniesApi.exportPreview.mockImplementation((_companyId, _request, options) => {
@@ -353,7 +374,7 @@ describe("CompanyExport", () => {
     await clickElement(categoryInput("tasks"));
 
     expect(container.textContent).toContain("Updating export preview");
-    expect(categoryInput("tasks").checked).toBe(true);
+    expect(categoryInput("tasks").checked).toBe(false);
     expect(container.querySelector('[role="tree"]')).not.toBeNull();
     expect(exportButton()).toBeDefined();
 
@@ -362,9 +383,9 @@ describe("CompanyExport", () => {
     expect(slowRequestSignal?.aborted).toBe(true);
     expect(mockCompaniesApi.exportPreview).toHaveBeenCalledTimes(3);
     expect(mockCompaniesApi.exportPreview.mock.calls[2]?.[1]).toMatchObject({
-      include: { issues: false },
+      include: { issues: true },
     });
-    expect(categoryInput("tasks").checked).toBe(false);
+    expect(categoryInput("tasks").checked).toBe(true);
     expect(container.textContent).not.toContain("Updating export preview");
   });
 
@@ -417,7 +438,6 @@ describe("CompanyExport", () => {
     mockCompaniesApi.exportPreview.mockResolvedValue(buildRichExportPreviewResult());
 
     await renderPage();
-    await clickElement(categoryInput("tasks"));
     await clickElement(categoryInput("routines"));
     await clickElement(categoryInput("attachments"));
     await clickElement(categoryInput("tasks"));
@@ -445,6 +465,7 @@ describe("CompanyExport", () => {
     mockCompaniesApi.exportPreview.mockResolvedValue(buildRichExportPreviewResult());
 
     await renderPage();
+    await clickElement(categoryInput("tasks"));
 
     const attachments = categoryInput("attachments");
     expect(attachments.disabled).toBe(true);
@@ -457,7 +478,6 @@ describe("CompanyExport", () => {
     mockCompaniesApi.exportPreview.mockResolvedValue(buildRichExportPreviewResult());
 
     await renderPage();
-    await clickElement(categoryInput("tasks"));
     await clickElement(categoryInput("attachments"));
 
     const sizeText = () =>
@@ -497,6 +517,21 @@ describe("CompanyExport", () => {
       "Importing this export will fail because the bundle references data this board cannot restore.",
     );
     expect(container.textContent).toContain("3 approvals are not included in the export bundle.");
+  });
+
+  it("renders export warnings in an AA-contrast tone (EXIT-R1)", async () => {
+    // amber-500 on the light page measured below 4.5:1 in the real-route axe run.
+    mockCompaniesApi.exportFidelity.mockResolvedValue(buildFidelityReport([
+      { code: "approvals_not_exported", severity: "warning", message: "3 approvals are not included in the export bundle." },
+    ]));
+
+    await renderPage();
+
+    const warning = [...container.querySelectorAll("div")]
+      .find((element) => element.textContent === "3 approvals are not included in the export bundle.");
+    expect(warning?.className).toContain("text-amber-700");
+    expect(warning?.className).toContain("dark:text-amber-300");
+    expect(container.innerHTML).not.toContain("text-amber-500");
   });
 
   it("renders no fidelity panel when the report has no warnings", async () => {

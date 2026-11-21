@@ -1,3 +1,4 @@
+import { readCompanyResponsibilityAttention } from "./company-responsibility-attention.js";
 import { readCoreMaintenance } from "./core-maintenance.js";
 import { readMemoryMaintenanceAttention } from "./memory-maintenance-attention.js";
 import { readConnectorRecovery } from "./connector-recovery.js";
@@ -41,78 +42,114 @@ import { composeExperience } from "./projection.js";
 import { withExperienceAdmission } from "./admission.js";
 import { attentionExperienceCard } from "./attention-card.js";
 
-export function experienceService(db: Db) {
+export function experienceService(db: Db, configuredOperatorUserIds: readonly string[] = []) {
   const auth = authorizationService(db);
-  async function attentionIsVisible(
+  /** Visibility of each attention item, in order. An item is visible only
+   * when every Task it names (subject, related Task, metadata Task ids and
+   * the Tasks linked to an approval) exists in this company and is readable,
+   * and its project and agent are readable. Each check is the same as one
+   * item at a time; the Tasks' issue:read decisions run together so their
+   * privacy probes share one statement (PERF5). */
+  async function attentionVisibility(
     actor: AuthorizationActor,
     companyId: string,
-    item: AttentionItem,
+    items: readonly AttentionItem[],
     signal: AbortSignal,
-  ) {
-    if (item.companyId !== companyId || item.subject.companyId !== companyId)
-      return false;
-    const issueIds = new Set<string>();
-    if (item.subject.kind === "issue") issueIds.add(item.subject.id);
-    if (item.relatedIssue?.kind === "issue") issueIds.add(item.relatedIssue.id);
-    for (const key of ["issueId", "originIssueId"]) {
-      const id = item.subject.metadata?.[key];
-      if (typeof id === "string") issueIds.add(id);
+  ): Promise<boolean[]> {
+    const issueIdsByItem: Array<Set<string> | null> = [];
+    for (const item of items) {
+      if (item.companyId !== companyId || item.subject.companyId !== companyId) {
+        issueIdsByItem.push(null);
+        continue;
+      }
+      const issueIds = new Set<string>();
+      if (item.subject.kind === "issue") issueIds.add(item.subject.id);
+      if (item.relatedIssue?.kind === "issue") issueIds.add(item.relatedIssue.id);
+      for (const key of ["issueId", "originIssueId"]) {
+        const id = item.subject.metadata?.[key];
+        if (typeof id === "string") issueIds.add(id);
+      }
+      if (item.subject.kind === "approval") {
+        const links = await db
+          .select({ id: issueApprovals.issueId })
+          .from(issueApprovals)
+          .where(
+            and(
+              eq(issueApprovals.companyId, companyId),
+              eq(issueApprovals.approvalId, item.subject.id),
+            ),
+          )
+          .limit(26);
+        if (links.length > 25) {
+          issueIdsByItem.push(null);
+          continue;
+        }
+        for (const link of links) issueIds.add(link.id);
+      }
+      issueIdsByItem.push(issueIds);
     }
-    if (item.subject.kind === "approval") {
-      const links = await db
-        .select({ id: issueApprovals.issueId })
-        .from(issueApprovals)
-        .where(
-          and(
-            eq(issueApprovals.companyId, companyId),
-            eq(issueApprovals.approvalId, item.subject.id),
-          ),
-        )
-        .limit(26);
-      if (links.length > 25) return false;
-      for (const link of links) issueIds.add(link.id);
+    const tasks = new Map<string, Awaited<ReturnType<ReturnType<typeof issueService>["getById"]>>>();
+    for (const issueIds of issueIdsByItem) {
+      for (const id of issueIds ?? []) {
+        if (tasks.has(id)) continue;
+        signal.throwIfAborted();
+        tasks.set(id, await issueService(db).getById(id));
+      }
     }
-    for (const id of issueIds) {
-      signal.throwIfAborted();
-      const task = await issueService(db).getById(id);
-      if (!task || task.companyId !== companyId) return false;
-      const decision = await auth.decide({
-        actor,
-        action: "issue:read",
-        resource: {
-          type: "issue",
-          companyId,
-          issueId: task.id,
-          projectId: task.projectId,
-          assigneeAgentId: task.assigneeAgentId,
-          assigneeUserId: task.assigneeUserId,
-        },
-      });
-      if (!decision.allowed) return false;
+    signal.throwIfAborted();
+    const readableTasks = [...tasks.entries()].flatMap(([id, task]) =>
+      task && task.companyId === companyId ? [{ id, task }] : [],
+    );
+    const decisions = await auth.decideIssueReads(
+      actor,
+      readableTasks.map(({ task }) => ({
+        type: "issue" as const,
+        companyId,
+        issueId: task!.id,
+        projectId: task!.projectId,
+        assigneeAgentId: task!.assigneeAgentId,
+        assigneeUserId: task!.assigneeUserId,
+      })),
+    );
+    const taskReadable = new Map(
+      readableTasks.map(({ id }, index) => [id, decisions[index]?.allowed === true]),
+    );
+    const visible: boolean[] = [];
+    for (const [index, item] of items.entries()) {
+      const issueIds = issueIdsByItem[index];
+      if (!issueIds || [...issueIds].some((id) => taskReadable.get(id) !== true)) {
+        visible.push(false);
+        continue;
+      }
+      if (
+        item.project &&
+        !(
+          await auth.decide({
+            actor,
+            action: "project:read",
+            resource: { type: "project", companyId, projectId: item.project.id },
+          })
+        ).allowed
+      ) {
+        visible.push(false);
+        continue;
+      }
+      if (
+        item.subject.kind === "agent" &&
+        !(
+          await auth.decide({
+            actor,
+            action: "agent:read",
+            resource: { type: "agent", companyId, agentId: item.subject.id },
+          })
+        ).allowed
+      ) {
+        visible.push(false);
+        continue;
+      }
+      visible.push(true);
     }
-    if (
-      item.project &&
-      !(
-        await auth.decide({
-          actor,
-          action: "project:read",
-          resource: { type: "project", companyId, projectId: item.project.id },
-        })
-      ).allowed
-    )
-      return false;
-    if (
-      item.subject.kind === "agent" &&
-      !(
-        await auth.decide({
-          actor,
-          action: "agent:read",
-          resource: { type: "agent", companyId, agentId: item.subject.id },
-        })
-      ).allowed
-    )
-      return false;
-    return true;
+    return visible;
   }
   async function currentMembership(
     actor: AuthorizationActor,
@@ -463,24 +500,39 @@ export function experienceService(db: Db) {
                     limit: 25,
                   });
                   signal.throwIfAborted();
-                  const visible: AttentionItem[] = [];
-                  for (const item of feed.items)
-                    if (
-                      await attentionIsVisible(actor, companyId, item, signal)
-                    )
-                      visible.push(item);
+                  const visibility = await attentionVisibility(
+                    actor,
+                    companyId,
+                    feed.items,
+                    signal,
+                  );
+                  const visible = feed.items.filter(
+                    (_, index) => visibility[index],
+                  );
+                  let responsibilityCards: ExperienceCard[] = [];
+                  let responsibilityUnavailable: "source_stale" | "source_unavailable" | "overflow" | null = null;
+                  try {
+                    const companyResponsibility = await readCompanyResponsibilityAttention(db, actor, companyId, signal, configuredOperatorUserIds);
+                    responsibilityCards = [...companyResponsibility.needsYou];
+                    responsibilityUnavailable = typeof companyResponsibility.coverage === "object"
+                      ? companyResponsibility.coverage.reason : null;
+                  } catch {
+                    signal.throwIfAborted();
+                    responsibilityUnavailable = "source_stale";
+                  }
                   return {
-                    ...(feed.nextCursor
+                    ...(feed.nextCursor || responsibilityUnavailable
                       ? {
                           coverage: {
                             state: "partial" as const,
-                            reason: "more_items_available" as const,
+                            reason: responsibilityUnavailable ?? "more_items_available" as const,
                           },
                         }
                       : {}),
-                    needsYou: visible.map((item) =>
-                      attentionExperienceCard(item, feed.generatedAt),
-                    ),
+                    needsYou: [
+                      ...responsibilityCards,
+                      ...visible.map((item) => attentionExperienceCard(item, feed.generatedAt)),
+                    ],
                   };
                 },
               },
@@ -501,6 +553,26 @@ export function experienceService(db: Db) {
                       sortDir: "desc",
                     }),
                   ]);
+                  // One issue:read decision per Task, as before; the Task
+                  // privacy probe of all 24 candidates runs as one statement.
+                  signal.throwIfAborted();
+                  const candidates = [...active, ...completed];
+                  const decisions = await auth.decideIssueReads(
+                    actor,
+                    candidates.map((task) => ({
+                      type: "issue" as const,
+                      companyId,
+                      issueId: task.id,
+                      projectId: task.projectId,
+                      assigneeAgentId: task.assigneeAgentId,
+                      assigneeUserId: task.assigneeUserId,
+                    })),
+                  );
+                  const allowed = new Set(
+                    candidates
+                      .filter((_, index) => decisions[index]?.allowed === true)
+                      .map((task) => task.id),
+                  );
                   const project = async (
                     rows: typeof active,
                     kind: "progress" | "result",
@@ -508,19 +580,7 @@ export function experienceService(db: Db) {
                     const cards: ExperienceCard[] = [];
                     for (const task of rows) {
                       signal.throwIfAborted();
-                      const decision = await auth.decide({
-                        actor,
-                        action: "issue:read",
-                        resource: {
-                          type: "issue",
-                          companyId,
-                          issueId: task.id,
-                          projectId: task.projectId,
-                          assigneeAgentId: task.assigneeAgentId,
-                          assigneeUserId: task.assigneeUserId,
-                        },
-                      });
-                      if (!decision.allowed) continue;
+                      if (!allowed.has(task.id)) continue;
                       taskSnapshots.set(
                         task.id,
                         new Date(task.updatedAt).getTime(),
@@ -572,7 +632,7 @@ export function experienceService(db: Db) {
           // for a resource that has since become private or changed.
           const markPartial = (
             domain: string,
-            reason: "denied" | "source_stale" | "more_items_available",
+            reason: "denied" | "source_stale" | "source_unavailable" | "overflow" | "more_items_available",
           ) => {
             const dependency = result.dependencies.find(
               (entry) => entry.domain === domain,
@@ -582,44 +642,70 @@ export function experienceService(db: Db) {
               dependency.reason = reason;
             }
           };
+          // Re-read every card's Task first, then decide issue:read for each
+          // current one (privacy probes batched as in the reader). Outcomes are
+          // applied in the original card order, so the reported reason is the
+          // same as one-card-at-a-time.
+          const rechecks: Array<{
+            section: "inProgress" | "done";
+            card: ExperienceCard;
+            task: Awaited<ReturnType<ReturnType<typeof issueService>["getById"]>>;
+            stale: boolean;
+          }> = [];
           for (const section of ["inProgress", "done"] as const) {
-            const currentCards: ExperienceCard[] = [];
             for (const card of result[section]) {
               admittedSignal.throwIfAborted();
               const task = await issueService(db).getById(
                 card.source.resourceId,
               );
-              if (
+              const stale =
                 !task ||
                 task.companyId !== companyId ||
-                task.hiddenAt ||
+                !!task.hiddenAt ||
                 String(task.statusVersion) !== card.source.version ||
                 new Date(task.updatedAt).getTime() !==
-                  taskSnapshots.get(task.id)
-              ) {
-                markPartial("tasks", "source_stale");
-                continue;
-              }
-              const decision = await auth.decide({
-                actor,
-                action: "issue:read",
-                resource: {
-                  type: "issue",
-                  companyId,
-                  issueId: task.id,
-                  projectId: task.projectId,
-                  assigneeAgentId: task.assigneeAgentId,
-                  assigneeUserId: task.assigneeUserId,
-                },
-              });
-              if (!decision.allowed) {
-                markPartial("tasks", "denied");
-                continue;
-              }
-              currentCards.push(card);
+                  taskSnapshots.get(task.id);
+              rechecks.push({ section, card, task, stale });
             }
-            result[section] = currentCards;
           }
+          admittedSignal.throwIfAborted();
+          const currentTasks = rechecks.flatMap((entry) =>
+            entry.stale || !entry.task ? [] : [entry.task],
+          );
+          const currentDecisions = await auth.decideIssueReads(
+            actor,
+            currentTasks.map((task) => ({
+              type: "issue" as const,
+              companyId,
+              issueId: task.id,
+              projectId: task.projectId,
+              assigneeAgentId: task.assigneeAgentId,
+              assigneeUserId: task.assigneeUserId,
+            })),
+          );
+          const currentlyAllowed = new Map(
+            currentTasks.map((task, index) => [
+              task,
+              currentDecisions[index]?.allowed === true,
+            ]),
+          );
+          const currentCards = {
+            inProgress: [] as ExperienceCard[],
+            done: [] as ExperienceCard[],
+          };
+          for (const entry of rechecks) {
+            if (entry.stale || !entry.task) {
+              markPartial("tasks", "source_stale");
+              continue;
+            }
+            if (!currentlyAllowed.get(entry.task)) {
+              markPartial("tasks", "denied");
+              continue;
+            }
+            currentCards[entry.section].push(entry.card);
+          }
+          result.inProgress = currentCards.inProgress;
+          result.done = currentCards.done;
           if (
             result.needsYou.some((card) => card.source.domain === "attention")
           ) {
@@ -631,23 +717,34 @@ export function experienceService(db: Db) {
             });
             const current = new Map(feed.items.map((item) => [item.id, item]));
             const cards: ExperienceCard[] = [];
-            for (const card of result.needsYou.filter(
-              (card) => card.source.domain === "attention",
-            )) {
+            const attentionCards = result.needsYou
+              .filter((card) => card.source.domain === "attention")
+              .map((card) => {
+                const item = current.get(card.source.resourceId);
+                return item && item.updatedAt === card.source.version
+                  ? { card, item }
+                  : { card, item: null };
+              });
+            admittedSignal.throwIfAborted();
+            const currentItems = attentionCards.flatMap((entry) =>
+              entry.item ? [entry.item] : [],
+            );
+            const currentVisibility = await attentionVisibility(
+              actor,
+              companyId,
+              currentItems,
+              admittedSignal,
+            );
+            const visibleNow = new Map(
+              currentItems.map((item, index) => [item, currentVisibility[index]]),
+            );
+            for (const { item } of attentionCards) {
               admittedSignal.throwIfAborted();
-              const item = current.get(card.source.resourceId);
-              if (!item || item.updatedAt !== card.source.version) {
+              if (!item) {
                 markPartial("attention", "source_stale");
                 continue;
               }
-              if (
-                !(await attentionIsVisible(
-                  actor,
-                  companyId,
-                  item,
-                  admittedSignal,
-                ))
-              ) {
+              if (!visibleNow.get(item)) {
                 markPartial("attention", "denied");
                 continue;
               }
@@ -659,6 +756,24 @@ export function experienceService(db: Db) {
                 (card) => card.source.domain !== "attention",
               ),
             ];
+          }
+          if (result.needsYou.some(card => card.source.domain === "company_responsibility")) {
+            try {
+              const current = await readCompanyResponsibilityAttention(db, actor, companyId, admittedSignal, configuredOperatorUserIds);
+              const cards = new Map(current.needsYou.map(card => [card.id, card]));
+              if (typeof current.coverage === "object") markPartial("attention", current.coverage.reason);
+              result.needsYou = result.needsYou.flatMap(card => {
+                if (card.source.domain !== "company_responsibility") return [card];
+                const fresh = cards.get(card.id);
+                if (fresh?.source.version === card.source.version) return [fresh];
+                markPartial("attention", "source_stale");
+                return [];
+              });
+            } catch {
+              admittedSignal.throwIfAborted();
+              result.needsYou = result.needsYou.filter(card => card.source.domain !== "company_responsibility");
+              markPartial("attention", "denied");
+            }
           }
           const isAutomaticPackageMaintenance = (card: ExperienceCard) => card.source.domain === "agent_package_installation" &&
             !card.evidence.includes("package_revalidation_required");

@@ -1,0 +1,3 @@
+34a7b31f4852666059a807942f854a0ed4fb0a146c9337f0b46f10de85d53b86  server/src/routes/v9-api-paths.ts
+7dc6fc3ea3b3fe97303ab2f6c250506f215fb829eb692594cf42ec89b7b92a8e  server/src/routes/openapi.ts
+6bb32896e398884a2f316ff832104ee2487211c8123b9565d1790b7c61226dc7  server/src/__tests__/openapi-routes.test.ts

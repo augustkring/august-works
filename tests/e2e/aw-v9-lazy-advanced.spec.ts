@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { json } from "./agent-chat.shared";
+import { deleteCompany } from "./company-cleanup";
 
 // Actual shipped chunks and local Native owner reads. This measures loading
 // behavior; it is not a human journey or hosted performance qualification.
@@ -44,6 +45,6 @@ test("advanced planning code and data load when the admitted route opens", async
     }, null, 2)) });
   } finally {
     await json(await request.patch("/api/instance/settings/experimental", { data: original }));
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(request, company.id));
   }
 });

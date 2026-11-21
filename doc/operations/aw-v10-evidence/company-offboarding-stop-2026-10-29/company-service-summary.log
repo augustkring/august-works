@@ -1,0 +1,25 @@
+ ✓ src/__tests__/companies-service.test.ts > companyService > retries generated issue prefixes when Drizzle wraps the unique constraint error 180ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > persists company language and timezone defaults through the canonical company update service 38ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > does not auto-provision bundled built-in agents for a freshly created company 743ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > archives companies by pausing runnable agents and cancelling active runs 468ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > reactivates only agents paused because the company was archived 49ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > runs the archive cascade when update() transitions a company to archived 240ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > reactivates company_archived agents even when going via paused state (archived → paused → active) 52ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > emits company.reactivated for archived → active even when no agents need restoring 50ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > does not emit company.reactivated when paused → active restores no archive-paused agents 23ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > cancels orphan queued wakeup requests with no runId during archive 100ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > archive() is idempotent — re-archiving emits no second cascade or activity entry 54ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > company deletion runs the canonical cascade for an already archived company and stale revoke workers cannot reopen the stage 223ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > rings the Cloud lifecycle doorbell exactly on archived-boundary transitions 44ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > runs the archive cascade when update() transitions a paused company to archived 106ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > getById returns null (not a query error) for non-UUID refs 10ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > issue prefix re-derivation on rename > re-derives the prefix and re-keys both identifier tables on a managed instance 132ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > issue prefix re-derivation on rename > suffixes the candidate when another company already holds the derived base 62ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > issue prefix re-derivation on rename > keeps the prefix when the rename derives the same base 41ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > issue prefix re-derivation on rename > keeps identifiers and the company prefix together under concurrent renames 56ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > issue prefix re-derivation on rename > keeps the prefix consistent when a stale form resubmits the old name during a rename 57ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > issue prefix re-derivation on rename > leaves the prefix alone when only non-name fields change 35ms
+ ✓ src/__tests__/companies-service.test.ts > companyService > issue prefix re-derivation on rename > never touches the prefix on a self-hosted instance 56ms
+ Test Files  1 passed (1)
+      Tests  22 passed (22)
+   Duration  21.02s (transform 9.22s, setup 70ms, import 13.61s, tests 7.22s, environment 0ms)

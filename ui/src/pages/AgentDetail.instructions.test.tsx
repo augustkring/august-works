@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PromptsTab } from "./AgentDetail";
 import { PromptsTab as ProductionPromptsTab } from "./AgentDetail.production";
 import { MemoryRouter } from "react-router-dom";
+import { i18n } from "../i18n";
 
 const mockAgentsApi = vi.hoisted(() => ({
   instructionsBundle: vi.fn(),
@@ -292,6 +293,23 @@ describe("PromptsTab instruction editor", () => {
     });
     await flushReact();
   }
+
+  it("shows the agent instructions tab in Danish without English labels (I18N-DA2)", async () => {
+    await act(async () => { await i18n.changeLanguage("da"); });
+    try {
+      const summary = makeSummary("AGENTS.md", "AGENTS.md", { editable: true });
+      await renderPromptsTab(makeBundle("AGENTS.md", [summary], { editable: true }),
+        { "AGENTS.md": makeDetail(summary, "Responsibility and limits") });
+      await vi.waitFor(() => expect(container.textContent).toContain("Filer"));
+      const text = container.textContent ?? "";
+      for (const danish of ["Avanceret", "Filer"]) expect(text).toContain(danish);
+      for (const english of ["Advanced", "Files", "Root path", "Entry file"]) {
+        expect(text, `English label ${english} in Danish tab`).not.toContain(english);
+      }
+    } finally {
+      await act(async () => { await i18n.changeLanguage("en"); });
+    }
+  });
 
   it.each([["classic", PromptsTab], ["production", ProductionPromptsTab]] as const)(
     "%s displays the Original published instructions read-only and opens the existing private draft builder",

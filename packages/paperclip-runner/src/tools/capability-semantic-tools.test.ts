@@ -159,6 +159,7 @@ describe("Capability exposure and authorization", () => {
     expect(askIds).toContain("answer_status_question");
     expect(askIds).not.toContain("finish_task");
     expect(askIds).not.toContain("write_document");
+    expect(askIds).not.toContain("report_progress");
 
     const granted = await runtimeFor({
       scenarioGrants: ["discovery:tasks:read", "governance:approvals:decide"],

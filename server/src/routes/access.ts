@@ -12,8 +12,9 @@ import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { Router } from "express";
-import type { Request } from "express";
+import type { NextFunction, Request, Response } from "express";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, ne } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -45,6 +46,8 @@ import {
   archiveCompanyMemberSchema,
   updateMemberPermissionsSchema,
   updateUserCompanyAccessSchema,
+  createHumanWorkflowCoverageSchema,
+  securitySuspendCompanyMemberSchema,
   PERMISSION_KEYS,
   isUuidLike,
 } from "@paperclipai/shared";
@@ -59,6 +62,8 @@ import {
 } from "../errors.js";
 import { getHiddenSettings } from "../services/settings-visibility.js";
 import { runtimeCanonicalOrigin } from "../services/cloud-runtime-identity.js";
+import { readMemberContinuityPreflight } from "../services/experience/private-0565/member-continuity-preflight.js";
+
 
 /**
  * Floor: when the hosting operator hides the Instance Access surface
@@ -81,6 +86,7 @@ import {
 import { logger } from "../middleware/logger.js";
 import { validate } from "../middleware/validate.js";
 import { collectReachableInterfaceHosts } from "../runtime-api.js";
+import { heartbeatService } from "../services/heartbeat.js";
 import {
   accessService,
   agentService,
@@ -1735,6 +1741,7 @@ function buildInviteOnboardingManifest(
     bindHost: string;
     allowedHostnames: string[];
     authPublicBaseUrl?: string;
+    operatorUserIds?: readonly string[];
     saasInviteRecipient?: (invite:typeof invites.$inferSelect,userId:string)=>Promise<void>;
   }
 ) {
@@ -2639,19 +2646,34 @@ async function probeInviteResolutionTarget(
 export function accessRoutes(
   db: Db,
   opts: {
+    operatorUserIds?: readonly string[];
     deploymentMode: DeploymentMode;
     deploymentExposure: DeploymentExposure;
     bindHost: string;
     allowedHostnames: string[];
     inviteResolutionNetwork?: Partial<InviteResolutionNetwork>;
     inviteRateLimiter?: InviteRateLimiter;
+    cliAuthCreateRateLimiter?: InviteRateLimiter;
+    cliAuthPollRateLimiter?: InviteRateLimiter;
     authPublicBaseUrl?: string;
     saasInviteRecipient?: (invite:typeof invites.$inferSelect,userId:string)=>Promise<void>;
   }
 ) {
   const router = Router();
   const access = accessService(db);
-  const boardAuth = boardAuthService(db);
+  const boardAuth = boardAuthService(db, {
+    allowLocalImplicit: opts.deploymentMode === "local_trusted",
+    operatorUserIds: opts.operatorUserIds,
+  });
+  function assertExpectedBoardActor(req: Request) {
+    const expectedUser = req.get("X-Blentera-Expected-User");
+    const expectedSession = req.get("X-Blentera-Expected-Session");
+    const actualUser = req.actor.userId ?? (isLocalImplicit(req) ? "local-board" : undefined);
+    if (expectedUser !== undefined && expectedUser !== actualUser)
+      throw conflict("Account changed; review this request again", { code: "ACCOUNT_CHANGED" });
+    if (expectedSession !== undefined && expectedSession !== req.actor.sessionId)
+      throw conflict("Sign-in changed; review this request again", { code: "AUTHENTICATION_STATE_CHANGED" });
+  }
   const agents = agentService(db);
   const routeInviteResolutionNetwork = opts.inviteResolutionNetwork
     ? { ...defaultInviteResolutionNetwork, ...opts.inviteResolutionNetwork }
@@ -2685,6 +2707,25 @@ export function accessRoutes(
       );
       return;
     }
+    next();
+  });
+
+  const cliAuthCreateRateLimiter = opts.cliAuthCreateRateLimiter ?? createInviteRateLimiter();
+  const cliAuthPollRateLimiter = opts.cliAuthPollRateLimiter ?? createInviteRateLimiter({ maxRequests: 120 });
+  const limitCliAuth = (limiter: InviteRateLimiter) => (req: Request, res: Response, next: NextFunction) => {
+    const result = limiter.consume(req.ip || req.socket?.remoteAddress || "unknown");
+    res.setHeader("X-RateLimit-Limit", String(result.limit));
+    res.setHeader("X-RateLimit-Remaining", String(result.remaining));
+    if (!result.allowed) {
+      res.setHeader("Retry-After", String(result.retryAfterSeconds));
+      next(tooManyRequests("Too many CLI auth requests", { retryAfterSeconds: result.retryAfterSeconds }));
+      return;
+    }
+    next();
+  };
+  router.use(["/cli-auth", "/board-api-keys"], (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
     next();
   });
 
@@ -2770,6 +2811,7 @@ export function accessRoutes(
 
   router.post(
     "/cli-auth/challenges",
+    limitCliAuth(cliAuthCreateRateLimiter),
     validate(createCliAuthChallengeSchema),
     async (req, res) => {
       const created = await boardAuth.createCliAuthChallenge(req.body);
@@ -2786,18 +2828,22 @@ export function accessRoutes(
         approvalUrl: baseUrl ? `${baseUrl}${approvalPath}` : null,
         pollPath: `/cli-auth/challenges/${created.challenge.id}`,
         expiresAt: created.challenge.expiresAt.toISOString(),
+        keyName: created.challenge.pendingKeyName,
+        keyExpiresAt: created.challenge.pendingKeyExpiresAt?.toISOString() ?? null,
         suggestedPollIntervalMs: 1000,
       });
     },
   );
 
-  router.get("/cli-auth/challenges/:id", async (req, res) => {
+  router.get("/cli-auth/challenges/:id", limitCliAuth(cliAuthPollRateLimiter), async (req, res) => {
     const id = (req.params.id as string).trim();
     const token =
       typeof req.query.token === "string" ? req.query.token.trim() : "";
     if (!id || !token) throw notFound("CLI auth challenge not found");
     if (!isUuidLike(id)) throw badRequest("Invalid CLI auth challenge ID");
-    const challenge = await boardAuth.describeCliAuthChallenge(id, token);
+    const challenge = await boardAuth.describeCliAuthChallenge(id, token, {
+      viewerUserId: req.actor.type === "board" ? req.actor.userId : undefined,
+    });
     if (!challenge) throw notFound("CLI auth challenge not found");
 
     const isSignedInBoardUser =
@@ -2806,6 +2852,8 @@ export function accessRoutes(
       Boolean(req.actor.userId);
     const canApprove =
       isSignedInBoardUser &&
+      (!challenge.requestedCompanyId || Boolean(req.actor.isInstanceAdmin) || isLocalImplicit(req)
+        || Boolean(req.actor.companyIds?.includes(challenge.requestedCompanyId))) &&
       (challenge.requestedAccess !== "instance_admin_required" ||
         isLocalImplicit(req) ||
         Boolean(req.actor.isInstanceAdmin));
@@ -2825,42 +2873,20 @@ export function accessRoutes(
       const id = (req.params.id as string).trim();
       if (
         req.actor.type !== "board" ||
+        (req.actor.source !== "session" && !isLocalImplicit(req)) ||
         (!req.actor.userId && !isLocalImplicit(req))
       ) {
         throw unauthorized("Sign in before approving CLI access");
       }
       if (!isUuidLike(id)) throw badRequest("Invalid CLI auth challenge ID");
 
+      assertExpectedBoardActor(req);
       const userId = req.actor.userId ?? "local-board";
       const approved = await boardAuth.approveCliAuthChallenge(
         id,
         req.body.token,
-        userId,
+        req.actor,
       );
-
-      if (approved.status === "approved") {
-        const companyIds = await boardAuth.resolveBoardActivityCompanyIds({
-          userId,
-          requestedCompanyId: approved.challenge.requestedCompanyId,
-          boardApiKeyId: approved.challenge.boardApiKeyId,
-        });
-        for (const companyId of companyIds) {
-          await logActivity(db, {
-            companyId,
-            actorType: "user",
-            actorId: userId,
-            action: "board_api_key.created",
-            entityType: "user",
-            entityId: userId,
-            details: {
-              boardApiKeyId: approved.challenge.boardApiKeyId,
-              requestedAccess: approved.challenge.requestedAccess,
-              requestedCompanyId: approved.challenge.requestedCompanyId,
-              challengeId: approved.challenge.id,
-            },
-          });
-        }
-      }
 
       res.json({
         approved: approved.status === "approved",
@@ -2924,33 +2950,13 @@ export function accessRoutes(
         assertCompanyAccess(req, req.body.requestedCompanyId);
       }
 
+      assertExpectedBoardActor(req);
       const key = await boardAuth.createNamedBoardApiKey({
-        userId: req.actor.userId,
+        actor: req.actor,
         name: req.body.name,
         expiresAt: req.body.expiresAt === undefined ? undefined : req.body.expiresAt,
-      });
-      const companyIds = await boardAuth.resolveBoardActivityCompanyIds({
-        userId: req.actor.userId,
         requestedCompanyId: req.body.requestedCompanyId ?? null,
-        boardApiKeyId: key.id,
       });
-      for (const companyId of companyIds) {
-        await logActivity(db, {
-          companyId,
-          actorType: "user",
-          actorId: req.actor.userId,
-          action: "board_api_key.created",
-          entityType: "user",
-          entityId: req.actor.userId,
-          details: {
-            boardApiKeyId: key.id,
-            name: key.name,
-            requestedCompanyId: req.body.requestedCompanyId ?? null,
-            expiresAt: key.expiresAt?.toISOString() ?? null,
-          },
-        });
-      }
-
       res.status(201).json(key);
     },
   );
@@ -2965,28 +2971,8 @@ export function accessRoutes(
     }
     const key = await boardAuth.getBoardApiKeyForUser(keyId, req.actor.userId);
     if (!key) throw notFound("Board API key not found");
-    const revoked = await boardAuth.revokeBoardApiKey(key.id);
+    const revoked = await boardAuth.revokeBoardApiKey(key.id, { userId: req.actor.userId, revokedVia: "board_api_key_lifecycle" });
     if (!revoked) throw notFound("Board API key not found");
-
-    const companyIds = await boardAuth.resolveBoardActivityCompanyIds({
-      userId: req.actor.userId,
-      boardApiKeyId: key.id,
-    });
-    for (const companyId of companyIds) {
-      await logActivity(db, {
-        companyId,
-        actorType: "user",
-        actorId: req.actor.userId,
-        action: "board_api_key.revoked",
-        entityType: "user",
-        entityId: req.actor.userId,
-        details: {
-          boardApiKeyId: key.id,
-          name: key.name,
-          revokedVia: "board_api_key_lifecycle",
-        },
-      });
-    }
 
     res.json({ ok: true, keyId: key.id });
   });
@@ -2999,25 +2985,7 @@ export function accessRoutes(
       req.actor.keyId,
       req.actor.userId,
     );
-    await boardAuth.revokeBoardApiKey(key.id);
-    const companyIds = await boardAuth.resolveBoardActivityCompanyIds({
-      userId: key.userId,
-      boardApiKeyId: key.id,
-    });
-    for (const companyId of companyIds) {
-      await logActivity(db, {
-        companyId,
-        actorType: "user",
-        actorId: key.userId,
-        action: "board_api_key.revoked",
-        entityType: "user",
-        entityId: key.userId,
-        details: {
-          boardApiKeyId: key.id,
-          revokedVia: "cli_auth_logout",
-        },
-      });
-    }
+    await boardAuth.revokeBoardApiKey(key.id, { userId: key.userId, revokedVia: "cli_auth_logout" });
     res.json({ revoked: true, keyId: key.id });
   });
 
@@ -4500,11 +4468,84 @@ export function accessRoutes(
     });
   });
 
+  router.get("/companies/:companyId/workflow-coverages", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
+      throw forbidden("A current Human session is required to view workflow coverage.", { code: "workflow_coverage_session_required" });
+    }
+    assertExpectedBoardActor(req);
+    assertCompanyAccess(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json({ coverages: await access.listWorkflowCoverages(companyId, req.actor.userId) });
+  });
+
+  router.post("/companies/:companyId/workflow-coverages", validate(createHumanWorkflowCoverageSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
+      throw forbidden("A current Human session is required to create workflow coverage.", { code: "workflow_coverage_session_required" });
+    }
+    assertExpectedBoardActor(req);
+    assertCompanyAccess(req, companyId);
+    const result = await access.createWorkflowCoverage(companyId, {
+      ...req.body,
+      taskId: req.body.taskId ?? null,
+      startsAt: req.body.startsAt ?? new Date(),
+    }, req.actor);
+    const coverage = result.coverage;
+    if (result.created) await logActivity(db, {
+      companyId, actorType: "user", actorId: req.actor.userId,
+      action: "company.workflow_coverage.created", entityType: "human_workflow_coverage", entityId: coverage.id,
+      details: { delegateeUserId: coverage.delegateeUserId, workflowId: coverage.workflowId,
+        workflowRevisionId: coverage.workflowRevisionId, scopeType: coverage.scopeType,
+        taskId: coverage.taskId, startsAt: coverage.startsAt.toISOString(), expiresAt: coverage.expiresAt.toISOString(),
+        requestId: coverage.requestId },
+    });
+    res.set("Cache-Control", "private, no-store");
+    res.status(result.created ? 201 : 200).json(coverage);
+  });
+
+  router.delete("/companies/:companyId/workflow-coverages/:coverageId", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    const coverageId = z.uuid().parse(req.params.coverageId);
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
+      throw forbidden("A current Human session is required to revoke workflow coverage.", { code: "workflow_coverage_session_required" });
+    }
+    assertExpectedBoardActor(req);
+    assertCompanyAccess(req, companyId);
+    const coverage = await access.revokeWorkflowCoverage(companyId, coverageId, req.actor);
+    if (!coverage) throw notFound("Workflow coverage not found");
+    if (coverage.revokedByUserId === req.actor.userId) {
+      await logActivity(db, { companyId, actorType: "user", actorId: req.actor.userId,
+        action: "company.workflow_coverage.revoked", entityType: "human_workflow_coverage", entityId: coverage.id,
+        details: { workflowId: coverage.workflowId, workflowRevisionId: coverage.workflowRevisionId,
+          scopeType: coverage.scopeType, taskId: coverage.taskId } });
+    }
+    res.set("Cache-Control", "private, no-store");
+    res.json(coverage);
+  });
+
   router.get("/companies/:companyId/user-directory", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
     const users = await loadCompanyUserDirectory(db, companyId);
     res.json({ users });
+  });
+
+  router.get("/companies/:companyId/members/:memberId/responsibility-preflight", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    const memberId = req.params.memberId as string;
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
+      throw forbidden("A current Human session is required for member continuity preview.", { code: "member_preflight_session_required" });
+    }
+    assertExpectedBoardActor(req);
+    await assertCompanyPermission(req, companyId, "users:manage_permissions");
+    const member = await access.getMemberById(companyId, memberId);
+    if (!member) throw notFound("Member not found");
+    await assertCanManageCompanyMember(req, access, companyId, member, "archive");
+    const preflight = await readMemberContinuityPreflight({ db, actor: req.actor, companyId, memberId,
+      operatorUserIds: opts.operatorUserIds });
+    res.set("Cache-Control", "private, no-store");
+    res.json(preflight);
   });
 
   router.patch(
@@ -4518,8 +4559,12 @@ export function accessRoutes(
       if (!memberToUpdate) throw notFound("Member not found");
       await assertCanManageCompanyMember(req, access, companyId, memberToUpdate);
 
-      const updated = await access.updateMember(companyId, memberId, req.body);
+      const updated = await access.updateMember(companyId, memberId, req.body, req.actor.userId ?? null);
       if (!updated) throw notFound("Member not found");
+      if (updated.status !== "active" && memberToUpdate.principalType === "user") {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, memberToUpdate.principalId,
+          "Cancelled because the responsible Human's company access was withdrawn");
+      }
 
       await logActivity(db, {
         companyId,
@@ -4564,6 +4609,10 @@ export function accessRoutes(
         req.actor.userId ?? null,
       );
       if (!updated) throw notFound("Member not found");
+      if (updated.status !== "active" && memberToUpdate.principalType === "user") {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, memberToUpdate.principalId,
+          "Cancelled because the responsible Human's company access was withdrawn");
+      }
 
       await logActivity(db, {
         companyId,
@@ -4588,6 +4637,33 @@ export function accessRoutes(
   );
 
   router.post(
+    "/companies/:companyId/members/:memberId/security-suspend",
+    validate(securitySuspendCompanyMemberSchema),
+    async (req, res) => {
+      const companyId = req.params.companyId as string;
+      const memberId = req.params.memberId as string;
+      assertExpectedBoardActor(req);
+      const memberBefore = await access.getMemberById(companyId, memberId);
+      if (!memberBefore) throw notFound("Member not found");
+      const result = await access.suspendMemberForSecurity(
+        companyId,
+        memberId,
+        req.actor,
+        req.body.reasonCode,
+      );
+      if (!result) throw notFound("Member not found");
+      if (memberBefore.principalType === "user") {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, memberBefore.principalId,
+          "Cancelled because the responsible Human was security-suspended");
+      }
+      const member = (await loadCompanyMemberRecords(db, companyId)).find(entry => entry.id === memberId);
+      if (!member) throw notFound("Member not found");
+      res.set("Cache-Control", "private, no-store");
+      res.json({ member, ownerRecoveryRequired: result.ownerRecoveryRequired });
+    },
+  );
+
+  router.post(
     "/companies/:companyId/members/:memberId/archive",
     validate(archiveCompanyMemberSchema),
     async (req, res) => {
@@ -4600,8 +4676,13 @@ export function accessRoutes(
 
       const result = await access.archiveMember(companyId, memberId, {
         reassignment: req.body.reassignment ?? null,
-      });
+        routineResponsibleUserId: req.body.routineResponsibleUserId ?? null,
+      }, req.actor.userId ?? "board");
       if (!result) throw notFound("Member not found");
+      if (memberToArchive.principalType === "user") {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, memberToArchive.principalId,
+          "Cancelled because the responsible Human's company access was withdrawn");
+      }
 
       await logActivity(db, {
         companyId,
@@ -4613,6 +4694,10 @@ export function accessRoutes(
         details: {
           principalId: result.member.principalId,
           reassignedIssueCount: result.reassignedIssueCount,
+          reassignedRoutineCount: result.reassignedRoutineCount,
+          pausedRoutineCount: result.pausedRoutineCount,
+          ownerActionRoutineCount: result.ownerActionRoutineCount,
+          routineResponsibleUserId: req.body.routineResponsibleUserId ?? null,
           reassignment: req.body.reassignment ?? null,
         },
       });
@@ -4624,6 +4709,9 @@ export function accessRoutes(
       res.json({
         member,
         reassignedIssueCount: result.reassignedIssueCount,
+        reassignedRoutineCount: result.reassignedRoutineCount,
+        pausedRoutineCount: result.pausedRoutineCount,
+        ownerActionRoutineCount: result.ownerActionRoutineCount,
       });
     }
   );

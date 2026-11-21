@@ -1,0 +1,103 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/authenticator-lifetime.integration.test.ts (11 tests | 3 failed | 8 skipped) 14473ms
+     × erases native JSON challenges on credential rotation while preserving unrelated verification data 108ms
+     × erases native JSON challenges on factor activation while preserving unrelated verification data 30ms
+     × erases native JSON challenges on user deletion while preserving unrelated verification data 28ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authenticator-lifetime.integration.test.ts > native authenticator lifetime constraints > erases native JSON challenges on credential rotation while preserving unrelated verification data
+AssertionError: expected [ { …(6) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "createdAt": 2026-10-24T01:02:01.582Z,
++     "expiresAt": 2026-10-24T01:12:01.582Z,
++     "id": "048a9a0c-aec0-4720-b979-1b2b1e02d975",
++     "identifier": "native-factor-fixture-d11fc80a-1c8c-44dc-a36c-c6dbc46489c6",
++     "updatedAt": 2026-10-24T01:02:01.582Z,
++     "value": "{\"type\":\"registration\",\"expectedChallenge\":\"a96ad097-7214-401f-962e-971721a3a6a3\",\"userData\":{\"id\":\"c2cce64d-a3bd-438d-96d7-bc2bbc1796fc\",\"name\":\"c2cce64d-a3bd-438d-96d7-bc2bbc1796fc@example.test\",\"displayName\":\"Native challenge fixture\"},\"context\":null}",
++   },
++ ]
+
+ ❯ src/__tests__/authenticator-lifetime.integration.test.ts:320:122
+    318|         .where(eq(authUsers.id, user.id));
+    319|       else await db.delete(authUsers).where(eq(authUsers.id, user.id));
+    320|       for (const row of owned) expect(await db.select().from(authVerif…
+       |                                                                                                                          ^
+    321|       for (const row of unrelated) expect(await db.select().from(authV…
+    322|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authenticator-lifetime.integration.test.ts > native authenticator lifetime constraints > erases native JSON challenges on factor activation while preserving unrelated verification data
+AssertionError: expected [ { …(6) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "createdAt": 2026-10-24T01:02:01.666Z,
++     "expiresAt": 2026-10-24T01:12:01.666Z,
++     "id": "540d6397-a8aa-4012-8cbc-df53010b0abb",
++     "identifier": "native-factor-fixture-399b396a-b494-4291-a739-38ef6d9f2a95",
++     "updatedAt": 2026-10-24T01:02:01.666Z,
++     "value": "{\"type\":\"registration\",\"expectedChallenge\":\"27883b5a-f625-4d8f-86fe-8028b0ba912f\",\"userData\":{\"id\":\"7ae7e051-6316-4b8b-847c-42c1ac1bf437\",\"name\":\"7ae7e051-6316-4b8b-847c-42c1ac1bf437@example.test\",\"displayName\":\"Native challenge fixture\"},\"context\":null}",
++   },
++ ]
+
+ ❯ src/__tests__/authenticator-lifetime.integration.test.ts:320:122
+    318|         .where(eq(authUsers.id, user.id));
+    319|       else await db.delete(authUsers).where(eq(authUsers.id, user.id));
+    320|       for (const row of owned) expect(await db.select().from(authVerif…
+       |                                                                                                                          ^
+    321|       for (const row of unrelated) expect(await db.select().from(authV…
+    322|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authenticator-lifetime.integration.test.ts > native authenticator lifetime constraints > erases native JSON challenges on user deletion while preserving unrelated verification data
+AssertionError: expected [ { …(6) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "createdAt": 2026-10-24T01:02:01.689Z,
++     "expiresAt": 2026-10-24T01:12:01.689Z,
++     "id": "71b65193-bc7e-4006-8d85-6e9325c39947",
++     "identifier": "native-factor-fixture-c6584a65-ce38-4775-8cae-3c378efa0418",
++     "updatedAt": 2026-10-24T01:02:01.689Z,
++     "value": "{\"type\":\"registration\",\"expectedChallenge\":\"6e060692-aff8-4027-a13f-b0598e3a02b7\",\"userData\":{\"id\":\"d3ca11e5-7824-41d4-8c04-56c8b796b8e7\",\"name\":\"d3ca11e5-7824-41d4-8c04-56c8b796b8e7@example.test\",\"displayName\":\"Native challenge fixture\"},\"context\":null}",
++   },
++ ]
+
+ ❯ src/__tests__/authenticator-lifetime.integration.test.ts:320:122
+    318|         .where(eq(authUsers.id, user.id));
+    319|       else await db.delete(authUsers).where(eq(authUsers.id, user.id));
+    320|       for (const row of owned) expect(await db.select().from(authVerif…
+       |                                                                                                                          ^
+    321|       for (const row of unrelated) expect(await db.select().from(authV…
+    322|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 8 skipped (11)
+   Start at  01:01:06
+   Duration  55.22s (transform 22.65s, setup 304ms, import 39.77s, tests 14.47s, environment 0ms)
+

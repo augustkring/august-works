@@ -27,6 +27,7 @@ export const agents = pgTable(
     icon: text("icon"),
     appearance: jsonb("appearance").$type<AgentAppearance>(),
     status: text("status").notNull().default("idle"),
+    lifecycleRequiredPluginIds: jsonb("lifecycle_required_plugin_ids").$type<string[]>().notNull().default([]),
     reportsTo: uuid("reports_to").references((): AnyPgColumn => agents.id),
     capabilities: text("capabilities"),
     adapterType: text("adapter_type").notNull().default("process"),

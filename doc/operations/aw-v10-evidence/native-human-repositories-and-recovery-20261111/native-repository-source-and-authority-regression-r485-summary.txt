@@ -1,0 +1,2 @@
+552 passed; 1 failed.
+The assigned-review source-history case fails during its task-source dispatch fixture setup, before its later-read assertion. This earlier iteration is failed and is not counted as qualification. Its two fixture defects were corrected before the separately recorded passing r489/r490 checks.

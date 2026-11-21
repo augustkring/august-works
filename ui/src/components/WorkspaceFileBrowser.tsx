@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import {
   useEffect,
   useId,
@@ -1035,7 +1036,7 @@ export function WorkspaceFileBrowser({
         title={changedFilesTemporarilyUnavailable ? "Changed files temporarily unavailable" : "Couldn't load files"}
         body={
           changedFilesTemporarilyUnavailable
-            ? "Paperclip is limiting workspace scans to keep the server responsive. Try again in a moment."
+            ? `${PRODUCT_IDENTITY.productName} is limiting workspace scans to keep the server responsive. Try again in a moment.`
             : status === 404
             ? "Workspace browsing isn't available for this issue."
             : "Something went wrong loading workspace files."

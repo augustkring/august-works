@@ -1,0 +1,22 @@
+[
+  {
+    "file": "gateway-unsettled-status-r1-20261026-source-pins.json",
+    "rawSha256": "9d3c46df28feb756bebcfd8533d5b4c2e21adb4f964381f58302800ae6f0817e",
+    "rawBytes": 36590
+  },
+  {
+    "file": "gateway-unsettled-status-r1-20261026-snapshot.log.gz",
+    "rawSha256": "ee9b834ec6cac3ef0fe2289b574278e3c8d9a137004e5b9518fa5528ef242283",
+    "rawBytes": 37
+  },
+  {
+    "file": "gateway-unsettled-status-r1-20261026-test.log.gz",
+    "rawSha256": "bafc821267283c8a387b9816476163441fc00db0b59defe50c97fe3c54e4b672",
+    "rawBytes": 4198
+  },
+  {
+    "file": "gateway-unsettled-status-r1-20261026-test.exit",
+    "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "rawBytes": 2
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "file": "scope-closed-workspace-routes-20261026-source-pins.json",
+    "rawSha256": "4d5050d3c63c2051a43540178387f7e36733fa20aa75f314df3a5fb768e9b741",
+    "rawBytes": 36066
+  },
+  {
+    "file": "scope-closed-workspace-routes-20261026-snapshot.exit",
+    "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "rawBytes": 2
+  },
+  {
+    "file": "scope-closed-workspace-routes-20261026-test.log.gz",
+    "rawSha256": "c71cc73917daa4739626a91faf4729f9e31f131a30f71a1db3e43351d832234b",
+    "rawBytes": 1947
+  },
+  {
+    "file": "scope-closed-workspace-routes-20261026-test.exit",
+    "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "rawBytes": 2
+  }
+]

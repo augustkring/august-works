@@ -32,6 +32,13 @@ contact others, spend, install or grant access. Keep the dated implementation
 ledger and screen contracts aligned, and distinguish software evidence from
 host/provider, manual accessibility and representative Human qualification.
 
+The playbooks are 20k-75k tokens each, so do not load them whole. Start from the
+generated heading indexes in `doc/reference/aw-v9/playbooks/index/` (rebuild with
+`node scripts/build-reference-index.mjs`) and read only the executive section,
+the checklist and the chapter that fits the change. Claude Code routes this
+through the `pb-*` skills in `.claude/skills/`. The V10 brief has the same kind
+of index at `doc/reference/blentera-v10/index.md`.
+
 When adding or changing an Apps catalog connection, also follow
 `doc/connections/CONNECTOR-PLAYBOOK.md`. It is the canonical connection
 authoring runbook for provider research, supported transport/auth patterns,
@@ -86,10 +93,12 @@ pnpm dev
 1. Keep changes company-scoped.
 Every domain entity should be scoped to a company and company boundaries must be enforced in routes/services.
 
-Explicit exceptions: personal keyboard shortcut enablement is stored on the
-authenticated user and applies across companies, like the user profile. Only
-that user can read or change it; writes validate company membership for their
-audit context. Announcement dismissals are instance-wide user preferences,
+Explicit exceptions: personal keyboard shortcut enablement and language are
+stored on the authenticated user and apply across companies, like the user
+profile. Only that user can read or change them. Keyboard writes require a
+company audit context; language alone can be saved before joining a company.
+Any supplied company audit context must validate current membership.
+Announcement dismissals are instance-wide user preferences,
 keyed by user and announcement so they persist across companies. Their audit
 context must still validate company membership. The announcement publication-ID
 registry is instance-level feed metadata; it contains no company or user data.
@@ -120,7 +129,7 @@ When your task produces a user-inspectable deliverable file, follow the Papercli
 7. Name the three data paths correctly.
 This repo has three separate data paths. Do not confuse them. Match a change to a path by its file path, not by the word "observability" or "telemetry" alone.
 
-- **Telemetry** is the Paperclip first-party event system. It is opt-out and it sends data to a Paperclip endpoint by default. Its paths are:
+- **Telemetry** is the first-party event system. It is off by default and requires explicit operator enablement and an explicit destination. Its paths are:
   - `packages/shared/src/telemetry/`
   - the generated contract `packages/shared/src/telemetry/generated/paperclip-telemetry.ts`
   - each caller of `packages/shared/src/telemetry/events.ts` or `packages/shared/src/telemetry/client.ts`
@@ -137,7 +146,7 @@ This repo has three separate data paths. Do not confuse them. Match a change to 
 
 Apply a review level that matches the path:
 
-- **Telemetry change (strict review).** The author updates the generated contract first. The author updates `packages/shared/src/telemetry/README.md` in the same pull request. The author requests a privacy review. Reason: a Telemetry event goes to a Paperclip endpoint by default, so a mistake sends data immediately.
+- **Telemetry change (strict review).** The author updates the generated contract first. The author updates `packages/shared/src/telemetry/README.md` in the same pull request. The author requests a privacy review. Reason: enabled Telemetry sends data outside the instance, so its admission, destination and payload need privacy review.
 - **Observability change (lighter review).** The operator endpoint gate stays in place. The no-operation behaviour stays when no endpoint is set. A privacy review is not necessary while the change stays inside the closed span-attribute allowlist.
 - **Run-log change (no extra review).** A run-log change needs neither review level above, because the data stays in the instance database.
 

@@ -13,7 +13,7 @@ function launch(first: boolean) {
       "--import",
       "./cli/node_modules/tsx/dist/loader.mjs",
       "cli/src/index.ts",
-      ...(first ? ["onboard", "--yes", "--run"] : ["run"]),
+      ...(first ? ["onboard", "--yes", "--bind", "lan", "--run"] : ["run"]),
     ],
     { stdio: "inherit", detached: true, env: process.env },
   );

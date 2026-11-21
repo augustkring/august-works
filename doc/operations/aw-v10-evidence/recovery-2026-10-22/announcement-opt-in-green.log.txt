@@ -1,0 +1,17 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[19:30:04] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[19:30:04] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[19:30:04] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[19:30:04] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[19:30:04] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+
+ Test Files  2 passed (2)
+      Tests  36 passed (36)
+   Start at  19:29:49
+   Duration  53.44s (transform 12.89s, setup 524ms, import 32.25s, tests 18.79s, environment 0ms)
+

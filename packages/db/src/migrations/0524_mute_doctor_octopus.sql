@@ -1,0 +1,1 @@
+ALTER TABLE "cli_auth_challenges" ADD COLUMN "pending_key_expires_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP + INTERVAL '30 days';

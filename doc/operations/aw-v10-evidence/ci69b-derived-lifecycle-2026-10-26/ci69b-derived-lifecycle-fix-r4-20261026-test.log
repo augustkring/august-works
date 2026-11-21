@@ -1,0 +1,28 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts (8 tests | 1 failed) 15518ms
+     × propagates Context root erasure into run/Task payloads and blocks late restored writes 2060ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > propagates Context root erasure into run/Task payloads and blocks late restored writes
+Error: Context assembly deadline exceeded
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:207:13
+    205|   } catch (error) {
+    206|     if (error instanceof ProviderDeadlineError) {
+    207|       throw new HttpError(503, "Context assembly deadline exceeded", {
+       |             ^
+    208|         code: "source_unavailable",
+    209|         reason: "context_deadline",
+ ❯ assemble src/services/context/context-engine.ts:824:55
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts:138:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  13:17:47
+   Duration  30.41s (transform 10.33s, setup 82ms, import 14.68s, tests 15.52s, environment 0ms)
+

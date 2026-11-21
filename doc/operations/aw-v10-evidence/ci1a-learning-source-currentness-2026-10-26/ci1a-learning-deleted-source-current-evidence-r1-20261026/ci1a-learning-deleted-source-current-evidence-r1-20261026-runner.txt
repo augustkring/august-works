@@ -1,0 +1,1 @@
+timeout_seconds=240ntest_file=src/__tests__/learning-deleted-memory-source.integration.test.tsntest_pattern=cannot become public when only the private member of two actual roots is deletedn

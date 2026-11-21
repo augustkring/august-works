@@ -1,0 +1,12 @@
+main_head=40b354f61cb4fc693e007b797da408739802f6ae
+qualification_head=886014cae5a7d6ed5a9ab99d62613ec7646308cb
+node=v24.19.0
+pnpm=9.15.4
+cli_workspace_name=paperclipai
+typescript=Version 7.0.2
+main_fixture_sha256:
+fda04f9ebdeb77ab68bd7f47c4474e8faa60ed8b17ee284fc62f22231d881d3f  /workspace/blentera-v10/cli/src/__tests__/company-delete.test.ts
+256f0ea6e7a7a7d36ec2670fdd033741adf45bd8a093623f9b4a96abe7092f22  /workspace/blentera-v10/cli/src/__tests__/company.test.ts
+qualification_fixture_sha256:
+fda04f9ebdeb77ab68bd7f47c4474e8faa60ed8b17ee284fc62f22231d881d3f  cli/src/__tests__/company-delete.test.ts
+256f0ea6e7a7a7d36ec2670fdd033741adf45bd8a093623f9b4a96abe7092f22  cli/src/__tests__/company.test.ts

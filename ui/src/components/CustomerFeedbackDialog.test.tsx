@@ -130,6 +130,26 @@ describe("feedback consent and canonical receipt", () => {
     ).toBeTruthy();
     expect(document.querySelector('[role="dialog"]')).toBeTruthy();
   });
+  it("sends separate bounded experience ratings only after explicit opt-in", async () => {
+    const save = vi.spyOn(customerFeedbackApi, "create").mockResolvedValue(accepted);
+    await mount();
+    await enter(accepted.body);
+    const consent = [...document.querySelectorAll("label")].find(label => label.textContent?.includes("Share ratings for this feedback"))!.querySelector("input")!;
+    await act(async () => consent.click());
+    const satisfaction = [...document.querySelectorAll("label")].find(label => label.textContent?.includes("How satisfied were you with the outcome"))!.querySelector("select")!;
+    const effort = [...document.querySelectorAll("label")].find(label => label.textContent?.includes("How easy or difficult was it"))!.querySelector("select")!;
+    await act(async () => {
+      for (const [select, value] of [[satisfaction, "satisfied"], [effort, "difficult"]] as const) {
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value);
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+    await click("Send feedback");
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0]![2].experienceMeasure).toEqual({
+      offered: true, consent: "granted", satisfaction: "satisfied", effort: "difficult",
+    });
+  });
   it("preserves draft on close/failure, retries the same payload and omits raw page context", async () => {
     const reported = vi
       .spyOn(navigator, "userAgent", "get")
@@ -170,6 +190,7 @@ describe("feedback consent and canonical receipt", () => {
     expect(JSON.stringify(first)).not.toContain("private-ua-canary");
     expect(first.includeDiagnostics).toBe(false);
     expect(first).not.toHaveProperty("diagnostics");
+    expect(first.experienceMeasure).toEqual({ offered: true });
     expect(JSON.stringify(first)).not.toContain("private-query");
     expect(JSON.stringify(first)).not.toContain("private-fragment");
     await click("Cancel");

@@ -1,0 +1,7 @@
+{
+  "sourceParent": "2f70e9a3e33f752f95701f2baacb9bbe7a63bfc6",
+  "workingSourceDiffSha256Preserved": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "scope": "recovery only; no activation, final software qualification or merge claim",
+  "dependsOn": "r70 and its committed recovery ancestors",
+  "archiveSha256": "de8da0dbf1018d761872642e6fc94d370c1e1a334d23aa9054086ac6c55129fb"
+}

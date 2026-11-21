@@ -1,0 +1,40 @@
+{
+  "scope": "Canonical product identity in original first-admin bootstrap and invite/account flows",
+  "sources": {
+    "ui/src/components/BootstrapPendingPage.tsx": "98dbde2963130793b3de797d41a6b44c6e9ba879777914a8017316a6eaa787fe",
+    "ui/src/pages/InviteLanding.tsx": "51f172ef96a4ec4404c96f24ddf67d1e38f74946b0275dd82ebd49aef935484c",
+    "ui/src/pages/InviteLanding.test.tsx": "bae9d5248b2d2c35c149fd783c7346eadf64d787f427c5994e210280d83590b1",
+    "ui/src/App.test.tsx": "0f2eff71ebbf8f830c53ce31bfdbc697f2acff5ca2b7c1c40eba321c1e1d5d3a"
+  },
+  "implementation": "Existing PRODUCT_IDENTITY supplies product/account/signin/bootstrap/fallback labels in original two UI owners. Actual CLI command/package, adapter IDs, invite storage keys and auth behavior unchanged. Directly stale expected text changed only; no new scalar copy tests.",
+  "verification": {
+    "originalInviteSuite": {
+      "passed": 18,
+      "seconds": 14.01,
+      "exit": 0,
+      "log": "brand-bootstrap-invite-tests.log"
+    },
+    "originalAppAccessGateSuite": {
+      "passed": 14,
+      "seconds": 26.84,
+      "exit": 0,
+      "log": "brand-bootstrap-invite-app-tests.log",
+      "assertions": "Existing invitation/first-admin sign-in, claim, public invite-only and closed error branches retained. Root traced CloudAccessGate and found original bootstrap assertions in App suite, updated only directly stale displayed copy."
+    },
+    "uiTypecheck": {
+      "exit": 0,
+      "log": "brand-bootstrap-invite-ui-types.log"
+    },
+    "tokenGates": {
+      "exit": 0,
+      "log": "brand-bootstrap-invite-token-gates.log"
+    },
+    "finalPinsMatch": true,
+    "processesClosed": true
+  },
+  "review": "Bounded gpt-6-luna original UI reading/copy assistance; Root reviewed diff, traced additional App caller coverage, ran and closed actual checks.",
+  "limits": [
+    "UI presentation only; no new auth/CLI/identity-provider behavior or deployment qualification.",
+    "Complete identity/localization/customer-flow inventory, full latest recursive workspace/tests/build and broad source/privacy/V10/PR/release gates remain open."
+  ]
+}

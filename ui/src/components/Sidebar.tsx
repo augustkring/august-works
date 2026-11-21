@@ -147,7 +147,12 @@ export function Sidebar({ children }: { children?: ReactNode }) {
       </div>
 
       <nav className={primarySidebarStyles.nav}>
-        {experienceShell ? <ExperienceNavigation/> : <>
+        {experienceShell ? <>
+          <ExperienceNavigation/>
+          {/* The progressive navigation also exposes Ask, so retain its
+              scoped preference/picker and command fallback owner. */}
+          <SidebarAgentChats enabled={agentChatEnabled} showNavigation={false} />
+        </> : <>
         <div className={primarySidebarStyles.group}>
           {/* New Task button aligned with nav items */}
           {(() => {
@@ -308,7 +313,9 @@ export function Sidebar({ children }: { children?: ReactNode }) {
         ) : null}
 
         {children}
-        {agentChatEnabled && !children && <SidebarAgentChats />}
+        {/* Keep the Ask action's preference/picker listener mounted even when
+            chat navigation itself is disabled or supplied by a child layout. */}
+        <SidebarAgentChats enabled={agentChatEnabled} showNavigation={agentChatEnabled && !children} />
 
         {streamlinedUiEnabled ? (
           <SidebarRecentTasks companyId={selectedCompanyId} liveIssueIds={liveIssueIds} />

@@ -7,13 +7,18 @@ import {
   connectionGrants,
   createDb,
   externalObjects,
+  issueThreadInteractions,
+  issues,
   toolApplications,
   toolConnections,
 } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
 import { githubConnectionEventService } from "../services/github-connection-events.js";
+import { projectToolConnectionLifecycle } from "../services/tool-connection-lifecycle.js";
 import { subscribeCompanyLiveEvents } from "../services/live-events.js";
 import type { PaperclipCloudConnector } from "../services/paperclip-cloud-connector.js";
+import { externalObjectService } from "../services/external-objects.js";
+import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -34,6 +39,8 @@ describeEmbeddedPostgres.sequential("GitHub connection event delivery", () => {
   afterEach(async () => {
     await db.delete(activityLog);
     await db.delete(connectionEventDeliveries);
+    await db.delete(issueThreadInteractions);
+    await db.delete(issues);
     await db.delete(externalObjects);
     await db.delete(connectionGrants);
     await db.delete(toolConnections);
@@ -107,6 +114,8 @@ describeEmbeddedPostgres.sequential("GitHub connection event delivery", () => {
       statusCategory: "open",
       statusTone: "info",
       data: { provider: "github", marker: "preserved" },
+      remoteVersion: "2026-09-04T11:58:00.000Z",
+      etag: '"pr-before-event"',
     });
 
     const leasedEvent = {
@@ -137,6 +146,7 @@ describeEmbeddedPostgres.sequential("GitHub connection event delivery", () => {
       },
     };
     let poll = 0;
+    let queuedEvents = [leasedEvent];
     const connector = {
       getCapabilities: vi.fn(async () => ["github.code" as const]),
       startAuthorization: vi.fn(),
@@ -144,7 +154,7 @@ describeEmbeddedPostgres.sequential("GitHub connection event delivery", () => {
       refresh: vi.fn(),
       revoke: vi.fn(),
       setWebhookBinding: vi.fn(async () => undefined),
-      leaseEvents: vi.fn(async () => ({ leaseId: `lease-${++poll}`, events: [leasedEvent] })),
+      leaseEvents: vi.fn(async () => ({ leaseId: `lease-${++poll}`, events: queuedEvents })),
       acknowledgeEvents: vi.fn(async () => 1),
     } as unknown as PaperclipCloudConnector;
     let currentTime = new Date("2026-09-04T12:00:05.000Z");
@@ -205,6 +215,142 @@ describeEmbeddedPostgres.sequential("GitHub connection event delivery", () => {
     ));
     expect(duplicateReceipt?.attempts).toBe(1);
     expect(connector.acknowledgeEvents).toHaveBeenCalledTimes(2);
+
+    // A refresh that started from this version must not overwrite a newer
+    // provider event that commits before its API response returns.
+    let markFetchStarted!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => { markFetchStarted = resolve; });
+    let finishFetch!: (response: Response) => void;
+    const fetchCanFinish = new Promise<Response>((resolve) => { finishFetch = resolve; });
+    const refresh = externalObjectService(db, {
+      github: {
+        tokenProvider: null,
+        fetch: async () => {
+          markFetchStarted();
+          return fetchCanFinish;
+        },
+      },
+    });
+    const refreshPromise = refresh.refreshObject(externalObjectId, { companyId, force: true, now: currentTime });
+    await fetchStarted;
+    currentTime = new Date(currentTime.getTime() + 5_000);
+    const latestEvent = {
+      ...leasedEvent,
+      id: "delivery_reopened_124",
+      action: "reopened",
+      createdAt: currentTime.toISOString(),
+      payload: { ...leasedEvent.payload, state: "open", merged: false, updatedAt: "2026-09-04T11:59:03.000Z" },
+    };
+    queuedEvents = [latestEvent];
+    await expect(service.pollOnce()).resolves.toMatchObject({ processed: 1, duplicate: 0, failed: 0 });
+    finishFetch(new Response(JSON.stringify({
+      state: "closed", draft: false, merged: true, title: "Stale API response",
+      updated_at: "2026-09-04T11:59:02.000Z",
+    }), { status: 200, headers: { "content-type": "application/json", etag: '"stale-api"' } }));
+    await expect(refreshPromise).resolves.toMatchObject({ refreshed: false, reason: "refresh_superseded" });
+    let [afterRace] = await db.select().from(externalObjects).where(eq(externalObjects.id, externalObjectId));
+    expect(afterRace).toMatchObject({ statusKey: "open", remoteVersion: "2026-09-04T11:59:03.000Z" });
+
+    const staleEvent = {
+      ...leasedEvent,
+      id: "delivery_old_122",
+      action: "closed",
+      payload: { ...leasedEvent.payload, state: "closed", merged: false, updatedAt: "2026-09-04T11:59:02.000Z" },
+    };
+    currentTime = new Date(currentTime.getTime() + 5_001);
+    queuedEvents = [staleEvent];
+    await expect(service.pollOnce()).resolves.toMatchObject({ processed: 1, duplicate: 0, failed: 0 });
+    [afterRace] = await db.select().from(externalObjects).where(eq(externalObjects.id, externalObjectId));
+    expect(afterRace).toMatchObject({ statusKey: "open", remoteVersion: "2026-09-04T11:59:03.000Z" });
+    expect(afterRace.nextRefreshAt?.getTime()).toBeLessThanOrEqual(currentTime.getTime());
+
+    const equalVersionConflict = {
+      ...staleEvent,
+      id: "delivery_equal_version_conflict",
+      payload: { ...staleEvent.payload, updatedAt: "2026-09-04T11:59:03.000Z" },
+    };
+    currentTime = new Date(currentTime.getTime() + 5_001);
+    queuedEvents = [equalVersionConflict];
+    await expect(service.pollOnce()).resolves.toMatchObject({ processed: 1, duplicate: 0, failed: 0 });
+    [afterRace] = await db.select().from(externalObjects).where(eq(externalObjects.id, externalObjectId));
+    expect(afterRace).toMatchObject({ statusKey: "open", remoteVersion: "2026-09-04T11:59:03.000Z" });
+    expect(afterRace.nextRefreshAt?.getTime()).toBeLessThanOrEqual(currentTime.getTime());
+
+    const unversionedEvent = {
+      ...staleEvent,
+      id: "delivery_without_provider_version",
+      payload: { ...staleEvent.payload, updatedAt: "not-a-provider-timestamp" },
+    };
+    currentTime = new Date(currentTime.getTime() + 5_001);
+    queuedEvents = [unversionedEvent];
+    await expect(service.pollOnce()).resolves.toMatchObject({ processed: 1, duplicate: 0, failed: 0 });
+    [afterRace] = await db.select().from(externalObjects).where(eq(externalObjects.id, externalObjectId));
+    expect(afterRace).toMatchObject({ statusKey: "open", remoteVersion: "2026-09-04T11:59:03.000Z" });
+    expect(afterRace.nextRefreshAt?.getTime()).toBeLessThanOrEqual(currentTime.getTime());
+
+    const rejectedPrNumber = 913;
+    const confirmationIssueId = randomUUID();
+    const confirmationId = randomUUID();
+    await db.insert(issues).values({
+      id: confirmationIssueId,
+      companyId,
+      title: "Wait for the linked pull request",
+      status: "in_review",
+      priority: "medium",
+    });
+    await db.insert(issueThreadInteractions).values({
+      id: confirmationId,
+      companyId,
+      issueId: confirmationIssueId,
+      kind: "request_confirmation",
+      status: "pending",
+      continuationPolicy: "wake_assignee_on_accept",
+      requestedResolverPolicy: "board_only",
+      effectiveResolverPolicy: "board_only",
+      title: `Merge paperclipai/paperclip#${rejectedPrNumber}?`,
+      payload: { version: 1, prompt: "Merge this pull request?" },
+    });
+    await db.insert(externalObjects).values({
+      id: randomUUID(),
+      companyId,
+      providerKey: "github",
+      objectType: "pull_request",
+      externalId: `paperclipai/paperclip#pull/${rejectedPrNumber}`,
+      statusKey: "open",
+      statusCategory: "open",
+      statusTone: "info",
+      isTerminal: false,
+      data: { provider: "github", owner: "paperclipai", repo: "paperclip", number: rejectedPrNumber, state: "open", merged: false },
+      remoteVersion: "2026-09-04T11:59:03.000Z",
+    });
+    const staleMergedEvent = {
+      ...leasedEvent,
+      id: "delivery_stale_merged_913",
+      payload: {
+        ...leasedEvent.payload,
+        number: rejectedPrNumber,
+        state: "closed",
+        merged: true,
+        updatedAt: "2026-09-04T11:59:02.000Z",
+      },
+    };
+    currentTime = new Date(currentTime.getTime() + 5_001);
+    queuedEvents = [staleMergedEvent];
+    await expect(service.pollOnce()).resolves.toMatchObject({ processed: 1, duplicate: 0, failed: 0 });
+
+    const [afterRejectedMerge] = await db.select({ status: issueThreadInteractions.status })
+      .from(issueThreadInteractions).where(eq(issueThreadInteractions.id, confirmationId));
+    expect(afterRejectedMerge?.status).toBe("pending");
+
+    // Verify the rejected delivery did not seed the bounded merged-state cache
+    // either: a canonical provider answer of open must still be consulted.
+    const resolvePullRequestState = vi.fn(async () => "open" as const);
+    const confirmations = issueThreadInteractionService(db, { resolvePullRequestState });
+    await confirmations.sweepMergedPullRequestConfirmations();
+    expect(resolvePullRequestState).toHaveBeenCalledTimes(1);
+    const [afterCanonicalRefresh] = await db.select({ status: issueThreadInteractions.status })
+      .from(issueThreadInteractions).where(eq(issueThreadInteractions.id, confirmationId));
+    expect(afterCanonicalRefresh?.status).toBe("pending");
   });
 
   it.each([false, true])("applies installation events once without discarding newer verified access (refreshed: %s)", async (refreshed) => {
@@ -304,6 +450,14 @@ describeEmbeddedPostgres.sequential("GitHub connection event delivery", () => {
     unsubscribe();
     let [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grantId));
     expect(grant?.providerTenant?.github).toMatchObject({ repositoryCount: refreshed ? 3 : 4, webhookHealth: "healthy" });
+    const [connection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connectionId));
+    expect(projectToolConnectionLifecycle(connection!, grant!, currentTime).syncReconciliation).toMatchObject(
+      refreshed
+        ? { state: "required", mode: "github_repository_full_snapshot", accessRevision: null,
+          accessRevisionKind: "not_reported", lastSuccessAt: null, lastFullReconciledAt: null, gapDetection: "not_reported" }
+        : { state: "required", mode: "github_repository_full_snapshot", accessRevisionKind: "local_access_revision",
+          lastSuccessAt: null, lastFullReconciledAt: null, gapDetection: "not_reported" },
+    );
     if (refreshed) {
       expect(grant?.providerTenant?.github?.repositories).toHaveLength(1);
     } else {

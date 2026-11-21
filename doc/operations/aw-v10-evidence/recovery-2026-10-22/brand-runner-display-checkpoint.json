@@ -1,0 +1,25 @@
+{
+  "scope": "Use shared customer identity for canonical Runner display and original permission explanations",
+  "sources": {
+    "ui/src/adapters/adapter-display-registry.ts": "8145546bf4bea0fe041f8c192f86df1ef934129ed24d8b58cc9e4321dec30df8",
+    "packages/adapter-utils/src/paperclip-runner-permissions.ts": "1bc45b05ebb37996a0da4a8a98d996008a33638a54e6ef891b21f4e0d71622f5"
+  },
+  "verification": {
+    "existingSuites": {
+      "files": 2,
+      "passed": 17,
+      "seconds": 11.93,
+      "exit": 0
+    },
+    "uiTypecheck": 0,
+    "adapterUtilsTypecheck": 0,
+    "tokenGates": 0,
+    "allFinalPinsMatch": true,
+    "processesClosed": true
+  },
+  "change": "Original registry label and original browser-safe permission catalogue reuse PRODUCT_IDENTITY.productName. Provider names, identifiers, mode values, tool names and permission enforcement unchanged. No dependencies or new tests.",
+  "limits": [
+    "Existing isolation/provider-profile claims are retained copy, not new physical host qualification.",
+    "Runner transcript fallback labels, remaining customer identity inventory and full V10 release gates remain open."
+  ]
+}

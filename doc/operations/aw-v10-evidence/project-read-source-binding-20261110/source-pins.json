@@ -1,0 +1,36 @@
+{
+  "parentCommit": "41ea2224fe41749dc38e535d81fbc0e92229103a",
+  "files": {
+    "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts": "45bdc6fef23b72bebd602a4e94529ce3552e9371bb2e3011f2ce060d902cb360",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts": "77189ed37c2a32d3cd305bd7210261d9a540b262e50a8f84d4cf96722de74d5f",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "6467c4329f7e3a308d433bacbd97ecd92a9b8ad61f8f246ad91c2de1da30d828",
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "c352951cbbc93da2ffa598c793808db34b86d8b33f8e23b08fb73623e313aeca",
+    "server/src/__tests__/manual-project-payload-source.integration.test.ts": "4d32da6d8a080b2d7dfd9a47ea927cec44bf1fe648f2ee7670fa6d21896aaf30",
+    "server/src/__tests__/v7-worker-model-gateway.integration.test.ts": "e88ceb4bf70b47868611b444198072626b76112b582b80c9e1427971c1b88ce5",
+    "server/src/services/native-direct-input.ts": "669a72919c0c7eaa1fce53f5c8893cd9803df620e13df988d19df36c333ff93a",
+    "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts": "f9b5b3c53964386a0683f0807654e79ae77dd8286397162985fc79c7fe3c23f4",
+    "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts": "a55509a80b8d7fc8c2de1645cd60a989664d722c534e08cc0e883afb385f2b91",
+    "server/src/services/native-runtime/native-session-executor.ts": "4a1e1cd0163d3e87c3f1ca8e877b51eadafbd2a51f4d0cffae141f0f1b5c93f4",
+    "server/src/services/orchestration/native-tool-boundary.ts": "80c45e83976a2924690537d866ac57b76c49892610ab5e5c39202429482d2359",
+    "server/src/services/orchestration/worker-model-gateway.ts": "b9cf660bc20fe3b1d6550c4b51d9826adf7bbc64deaaa5d05ce1e4e667969a60"
+  },
+  "artifacts": {
+    "providerPackManifest": {
+      "sha256": "97a3bc8f9e1aa69791d9bd10750ebefb4500170169fd7f8b29a102f4ef77b6e7",
+      "bytes": 1988
+    },
+    "runnerd": {
+      "sha256": "31964806291c8eac3cad8b18bc26c1d3377191fb46f1f1e65aee2595a5697604",
+      "bytes": 36838128
+    },
+    "openCode": {
+      "sha256": "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080",
+      "bytes": 185165952
+    },
+    "openShellProver": {
+      "sha256": "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1",
+      "bytes": 32609144
+    }
+  },
+  "scope": "Final current leaves. Each invocation manifest independently identifies its exact observation window and unchanged HEAD dependency bytes; this is not a loaded-module trace."
+}

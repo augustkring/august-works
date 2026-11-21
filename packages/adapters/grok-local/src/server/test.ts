@@ -1,3 +1,4 @@
+import { admitPaidModelProbe } from "@paperclipai/adapter-utils/paid-model-probe";
 import type {
   AdapterEnvironmentCheck,
   AdapterEnvironmentTestContext,
@@ -309,7 +310,7 @@ export async function testEnvironment(
     }
   }
 
-  if (canRunProbe) {
+  if (canRunProbe && admitPaidModelProbe(checks)) {
     const probeArgs = [
       "--output-format",
       "streaming-json",

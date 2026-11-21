@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -188,16 +188,88 @@ function collectTextFiles(root: string, current: string, files: Record<string, s
 }
 
 async function stopServerProcess(child: ServerProcess | null) {
-  if (!child || child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await new Promise<void>((resolve) => {
-    child.once("exit", () => resolve());
-    setTimeout(() => {
-      if (child.exitCode === null) {
-        child.kill("SIGKILL");
+  if (!child) return;
+
+  const processGroupId = process.platform === "win32" ? null : child.pid;
+  if (!processGroupId && (child.exitCode !== null || child.signalCode !== null)) return;
+  const signalTree = (signal: NodeJS.Signals) => {
+    if (processGroupId) {
+      try {
+        process.kill(-processGroupId, signal);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
       }
-    }, 5_000);
-  });
+    } else if (child.exitCode === null && child.signalCode === null) {
+      child.kill(signal);
+    }
+  };
+  const processGroupHasLiveMembers = () => {
+    if (!processGroupId) return child.exitCode === null && child.signalCode === null;
+    try {
+      process.kill(-processGroupId, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+      if ((error as NodeJS.ErrnoException).code === "EPERM") return true;
+      throw error;
+    }
+
+    // Container PID 1 may leave adopted zombies unreaped. They are dead and
+    // hold no server resources, so wait for live members rather than treating
+    // those inert process-table entries as a running process group.
+    if (existsSync("/proc")) {
+      for (const entry of readdirSync("/proc")) {
+        if (!/^\d+$/.test(entry)) continue;
+        try {
+          const stat = readFileSync(`/proc/${entry}/stat`, "utf8");
+          const closingParen = stat.lastIndexOf(")");
+          if (closingParen < 0) continue;
+          const fields = stat.slice(closingParen + 2).split(" ");
+          const state = fields[0];
+          const groupId = Number(fields[2]);
+          if (groupId === processGroupId && state !== "Z" && state !== "X") return true;
+        } catch {
+          // A process may exit while /proc is being inspected.
+        }
+      }
+      return false;
+    }
+
+    // BSD/macOS lack /proc, so use ps to distinguish live members from
+    // zombies that cannot be reaped by the test process.
+    const processes = execFileSync("ps", ["-eo", "pgid=,stat="], { encoding: "utf8" });
+    return processes.split("\n").some((line) => {
+      const [groupIdText, state] = line.trim().split(/\s+/, 2);
+      return Number(groupIdText) === processGroupId && state !== "Z" && state !== "X";
+    });
+  };
+  const waitForTreeExit = async (timeoutMs: number) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (!processGroupHasLiveMembers()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return !processGroupHasLiveMembers();
+  };
+  const waitForDirectChildExit = async () => {
+    const deadline = Date.now() + 1_000;
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null || child.signalCode !== null) return true;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return child.exitCode !== null || child.signalCode !== null;
+  };
+  const ensureFullyStopped = async () => {
+    if (!(await waitForTreeExit(2_500))) return false;
+    return waitForDirectChildExit();
+  };
+
+  signalTree("SIGTERM");
+  if (await ensureFullyStopped()) return;
+
+  signalTree("SIGKILL");
+  if (!(await ensureFullyStopped())) {
+    throw new Error(`CLI test server process group ${processGroupId ?? child.pid ?? "unknown"} did not exit`);
+  }
 }
 
 async function api<T>(baseUrl: string, pathname: string, init?: RequestInit): Promise<T> {
@@ -272,6 +344,26 @@ async function waitForServer(
   );
 }
 
+async function ensureWorkspaceBuildDependencies(repoRoot: string) {
+  const buildScript = path.join(repoRoot, "scripts", "ensure-plugin-build-deps.mjs");
+  const startedAt = Date.now();
+  try {
+    await execFileAsync(process.execPath, [buildScript], {
+      cwd: repoRoot,
+      timeout: 120_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  } catch (error) {
+    const result = error as Error & { stdout?: string; stderr?: string };
+    throw new Error(
+      `Failed to prepare the workspace build dependencies before starting the company import/export CLI fixture.\n` +
+      `stdout:\n${result.stdout ?? ""}\nstderr:\n${result.stderr ?? ""}\n${result.message}`,
+      { cause: error },
+    );
+  }
+  return Date.now() - startedAt;
+}
+
 describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
   let tempRoot = "";
   let configPath = "";
@@ -282,6 +374,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
   let paperclipInstanceId = "";
   let serverProcess: ServerProcess | null = null;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let serverOutput = { stdout: [] as string[], stderr: [] as string[] };
 
   beforeAll(async () => {
     tempRoot = mkdtempSync(path.join(os.tmpdir(), "paperclip-company-cli-e2e-"));
@@ -300,12 +393,16 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
     apiBase = `http://127.0.0.1:${port}`;
 
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-    const output = { stdout: [] as string[], stderr: [] as string[] };
+    const buildPreparationMs = await ensureWorkspaceBuildDependencies(repoRoot);
+    console.info(`[company-import-export-e2e] Workspace build prerequisites ready in ${buildPreparationMs}ms`);
+    serverOutput = { stdout: [], stderr: [] };
+    const output = serverOutput;
     const child = spawn(
       "pnpm",
       ["paperclipai", "run", "--config", configPath],
       {
         cwd: repoRoot,
+        detached: process.platform !== "win32",
         env: createServerEnv(configPath, port, tempDb.connectionString, {
           paperclipHome,
           instanceId: paperclipInstanceId,
@@ -322,8 +419,10 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
       output.stderr.push(String(chunk));
     });
 
+    const serverStartedAt = Date.now();
     await waitForServer(apiBase, child, output);
-  }, 60_000);
+    console.info(`[company-import-export-e2e] Server health ready in ${Date.now() - serverStartedAt}ms after spawn`);
+  }, 180_000);
 
   afterAll(async () => {
     await stopServerProcess(serverProcess);
@@ -331,7 +430,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
     if (tempRoot) {
       rmSync(tempRoot, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("exports a company package and imports it into new and existing companies", async () => {
     expect(serverProcess).not.toBeNull();
@@ -451,30 +550,39 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
     expect(readFileSync(path.join(exportDir, "COMPANY.md"), "utf8")).toContain(sourceCompany.name);
     expect(readFileSync(path.join(exportDir, ".paperclip.yaml"), "utf8")).toContain('schema: "paperclip/v1"');
 
-    const importedNew = await runCliJson<{
+    let importedNew: {
       company: { id: string; name: string; action: string };
       agents: Array<{ id: string | null; action: string; name: string }>;
-    }>(
-      [
-        "company",
-        "import",
-        exportDir,
-        "--target",
-        "new",
-        "--new-company-name",
-        `Imported ${sourceCompany.name}`,
-        "--include",
-        "company,agents,projects,issues",
-        "--yes",
-      ],
-      {
-        apiBase,
-        configPath,
-        paperclipHome,
-        instanceId: paperclipInstanceId,
-        shellHome: cliShellHome,
-      },
-    );
+    };
+    try {
+      importedNew = await runCliJson(
+        [
+          "company",
+          "import",
+          exportDir,
+          "--target",
+          "new",
+          "--new-company-name",
+          `Imported ${sourceCompany.name}`,
+          "--include",
+          "company,agents",
+          "--yes",
+        ],
+        {
+          apiBase,
+          configPath,
+          paperclipHome,
+          instanceId: paperclipInstanceId,
+          shellHome: cliShellHome,
+        },
+      );
+    } catch (error) {
+      const safeDiagnostics = serverOutput.stdout
+        .join("")
+        .split(/\r?\n/)
+        .filter((line) => line.includes("company import domain operation requires reconciliation"));
+      throw new Error(`${error instanceof Error ? error.message : String(error)}\n${safeDiagnostics.join("\n")}`, { cause: error });
+    }
 
     expect(importedNew.company.action).toBe("created");
     expect(importedNew.agents).toHaveLength(1);
@@ -495,8 +603,26 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
     const importedMatchingIssues = importedIssues.filter((issue) => issue.title === sourceIssue.title);
 
     expect(importedAgents.map((agent) => agent.name)).toContain(sourceAgent.name);
-    expect(importedProjects.map((project) => project.name)).toContain(sourceProject.name);
-    expect(importedMatchingIssues).toHaveLength(1);
+    expect(importedProjects).toEqual([]);
+    expect(importedMatchingIssues).toHaveLength(0);
+
+    const companiesBeforeDeniedCopy = await api<Array<{ id: string }>>(apiBase, "/api/companies");
+    const sourceAgentsBeforeDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/agents`);
+    const sourceProjectsBeforeDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/projects`);
+    const sourceIssuesBeforeDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/issues`);
+    await expect(runCliJson([
+      "company", "import", exportDir, "--target", "new", "--new-company-name", `Denied ${sourceCompany.name}`,
+      "--include", "company,agents,projects,issues", "--yes",
+    ], { apiBase, configPath, paperclipHome, instanceId: paperclipInstanceId, shellHome: cliShellHome }))
+      .rejects.toThrow("Cross-company work import requires a current original-owner review of one complete source company and exact package");
+    const companiesAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, "/api/companies");
+    const sourceAgentsAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/agents`);
+    const sourceProjectsAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/projects`);
+    const sourceIssuesAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/issues`);
+    expect(companiesAfterDeniedCopy.map((row) => row.id)).toEqual(companiesBeforeDeniedCopy.map((row) => row.id));
+    expect(sourceAgentsAfterDeniedCopy.map((row) => row.id)).toEqual(sourceAgentsBeforeDeniedCopy.map((row) => row.id));
+    expect(sourceProjectsAfterDeniedCopy.map((row) => row.id)).toEqual(sourceProjectsBeforeDeniedCopy.map((row) => row.id));
+    expect(sourceIssuesAfterDeniedCopy.map((row) => row.id)).toEqual(sourceIssuesBeforeDeniedCopy.map((row) => row.id));
 
     const previewExisting = await runCliJson<{
       errors: string[];
@@ -514,7 +640,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
         "--target",
         "existing",
         "--company-id",
-        importedNew.company.id,
+        sourceCompany.id,
         "--include",
         "company,agents,projects,issues",
         "--collision",
@@ -547,7 +673,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
         "--target",
         "existing",
         "--company-id",
-        importedNew.company.id,
+        sourceCompany.id,
         "--include",
         "company,agents,projects,issues",
         "--collision",
@@ -568,15 +694,15 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
 
     const twiceImportedAgents = await api<Array<{ id: string; name: string; metadata?: Record<string, unknown> | null }>>(
       apiBase,
-      `/api/companies/${importedNew.company.id}/agents`,
+      `/api/companies/${sourceCompany.id}/agents`,
     );
     const twiceImportedProjects = await api<Array<{ id: string; name: string }>>(
       apiBase,
-      `/api/companies/${importedNew.company.id}/projects`,
+      `/api/companies/${sourceCompany.id}/projects`,
     );
     const twiceImportedIssues = await api<Array<{ id: string; title: string; identifier: string }>>(
       apiBase,
-      `/api/companies/${importedNew.company.id}/issues`,
+      `/api/companies/${sourceCompany.id}/issues`,
     );
     const twiceImportedMatchingIssues = twiceImportedIssues.filter((issue) => issue.title === sourceIssue.title);
     const twiceImportedPortableAgents = twiceImportedAgents.filter(isPortableAgent);
@@ -605,7 +731,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
         "--new-company-name",
         `Zip Imported ${sourceCompany.name}`,
         "--include",
-        "company,agents,projects,issues",
+        "company,agents",
         "--yes",
       ],
       {

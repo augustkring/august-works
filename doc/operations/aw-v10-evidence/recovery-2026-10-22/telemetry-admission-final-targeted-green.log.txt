@@ -1,0 +1,18 @@
+2026-10-22T19:42:11Z
+0af3e98afd2e0f1aee172c4b09ad27607e2f4ad418d3e2c2ba0dff13923bf826  packages/shared/src/config-schema.ts
+ca845f532863908408f6a665ed6261e76c6edb3238b3ad85ea670b1d0c1814ee  packages/shared/src/telemetry/config.ts
+9d98a2d42200b2f4fde7d561c4abab256b62b9b5f73eb6b27ea0fc4ea80a92b5  packages/shared/src/telemetry/client.ts
+e790eb0719b9f5692c765fa2c490d861715c0db6df38b13e5faebfde6d17ade3  packages/shared/src/telemetry/admission.test.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  19:42:12
+   Duration  783ms (transform 210ms, setup 0ms, import 387ms, tests 86ms, environment 0ms)
+
+VITEST_EXIT=0

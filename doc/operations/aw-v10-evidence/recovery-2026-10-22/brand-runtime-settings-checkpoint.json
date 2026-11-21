@@ -1,0 +1,42 @@
+{
+  "scope": "Canonical software identity in advanced Agent setup and instance experimental controls",
+  "sources": {
+    "ui/src/components/new-agent/NewAgentSetup.tsx": "824483c42ed16c30adb246991d0472978d94c81761d3c202c084a8f90b14c57b",
+    "ui/src/pages/InstanceExperimentalSettings.tsx": "170ff8da5b3292eb72166ad7de15494841d05c6ce304245e65d29219637e3b35",
+    "ui/src/pages/InstanceExperimentalSettings.test.tsx": "c47d33bffdfcb0ad9e67fb3daa80e3fae6de4d195c70c8150bec88ff631aa583"
+  },
+  "implementation": "Reuse existing adapter display registry for saved native Agent Runner label and PRODUCT_IDENTITY for instance Runner, Developer Mode, built-in Agent and core Skill descriptions. Preserve actual provider names, identifiers, settings keys, Paperclip Cloud managed attribution and original isolation wording. Root moves two cards to their new displayed-title alphabetical positions.",
+  "baseline": {
+    "failed": 1,
+    "passed": 90,
+    "files": 3,
+    "seconds": 48.83,
+    "exit": 1,
+    "log": "brand-runtime-settings-order-baseline.log",
+    "finding": "Existing alphabetical-order assertion catches original static P-position after Blentera rename. Exact failed source/pins retained. Existing sort assertion remains unchanged."
+  },
+  "verification": {
+    "existingSuites": {
+      "files": 3,
+      "passed": 91,
+      "seconds": 76.64,
+      "exit": 0,
+      "log": "brand-runtime-settings-final-tests.log"
+    },
+    "uiTypecheck": {
+      "exit": 0,
+      "log": "brand-runtime-settings-ui-types.log"
+    },
+    "tokenGates": {
+      "exit": 0,
+      "log": "brand-runtime-settings-token-gates.log"
+    },
+    "finalPinsMatch": true,
+    "processesClosed": true
+  },
+  "review": "Bounded gpt-6-luna original-file/caller review and copy edits; Root reviewed diff, fixed existing alphabetical ordering, ran and closed actual checks. No new scalar-copy tests.",
+  "limits": [
+    "Presentation-only, no physical isolation/provider/deployment qualification.",
+    "Complete identity inventory, full latest recursive checks, complete privacy/source and all V10/PR/release gates remain open."
+  ]
+}

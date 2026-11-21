@@ -1,0 +1,132 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts (4 tests | 2 failed | 2 skipped) 13094ms
+     × omits Project proofs from list and detail while retaining their actual DB proof 1227ms
+     × keeps actual Comment list and detail proofs server-side while retaining the comment body 1073ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Project proofs from list and detail while retaining their actual DB proof
+AssertionError: expected { …(33) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:49:26
+     47|   function publicRow(row: Record<string, unknown>, id: string) {
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+       |                          ^
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+     51|   }
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:76:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Project proofs from list and detail while retaining their actual DB proof
+AssertionError: expected { …(33) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "digest": "b3e2a14af56bb7351272ca5fd138d23ba37ef544996eff953713f085806e2c10",
+  "inputs": [],
+  "owner": {
+    "companyId": "f67af669-e017-4936-919c-851e14580152",
+    "contentHash": "ddf5348ac9c3881d292c5638d54b6da8b1084f1d2b39bc891f7673d66ce141a0",
+    "id": "68308ebb-fdc2-4134-aaef-932c4473bfe3",
+    "kind": "project",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:50:26
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+       |                          ^
+     51|   }
+     52|
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:76:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > keeps actual Comment list and detail proofs server-side while retaining the comment body
+AssertionError: expected { …(26) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:49:26
+     47|   function publicRow(row: Record<string, unknown>, id: string) {
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+       |                          ^
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+     51|   }
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:109:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > keeps actual Comment list and detail proofs server-side while retaining the comment body
+AssertionError: expected { …(26) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "digest": "40bc26dbbf27b908d7ac76d446aa1eaf3d52f36733333adfb19f4668aa60730f",
+  "inputs": [],
+  "owner": {
+    "companyId": "45d76acf-8fe8-410f-9d08-4c37345dedd6",
+    "contentHash": "b148a64b857474d351d2005b4f588f9066ba663cc361ed11688b9ef397064acd",
+    "id": "aa635973-0e51-4582-b331-fc82df76ba84",
+    "kind": "comment",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:50:26
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+       |                          ^
+     51|   }
+     52|
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:109:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 skipped (4)
+   Start at  06:03:57
+   Duration  74.70s (transform 43.84s, setup 204ms, import 60.89s, tests 13.09s, environment 0ms)
+

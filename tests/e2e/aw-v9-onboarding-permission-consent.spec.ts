@@ -2,8 +2,11 @@ import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { activationViewSchema, initialActivationState } from "../../packages/shared/src/activation.ts";
 import { activationConnectionReviewSchema, activationConnectionConsentReceiptSchema } from "../../packages/shared/src/activation-connection-consent.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) { expect(response.ok(), await response.text()).toBe(true); return response.json(); }
 
 // Built UI with explicit software purpose/receipt responses. Actual Native
@@ -54,7 +57,8 @@ test("eight distinct permission fields, keyboard C3, unknown receipt recovery an
       saved = activationConnectionConsentReceiptSchema.parse({ ...saved, status: "withdrawn" });
       return route.fulfill({ json: saved });
     });
-    await page.goto(`/${company.issuePrefix}/dashboard`); await expect(page.getByRole("main")).toBeVisible();
+    await page.goto(`/${company.issuePrefix}/dashboard`);
+    await expect(page.getByRole("button", { name: `Open ${company.name} organization switcher`, exact: true })).toBeVisible();
     await page.goto("/saas/activation/8");
     const section = page.getByRole("region", { name: "Connection permissions: Original Gmail (gmail)", exact: true });
     await expect(section.locator("dt")).toHaveCount(8);
@@ -82,7 +86,7 @@ test("eight distinct permission fields, keyboard C3, unknown receipt recovery an
     expect(withdrawals).toHaveLength(0); await page.getByRole("checkbox").check(); await page.getByRole("button", { name: "Confirm decision", exact: true }).click();
     await expect(decide).toBeVisible(); expect(withdrawals).toHaveLength(1);
     await page.screenshot({ path: info.outputPath("onboarding-consent-narrow.png"), fullPage: true });
-  } finally { expect((await request.delete(`/api/companies/${company.id}`)).ok()).toBe(true); }
+  } finally { expect((await deleteCompany(request, company.id)).ok()).toBe(true); }
 });
 
 test("explicit C3 reuses the exact personal connection and refreshes access without provider setup", async ({ page, request }) => {
@@ -124,7 +128,8 @@ test("explicit C3 reuses the exact personal connection and refreshes access with
       return route.fulfill({ json: saved });
     });
     page.on("request", req => { if (req.method() === "POST" && /\/connect$|\/oauth\/start/.test(new URL(req.url()).pathname)) providerSetup.push(req.url()); });
-    await page.goto(`/${company.issuePrefix}/dashboard`); await expect(page.getByRole("main")).toBeVisible();
+    await page.goto(`/${company.issuePrefix}/dashboard`);
+    await expect(page.getByRole("button", { name: `Open ${company.name} organization switcher`, exact: true })).toBeVisible();
     await page.goto("/saas/activation/8");
     const section = page.getByRole("region", { name: "Connection permissions: Original Gmail (gmail)", exact: true });
     await expect(section.locator("dt")).toHaveCount(8);
@@ -137,7 +142,7 @@ test("explicit C3 reuses the exact personal connection and refreshes access with
     expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
     await page.reload(); await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
     expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
-  } finally { expect((await request.delete(`/api/companies/${company.id}`)).ok()).toBe(true); }
+  } finally { expect((await deleteCompany(request, company.id)).ok()).toBe(true); }
 });
 
 test("withdrawal refetches the exact successor and requires new C3 without reviving history or provider setup", async ({ page, request }) => {
@@ -189,7 +194,8 @@ test("withdrawal refetches the exact successor and requires new C3 without reviv
       return route.fulfill({ json: { ...original, status: "withdrawn" } });
     });
     page.on("request", req => { if (req.method() === "POST" && /\/connect$|\/oauth\/start/.test(new URL(req.url()).pathname)) providerSetup.push(req.url()); });
-    await page.goto(`/${company.issuePrefix}/dashboard`); await expect(page.getByRole("main")).toBeVisible();
+    await page.goto(`/${company.issuePrefix}/dashboard`);
+    await expect(page.getByRole("button", { name: `Open ${company.name} organization switcher`, exact: true })).toBeVisible();
     await page.goto("/saas/activation/8");
     const section = page.getByRole("region", { name: "Connection permissions: Original Gmail (gmail)", exact: true });
     await expect(section.locator("dt")).toHaveCount(8);
@@ -208,7 +214,7 @@ test("withdrawal refetches the exact successor and requires new C3 without reviv
     expect(approvals).toHaveLength(1); expect(approvals[0]!.requestKey).not.toBe(original.requestKey); expect(providerSetup).toEqual([]);
     await page.reload(); await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
     expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
-  } finally { expect((await request.delete(`/api/companies/${company.id}`)).ok()).toBe(true); }
+  } finally { expect((await deleteCompany(request, company.id)).ok()).toBe(true); }
 });
 
 test("retained login requires fresh C3 and stays blocked until separately observed current validation", async ({ page, request }) => {
@@ -256,7 +262,8 @@ test("retained login requires fresh C3 and stays blocked until separately observ
       if (/\/connect$|\/oauth\/start/.test(path)) providerSetup.push(req.url());
       if (/\/withdraw$/.test(path)) withdrawals.push(req.url());
     });
-    await page.goto(`/${company.issuePrefix}/dashboard`); await expect(page.getByRole("main")).toBeVisible();
+    await page.goto(`/${company.issuePrefix}/dashboard`);
+    await expect(page.getByRole("button", { name: `Open ${company.name} organization switcher`, exact: true })).toBeVisible();
     await page.goto("/saas/activation/8");
     const section = page.getByRole("region", { name: "Connection permissions: Original Gmail (gmail)", exact: true });
     await expect(section.locator("dt")).toHaveCount(8);
@@ -277,5 +284,5 @@ test("retained login requires fresh C3 and stays blocked until separately observ
     saved = activationConnectionConsentReceiptSchema.parse({ ...saved, status: "connected", connectedAt: new Date().toISOString() });
     await page.reload(); await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
     expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
-  } finally { expect((await request.delete(`/api/companies/${company.id}`)).ok()).toBe(true); }
+  } finally { expect((await deleteCompany(request, company.id)).ok()).toBe(true); }
 });

@@ -1,0 +1,7 @@
+{
+  "originalSha256": "9735bb033907f1c93b5513a55955b8fc34718065087e1f5c1d10f1f6e364db79",
+  "originalBytes": 1091168,
+  "credentialKeyRedactions": 0,
+  "connectionUrlRedactions": 0,
+  "reason": "Failed matcher dumped the native transaction object. The compressed log preserves the failure; credential-key and connection-URL pattern scans found no matches. No passing result is inferred."
+}

@@ -19,7 +19,7 @@ import type {
   GitHubReviewPolicy,
   GitHubTaskReview,
 } from "@paperclipai/shared";
-import { chatEndpoints } from "./chat_channels.js";
+import { chatEndpointResources, chatEndpoints } from "./chat_channels.js";
 import { issues } from "./issues.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
 
@@ -156,5 +156,45 @@ export const chatGitHubReviews = pgTable(
       "chat_github_review_state_check",
       sql`${t.state} in ('queued', 'running', 'completed', 'incomplete', 'error', 'superseded', 'manual_required')`,
     ),
+  ],
+);
+
+/** Completed stable-repository coordinate changes; inserted atomically with thread rebinding. */
+export const chatGitHubResourceMigrations = pgTable(
+  "chat_github_resource_migrations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").notNull(),
+    endpointId: uuid("endpoint_id").notNull(),
+    resourceId: uuid("resource_id").notNull(),
+    providerRepositoryId: text("provider_repository_id").notNull(),
+    fromRepository: text("from_repository").notNull(),
+    toRepository: text("to_repository").notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.companyId, t.endpointId],
+      foreignColumns: [chatEndpoints.companyId, chatEndpoints.id],
+      name: "chat_github_resource_migrations_company_endpoint_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.companyId, t.resourceId],
+      foreignColumns: [chatEndpointResources.companyId, chatEndpointResources.id],
+      name: "chat_github_resource_migrations_company_resource_fk",
+    }).onDelete("cascade"),
+    uniqueIndex("chat_github_resource_migrations_edge_uq").on(
+      t.companyId, t.endpointId, t.resourceId, t.providerRepositoryId,
+      t.fromRepository, t.toRepository,
+    ),
+    index("chat_github_resource_migrations_from_idx").on(
+      t.companyId, t.endpointId, t.resourceId, t.providerRepositoryId, t.fromRepository,
+    ),
+    check("chat_github_resource_migrations_repository_id_check",
+      sql`${t.providerRepositoryId} ~ '^[0-9]+$'`),
+    check("chat_github_resource_migrations_coordinates_check",
+      sql`${t.fromRepository} <> ${t.toRepository} and ${t.fromRepository} ~ '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' and ${t.toRepository} ~ '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'`),
   ],
 );

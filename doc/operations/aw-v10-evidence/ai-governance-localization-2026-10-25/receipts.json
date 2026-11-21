@@ -1,0 +1,60 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "English/Danish AI Governance page localization: focused page + locale validation tests, token gates, and scoped UI typecheck; typecheck currently blocked by unrelated RoutineTriggers and Storybook Company fixture errors.",
+  "logs": [
+    {
+      "name": "ai-governance-localization-focused-final2-20261025",
+      "exitCode": 0,
+      "exitSidecar": "ai-governance-localization-focused-final2-20261025.log.exit",
+      "rawSha256": "0b1ecd46126e6f24f28351bc59ea7d3a1fa8253ac4ab9cf2eac009fdfc539099",
+      "sanitizedSha256": "0b1ecd46126e6f24f28351bc59ea7d3a1fa8253ac4ab9cf2eac009fdfc539099",
+      "archiveSha256": "79e23dae8ab1aa9f6054e925970c745872878d7e70c0eb3bc0ee5ea9a3fd64a6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  10 passed (10)",
+        "Duration  3.58s (transform 1.90s, setup 37ms, import 3.06s, tests 173ms, environment 592ms)"
+      ]
+    },
+    {
+      "name": "ai-governance-localization-token-gates-20261025",
+      "exitCode": 0,
+      "exitSidecar": "ai-governance-localization-token-gates-20261025.log.exit",
+      "rawSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "sanitizedSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "archiveSha256": "54cb5fcb68faef60e731259e2486419a024cbc683cd5dd47dca7b8ba0d18a3a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "ai-governance-localization-typecheck-final-20261025",
+      "exitCode": 1,
+      "exitSidecar": "ai-governance-localization-typecheck-final-20261025.log.exit",
+      "rawSha256": "9b0309ceb4703f4a16983630fc5271393c3d790396c3adb08b5555b7a23d3aed",
+      "sanitizedSha256": "9b0309ceb4703f4a16983630fc5271393c3d790396c3adb08b5555b7a23d3aed",
+      "archiveSha256": "5d0a69ef23eae40b3adb12669763117a18ad009164c4566f022a9946dc79b614",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

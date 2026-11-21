@@ -18,6 +18,8 @@ export interface Company {
   id: string;
   name: string;
   description: string | null;
+  locale: "en" | "da";
+  timezone: string;
   status: CompanyStatus;
   pauseReason: PauseReason | null;
   pausedAt: Date | null;
@@ -36,4 +38,11 @@ export interface Company {
   logoUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** Contact IDs are returned only by the company-owner settings endpoint. */
+export interface CompanyResponsibilityContacts {
+  securityContactUserId: string | null;
+  supportIncidentContactUserId: string | null;
+  eligibleUsers: Array<{ id: string; name: string | null; email: string | null }>;
 }

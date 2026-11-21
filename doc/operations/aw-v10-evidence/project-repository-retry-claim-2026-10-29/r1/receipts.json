@@ -1,0 +1,23 @@
+{
+  "attempt": "project-repository-retry-claim-r9-20261029",
+  "result": {
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "exit": 0
+  },
+  "sourceHead": "9d9b64375f8e2a72e35bba7be0fd77aaa47c9952",
+  "sourceFiles": [
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "4090e803f45c12e5c036355db9fbce2a8342d6ec7a765386acbb281b5bccd799"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-project-repositories.test.ts",
+      "sha256": "47cc4767bcb8b543f6b1d2dfbf6bc688b63a8012d7ded25cda3524f91b79dac5"
+    }
+  ],
+  "archiveSha256": "32807977c3ee2705b0876844e1466d9ebf9bdf814b66c8d2173a5af6f63c59d6",
+  "scope": "Admitted error-state Agent claim transitions before startup source reads; canonical Human Task fixture; durable retries, pause, exhaustion and preserved local work.",
+  "qualification": "Scoped software proof; final unchanged-head workspace gates remain pending."
+}

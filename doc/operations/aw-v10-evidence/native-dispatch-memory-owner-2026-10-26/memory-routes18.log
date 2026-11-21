@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+··x·
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/memory-routes.test.ts > Memory routes > does not attach Human Memory evidence after its original Task source is withdrawn
+Error: Failed query: update "issues" set "description" = $1 where "issues"."id"=$2::uuid
+params: Withdrawn before contradiction attachment.,5b35cc48-991b-4b46-a4c4-21a4021d0a06
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/memory-routes.test.ts:361:5
+    359|       evidence:supportingEvidence(content,seeded.sourceIssue.id,seeded…
+    360|     }).expect(201);
+    361|     await db.update(issues).set({description:"Withdrawn before contrad…
+       |     ^
+    362|       .where(sql`${issues.id}=${seeded.sourceIssue.id}::uuid`);
+    363|     const contradictory="The Acme procurement review does not require …
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 81 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issues" set "description" = $1 where "issues"."id"=$2::uuid', parameters: [ 'Withdrawn before contradiction attachment.', '5b35cc48-991b-4b46-a4c4-21a4021d0a06' ], args: [ 'Withdrawn before contradiction attachment.', '5b35cc48-991b-4b46-a4c4-21a4021d0a06' ], types: [ 25, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  02:17:41
+   Duration  22.86s (transform 9.78s, setup 75ms, import 13.75s, tests 8.91s, environment 0ms)
+

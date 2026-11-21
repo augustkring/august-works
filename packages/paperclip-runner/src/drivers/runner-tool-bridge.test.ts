@@ -165,6 +165,42 @@ describe("runner semantic MCP bridge", () => {
     });
   });
 
+  it("starts with a draft-07 tool schema and validates by its declared dialect", async () => {
+    const handler = vi.fn(async () => ({ ok: true }));
+    const bridge = await startRunnerToolBridge({
+      tools: [
+        {
+          name: "app_railway_list_projects",
+          inputSchema: {
+            $schema: "http://json-schema.org/draft-07/schema#",
+            type: "object",
+            required: ["limit"],
+            properties: { limit: { type: "integer", minimum: 1 } },
+            additionalProperties: false,
+          },
+        },
+      ],
+      handler,
+    });
+    bridges.push(bridge);
+    expect(
+      await (
+        await rpc(bridge, {
+          id: "draft7-invalid",
+          method: "tools/call",
+          params: { name: "app_railway_list_projects", arguments: { limit: 0 } },
+        })
+      ).json(),
+    ).toMatchObject({ result: { isError: true } });
+    expect(handler).not.toHaveBeenCalled();
+    await rpc(bridge, {
+      id: "draft7-valid",
+      method: "tools/call",
+      params: { name: "app_railway_list_projects", arguments: { limit: 2 } },
+    });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps numeric and string JSON-RPC identities distinct", async () => {
     const handler = vi.fn(async ({ callId }) => ({ callId }));
     const bridge = await startRunnerToolBridge({

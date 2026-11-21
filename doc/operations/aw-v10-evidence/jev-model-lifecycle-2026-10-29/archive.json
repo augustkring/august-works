@@ -1,0 +1,73 @@
+{
+  "format": "jev-model-lifecycle-qualification-archive-v1",
+  "createdUtc": "2026-10-29",
+  "qualificationZip": "qualification.zip",
+  "qualificationZipSha256": "f8db7190e274dbd07226bbbe863f9bcdef5d0255d30dc5d013c33cf31433a39c",
+  "qualificationZipBytes": 1326297,
+  "zipIntegrity": "CRC and all internal SHA-256 entries verified",
+  "runs": [
+    {
+      "id": "r2-historical-42",
+      "testsPassed": 42,
+      "testsFreshForLatestSource": false,
+      "sourcePins": "qualification/r2-historical-42/source-pins.json"
+    },
+    {
+      "id": "r4-changed-cohort-11",
+      "testsPassed": 11,
+      "typesAndTokenGates": "passed",
+      "sourcePins": "qualification/r4-changed-cohort-11/source-pins.json",
+      "note": "Precedes the final SaaS settings cap; direct standalone TSC intentionally not claimed."
+    },
+    {
+      "id": "latest-full-route-15",
+      "testsPassed": 15,
+      "sourcePins": "qualification/latest-full-route-15/source-pins.json",
+      "exactSourcePaths": 19,
+      "sourceHashManifest": "qualification/latest-full-route-15/exact-19-source-hashes.json"
+    }
+  ],
+  "runnerBinarySha256": "31964806291c8eac3cad8b18bc26c1d3377191fb46f1f1e65aee2595a5697604",
+  "outerFiles": [
+    "README.md",
+    "archive.json",
+    "qualification.zip"
+  ],
+  "rootVerification": "ZIP CRC, all internal evidence hashes, and all 19 selected live-source hashes independently verified.",
+  "helpReview": {
+    "localeArticles": 4,
+    "reviewedArticleGroupsIncludingUnchangedGuidance": 8,
+    "reviewPairs": 160,
+    "checks": [
+      "Help metadata, registry, navigation and local links passed",
+      "Generated company search Help matches current articles",
+      "Only reviewed Jev/model-notice source pairs refreshed; remaining source changes await final freeze"
+    ],
+    "files": [
+      {
+        "path": "docs/help/apps-and-connections.md",
+        "sha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957"
+      },
+      {
+        "path": "docs/da/help/apps-and-connections.md",
+        "sha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f"
+      },
+      {
+        "path": "docs/guides/board-operator/managing-agents.md",
+        "sha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803"
+      },
+      {
+        "path": "docs/da/guides/board-operator/managing-agents.md",
+        "sha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866"
+      },
+      {
+        "path": "docs/help/change-review.json",
+        "sha256": "46a446113e5bd70bf2cf5f1dd29e8439c12cd3feb5a03388fb3b0745e6947f01"
+      },
+      {
+        "path": "server/src/services/company-search-help.generated.ts",
+        "sha256": "ea70b04006faf1c25de2efaffba0d35d1a11b7ae85e40a12f430b6b9fa9e6e6c"
+      }
+    ]
+  }
+}

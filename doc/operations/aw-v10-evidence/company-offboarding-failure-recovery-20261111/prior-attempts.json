@@ -1,0 +1,12 @@
+{
+  "R600": "PASS4 actual PG, intermediate before HTTP/contracts/UI",
+  "R601": "40 PASS1 FAIL: OpenAPI array maxItems absent; shared generic array constraint converter corrected, no test weakened",
+  "R602": "PASS41 actual PG, intermediate",
+  "R603": "PASS43 UI/4+token, intermediate",
+  "R604": {
+    "status": "ROOT_CANCELLED_FOR_ADDITIONAL_REQUIRED_SOURCE_CHANGES",
+    "reason": "Complete CE-14 customer-safe stable reason and next reconciliation time before final full checks",
+    "passingQualification": false
+  },
+  "routineGeneratorWrongWorkingDirectory": "Failed MODULE_NOT_FOUND for server/server path; exact generator rerun successfully from repo root before final UI/compiler checks"
+}

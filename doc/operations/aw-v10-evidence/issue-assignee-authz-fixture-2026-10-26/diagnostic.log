@@ -1,0 +1,234 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+xxxx·xxx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > refuses an agent assigning an issue to a paused agent
+AssertionError: {"error":"Internal server error"}; routeErrors=TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13): expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+    159| async function assertAnalyticalContextPayloadAccessInternal(db:Db,comp…
+    160|  scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,work…
+    161|  const origins=()=>db.execute<{source_run_id:string|null;source_task_i…
+       |                       ^
+    162|    select source_run_id,source_task_id,invalid from aw_runner_task_sou…
+    163|      ${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?sco…
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:240:95
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > refuses an agent creating a child issue assigned to a paused agent
+AssertionError: {"error":"Internal server error"}; routeErrors=TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13): expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+    159| async function assertAnalyticalContextPayloadAccessInternal(db:Db,comp…
+    160|  scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,work…
+    161|  const origins=()=>db.execute<{source_run_id:string|null;source_task_i…
+       |                       ^
+    162|    select source_run_id,source_task_id,invalid from aw_runner_task_sou…
+    163|      ${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?sco…
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:257:95
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > still allows an agent to assign to an invokable agent
+AssertionError: {"error":"Internal server error"}; routeErrors=TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13): expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+    159| async function assertAnalyticalContextPayloadAccessInternal(db:Db,comp…
+    160|  scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,work…
+    161|  const origins=()=>db.execute<{source_run_id:string|null;source_task_i…
+       |                       ^
+    162|    select source_run_id,source_task_id,invalid from aw_runner_task_sou…
+    163|      ${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?sco…
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:273:95
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > allows a board user to assign to a paused agent deliberately
+AssertionError: {"error":"Internal server error"}; routeErrors=TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13): expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+    159| async function assertAnalyticalContextPayloadAccessInternal(db:Db,comp…
+    160|  scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,work…
+    161|  const origins=()=>db.execute<{source_run_id:string|null;source_task_i…
+       |                       ^
+    162|    select source_run_id,source_task_id,invalid from aw_runner_task_sou…
+    163|      ${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?sco…
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:287:95
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > refuses an agent child assigned to the creator of an open ancestor
+AssertionError: {"error":"Internal server error"}; routeErrors=Error: Issue not found
+    at notFound (/workspace/v10-dep-qualification/server/src/errors.ts:25:10)
+    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:86)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16 | TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13): expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertPublicTaskWriteAdmission src/routes/issues.ts:3583:86
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:335:95
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > allows the same child when no open ancestor was created by the assignee
+AssertionError: {"error":"Internal server error"}; routeErrors=Error: Issue not found
+    at notFound (/workspace/v10-dep-qualification/server/src/errors.ts:25:10)
+    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:86)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16 | TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13) | TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13): expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertPublicTaskWriteAdmission src/routes/issues.ts:3583:86
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:358:95
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > does not consult the guard for board actors
+AssertionError: {"error":"Internal server error"}; routeErrors=Error: Issue not found
+    at notFound (/workspace/v10-dep-qualification/server/src/errors.ts:25:10)
+    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:86)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16 | TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13) | TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13) | TypeError: db.execute is not a function
+    at origins (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:161:23)
+    at assertAnalyticalContextPayloadAccessInternal (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:165:22)
+    at assertAnalyticalContextPayloadAccess (/workspace/v10-dep-qualification/server/src/services/analytical-context-authority.ts:113:9)
+    at assertIssueReadAllowed (/workspace/v10-dep-qualification/server/src/routes/issues.ts:5230:13): expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertPublicTaskWriteAdmission src/routes/issues.ts:3583:86
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ origins src/services/analytical-context-authority.ts:161:23
+ ❯ assertAnalyticalContextPayloadAccessInternal src/services/analytical-context-authority.ts:165:22
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:113:9
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:378:95
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 1 passed (8)
+   Start at  04:04:18
+   Duration  12.24s (transform 8.74s, setup 67ms, import 11.94s, tests 115ms, environment 0ms)
+

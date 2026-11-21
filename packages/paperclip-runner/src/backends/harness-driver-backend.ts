@@ -5,6 +5,7 @@ import type {
   PersistedHarnessSession,
 } from "../contracts/harness-driver.js";
 import type {
+  NativeConfirmedRunBinding,
   NativeSession,
   NativeSessionBackend,
   NativeSessionBackendDescriptor,
@@ -177,6 +178,10 @@ export class HarnessDriverBackend implements NativeSessionBackend {
         .catch(() => undefined);
       throw error;
     }
+    // CONF15-P2 (d): carry only the driver's runner-confirmed binding; never
+    // synthesize one from `snapshot`. A malformed binding is dropped, so a
+    // caller that requires it refuses.
+    const binding = confirmedRunBinding(recovered.binding);
     return {
       recovered: true,
       session: new HarnessNativeSession(
@@ -184,9 +189,46 @@ export class HarnessDriverBackend implements NativeSessionBackend {
         recovered.session,
         recoveredTerminal,
         (await this.#driver.descriptor()).capabilities.steering,
+        binding,
       ),
+      ...(binding === null ? {} : { binding: structuredClone(binding) }),
     };
   }
+}
+
+const CONFIRMED_RUN_BINDING_KEYS = [
+  "environmentLeaseId",
+  "normalizedSessionId",
+  "runId",
+  "runnerInstanceId",
+] as const;
+
+function confirmedRunBinding(
+  value: unknown,
+): NativeConfirmedRunBinding | null {
+  const candidate = plainRecord(value);
+  if (
+    candidate === null ||
+    Object.keys(candidate).sort().join(",") !==
+      CONFIRMED_RUN_BINDING_KEYS.join(",") ||
+    !CONFIRMED_RUN_BINDING_KEYS.every(
+      (key) => typeof candidate[key] === "string" && candidate[key] !== "",
+    )
+  )
+    return null;
+  return {
+    runId: candidate.runId as string,
+    normalizedSessionId: candidate.normalizedSessionId as string,
+    runnerInstanceId: candidate.runnerInstanceId as string,
+    environmentLeaseId: candidate.environmentLeaseId as string,
+  };
+}
+
+function sameConfirmedRunBinding(
+  left: NativeConfirmedRunBinding,
+  right: NativeConfirmedRunBinding,
+): boolean {
+  return CONFIRMED_RUN_BINDING_KEYS.every((key) => left[key] === right[key]);
 }
 
 function completedSemanticTurn(
@@ -432,14 +474,19 @@ class HarnessNativeSession implements NativeSession {
   }
 
   readonly #steeringSupported: boolean;
+  /** Runner-confirmed binding from this session's own recovery (CONF15-P2). */
+  #confirmedBinding: NativeConfirmedRunBinding | null;
 
   constructor(
     input: OpenNativeSessionInput,
     session: HarnessSession,
     terminal?: PrpTerminalState | null,
     steeringSupported = false,
+    confirmedBinding: NativeConfirmedRunBinding | null = null,
   ) {
     this.#steeringSupported = steeringSupported;
+    this.#confirmedBinding =
+      confirmedBinding === null ? null : structuredClone(confirmedBinding);
     this.#input = structuredClone(input);
     this.#session = session;
     this.#terminal = terminal === undefined ? null : structuredClone(terminal);
@@ -490,6 +537,43 @@ class HarnessNativeSession implements NativeSession {
       this.#rethrowProtocolIntegrity(error);
       throw error;
     }
+    this.#input = { ...this.#input, identity: structuredClone(input.identity) };
+    this.#terminal = null;
+    this.#explicitlyCancelled = false;
+  }
+
+  adoptConfirmedRun(input: {
+    identity: OpenNativeSessionInput["identity"];
+    binding: NativeConfirmedRunBinding;
+  }): void {
+    this.#assertProtocolIntegrity();
+    const confirmed = this.#confirmedBinding;
+    const currentIdentity = this.#input.identity;
+    if (
+      confirmed === null ||
+      confirmedRunBinding(input.binding) === null ||
+      !sameConfirmedRunBinding(confirmed, input.binding) ||
+      input.identity.runId !== confirmed.runId ||
+      input.identity.sessionId !== confirmed.normalizedSessionId ||
+      input.identity.sessionId !== currentIdentity.sessionId ||
+      input.identity.companyId !== currentIdentity.companyId ||
+      input.identity.issueId !== currentIdentity.issueId ||
+      input.identity.agentId !== currentIdentity.agentId
+    ) {
+      throw new Error("native_session_adopt_binding_mismatch");
+    }
+    if (this.#session.adoptConfirmedRun === undefined) {
+      throw new Error("native_session_adopt_unavailable");
+    }
+    try {
+      this.#session.adoptConfirmedRun({ runId: input.identity.runId });
+      this.#assertProtocolIntegrity();
+    } catch (error) {
+      this.#rethrowProtocolIntegrity(error);
+      throw error;
+    }
+    // One adoption per recovery; the session now carries this Run.
+    this.#confirmedBinding = null;
     this.#input = { ...this.#input, identity: structuredClone(input.identity) };
     this.#terminal = null;
     this.#explicitlyCancelled = false;

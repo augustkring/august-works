@@ -1,0 +1,22 @@
+[
+  {
+    "assertionPath": "/workspace/v10-preparation/host-conversation-offline-erasure-factory-r1/conversation-factory-assertion.patch",
+    "blockers": "Scope/name parser and synthetic-versus-real SDK conversation tree remain blockers.",
+    "candidate": "R1",
+    "capturedSha256": "33e40253051f619760da8e1c84606c0116bb2047a08faf6b4ff938f0271a1817",
+    "status": "UNQUALIFIED"
+  },
+  {
+    "assertionPath": "/workspace/v10-preparation/host-conversation-offline-erasure-factory-r4/conversation-factory-assertion.patch",
+    "candidate": "R4",
+    "reason": "Late assertion is excluded from this frozen-only capture.",
+    "sha256": "70d2d715da2e8a3a07415d5b503f441233080475048dccefcdd3df6c0cf74a71",
+    "status": "EXCLUDED_ACTIVE_OR_UNFROZEN"
+  },
+  {
+    "blockers": "Three-way merge draft; scope/name parser and synthetic-versus-real SDK tree remain blockers.",
+    "candidate": "R2",
+    "sourcePinsSha256": "0dabb5b84be0807799b3abac59123ace6ae675e0333b156ac5d4700b8a7eb271",
+    "status": "UNQUALIFIED"
+  }
+]

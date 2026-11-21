@@ -7,6 +7,19 @@ import { objectWithoutDefaults } from "./partial.js";
 
 const logoAssetIdSchema = z.string().guid().nullable().optional();
 const feedbackDataSharingTermsVersionSchema = z.string().min(1).nullable().optional();
+export const companyLocaleSchema = z.enum(["en", "da"]);
+
+export const companyTimeZoneSchema = z.string().trim().min(1).max(128).refine((timeZone) => {
+  // Intl accepts fixed UTC offsets too, but schedules require a timezone name
+  // with IANA daylight-saving rules rather than an offset-only representation.
+  if (/^[+-]\d{2}(?::?\d{2})?$/.test(timeZone)) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}, { message: "Invalid IANA timezone" });
 
 const interactionResolverKindGovernanceSchema = z.object({
   defaultPolicy: z.enum(ISSUE_THREAD_INTERACTION_RESOLVER_POLICIES).optional(),
@@ -30,11 +43,21 @@ export const createCompanySchema = z.object({
 
 export type CreateCompany = z.infer<typeof createCompanySchema>;
 
+/** DELETE /api/companies/:companyId body: the organization's current name,
+ * typed by the person deleting it. The server compares it exactly. */
+export const deleteCompanyConfirmationSchema = z.object({
+  confirmName: z.string().max(200),
+});
+
+export type DeleteCompanyConfirmation = z.infer<typeof deleteCompanyConfirmationSchema>;
+
 export const updateCompanySchema = objectWithoutDefaults(
   createCompanySchema
     .partial()
     .extend({
       status: z.enum(COMPANY_STATUSES).optional(),
+      locale: companyLocaleSchema.optional(),
+      timezone: companyTimeZoneSchema.optional(),
       spentMonthlyCents: z.number().int().nonnegative().optional(),
       requireBoardApprovalForNewAgents: z.boolean().optional(),
       interactionResolverGovernance: interactionResolverGovernanceSchema.optional(),
@@ -44,7 +67,14 @@ export const updateCompanySchema = objectWithoutDefaults(
       feedbackDataSharingTermsVersion: feedbackDataSharingTermsVersionSchema,
       logoAssetId: logoAssetIdSchema,
     }),
-);
+).strict();
+
+export const updateCompanyResponsibilityContactsSchema = z.object({
+  securityContactUserId: z.string().min(1).nullable(),
+  supportIncidentContactUserId: z.string().min(1).nullable(),
+}).strict();
+
+export type UpdateCompanyResponsibilityContacts = z.infer<typeof updateCompanyResponsibilityContactsSchema>;
 
 export type UpdateCompany = z.infer<typeof updateCompanySchema>;
 

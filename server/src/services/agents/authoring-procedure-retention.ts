@@ -5,6 +5,8 @@ import { agentExecutionManifestSchema } from "@paperclipai/shared";
 import type { authoringTestRuntime } from "./authoring-test-runtime.js";
 import { contextEngineService } from "../context/context-engine.js";
 import { contextManifestService } from "../context/context-manifest.js";
+import { canActorReadMemorySources } from "../memory/memory-privacy.js";
+import { withAgentAuthoringTestMemoryReads } from "./authoring-test-memory-source-scope.js";
 import type { EvidenceItem } from "@paperclipai/shared";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { forbidden } from "../../errors.js";
@@ -13,7 +15,7 @@ import { forbidden } from "../../errors.js";
  * Context owners. Source erasure follows their existing tombstones/outbox;
  * this records no execution authorization or outcome qualification. */
 export async function retainAuthoringProcedureSources(db: Db, testId: string,
-  current: Awaited<ReturnType<ReturnType<typeof authoringTestRuntime>["qualify"]>>) {
+  current: Awaited<ReturnType<ReturnType<typeof authoringTestRuntime>["qualify"]>>, actor: import("../authorization.js").AuthorizationActor) {
   if (!current.procedures.skills.length && !current.procedures.playbooks.length && !current.procedures.memory.length && !current.procedures.knowledge.length && !current.procedures.snapshot.rolePack?.pins.length) return;
   const [test] = await db.select().from(agentConfigurationTests).where(eq(agentConfigurationTests.id, testId));
   const [run] = test ? await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, test.companyId),
@@ -43,11 +45,26 @@ export async function retainAuthoringProcedureSources(db: Db, testId: string,
       metadata: { foundationDocumentId: pin.foundationDocumentId, documentId: pin.documentId, bodyHash: pin.bodyHash, readOnly: true },
     }));
     evidence.push(...authoringMemoryEvidence(test.companyId, current.procedures.memory));
-    const retained = await contextManifestService(db).create({ companyId: test.companyId, agentId: test.agentId,
+    const createRetainedContext = () => contextManifestService(db).create({ companyId: test.companyId, agentId: test.agentId,
       runId: test.runId, responsibleUserId: test.createdByUserId, query: "Exact selected knowledge for representative test",
       policySnapshot: { intent: "agent_safe_test", selectedKnowledgeHash: current.procedures.hash, grantsAuthority: false },
       selected: evidence.map(item => ({ decision: { evidence: item, authorityRank: null, primaryForDomain: false,
         reason: "non_authoritative_source" as const }, selectionReason: "exact_saved_knowledge_selection" })) });
+    const retained = current.procedures.memory.length ? await withAgentAuthoringTestMemoryReads(db, {
+      humanActor: actor, companyId: test.companyId, testId: test.id, draftId: test.draftId, agentId: test.agentId,
+      runId: test.runId, userId: test.createdByUserId, candidateHash: test.candidateHash,
+      configurationHash: test.configurationHash, authorityHash: test.authorityHash,
+      memoryRecordIds: current.procedures.memory.map(pin => pin.recordId),
+    }, async () => {
+      const context = await createRetainedContext();
+      const sourceActor: import("../authorization.js").AuthorizationActor = { type: "agent", source: "agent_jwt",
+        companyId: test.companyId, agentId: test.agentId, runId: test.runId, onBehalfOfUserId: test.createdByUserId };
+      for (const pin of current.procedures.memory) {
+        if (!await canActorReadMemorySources(db, test.companyId, sourceActor, pin.recordId))
+          throw forbidden("Selected Context Memory source access changed during retention");
+      }
+      return context;
+    }) : await createRetainedContext();
     contextId = retained.manifest.id;
   }
   const rolePack = current.procedures.snapshot.rolePack;

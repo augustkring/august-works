@@ -15,6 +15,8 @@ import type {
 } from "@paperclipai/shared";
 import { forbidden } from "../../errors.js";
 import { accessService } from "../access.js";
+import type { AuthorizationActor, NativeContextInspectionOwner } from "../authorization.js";
+import { fingerprintConnectedKnowledgeRequest } from "./connected-knowledge.js";
 import type {
   ConnectedKnowledgeProvider,
   ConnectedKnowledgeRetrievalInput,
@@ -24,6 +26,7 @@ const PROVIDER_KEY = "github-sync";
 const SOURCE_PROVIDER = "github";
 const AUTH_SCOPE_TTL_MS = 30_000;
 const MAX_AUTHORIZED_OBJECTS = 500;
+
 
 export interface GitHubSyncedKnowledgeObject {
   id: string;
@@ -58,9 +61,23 @@ export type GitHubSyncedIssueAccess =
       reason: string;
     };
 
+
+export function githubSyncedKnowledgeActorMatchesRequest(
+  request: ConnectedKnowledgeRequest,
+  actor: AuthorizationActor,
+): boolean {
+  return actor.type === "agent" &&
+    actor.companyId === request.companyId &&
+    actor.agentId === request.agentId &&
+    (actor.runId ?? null) === request.runId &&
+    (actor.onBehalfOfUserId ?? null) === request.responsibleUserId;
+}
+
 export interface GitHubSyncedKnowledgeDependencies {
   authorizeIssue(input: {
     request: ConnectedKnowledgeRequest;
+    authorizationActor?: AuthorizationActor;
+    authorizationDecision?: NativeContextInspectionOwner["decide"];
   }): Promise<GitHubSyncedIssueAccess>;
   listAuthorizedObjectIds(input: {
     request: ConnectedKnowledgeRequest;
@@ -393,6 +410,13 @@ function validateLoadedObjects(
 export function createGitHubSyncedConnectedKnowledgeProvider(
   deps: GitHubSyncedKnowledgeDependencies,
 ): ConnectedKnowledgeProvider {
+  /** Private bridge between registry reauthorization and retrieval. Authorization
+   * capabilities never enter the public retrieval input. */
+  const currentReadOwners = new WeakMap<object, {
+    requestFingerprint: string;
+    authorizationActor?: AuthorizationActor;
+    authorizationDecision?: NativeContextInspectionOwner["decide"];
+  }>();
   return {
     descriptor: {
       key: PROVIDER_KEY,
@@ -405,6 +429,8 @@ export function createGitHubSyncedConnectedKnowledgeProvider(
     async authorize({
       request,
       requestFingerprint,
+      authorizationActor,
+      authorizationDecision,
     }): Promise<ConnectedKnowledgeAccessDecision> {
       if (!request.issueId) {
         return {
@@ -414,7 +440,11 @@ export function createGitHubSyncedConnectedKnowledgeProvider(
         };
       }
 
-      const access = await deps.authorizeIssue({ request });
+      const access = await deps.authorizeIssue({
+        request,
+        ...(authorizationActor ? { authorizationActor } : {}),
+        ...(authorizationDecision ? { authorizationDecision } : {}),
+      });
       if (!access.allowed) {
         return {
           allowed: false,
@@ -452,11 +482,12 @@ export function createGitHubSyncedConnectedKnowledgeProvider(
       };
     },
 
-    async retrieveAuthorized(
-      input: ConnectedKnowledgeRetrievalInput,
-    ): Promise<ConnectedKnowledgeProviderResult> {
-      const scopedIds = scopeObjectIds(input.authorizedScope, input.request);
-      const access = await deps.authorizeIssue({ request: input.request });
+    async reauthorize(input) {
+      const access = await deps.authorizeIssue({
+        request: input.request,
+        ...(input.authorizationActor ? { authorizationActor: input.authorizationActor } : {}),
+        ...(input.authorizationDecision ? { authorizationDecision: input.authorizationDecision } : {}),
+      });
       if (!access.allowed) {
         throw forbidden(
           "GitHub synced knowledge authorization changed before retrieval",
@@ -466,7 +497,48 @@ export function createGitHubSyncedConnectedKnowledgeProvider(
           },
         );
       }
+      currentReadOwners.set(input.authorizedScope, {
+        requestFingerprint: input.requestFingerprint,
+        ...(input.authorizationActor ? { authorizationActor: input.authorizationActor } : {}),
+        ...(input.authorizationDecision ? { authorizationDecision: input.authorizationDecision } : {}),
+      });
+    },
 
+    async retrieveAuthorized(
+      input: ConnectedKnowledgeRetrievalInput,
+    ): Promise<ConnectedKnowledgeProviderResult> {
+      if (input.authorizedScope.requestFingerprint !== input.requestFingerprint ||
+          input.requestFingerprint !== fingerprintConnectedKnowledgeRequest(input.request)) {
+        throw forbidden("GitHub synced knowledge retrieval request binding changed", {
+          code: "connected_knowledge_scope_invalid",
+          providerKey: PROVIDER_KEY,
+        });
+      }
+      const scopedIds = scopeObjectIds(input.authorizedScope, input.request);
+      const currentReadOwner = currentReadOwners.get(input.authorizedScope);
+      if (currentReadOwner && currentReadOwner.requestFingerprint !== input.requestFingerprint) {
+        throw forbidden("GitHub synced knowledge retrieval owner binding changed", {
+          code: "connected_knowledge_scope_invalid",
+          providerKey: PROVIDER_KEY,
+        });
+      }
+      // Keep the provider's own current read check for direct/internal callers
+      // too. Registry calls carry the same exact owner via the private WeakMap;
+      // direct calls without such an entry retain the legacy request-only path.
+      const access = await deps.authorizeIssue({
+        request: input.request,
+        ...(currentReadOwner?.authorizationActor ? { authorizationActor: currentReadOwner.authorizationActor } : {}),
+        ...(currentReadOwner?.authorizationDecision ? { authorizationDecision: currentReadOwner.authorizationDecision } : {}),
+      });
+      if (!access.allowed) {
+        throw forbidden(
+          "GitHub synced knowledge authorization changed before retrieval",
+          {
+            code: "connected_knowledge_permission_denied",
+            providerKey: PROVIDER_KEY,
+          },
+        );
+      }
       const currentIds = new Set(
         uniqueBoundedIds(
           await deps.listAuthorizedObjectIds({ request: input.request }),
@@ -527,7 +599,7 @@ export function githubSyncedConnectedKnowledgeProvider(
   const access = accessService(db);
 
   const deps: GitHubSyncedKnowledgeDependencies = {
-    authorizeIssue: async ({ request }) => {
+    authorizeIssue: async ({ request, authorizationActor, authorizationDecision }) => {
       if (!request.issueId) {
         return {
           allowed: false,
@@ -562,16 +634,23 @@ export function githubSyncedConnectedKnowledgeProvider(
         };
       }
 
-      const decision = await access.decide({
+      const actor = authorizationActor ?? {
+        type: "agent" as const,
+        agentId: request.agentId,
+        companyId: request.companyId,
+        runId: request.runId ?? null,
+        onBehalfOfUserId: request.responsibleUserId ?? null,
+        source: "agent_jwt" as const,
+      };
+      if (
+        !githubSyncedKnowledgeActorMatchesRequest(request, actor) ||
+        (authorizationDecision !== undefined && authorizationActor === undefined)
+      ) {
+        return { allowed: false, reason: "Connected Knowledge reader binding is unavailable." };
+      }
+      const decision = await (authorizationDecision ?? access.decide)({
         enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
-        actor: {
-          type: "agent",
-          agentId: request.agentId,
-          companyId: request.companyId,
-          runId: request.runId ?? null,
-          onBehalfOfUserId: request.responsibleUserId ?? null,
-          source: "agent_jwt",
-        },
+        actor,
         action: "issue:read",
         resource: {
           type: "issue",

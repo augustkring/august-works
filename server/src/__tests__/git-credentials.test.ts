@@ -137,17 +137,35 @@ describe("createGitRemoteAuthProvider", () => {
     });
   });
 
-  it("continues down the chain when one secret fails to resolve", async () => {
+  it.each([
+    ["resolution failure", new Error("provider outage")],
+    ["empty value", ""],
+  ])("does not switch credential identities after a configured secret has an %s", async (_label, firstSecret) => {
     const secrets = buildSecretsFake({
-      GITHUB_TOKEN: new Error("provider outage"),
-      GH_TOKEN: "gh-token",
+      GITHUB_TOKEN: firstSecret,
+      GH_TOKEN: "second-company-token",
     });
     const provider = createGitRemoteAuthProvider(fakeDb, "company-1", undefined, {
       secrets,
-      env: {},
+      env: { GITHUB_TOKEN: "operator-token", GH_TOKEN: "operator-gh-token" },
     });
-    const invocation = await provider(githubUrl);
-    expect(invocation?.secretName).toBe("GH_TOKEN");
+    await expect(provider(githubUrl)).rejects.toThrow("Configured GitHub company credential is unavailable");
+    expect(secrets.getByName.mock.calls.map((call) => call[1])).toEqual(["GITHUB_TOKEN"]);
+    expect(secrets.resolveSecretValue).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat a failed secret inventory lookup as confirmed absence", async () => {
+    const secrets = buildSecretsFake({
+      GH_TOKEN: "second-company-token",
+    });
+    secrets.getByName.mockRejectedValueOnce(new Error("database unavailable"));
+    const provider = createGitRemoteAuthProvider(fakeDb, "company-1", undefined, {
+      secrets,
+      env: { GITHUB_TOKEN: "operator-token" },
+    });
+    await expect(provider(githubUrl)).rejects.toThrow("GitHub company credential configuration is unavailable");
+    expect(secrets.getByName.mock.calls.map((call) => call[1])).toEqual(["GITHUB_TOKEN"]);
+    expect(secrets.resolveSecretValue).not.toHaveBeenCalled();
   });
 
   it("ignores a managed connection installed only for another agent", async () => {

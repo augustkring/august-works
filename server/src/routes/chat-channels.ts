@@ -459,6 +459,7 @@ export function chatChannelRoutes(db: Db, options: ChatChannelRouteOptions) {
             req.body.idempotencyKey,
             userId,
             req.body.attachmentIds,
+            req.actor,
           ),
         );
     },

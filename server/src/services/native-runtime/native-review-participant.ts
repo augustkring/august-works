@@ -1,6 +1,15 @@
 import {
+  agentExecutionManifests,
   agents,
   heartbeatRuns,
+  issueExecutionDecisions,
+  orchestrationWorkers,
+  nativeRunFinalizations,
+  statusDecisionEffects,
+  nativeRunResults,
+  orchestrationModelReservations,
+  orchestrationWorkerAttempts,
+  workAssessments,
   issueThreadInteractions,
   issues,
   statusDecisions,
@@ -9,6 +18,10 @@ import {
 import { and, eq, isNull, or } from "drizzle-orm";
 import { evaluateAgentInvokabilityFromDb } from "../agent-invokability.js";
 import { canonicalizeStoredResolverPolicy } from "../issue-thread-interaction-resolution.js";
+import { nativeRunInputSourceReceiptSchema, type IssueExecutionState, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { nativeSha256 } from "./canonical.js";
+import { buildNativeReviewRequest } from "./native-review-prompt.js";
+import { parseIssueExecutionState } from "../issue-execution-policy.js";
 
 export type NativeReviewAssignmentContext = {
   nativeReviewInteractionId: string;
@@ -55,11 +68,29 @@ export type NativeReviewAssignmentFacts = {
   allowResolvedByRunId?: string;
 };
 
-export type NativeReviewAssignment = {
+/** MS1f decision 4. The reviewer lane has two kinds: the Native completion
+ * review (a review interaction addressed to a non-assignee Reviewer) and the
+ * execution-policy review stage under a plan (the stage participant, who is
+ * the Task assignee while the stage is pending). */
+export type NativeCompletionReviewAssignment = {
+  kind: "completion";
   interaction: typeof issueThreadInteractions.$inferSelect;
   sourceDecision: typeof statusDecisions.$inferSelect;
   sourceRun: typeof heartbeatRuns.$inferSelect;
 };
+export type NativeExecutionStageReviewAssignment = {
+  kind: "execution_stage";
+  stageId: string;
+  intentId: string;
+  state: IssueExecutionState;
+  /** Set when the Reviewer Run has recorded its own decision on the stage. */
+  recordedDecision: typeof issueExecutionDecisions.$inferSelect | null;
+  sourceDecision: typeof statusDecisions.$inferSelect;
+  sourceRun: typeof heartbeatRuns.$inferSelect;
+  sourceAttempt: typeof orchestrationWorkerAttempts.$inferSelect;
+  sourceWorker: typeof orchestrationWorkers.$inferSelect;
+};
+export type NativeReviewAssignment = NativeCompletionReviewAssignment | NativeExecutionStageReviewAssignment;
 
 export function readNativeReviewAssignmentContext(
   snapshot: unknown,
@@ -72,6 +103,22 @@ export function readNativeReviewAssignmentContext(
   if (typeof interactionId !== "string" || !uuid.test(interactionId)) return null;
   if (typeof decisionId !== "string" || !uuid.test(decisionId)) return null;
   return { nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId };
+}
+
+/**
+ * MS1h. A Native completion Reviewer's prompt is its review request, which
+ * replaces the ordinary Task prompt, and the Reviewer is never the Task
+ * assignee, so its wake has no closed execution-continuation capture. The
+ * executor-authored issue continuation summary therefore has no owner in the
+ * Reviewer's wake source closure and must not enter that wake payload; the
+ * Reviewer's input stays the review request bound to the exact source result.
+ */
+export function nativeReviewWakeExcludesContinuationSummary(input: {
+  adapterType: string;
+  contextSnapshot: unknown;
+}): boolean {
+  return input.adapterType === "paperclip_runner" &&
+    readNativeReviewAssignmentContext(input.contextSnapshot) !== null;
 }
 
 function isNativeCompletionReview(interaction: InteractionFacts, decisionId: string) {
@@ -150,7 +197,7 @@ export async function getNativeReviewAssignment(
     issueExecutionRunId?: string | null;
     allowResolvedByRunId?: string;
   },
-): Promise<NativeReviewAssignment | null> {
+): Promise<NativeCompletionReviewAssignment | null> {
   const context = readNativeReviewAssignmentContext(input.contextSnapshot);
   if (!context) return null;
   const issue = await db.select().from(issues).where(and(
@@ -212,9 +259,452 @@ export async function getNativeReviewAssignment(
     issueExecutionRunId: input.issueExecutionRunId,
     allowResolvedByRunId: input.allowResolvedByRunId,
   });
-  return valid ? { interaction, sourceDecision: decision, sourceRun } : null;
+  return valid ? { kind: "completion", interaction, sourceDecision: decision, sourceRun } : null;
 }
 
+/** MS1f decision 4. The persisted execution-policy stage Reviewer wake of a
+ * Run: an `issue.execution_stage` wake from a native status decision, for the
+ * `reviewer` role of a review stage, naming its stage and its current native
+ * status-wake intent (`nativeStatusWakeIntentId`). Never a Native completion
+ * review wake as well. Shape only: owners are checked by the callers. */
+export type NativeStageReviewContext = { nativeStatusWakeIntentId: string; stageId: string; issueId: string };
+export function readNativeStageReviewContext(snapshot: unknown): NativeStageReviewContext | null {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+  const value = snapshot as Record<string, unknown>;
+  if (Object.hasOwn(value, "nativeReviewInteractionId") || Object.hasOwn(value, "nativeReviewDecisionId")) return null;
+  const stage = value.executionStage && typeof value.executionStage === "object" && !Array.isArray(value.executionStage)
+    ? value.executionStage as Record<string, unknown> : null;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (value.source !== "issue.execution_stage" || value.statusDecisionSource !== "native_status_decision" ||
+    !stage || stage.wakeRole !== "reviewer" || stage.stageType !== "review" ||
+    typeof stage.stageId !== "string" || !uuid.test(stage.stageId) ||
+    typeof value.nativeStatusWakeIntentId !== "string" || !uuid.test(value.nativeStatusWakeIntentId) ||
+    typeof value.issueId !== "string" || value.taskId !== value.issueId) return null;
+  return { nativeStatusWakeIntentId: value.nativeStatusWakeIntentId, stageId: stage.stageId, issueId: value.issueId };
+}
+
+/** MS1f decision 4. The execution-policy stage Reviewer of `run` on a planned
+ * Task, read on `db` (the caller's transaction where it has one):
+ * 1. the Run's persisted stage Reviewer wake (`readNativeStageReviewContext`)
+ *    for this Task, whose current native status-wake intent, effect, applied
+ *    decision, executor Run and delivered wake all bind (`captureNativeStageOrigin`);
+ * 2. the executor's applied `execution_policy_stage_pending` decision, made by
+ *    the source Run, which is committed with process cleanup done;
+ * 3. the source Run has exactly one plan worker attempt, on a worker of this
+ *    Task, of the source Agent;
+ * 4. pending (default): the Task is `in_review` with that decision as its last
+ *    status decision, this Agent as assignee, the stage pending with this Agent
+ *    as participant and the source Agent as return assignee (independence:
+ *    never this Reviewer); with `executionRun`, this Run holds the Task's
+ *    execution lease. `recorded`: instead, this Run created the stage's
+ *    decision row, which is the stage's last decision, the return assignee is
+ *    still the source Agent, and the Task is back with the source Agent.
+ * Grants nothing by itself. */
+export async function getNativeExecutionStageReviewAssignment(db: Db, input: {
+  companyId: string; issueId: string; agentId: string; run: typeof heartbeatRuns.$inferSelect;
+  mode?: "pending" | "recorded"; executionRun?: boolean;
+}): Promise<NativeExecutionStageReviewAssignment | null> {
+  const { run } = input;
+  const context = readNativeStageReviewContext(run.contextSnapshot);
+  if (!context || context.issueId !== input.issueId || run.companyId !== input.companyId || run.agentId !== input.agentId ||
+    (run.nativeIssueId !== null && run.nativeIssueId !== input.issueId)) return null;
+  const { captureNativeStageOrigin } = await import("../native-stage-wake-source.js");
+  const origin = await captureNativeStageOrigin(db, { ...run, nativeIssueId: input.issueId });
+  // The origin is read from this Run's own persisted intent id, so it names that intent.
+  if (!origin || origin.executorAgentId === input.agentId) return null;
+  const [decision] = await db.select().from(statusDecisions).where(and(eq(statusDecisions.companyId, input.companyId),
+    eq(statusDecisions.issueId, input.issueId), eq(statusDecisions.id, origin.decisionId))).limit(1);
+  const [sourceRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.id, origin.executorRunId), eq(heartbeatRuns.agentId, origin.executorAgentId))).limit(1);
+  if (!decision || decision.applicationState !== "applied" || decision.toStatus !== "in_review" ||
+    decision.reasonCode !== "execution_policy_stage_pending" || decision.runId !== origin.executorRunId ||
+    !sourceRun?.agentId || sourceRun.agentId === input.agentId || sourceRun.nativeIssueId !== input.issueId ||
+    sourceRun.status !== "succeeded" || sourceRun.nativePhase !== "committed" ||
+    sourceRun.nativeProcessCleanupPending !== false) return null;
+  const sourceAttempts = await db.select({ attempt: orchestrationWorkerAttempts, worker: orchestrationWorkers })
+    .from(orchestrationWorkerAttempts).innerJoin(orchestrationWorkers, and(
+      eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId),
+      eq(orchestrationWorkers.planId, orchestrationWorkerAttempts.planId),
+      eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId)))
+    .where(and(eq(orchestrationWorkerAttempts.companyId, input.companyId), eq(orchestrationWorkerAttempts.runId, sourceRun.id),
+      eq(orchestrationWorkerAttempts.agentId, sourceRun.agentId), eq(orchestrationWorkers.issueId, input.issueId),
+      eq(orchestrationWorkers.agentId, sourceRun.agentId))).limit(2);
+  if (sourceAttempts.length !== 1 || !["running", "succeeded"].includes(sourceAttempts[0]!.attempt.status)) return null;
+  const [task] = await db.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).limit(1);
+  const state = parseIssueExecutionState(task?.executionState);
+  if (!task || task.hiddenAt || !state || state.returnAssignee?.type !== "agent" ||
+    state.returnAssignee.agentId !== sourceRun.agentId) return null;
+  let recordedDecision: typeof issueExecutionDecisions.$inferSelect | null = null;
+  if ((input.mode ?? "pending") === "pending") {
+    if (task.status !== "in_review" || task.lastStatusDecisionId !== decision.id || task.assigneeAgentId !== input.agentId ||
+      state.status !== "pending" || state.currentStageType !== "review" || state.currentStageId !== context.stageId ||
+      state.currentParticipant?.type !== "agent" || state.currentParticipant.agentId !== input.agentId ||
+      (input.executionRun && task.executionRunId !== run.id)) return null;
+  } else {
+    // After its own decision the stage is completed (an approval; under a plan
+    // the Task stays in review for plan verification) or returned for changes.
+    const recorded = await db.select().from(issueExecutionDecisions).where(and(
+      eq(issueExecutionDecisions.companyId, input.companyId), eq(issueExecutionDecisions.issueId, input.issueId),
+      eq(issueExecutionDecisions.stageId, context.stageId), eq(issueExecutionDecisions.createdByRunId, run.id),
+      eq(issueExecutionDecisions.actorAgentId, input.agentId), isNull(issueExecutionDecisions.actorUserId))).limit(2);
+    if (recorded.length !== 1 || state.lastDecisionId !== recorded[0]!.id || task.assigneeAgentId !== sourceRun.agentId ||
+      (task.executionRunId !== null && task.executionRunId !== run.id)) return null;
+    recordedDecision = recorded[0]!;
+  }
+  const [agent] = await db.select().from(agents).where(and(eq(agents.companyId, input.companyId), eq(agents.id, input.agentId))).limit(1);
+  if (!agent || !(await evaluateAgentInvokabilityFromDb(db, agent)).invokable) return null;
+  return { kind: "execution_stage", stageId: context.stageId, intentId: origin.intentId, state, recordedDecision,
+    sourceDecision: decision, sourceRun, sourceAttempt: sourceAttempts[0]!.attempt, sourceWorker: sourceAttempts[0]!.worker };
+}
+
+/**
+ * MS1h2. The one sandbox-lifecycle owner predicate for a current Native
+ * completion Reviewer Run. Brief §57.1 asks for an independent verifier where
+ * consequence requires one, and that Reviewer is never the Task assignee, so
+ * the managed sandbox owners admit `assignee || currentNativeReviewerRun`.
+ *
+ * True only when every fact the review model-token path (`currentReview`)
+ * checks for the pending path holds, read in the caller's transaction:
+ * 1. the pending native completion review this Run's persisted wake binds is
+ *    addressed to this Agent, with this Run as the acting Run
+ *    (`getNativeReviewAssignment` with `actingRunId`, no resolved allowance);
+ * 2. the Task is `in_review` with this Run as its execution Run;
+ * 3. this Run is the Reviewer's running Native Run on this Task, and its
+ *    execution manifest is bound to the Reviewer Agent, this Run and the Run's
+ *    responsible Human;
+ * 4. the reviewed source Run is committed, with process cleanup done.
+ *
+ * MS1f decision 4: for a Run whose persisted wake is an execution-policy stage
+ * Reviewer wake, facts 1 and 4 are instead the pending stage assignment of
+ * this Run (`getNativeExecutionStageReviewAssignment`, with this Run holding
+ * the execution lease); facts 2 and 3 are the same. Such a Reviewer is the
+ * Task assignee while its stage is pending, so the owners' assignee clause
+ * already admits it; this predicate decides its reviewer lane.
+ *
+ * It grants nothing by itself: callers keep every other gate (company, Human
+ * authorization, provider, policy, commercial and run-write checks), and the
+ * credential broker issues a Reviewer no credential bindings.
+ */
+export async function currentNativeReviewerRun(db: Db, input: {
+  companyId: string;
+  agentId: string;
+  runId: string;
+  issueId: string;
+  manifestId?: string;
+}): Promise<boolean> {
+  // 3. This Run: the Reviewer's running Native Run on this Task, in this company.
+  const [run] = await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+    eq(heartbeatRuns.agentId, input.agentId),
+  )).limit(1);
+  if (!run || run.status !== "running" || run.runtimeMode !== "native" ||
+    run.nativeIssueId !== input.issueId || !run.responsibleUserId) return false;
+  // 2. The Task is in review and this Run holds its execution lease.
+  const [task] = await db.select().from(issues).where(and(
+    eq(issues.companyId, input.companyId), eq(issues.id, input.issueId),
+  )).limit(1);
+  if (!task || task.status !== "in_review" || task.executionRunId !== run.id) return false;
+  // 3. This Run's own manifest (one per Run) is bound to the Reviewer and its Human.
+  const [manifest] = await db.select().from(agentExecutionManifests).where(and(
+    eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.runId, run.id),
+    eq(agentExecutionManifests.agentId, input.agentId),
+  )).limit(1);
+  if (!manifest || (input.manifestId !== undefined && manifest.id !== input.manifestId) ||
+    manifest.manifest.responsibleUserId !== run.responsibleUserId) return false;
+  // MS1f decision 4. 1 and 4 for an execution-policy stage Reviewer.
+  if (readNativeStageReviewContext(run.contextSnapshot))
+    return Boolean(await getNativeExecutionStageReviewAssignment(db, { companyId: input.companyId, issueId: input.issueId,
+      agentId: input.agentId, run, executionRun: true }));
+  // 1. The pending review this Run's persisted wake binds, addressed to this
+  // Agent, with this Run acting. No resolved-review allowance is passed.
+  const assignment = await getNativeReviewAssignment(db, {
+    companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
+    contextSnapshot: run.contextSnapshot, actingRunId: run.id, issueExecutionRunId: task.executionRunId,
+  });
+  if (!assignment || assignment.interaction.status !== "pending") return false;
+  // 4. The reviewed source Run is committed and its process cleanup is done.
+  return assignment.sourceRun.status === "succeeded" && assignment.sourceRun.nativePhase === "committed" &&
+    assignment.sourceRun.nativeProcessCleanupPending === false;
+}
+
+/** MS1h7, MS1h12. The reviewer lane of a Native Run, the one definition used
+ * by the managed model-session owner (`nativeModelSessionOwnerLane`) and by
+ * the Native tool boundary (`withOrchestrationNativeTool`): the Run's
+ * persisted context carries a Native review wake (a completion review,
+ * `readNativeReviewAssignmentContext`, or, MS1f decision 4, an
+ * execution-policy stage Reviewer wake, `readNativeStageReviewContext`), the
+ * Run has no plan worker attempt row, and it is the current Native Reviewer of
+ * this exact Run, Agent, Task and manifest (`currentNativeReviewerRun`). `kind`
+ * restricts the lane to one review kind (the boundary admits `resolve_review`
+ * only for the completion kind). Every fact is read on `db`, which is the
+ * caller's transaction where it has one. Grants nothing by itself. */
+export async function nativeReviewerLaneRun(db: Db, input: {
+  companyId: string;
+  agentId: string | null;
+  runId: string;
+  issueId: string;
+  manifestId: string;
+  contextSnapshot: unknown;
+  kind?: NativeReviewAssignment["kind"];
+}): Promise<boolean> {
+  const base = await nativeReviewerLaneBase(db, input);
+  if (!base || (input.kind !== undefined && base.kind !== input.kind)) return false;
+  return currentNativeReviewerRun(db, { companyId: input.companyId, agentId: base.agentId, runId: input.runId,
+    issueId: input.issueId, manifestId: input.manifestId });
+}
+
+/** The durable part of the reviewer lane shared by `nativeReviewerLaneRun` and
+ * `nativeReviewerLaneRecorded`: a review wake (completion or, MS1f decision 4,
+ * execution stage) in the Run's context and no plan worker attempt row for the
+ * Run. */
+async function nativeReviewerLaneBase(db: Db, input: { companyId: string; agentId: string | null; runId: string;
+  contextSnapshot: unknown }) {
+  const context = readNativeReviewAssignmentContext(input.contextSnapshot);
+  const stage = context ? null : readNativeStageReviewContext(input.contextSnapshot);
+  if (!input.agentId || (!context && !stage)) return null;
+  const [attempt] = await db.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
+    eq(orchestrationWorkerAttempts.companyId, input.companyId), eq(orchestrationWorkerAttempts.runId, input.runId))).limit(1);
+  if (attempt) return null;
+  return context ? { kind: "completion" as const, agentId: input.agentId, context }
+    : { kind: "execution_stage" as const, agentId: input.agentId, stage: stage! };
+}
+
+/** MS1h17. The reviewer lane decided from facts recorded when the Reviewer
+ * was dispatched, for its finalization after its own decision (when the review
+ * is no longer pending, so `currentNativeReviewerRun` no longer holds): the
+ * lane base of this Run (review wake, no plan worker attempt) and a
+ * `review_model` reservation bound to this exact Run, Agent, Task, review
+ * interaction, decision and the Run's own manifest. That reservation exists
+ * only after `issueForReviewRun` qualified this Run as the current Reviewer,
+ * and its binding is immutable (0576). Grants nothing: finalization uses it
+ * only to discard the Reviewer's sandbox (read-only Reviewer, MS1h17).
+ *
+ * MS1f decision 4: for an execution-policy stage Reviewer the reservation is
+ * stage-bound (this Run, Agent, Task, stage and manifest, no interaction; 0585),
+ * and the lane is recorded once this Run created the stage's decision row
+ * (`issueExecutionDecisions`, this Run and Agent, no Human). Until then the
+ * stage Reviewer is still the Task assignee and finalizes as one. A plan-less
+ * stage Reviewer never has such a reservation, so it is never on this lane. */
+export async function nativeReviewerLaneRecorded(db: Db, input: { companyId: string; runId: string }): Promise<boolean> {
+  const [run] = await db.select({ agentId: heartbeatRuns.agentId, nativeIssueId: heartbeatRuns.nativeIssueId,
+    contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
+    .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId))).limit(1);
+  if (!run?.nativeIssueId) return false;
+  const base = await nativeReviewerLaneBase(db, { companyId: input.companyId, agentId: run.agentId, runId: input.runId,
+    contextSnapshot: run.contextSnapshot });
+  if (!base) return false;
+  const [manifest] = await db.select({ id: agentExecutionManifests.id }).from(agentExecutionManifests).where(and(
+    eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.runId, input.runId),
+    eq(agentExecutionManifests.agentId, base.agentId))).limit(1);
+  if (!manifest) return false;
+  if (base.kind === "execution_stage") {
+    if (base.stage.issueId !== run.nativeIssueId) return false;
+    const [reservation] = await db.select({ id: orchestrationModelReservations.id }).from(orchestrationModelReservations).where(and(
+      eq(orchestrationModelReservations.companyId, input.companyId),
+      eq(orchestrationModelReservations.purpose, "review_model"),
+      eq(orchestrationModelReservations.reviewRunId, input.runId),
+      eq(orchestrationModelReservations.reviewAgentId, base.agentId),
+      eq(orchestrationModelReservations.reviewIssueId, run.nativeIssueId),
+      isNull(orchestrationModelReservations.reviewInteractionId),
+      eq(orchestrationModelReservations.reviewStageId, base.stage.stageId),
+      eq(orchestrationModelReservations.reviewExecutionManifestId, manifest.id),
+    )).limit(1);
+    if (!reservation) return false;
+    const [decision] = await db.select({ id: issueExecutionDecisions.id }).from(issueExecutionDecisions).where(and(
+      eq(issueExecutionDecisions.companyId, input.companyId), eq(issueExecutionDecisions.issueId, run.nativeIssueId),
+      eq(issueExecutionDecisions.stageId, base.stage.stageId), eq(issueExecutionDecisions.createdByRunId, input.runId),
+      eq(issueExecutionDecisions.actorAgentId, base.agentId), isNull(issueExecutionDecisions.actorUserId))).limit(1);
+    return Boolean(decision);
+  }
+  const [reservation] = await db.select({ id: orchestrationModelReservations.id }).from(orchestrationModelReservations).where(and(
+    eq(orchestrationModelReservations.companyId, input.companyId),
+    eq(orchestrationModelReservations.purpose, "review_model"),
+    eq(orchestrationModelReservations.reviewRunId, input.runId),
+    eq(orchestrationModelReservations.reviewAgentId, base.agentId),
+    eq(orchestrationModelReservations.reviewIssueId, run.nativeIssueId),
+    eq(orchestrationModelReservations.reviewInteractionId, base.context.nativeReviewInteractionId),
+    eq(orchestrationModelReservations.reviewDecisionId, base.context.nativeReviewDecisionId),
+    eq(orchestrationModelReservations.reviewExecutionManifestId, manifest.id),
+  )).limit(1);
+  return Boolean(reservation);
+}
+
+/** Resolve an already-captured review's immutable owner rows without applying
+ * live admission policy (current assignee or reviewer invokability). Callers
+ * must still recheck source ACLs, receipt, committed result and current owners. */
+export async function getNativeReviewSourceAssignment(db: Db, input: {
+  companyId: string; issueId: string; reviewerAgentId: string; contextSnapshot: unknown;
+}): Promise<NativeCompletionReviewAssignment | null> {
+  const context = readNativeReviewAssignmentContext(input.contextSnapshot);
+  if (!context) return null;
+  const [interaction] = await db.select().from(issueThreadInteractions).where(and(
+    eq(issueThreadInteractions.id, context.nativeReviewInteractionId), eq(issueThreadInteractions.companyId, input.companyId),
+    eq(issueThreadInteractions.issueId, input.issueId))).limit(1);
+  const [decision] = await db.select().from(statusDecisions).where(and(
+    eq(statusDecisions.id, context.nativeReviewDecisionId), eq(statusDecisions.companyId, input.companyId),
+    eq(statusDecisions.issueId, input.issueId))).limit(1);
+  if (!interaction || !decision || decision.applicationState !== "applied" ||
+      interaction.sourceRunId !== decision.runId || interaction.addresseeAgentId !== input.reviewerAgentId ||
+      interaction.addresseeUserId || decision.assessmentId === null) return null;
+  const [sourceRun] = await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.id, decision.runId), eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.nativeIssueId, input.issueId))).limit(1);
+  if (!sourceRun || sourceRun.agentId === input.reviewerAgentId) return null;
+  return { kind: "completion", interaction, sourceDecision: decision, sourceRun };
+}
+
+export type NativeReviewWakeWitness = NonNullable<Extract<NativePayloadSourceInput, { kind: "native_task_wake" }>["nativeReview"]>;
+
+/** Bind review prompt bytes to the exact committed Native result that created
+ * the assigned review. The current wake source rederives this witness; it is
+ * not accepted as a saved permission or a caller-selected review label. */
+export async function captureNativeReviewWakeWitness(db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0], input: {
+  companyId: string; issueId: string; reviewerRunId: string; reviewerAgentId: string; responsibleUserId: string;
+  reviewerCompletionContract: { id: string; sha256: string };
+  assignment: NativeCompletionReviewAssignment;
+}): Promise<NativeReviewWakeWitness | null> {
+  const assignment = input.assignment;
+  const interaction = assignment.interaction;
+  const decision = assignment.sourceDecision;
+  const sourceRun = assignment.sourceRun;
+  const [reviewerRun] = await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
+    agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId, createdAt: heartbeatRuns.createdAt })
+    .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.reviewerRunId), eq(heartbeatRuns.agentId, input.reviewerAgentId))).limit(1);
+  if (!reviewerRun || reviewerRun.responsibleUserId !== input.responsibleUserId ||
+      sourceRun.id === reviewerRun.id || sourceRun.createdAt >= reviewerRun.createdAt ||
+      interaction.createdAt > reviewerRun.createdAt) return null;
+  if (interaction.kind !== "request_confirmation" || interaction.addresseeAgentId !== input.reviewerAgentId ||
+      interaction.addresseeUserId !== null || interaction.companyId !== input.companyId || interaction.issueId !== input.issueId ||
+      decision.companyId !== input.companyId || decision.issueId !== input.issueId ||
+      sourceRun.companyId !== input.companyId || sourceRun.nativeIssueId !== input.issueId ||
+      interaction.sourceRunId !== sourceRun.id || decision.runId !== sourceRun.id ||
+      decision.applicationState !== "applied" || !decision.appliedAt ||
+      !sourceRun.responsibleUserId || !sourceRun.completionContractId || !sourceRun.completionContractSha256 ||
+      !input.responsibleUserId || !input.reviewerCompletionContract.id || !input.reviewerCompletionContract.sha256 ||
+      sourceRun.status !== "succeeded" || sourceRun.nativePhase !== "committed" || sourceRun.nativeProcessCleanupPending !== false ||
+      sourceRun.nativeInputSourceProtocolVersion !== 1) return null;
+  const profile = sourceRun.runnerProfileJson && typeof sourceRun.runnerProfileJson === "object" && !Array.isArray(sourceRun.runnerProfileJson)
+    ? sourceRun.runnerProfileJson as Record<string, unknown> : {};
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  if (!receipt.success || receipt.data.binding.companyId !== input.companyId || receipt.data.binding.runId !== sourceRun.id ||
+      receipt.data.binding.agentId !== sourceRun.agentId || receipt.data.binding.issueId !== input.issueId ||
+      receipt.data.binding.responsibleUserId !== sourceRun.responsibleUserId) return null;
+  const [coordinator] = await db.select().from(nativeRunFinalizations).where(and(
+    eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
+    eq(nativeRunFinalizations.runId, sourceRun.id), eq(nativeRunFinalizations.phase, "committed"),
+    isNull(nativeRunFinalizations.leaseOwner))).limit(1);
+  if (!coordinator?.resultId || !coordinator.assessmentId || coordinator.decisionId !== decision.id ||
+      coordinator.failureCode || coordinator.nextAttemptAt) return null;
+  const [accepted] = await db.select().from(nativeRunResults).where(and(
+    eq(nativeRunResults.companyId, input.companyId), eq(nativeRunResults.issueId, input.issueId),
+    eq(nativeRunResults.runId, sourceRun.id), eq(nativeRunResults.id, coordinator.resultId),
+    eq(nativeRunResults.schemaStatus, "accepted"))).limit(1);
+  const [assessment] = await db.select().from(workAssessments).where(and(
+    eq(workAssessments.companyId, input.companyId), eq(workAssessments.issueId, input.issueId),
+    eq(workAssessments.runId, sourceRun.id), eq(workAssessments.id, coordinator.assessmentId),
+    eq(workAssessments.resultId, coordinator.resultId))).limit(1);
+  if (!accepted || !assessment || decision.assessmentId !== assessment.id || decision.runId !== sourceRun.id ||
+      accepted.completionContractId !== sourceRun.completionContractId) return null;
+  const runResult = sourceRun.resultJson && typeof sourceRun.resultJson === "object" && !Array.isArray(sourceRun.resultJson)
+    ? sourceRun.resultJson as Record<string, unknown> : {};
+  if (runResult.finalizationPhase !== "committed" || runResult.assessmentId !== assessment.id || runResult.decisionId !== decision.id)
+    return null;
+  const { acceptedResponseDigestMatches } = await import("./native-run-finalizer.js");
+  if (!await acceptedResponseDigestMatches(db, sourceRun, accepted)) return null;
+  const decisionRecord = decision.decisionJson && typeof decision.decisionJson === "object" && !Array.isArray(decision.decisionJson)
+    ? decision.decisionJson as Record<string, unknown> : {};
+  const effects = Array.isArray(decisionRecord.effects) ? decisionRecord.effects : [];
+  const payload = interaction.payload && typeof interaction.payload === "object" && !Array.isArray(interaction.payload)
+    ? interaction.payload as unknown as Record<string, unknown> : {};
+  const effectOwners = await db.select().from(statusDecisionEffects).where(and(
+    eq(statusDecisionEffects.companyId, input.companyId), eq(statusDecisionEffects.issueId, input.issueId),
+    eq(statusDecisionEffects.decisionId, decision.id), eq(statusDecisionEffects.effectKind, "bind_reviewer"),
+    eq(statusDecisionEffects.targetType, "issue_thread_interaction"), eq(statusDecisionEffects.targetId, interaction.id),
+    eq(statusDecisionEffects.deliveryState, "delivered"))).limit(2);
+  const effectOwner = effectOwners.length === 1 ? effectOwners[0] : null;
+  const candidateEffects = effects.filter(value => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const candidate = value as Record<string, unknown>;
+    if (candidate.kind !== "bind_reviewer" || candidate.ownerAgentId !== input.reviewerAgentId ||
+        (candidate.ownerUserId !== null && candidate.ownerUserId !== undefined)) return false;
+    const suffix = typeof candidate.requestKey === "string" && candidate.requestKey.length > 0 ? `:${candidate.requestKey}` : "";
+    return interaction.idempotencyKey === `native-review:${decision.id}${suffix}` &&
+      candidate.prompt === interaction.summary && (candidate.detailsMarkdown ?? null) === (payload.detailsMarkdown ?? null);
+  });
+  const effect = candidateEffects[0] && typeof candidateEffects[0] === "object" ? candidateEffects[0] as Record<string, unknown> : null;
+  const target = payload.target && typeof payload.target === "object" && !Array.isArray(payload.target)
+    ? payload.target as Record<string, unknown> : null;
+  if (!effectOwner || !effect || candidateEffects.length !== 1 || effectOwner.payload.interactionId !== interaction.id ||
+      effectOwner.payload.interactionKind !== "request_confirmation" || effectOwner.payload.ownerAgentId !== input.reviewerAgentId ||
+      (effectOwner.payload.ownerUserId !== null && effectOwner.payload.ownerUserId !== undefined) || interaction.title !== "Review requested" ||
+      typeof effect.prompt !== "string" || interaction.summary !== effect.prompt || payload.prompt !== effect.prompt ||
+      (payload.detailsMarkdown ?? null) !== (effect.detailsMarkdown ?? null) || !target || target.type !== "custom" ||
+      target.key !== "native_completion_review" || target.revisionId !== decision.id ||
+      !/^[0-9a-f]{64}$/.test(decision.decisionDigest)) return null;
+  const requestEvidence = { title: interaction.title, summary: interaction.summary, payload: interaction.payload };
+  const renderedRequest = buildNativeReviewRequest(requestEvidence);
+  return {
+    version: 1, companyId: input.companyId, issueId: input.issueId, reviewerRunId: input.reviewerRunId,
+    reviewerAgentId: input.reviewerAgentId, responsibleUserId: input.responsibleUserId,
+    interactionId: interaction.id, decisionId: decision.id, interactionCreatedAt: interaction.createdAt.toISOString(),
+    sourceRunCreatedAt: sourceRun.createdAt.toISOString(), reviewerRunCreatedAt: reviewerRun.createdAt.toISOString(),
+    interactionRequestHash: nativeSha256(requestEvidence), renderedRequestHash: nativeSha256(renderedRequest),
+    decisionDigest: decision.decisionDigest, sourceRunId: sourceRun.id, sourceAgentId: sourceRun.agentId,
+    sourceResponsibleUserId: sourceRun.responsibleUserId, sourceReceiptDigest: receipt.data.digest, sourceResultId: accepted.id, sourceResultCanonicalSha256: accepted.canonicalSha256,
+    sourceCompletionContractId: sourceRun.completionContractId, sourceCompletionContractSha256: sourceRun.completionContractSha256,
+    reviewerCompletionContractId: input.reviewerCompletionContract.id,
+    reviewerCompletionContractSha256: input.reviewerCompletionContract.sha256,
+  };
+}
+
+
+/** MS1f decision 4. The committed source of an execution-policy stage review:
+ * the source Run's input receipt, its committed finalization of exactly the
+ * stage-pending decision, its accepted result and assessment. The same source
+ * checks as the completion witness (`captureNativeReviewWakeWitness`); a stage
+ * review has no review interaction, request card or `bind_reviewer` effect. */
+export async function captureNativeStageReviewSourceWitness(db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0], input: {
+  companyId: string; issueId: string; assignment: Pick<NativeExecutionStageReviewAssignment, "sourceRun" | "sourceDecision">;
+}): Promise<{ sourceRunId: string; decisionId: string; sourceReceiptDigest: string; sourceResultId: string;
+  sourceResultCanonicalSha256: string } | null> {
+  const { sourceRun, sourceDecision: decision } = input.assignment;
+  if (sourceRun.companyId !== input.companyId || sourceRun.nativeIssueId !== input.issueId || decision.runId !== sourceRun.id ||
+      decision.companyId !== input.companyId || decision.issueId !== input.issueId || decision.applicationState !== "applied" ||
+      !decision.appliedAt || !sourceRun.responsibleUserId || !sourceRun.completionContractId || !sourceRun.completionContractSha256 ||
+      sourceRun.status !== "succeeded" || sourceRun.nativePhase !== "committed" || sourceRun.nativeProcessCleanupPending !== false ||
+      sourceRun.nativeInputSourceProtocolVersion !== 1 || !/^[0-9a-f]{64}$/.test(decision.decisionDigest)) return null;
+  const profile = sourceRun.runnerProfileJson && typeof sourceRun.runnerProfileJson === "object" && !Array.isArray(sourceRun.runnerProfileJson)
+    ? sourceRun.runnerProfileJson as Record<string, unknown> : {};
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  if (!receipt.success || receipt.data.binding.companyId !== input.companyId || receipt.data.binding.runId !== sourceRun.id ||
+      receipt.data.binding.agentId !== sourceRun.agentId || receipt.data.binding.issueId !== input.issueId ||
+      receipt.data.binding.responsibleUserId !== sourceRun.responsibleUserId) return null;
+  const [coordinator] = await db.select().from(nativeRunFinalizations).where(and(
+    eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
+    eq(nativeRunFinalizations.runId, sourceRun.id), eq(nativeRunFinalizations.phase, "committed"),
+    isNull(nativeRunFinalizations.leaseOwner))).limit(1);
+  if (!coordinator?.resultId || !coordinator.assessmentId || coordinator.decisionId !== decision.id ||
+      coordinator.failureCode || coordinator.nextAttemptAt) return null;
+  const [accepted] = await db.select().from(nativeRunResults).where(and(
+    eq(nativeRunResults.companyId, input.companyId), eq(nativeRunResults.issueId, input.issueId),
+    eq(nativeRunResults.runId, sourceRun.id), eq(nativeRunResults.id, coordinator.resultId),
+    eq(nativeRunResults.schemaStatus, "accepted"))).limit(1);
+  const [assessment] = await db.select().from(workAssessments).where(and(
+    eq(workAssessments.companyId, input.companyId), eq(workAssessments.issueId, input.issueId),
+    eq(workAssessments.runId, sourceRun.id), eq(workAssessments.id, coordinator.assessmentId),
+    eq(workAssessments.resultId, coordinator.resultId))).limit(1);
+  if (!accepted || !assessment || decision.assessmentId !== assessment.id ||
+      accepted.completionContractId !== sourceRun.completionContractId) return null;
+  const runResult = sourceRun.resultJson && typeof sourceRun.resultJson === "object" && !Array.isArray(sourceRun.resultJson)
+    ? sourceRun.resultJson as Record<string, unknown> : {};
+  if (runResult.finalizationPhase !== "committed" || runResult.assessmentId !== assessment.id || runResult.decisionId !== decision.id)
+    return null;
+  const { acceptedResponseDigestMatches } = await import("./native-run-finalizer.js");
+  if (!await acceptedResponseDigestMatches(db, sourceRun, accepted)) return null;
+  return { sourceRunId: sourceRun.id, decisionId: decision.id, sourceReceiptDigest: receipt.data.digest,
+    sourceResultId: accepted.id, sourceResultCanonicalSha256: accepted.canonicalSha256 };
+}
 
 /** Claim the normal issue execution lock without changing the worker assignee. */
 export async function claimNativeReviewExecutionLock(db: Db, input: {

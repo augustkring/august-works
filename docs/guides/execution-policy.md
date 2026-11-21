@@ -124,6 +124,35 @@ interface IssueExecutionDecision {
 4. Runtime routes back to the **same review stage** (not the beginning), with the same reviewer.
 5. This loop continues until the reviewer approves.
 
+### Issues covered by an orchestration plan
+
+When an orchestration plan that is not finished covers the issue (the plan's own Task, or a worker Task whose worker is not completed), the plan's Human server verification completes the issue, not the last stage approval.
+
+A Native executor reaches the first stage through a **stage handoff**. The plan's completion contract is server-arbitrated, so the executor's `done` claim cannot complete the issue, and criteria about the Reviewer's later decision are reported as `unknown`. The status arbiter hands the claim to the declared stage (`in_review`, decision `execution_policy_stage_pending`) only when all of these hold:
+
+- the executor reported `done` against the current contract revision, with the objective claimed;
+- every criterion is reported `satisfied` or `unknown`, and none is rejected;
+- every `output_<key>` criterion is accepted from **Task document evidence** `document:<docId>:<revisionId>` for that key: the document is linked to the issue under the declared required-output key, the cited revision is its latest revision and matches its latest body, the declared JSON schema (if any) validates, the executor's Run created the revision, and that Run has a succeeded `write_document` tool invocation charged to the plan that wrote it. This proves which Run produced the current output, not that the output is good; it is not evidence for any other criterion or for a verification check;
+- no verification failed or cites rejected evidence, and there is no attention request or blocking remaining work;
+- a dry run of the executor's `done` transition would enter a pending stage.
+
+The committer applies the same transition as for `done`. If no stage would become pending when it commits (for example, the policy was edited), it records the incomplete-evidence decision instead. A handoff never moves the issue to `done`. Without a covering plan, or with an `agent_claim_policy` contract, nothing changes.
+
+An Agent participant of a pending **review** stage on a planned issue runs as a Reviewer of the plan, not as a plan worker (it gets no worker attempt):
+
+- Its wake must be the current stage wake of the executor's `execution_policy_stage_pending` decision, the issue must be `in_review` with that stage pending, the Reviewer as participant, assignee and execution Run, and the plan Worker (never the Reviewer) as the stage's `returnAssignee`. The executor's Run must be committed with exactly one plan attempt. Otherwise its Run is refused before it starts.
+- Its model calls use a stage-bound `review_model` capability and are reserved under the plan's model budget. Its approval comment (`call_api`, `POST /api/issues/{id}/comments`) and each read of one of the issue's declared required-output documents (`read_document` with exactly `{ "key": <output key> }`) are charged once each to the plan's tool budget. Every other tool is refused while the plan is active. A completion Reviewer may read the declared output documents the same way.
+- Its own run result keeps the issue status, and after it records its stage decision its workspace is discarded rather than copied back.
+
+After the stages:
+
+- The final approval is still recorded (`outcome: "approved"`), and `executionState.status` becomes `completed` with `lastDecisionId` set to that decision.
+- The issue stays `in_review` and returns to the stage's `returnAssignee` (the plan Worker) without waking it.
+- The `issue.updated` activity records `taskCompletion: "awaiting_plan_verification"` and the plan id.
+- Plan verification passes only when every declared stage is completed and its latest decision is an approval. Otherwise it reports the deterministic failure `execution_stage_changes_requested:<stageId>` (the latest decision asked for changes and the stage is not back in review) or `execution_stage_incomplete:<stageId>` (pending, not started, or completed without an approval); a pending or returned stage the policy no longer declares also blocks. The verification packet cites each completed stage's approving decision as `stage_decision:<decisionId>` evidence, as ids and hashes only (never the decision text).
+
+Requesting changes is unchanged. Without a covering plan, the final approval moves the issue to `done` as before.
+
 ### Policy Variants
 
 **Review only** (no approval stage):

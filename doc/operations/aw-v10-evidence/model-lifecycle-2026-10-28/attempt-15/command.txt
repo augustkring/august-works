@@ -1,0 +1,1 @@
+flock -x /workspace/v10-preparation/v10-pg-tests.lock bash doc/operations/aw-v10-evidence/model-lifecycle-2026-10-28/attempt-15/run.sh

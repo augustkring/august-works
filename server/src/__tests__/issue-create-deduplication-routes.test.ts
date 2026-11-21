@@ -20,6 +20,7 @@ import {
 import { actorMiddleware } from "../middleware/auth.js";
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
+import { projectRoutes } from "../routes/projects.js";
 import {
   ISSUE_CREATE_IDEMPOTENCY_KEY_RETENTION_DAYS,
   issueService,
@@ -65,6 +66,7 @@ describeEmbeddedPostgres("issue create deduplication routes", () => {
     app.use(express.json());
     app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
     app.use("/api", issueRoutes(db, {} as any));
+    app.use("/api", projectRoutes(db));
     app.use(errorHandler);
     return app;
   }
@@ -91,9 +93,9 @@ describeEmbeddedPostgres("issue create deduplication routes", () => {
   }
 
   it("records the mutation's project and status receipt for native projection without turning metadata edits into transitions",async()=>{
-    const companyId=await seedCompany(),projectId=randomUUID();
-    await db.insert(projects).values({id:projectId,companyId,name:"Recorded project"});
-    const app=createApp();
+    const companyId=await seedCompany(),app=createApp();
+    const createdProject=await request(app).post(`/api/companies/${companyId}/projects`).send({name:"Recorded project"}).expect(201);
+    const projectId=createdProject.body.id as string;
     const created=await request(app).post(`/api/companies/${companyId}/issues`).send({title:"Private process task",projectId,status:"todo"}).expect(201);
     await request(app).patch(`/api/issues/${created.body.id}`).send({status:"done"}).expect(200);
     await request(app).patch(`/api/issues/${created.body.id}`).send({title:"Private metadata update"}).expect(200);

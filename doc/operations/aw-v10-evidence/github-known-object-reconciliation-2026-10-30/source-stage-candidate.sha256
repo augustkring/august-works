@@ -1,0 +1,6 @@
+f6b0850aa28e498a4add503f3220fab6183ba249c051c4850fb0e6da7d5cc245  doc/connections/CONNECTOR-PLAYBOOK.md
+b569573b2ec3aa6006f0ea2a67be54fe4bbbf6837e7525c5b355d8e890ccbf62  server/src/services/external-objects.ts
+b7b678a04fffb4d6d902894ca40595072fe4350df237a1b913ed31aa08316a1e  server/src/services/github-connection-events.ts
+183be78583e9d36d9bfda13dd0ce1adf7434af38d3ac014442c81d7fbe95d248  server/src/services/github-external-object-provider.ts
+025bd9a662569693cb5722262cf2c8204cdd444b507d907f83cb09c2208bec1a  server/src/__tests__/external-objects-service.test.ts
+d9b2fb7fd52e4cee1c86275437c27de77ada8ce60880523c02b1ba4026dabc7d  server/src/__tests__/github-connection-events.test.ts

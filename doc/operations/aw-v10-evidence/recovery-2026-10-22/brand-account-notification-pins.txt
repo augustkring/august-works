@@ -1,0 +1,6 @@
+61b211cef69641bff010331a9dda57049787cca3b36c976328378fa75ca6d5fa  server/src/services/saas/auth-delivery.ts
+cc1b5baf210f98380a5fe1952ed1641a5ed8fbe63c5558b1a5d901f82198b2e2  server/src/services/saas/invitations.ts
+2a9d97814094ceda547bd1ddbd4d7cba1d73209ebd876a29cf9052eccf75bdd0  server/src/services/notifications/notifications.ts
+268d6891166295559956c0f85cbf0e5a52ef5dde24ef025d09773578e190b655  server/src/__tests__/v6-saas-auth.integration.test.ts
+6e64d27195e843fbeae4af930eb66e1141377a78d8f9770892be1439e936ad6c  server/src/__tests__/v6-saas-domains.integration.test.ts
+0db88d24f11d043ac20660830582f9c02e89eb27a35bdb6bf1a84be818c2a492  server/src/__tests__/v9-notification-channels.test.ts

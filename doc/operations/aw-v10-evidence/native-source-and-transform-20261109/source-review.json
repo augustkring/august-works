@@ -1,0 +1,34 @@
+{
+  "baseHead": "75d0bd1ec2f4b593bd16a73611e425bafc73be52",
+  "sourcePins": {
+    "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts": "625704a96e39e7b46e529acaf60033ef50f81947016cb066be4c5d021cff83a9",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "aa7394df06453082fc3acd882f61d474a3abab607843f1d01dabe9da8494fa7e",
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": "4c2455ad4d2e935b9b01a78637743ccdaeef2b4aa7f9d7d38e9d297d45de6680",
+    "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts": "06307bca13069e9d686a9352db6ec55485c6c1d7385c1f533613aaf3eac58eab",
+    "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts": "7858421b2880de9727b48b524f258dd1d53fa3e92dc44f07aeea15835f54db93",
+    "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts": "6c2e9f0207ba8e8bf014bb17300a25eb8c2bab32b8a6f4f82deb1a43e040b93e",
+    "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts": "9e71dc49ef083624bce49bcabcabfaeacef29985755512f5d38445459045a90d",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "972c05f1b3b10dd319ba6a2d4f4c6c20ca5ad3a4ecde9e5d28d598fcc8eebefa",
+    "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts": "1e6cf3e375f760b8837b496f3ee2380c3c1542decf4c40f9ffa7526d7f752183",
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "a5baef87c30d7ee4ede5c2c873baa992398e107689030095f8d734c03a11c3fb",
+    "server/src/services/heartbeat.ts": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5",
+    "server/src/services/native-direct-input.ts": "4ef4bf3b56bd7e061db5279a3a3bb004c4dd4b8316baac3fa4ea383f280ff49f",
+    "server/src/services/native-runtime/native-execution-input.test.ts": "87702a2d60bc8c2c02ada25a16b8171a86f964d1468f4cd09e72846eefc86652",
+    "server/src/services/native-runtime/native-execution-input.ts": "463c2b40bc5f16886ff70d72a3900fe26120b91ceb71308fb3e87f34d8493e37",
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+    "server/src/services/native-runtime/native-project-repository-source.ts": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7"
+  },
+  "reviewedChanges": [
+    "Capture the selected primary Project through the existing source owner even without extra repository paths. Reuse validated appendix captures and retain final currentness checks after asynchronous filesystem validation.",
+    "Capture original paused Human-comment provenance through the canonical Hold, wake, Run, comment and reader owners. Keep source readability separate from execution authority; retain current privacy checks after canonical Hold release.",
+    "Retain one lazy trusted-transform promise per actual workflow invocation. Preserve mode, Source, lease, Memory and candidate admission checks.",
+    "Retire exactly three obsolete positive legacy dependency cases whose dispatcher, capacity and cancellation assertions are covered by the actual eleven-case Native text-controller module. Retain all other legacy assertions, including Human blocked interactions.",
+    "Observe registered fixture and Host gateways with per-fixture cleanup and closed result counters. The registry component test does not establish why the earlier SDK observer missed a Memory result.",
+    "Enable the canonical supervision/verifier fixture prerequisites used by current verification owners. Production feature and authorization gates remain unchanged.",
+    "Project only closed persisted completion facts at three failing SDK Task assertions. No completion or authorization predicate is changed."
+  ],
+  "qualificationBoundary": "Source review, actual current server typecheck, controlled component tests and actual local PostgreSQL text-controller tests only. Full current-head CI, Native SDK, hosted/provider, physical isolation and Human acceptance remain separate.",
+  "preserved": "169 requirement rows, all 50 existing owner assessments, migration journal, historical phase statuses and source-before evidence remain unchanged."
+}

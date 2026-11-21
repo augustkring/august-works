@@ -1,0 +1,155 @@
+[
+  {
+    "path": "packages/db/src/migrations/0564_broken_guardian.sql",
+    "sha256": "f6a864d30917b526d97e4ad62bcca58b238dc88a41832a2e04e3bcfe966a7dab",
+    "state": "present"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0558_snapshot.json",
+    "state": "deleted"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0559_snapshot.json",
+    "state": "deleted"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0564_snapshot.json",
+    "sha256": "4fe9e81c7ad48a5b9ab4729b7327215774f42f2ffe27b0205427fe48eef02224",
+    "state": "present"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/_journal.json",
+    "sha256": "b19f731e45e15348a93b63b1c1c0405918c5acb020a088edb39bc90e0e70513b",
+    "state": "present"
+  },
+  {
+    "path": "packages/db/src/schema/environment_leases.ts",
+    "sha256": "88222db0df8a135ccfca439ea8cbe624df8bd8df1209a8de48f775254a278b96",
+    "state": "present"
+  },
+  {
+    "path": "packages/db/src/schema/heartbeat_runs.ts",
+    "sha256": "98463a00ffaedd8da1bf9e35a944fd1411e338f76f01e9a49ee28a472ec1cac3",
+    "state": "present"
+  },
+  {
+    "path": "packages/db/src/schema/memory_jobs.ts",
+    "sha256": "d6767af727ccabb5109141fa9ff2ce0f03fd41c119232bdcd9a3b9467df3258b",
+    "state": "present"
+  },
+  {
+    "path": "packages/db/src/schema/native_run_finalizations.ts",
+    "sha256": "4dffb87a6701eba9882ca168b69530c9c37dbd8a20e762382c1784f4df1fb288",
+    "state": "present"
+  },
+  {
+    "path": "packages/db/src/schema/workflows.ts",
+    "sha256": "09affeab6594e5d161381ae2f5a44e861f55e2338aa3ff134d8256f5bd807db4",
+    "state": "present"
+  },
+  {
+    "path": "packages/shared/src/index.ts",
+    "sha256": "8ced14d1d7882755ee69566c089a032727c74f02398b52e52e567ef1660988df",
+    "state": "present"
+  },
+  {
+    "path": "packages/shared/src/resource-governance.test.ts",
+    "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8",
+    "state": "present"
+  },
+  {
+    "path": "packages/shared/src/resource-governance.ts",
+    "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6",
+    "state": "present"
+  },
+  {
+    "path": "packages/shared/src/settings-visibility.ts",
+    "sha256": "33feffa1548899ab2ec07917b250fc10aca33c0c89742a58539ca592910c896d",
+    "state": "present"
+  },
+  {
+    "path": "packages/shared/src/types/instance.ts",
+    "sha256": "14bda6e8be597b6ab0320c3681708eddd3c15b34c04f49c4b4cdf658a62e7d84",
+    "state": "present"
+  },
+  {
+    "path": "packages/shared/src/validators/instance.ts",
+    "sha256": "05ec36b2f52b6239b051091bd07e6da43fd2be8c6b5c771c1f32a87947b6a31a",
+    "state": "present"
+  },
+  {
+    "path": "server/src/__tests__/resource-governance.integration.test.ts",
+    "sha256": "483983848ee49c8b728bc47fb4a8cc4ecc77f7a04f528011a4af85d0f2731b31",
+    "state": "present"
+  },
+  {
+    "path": "server/src/__tests__/tool-gateway.test.ts",
+    "sha256": "ac76608386eee656208dc303b59dea26a1351360e0a4ebeaeae05c88013bdbb7",
+    "state": "present"
+  },
+  {
+    "path": "server/src/middleware/error-handler.ts",
+    "sha256": "6ac89738006a47015d1ff1e9e82bcad231b3f0c790aa6c8319af5769b6186154",
+    "state": "present"
+  },
+  {
+    "path": "server/src/routes/instance-settings.ts",
+    "sha256": "b0a0a81bd018fb4540686acdd9fafa4b7e36cc3cdf38e19ac9cf51830d9c210d",
+    "state": "present"
+  },
+  {
+    "path": "server/src/routes/tool-gateway.ts",
+    "sha256": "29a57d7c63744b4dc09f39ad9c905de8e62f91beadce42bb912cbae091061b9a",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/business-forecasting/service.ts",
+    "sha256": "0377f3d5e9035d7219426a47a283f6507301f9040a7ea5ebc11a877bfc2963d1",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/causal-claims/service.ts",
+    "sha256": "36e9c9e2d8dd8e3ecdd4cea6e2a4ebc7cd60b2dd24fd482f73284049c8c143c4",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/execution-blocker.ts",
+    "sha256": "4e93263aae7d464206ac401ba4bf3dc9f4d8a72fd90c40f3e042351b556b1777",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/heartbeat.ts",
+    "sha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/instance-settings.ts",
+    "sha256": "23ced37e242bbfa5caaea198914d6941e6f6c2af6f0bf354102f5bb420096849",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/memory/memory-jobs.ts",
+    "sha256": "cbd65e9bee9e3a695184d9fec757d5af5cb24c57b0cf6732e5ae4ca27c58a881",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/process-analysis.ts",
+    "sha256": "597fe0efe6e636487c785a26a813bb52f140e29463627c3512592af0df3471de",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/resource-governance.ts",
+    "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/tool-gateway.ts",
+    "sha256": "edb3c85b30c222ed4174891bf4cc8c08b036546dcce25ba05846fad14ec860b8",
+    "state": "present"
+  },
+  {
+    "path": "server/src/services/workflows/workflow-executor.ts",
+    "sha256": "247f249b4fd6f2a821678c6983b648668ffd08bc2c918f21a2ddf37bdf8d1c37",
+    "state": "present"
+  }
+]

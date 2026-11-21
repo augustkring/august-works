@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, like, sql } from "drizzle-orm";
 import {
   activityLog,
   authRateLimits,
@@ -9,6 +9,7 @@ import {
   customerFeedback,
   customerFeedbackAccess,
   customerFeedbackEvents,
+  customerFeedbackExperienceMeasures,
   issues,
   saasNotifications,
   type Db,
@@ -18,22 +19,59 @@ import {
   customerFeedbackSchema,
   feedbackFollowUpSchema,
   feedbackInternalDetailSchema,
+  feedbackInternalStateSchema,
   customerFeedbackRequestReceiptSchema,
   feedbackTriageSchema,
   FEEDBACK_CUSTOMER_STATUS,
   FEEDBACK_CONTEXT_FEATURE_IDS,
+  customerProblemEvidencePointerSchema,
+  customerExperienceMeasureSchema,
+  customerFeedbackExperienceMeasureMarkerSchema,
+  customerFeedbackStoredExperienceMeasureSchema,
+  withdrawCustomerExperienceMeasureSchema,
+  feedbackProblemClassificationSchema,
+  projectFeedbackProblemEvidence,
+  summarizeCustomerFeedbackMeasures,
   v9FeatureEnabled,
 } from "@paperclipai/shared";
-import { conflict, forbidden, notFound, tooManyRequests } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound, tooManyRequests } from "../errors.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { assertV5Authorization, v5HumanActorId } from "./v5-authorization.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { serverVersion } from "../version.js";
 import { readBuildCommit } from "../build-commit.js";
+import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
 import { awOutputFeedbackIsLocal } from "./customer-feedback-privacy.js";
 
 const digest = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
+function feedbackRequestHash(input: ReturnType<typeof createCustomerFeedbackSchema.parse>) {
+  return digest({
+    ...input,
+    ...(input.experienceMeasure ? {
+      experienceMeasure: {
+        offered: true,
+        ...(input.experienceMeasure.consent === "granted" ? { consent: "granted" } : {}),
+      },
+    } : {}),
+  });
+}
+const CLASSIFICATION_NOTE_PREFIX = "AW_FEEDBACK_CLASSIFICATION_V1:";
+function encodeTriageInternalNote(note: string, classification: unknown) {
+  return CLASSIFICATION_NOTE_PREFIX + JSON.stringify({ note, classification });
+}
+function decodeTriageInternalNote(value: string | null) {
+  if (!value?.startsWith(CLASSIFICATION_NOTE_PREFIX)) return { note: value, classification: undefined };
+  try {
+    const decoded = JSON.parse(value.slice(CLASSIFICATION_NOTE_PREFIX.length)) as { note?: unknown; classification?: unknown };
+    return {
+      note: typeof decoded.note === "string" ? decoded.note || null : null,
+      classification: decoded.classification === null
+        ? null
+        : feedbackProblemClassificationSchema.safeParse(decoded.classification).data,
+    };
+  } catch { return { note: value, classification: undefined }; }
+}
 const routeTemplates = {
   home: "/dashboard",
   needs_you: "/needs-you",
@@ -46,6 +84,7 @@ const routeTemplates = {
   support: "/company/settings/support",
   other: null,
 };
+const FEEDBACK_MEASURE_WITHDRAWAL_EVENT = "aw_feedback_measure_withdrawal_v1";
 type FeedbackRow = typeof customerFeedback.$inferSelect;
 export function customerFeedbackService(
   db: Db,
@@ -92,14 +131,37 @@ export function customerFeedbackService(
     }
     return principal;
   }
+  async function currentIssueLinkVisibility(
+    reader: Db,
+    actor: AuthorizationActor,
+    companyId: string,
+    issueIds: readonly string[],
+  ) {
+    const visibility = new Map<string, boolean>();
+    for (const issueId of new Set(issueIds)) {
+      try {
+        await assertV5Authorization(reader, actor, companyId, "issue:read", {
+          type: "issue", companyId, issueId,
+        });
+        visibility.set(issueId, true);
+      } catch (error) {
+        if (error && typeof error === "object" && "status" in error && [403, 404].includes(Number(error.status))) {
+          visibility.set(issueId, false);
+          continue;
+        }
+        throw error;
+      }
+    }
+    return visibility;
+  }
   async function budget(companyId: string, principal: string) {
     const key =
       "customer-feedback:" + digest(principal) + ":" + digest(companyId);
-    const now = Date.now(),
-      cutoff = now - 600000;
+    const now = sql`floor(extract(epoch from statement_timestamp()) * 1000)::bigint`,
+      cutoff = sql`${now} - 600000`;
     const [row] = await db
       .insert(authRateLimits)
-      .values({ id: key, key, count: 1, lastRequest: now })
+      .values({ id: randomUUID(), key, count: 1, lastRequest: now })
       .onConflictDoUpdate({
         target: authRateLimits.key,
         set: {
@@ -111,7 +173,27 @@ export function customerFeedbackService(
     if (row!.count > 20)
       throw tooManyRequests("Feedback request limit reached. Try again later.");
   }
-  async function receipt(reader: Db, row: FeedbackRow, includeMessages = true) {
+  async function storedExperienceMeasure(reader: Db, row: FeedbackRow) {
+    const marker = customerFeedbackExperienceMeasureMarkerSchema.safeParse(row.context.experienceMeasure);
+    if (!marker.success) return undefined;
+    if (marker.data.consent !== "granted") return { offered: true as const };
+    const [stored] = await reader.select().from(customerFeedbackExperienceMeasures).where(and(
+      eq(customerFeedbackExperienceMeasures.companyId, row.companyId),
+      eq(customerFeedbackExperienceMeasures.feedbackId, row.id),
+    ));
+    if (stored) return customerFeedbackStoredExperienceMeasureSchema.parse({ offered: true, consent: "granted", satisfaction: stored.satisfaction, effort: stored.effort });
+    const [withdrawal] = await reader.select({ id: customerFeedbackEvents.id }).from(customerFeedbackEvents).where(and(
+      eq(customerFeedbackEvents.companyId, row.companyId),
+      eq(customerFeedbackEvents.feedbackId, row.id),
+      eq(customerFeedbackEvents.linkType, FEEDBACK_MEASURE_WITHDRAWAL_EVENT),
+      eq(customerFeedbackEvents.kind, "product_message"),
+      eq(customerFeedbackEvents.customerVisible, false),
+      eq(customerFeedbackEvents.body, ""),
+    )).limit(1);
+    return customerFeedbackStoredExperienceMeasureSchema.parse({ offered: true, availability: withdrawal ? "withdrawn" : "unavailable" });
+  }
+  async function receipt(reader: Db, row: FeedbackRow, includeMessages = true, includeExperienceRatings = true) {
+    const experienceMeasure = await storedExperienceMeasure(reader, row);
     const messages = includeMessages
       ? await reader
           .select({
@@ -143,6 +225,12 @@ export function customerFeedbackService(
       goal: row.goal,
       blocksWork: row.blocksWork,
       omitName: row.omitName,
+      ...(experienceMeasure?.consent === "granted"
+        ? { experienceMeasureStatus: "granted" as const }
+        : experienceMeasure?.availability ? { experienceMeasureStatus: experienceMeasure.availability } : {}),
+      ...(includeExperienceRatings && experienceMeasure?.consent === "granted"
+        ? { experienceMeasure: { satisfaction: experienceMeasure.satisfaction!, effort: experienceMeasure.effort! } }
+        : {}),
       status: row.status,
       version: row.version,
       createdAt: row.createdAt.toISOString(),
@@ -196,16 +284,9 @@ export function customerFeedbackService(
       details: null,
     });
   }
-  async function operator(reader: Db, actor: AuthorizationActor) {
-    const principal = v5HumanActorId(actor);
-    if (!options.operatorUserIds?.includes(principal))
-      throw forbidden("Internal feedback operator required");
-    const [user] = await reader
-      .select({ verified: authUsers.emailVerified })
-      .from(authUsers)
-      .where(eq(authUsers.id, principal));
-    if (!user?.verified) throw forbidden("Verified operator account required");
-    return principal;
+  async function operator(reader: Db, actor: AuthorizationActor, requireRecent = false) {
+    await assertConfiguredOperatorAuthentication(reader, actor, options.operatorUserIds ?? [], { requireRecent });
+    return v5HumanActorId(actor);
   }
   async function notify(reader: Db, row: FeedbackRow) {
     const recipients = await reader
@@ -246,12 +327,12 @@ export function customerFeedbackService(
   }
   type RetentionOwner = Pick<FeedbackRow, "id" | "createdAt" | "closedAt" | "status" | "version">;
   async function withRetentionOwner<T>(actor: AuthorizationActor, companyId: string, id: string | null,
-    operation: (reader: Db, principal: string, row: RetentionOwner | null) => Promise<T>): Promise<T> {
+    operation: (reader: Db, principal: string, row: RetentionOwner | null) => Promise<T>, requireRecent = false): Promise<T> {
       if (actor.source === "local_implicit") throw forbidden("A verified operator session is required for retention controls");
       return db.transaction(async tx => {
         await tx.execute(sql`set local statement_timeout='5s'`);
         await tx.execute(sql`set local lock_timeout='1s'`);
-        const reader = tx as unknown as Db, principal = await operator(reader, actor);
+        const reader = tx as unknown as Db, principal = await operator(reader, actor, requireRecent);
         await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, principal)).for("share");
         const [company] = await tx.select({ id: companies.id, status: companies.status }).from(companies)
           .where(eq(companies.id, companyId)).for("update");
@@ -260,7 +341,7 @@ export function customerFeedbackService(
           closedAt: customerFeedback.closedAt, status: customerFeedback.status, version: customerFeedback.version }).from(customerFeedback)
           .where(and(eq(customerFeedback.companyId, companyId), eq(customerFeedback.id, id))).for("update");
         const result = await operation(reader, principal, row ?? null);
-        await operator(reader, actor);
+        await operator(reader, actor, requireRecent);
         return result;
       });
   }
@@ -270,9 +351,8 @@ export function customerFeedbackService(
      * replays return before this call and never run the scanner again. */
     async chargeImageAttempt(reader: Db, companyId: string, principal: string) {
       const key = "customer-feedback:" + digest(principal) + ":" + digest(companyId);
-      const [clock] = await reader.execute<{ now: string }>(sql`select floor(extract(epoch from clock_timestamp()) * 1000)::bigint::text as now`);
-      const now = Number(clock!.now), cutoff = now - 600000;
-      const [row] = await reader.insert(authRateLimits).values({ id: key, key, count: 1, lastRequest: now })
+      const now = sql`floor(extract(epoch from statement_timestamp()) * 1000)::bigint`, cutoff = sql`${now} - 600000`;
+      const [row] = await reader.insert(authRateLimits).values({ id: randomUUID(), key, count: 1, lastRequest: now })
         .onConflictDoUpdate({ target: authRateLimits.key, set: {
           count: sql`case when ${authRateLimits.lastRequest}<${cutoff} then 1 else ${authRateLimits.count}+1 end`,
           lastRequest: sql`case when ${authRateLimits.lastRequest}<${cutoff} then ${now} else ${authRateLimits.lastRequest} end`,
@@ -280,11 +360,11 @@ export function customerFeedbackService(
       if (row!.count > 20) throw tooManyRequests("Feedback request limit reached. Try again later.");
     },
     async withInternalRetention<T>(actor: AuthorizationActor, companyId: string, id: string,
-      operation: (reader: Db, principal: string, row: RetentionOwner) => Promise<T>): Promise<T> {
+      operation: (reader: Db, principal: string, row: RetentionOwner) => Promise<T>, requireRecent = false): Promise<T> {
       return withRetentionOwner(actor, companyId, id, (reader, principal, row) => {
         if (!row) throw notFound("Feedback not found");
         return operation(reader, principal, row);
-      });
+      }, requireRecent);
     },
     /** Same original verified operator admission and company lock. Only minimal
      * erasure receipts may be read/replayed after their feedback parent is gone. */
@@ -319,56 +399,96 @@ export function customerFeedbackService(
       companyId: string,
       beforeId?: string,
     ) {
-      await operator(db, actor);
-      const [company] = await db
-        .select({ id: companies.id })
-        .from(companies)
-        .where(eq(companies.id, companyId));
-      if (!company) throw notFound("Company not found");
-      const [boundary] = beforeId
-        ? await db
-            .select()
-            .from(customerFeedback)
-            .where(
-              and(
-                eq(customerFeedback.companyId, companyId),
-                eq(customerFeedback.id, beforeId),
-              ),
-            )
-            .limit(1)
-        : [];
-      if (beforeId && !boundary) throw notFound("Feedback not found");
-      const rows = await db
-        .select()
-        .from(customerFeedback)
-        .where(
-          and(
-            eq(customerFeedback.companyId, companyId),
-            boundary
-              ? sql`(${customerFeedback.createdAt},${customerFeedback.id}) < (select created_at, id from customer_feedback where company_id = ${companyId}::uuid and id = ${boundary.id}::uuid)`
-              : undefined,
-          ),
-        )
-        .orderBy(desc(customerFeedback.createdAt), desc(customerFeedback.id))
-        .limit(25);
-      await audit(
-        db,
-        companyId,
-        v5HumanActorId(actor),
-        "customer_feedback.internal_read",
-        randomUUID(),
-      );
-      await operator(db, actor);
-      return rows.map((row) => ({
-        id: row.id,
-        feedbackId: "AWF-" + row.id.replaceAll("-", "").toUpperCase(),
-        category: row.category,
-        body: row.body,
-        goal: row.goal,
-        internalState: row.internalState,
-        version: row.version,
-        createdAt: row.createdAt.toISOString(),
-      }));
+      return db.transaction(async tx => {
+        const reader = tx as unknown as Db;
+        await operator(reader, actor);
+        const [company] = await reader
+          .select({ id: companies.id })
+          .from(companies)
+          .where(eq(companies.id, companyId));
+        if (!company) throw notFound("Company not found");
+        const [boundary] = beforeId
+          ? await reader
+              .select()
+              .from(customerFeedback)
+              .where(
+                and(
+                  eq(customerFeedback.companyId, companyId),
+                  eq(customerFeedback.id, beforeId),
+                ),
+              )
+              .limit(1)
+          : [];
+        if (beforeId && !boundary) throw notFound("Feedback not found");
+        const rows = await reader
+          .select()
+          .from(customerFeedback)
+          .where(
+            and(
+              eq(customerFeedback.companyId, companyId),
+              boundary
+                ? sql`(${customerFeedback.createdAt},${customerFeedback.id}) < (select created_at, id from customer_feedback where company_id = ${companyId}::uuid and id = ${boundary.id}::uuid)`
+                : undefined,
+            ),
+          )
+          .orderBy(desc(customerFeedback.createdAt), desc(customerFeedback.id))
+          .limit(25);
+        await audit(
+          reader,
+          companyId,
+          v5HumanActorId(actor),
+          "customer_feedback.internal_read",
+          randomUUID(),
+        );
+        await operator(reader, actor);
+        return rows.map((row) => ({
+          id: row.id,
+          feedbackId: "AWF-" + row.id.replaceAll("-", "").toUpperCase(),
+          category: row.category,
+          body: row.body,
+          goal: row.goal,
+          internalState: row.internalState,
+          version: row.version,
+          createdAt: row.createdAt.toISOString(),
+        }));
+      });
+    },
+    async qualitySummary(actor: AuthorizationActor, companyId: string, from: string, to: string) {
+      const start = new Date(from), end = new Date(to);
+      if (!Number.isFinite(start.valueOf()) || !Number.isFinite(end.valueOf()) || start >= end || end.valueOf() - start.valueOf() > 366 * 86400000)
+        throw badRequest("A valid period of at most 366 days is required");
+      return db.transaction(async tx => {
+        const reader = tx as unknown as Db;
+        await operator(reader, actor);
+        const [company] = await reader.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId));
+        if (!company) throw notFound("Company not found");
+        const rows = await reader.select({ context: customerFeedback.context, measure: customerFeedbackExperienceMeasures,
+          withdrawn: sql<boolean>`exists (select 1 from customer_feedback_events e where e.company_id = ${companyId}::uuid and e.feedback_id = ${customerFeedback.id} and e.link_type = ${FEEDBACK_MEASURE_WITHDRAWAL_EVENT} and e.kind='product_message' and e.customer_visible=false and e.body='')`.as("withdrawn"),
+        }).from(customerFeedback).leftJoin(
+          customerFeedbackExperienceMeasures,
+          and(eq(customerFeedbackExperienceMeasures.companyId, customerFeedback.companyId), eq(customerFeedbackExperienceMeasures.feedbackId, customerFeedback.id)),
+        ).where(and(
+          eq(customerFeedback.companyId, companyId),
+          sql`${customerFeedback.createdAt} >= ${start.toISOString()}::timestamptz`,
+          sql`${customerFeedback.createdAt} < ${end.toISOString()}::timestamptz`,
+        ));
+        const summary = summarizeCustomerFeedbackMeasures({
+          from: start.toISOString(), to: end.toISOString(),
+          submissions: rows.map(row => {
+            const marker = customerFeedbackExperienceMeasureMarkerSchema.safeParse(row.context.experienceMeasure);
+            if (!marker.success) return {};
+            if (marker.data.consent === "granted") return {
+              experienceMeasure: customerFeedbackStoredExperienceMeasureSchema.parse(row.measure
+                ? { offered: true, consent: "granted", satisfaction: row.measure.satisfaction, effort: row.measure.effort }
+                : { offered: true, availability: row.withdrawn ? "withdrawn" : "unavailable" }),
+            };
+            return { experienceMeasure: { offered: true } as const };
+          }),
+        });
+        await audit(reader, companyId, v5HumanActorId(actor), "customer_feedback.quality_summary_read", randomUUID());
+        await operator(reader, actor);
+        return summary;
+      });
     },
     async internalGet(
       actor: AuthorizationActor,
@@ -376,81 +496,123 @@ export function customerFeedbackService(
       id: string,
       beforeEventId?: string,
     ) {
-      await operator(db, actor);
-      const [row] = await db
-        .select()
-        .from(customerFeedback)
-        .where(
-          and(
-            eq(customerFeedback.companyId, companyId),
-            eq(customerFeedback.id, id),
-          ),
+      return db.transaction(async tx => {
+        const reader = tx as unknown as Db;
+        await operator(reader, actor);
+        const [row] = await reader
+          .select()
+          .from(customerFeedback)
+          .where(
+            and(
+              eq(customerFeedback.companyId, companyId),
+              eq(customerFeedback.id, id),
+            ),
+          );
+        if (!row) throw notFound("Feedback not found");
+        const [boundary] = beforeEventId
+          ? await reader
+              .select()
+              .from(customerFeedbackEvents)
+              .where(
+                and(
+                  eq(customerFeedbackEvents.companyId, companyId),
+                  eq(customerFeedbackEvents.feedbackId, id),
+                  eq(customerFeedbackEvents.id, beforeEventId),
+                ),
+              )
+              .limit(1)
+          : [];
+        if (beforeEventId && !boundary)
+          throw notFound("Feedback event not found");
+        const events = await reader
+          .select({
+            id: customerFeedbackEvents.id,
+            kind: customerFeedbackEvents.kind,
+            body: customerFeedbackEvents.body,
+            internalNote: customerFeedbackEvents.internalNote,
+            linkType: customerFeedbackEvents.linkType,
+            linkId: customerFeedbackEvents.linkId,
+            createdAt: customerFeedbackEvents.createdAt,
+          })
+          .from(customerFeedbackEvents)
+          .where(
+            and(
+              eq(customerFeedbackEvents.companyId, companyId),
+              eq(customerFeedbackEvents.feedbackId, id),
+              sql`${customerFeedbackEvents.linkType} is distinct from ${FEEDBACK_MEASURE_WITHDRAWAL_EVENT}`,
+              boundary
+                ? sql`(${customerFeedbackEvents.createdAt},${customerFeedbackEvents.id}) < (select created_at, id from customer_feedback_events where company_id = ${companyId}::uuid and feedback_id = ${id}::uuid and id = ${boundary.id}::uuid)`
+                : undefined,
+            ),
+          )
+          .orderBy(
+            desc(customerFeedbackEvents.createdAt),
+            desc(customerFeedbackEvents.id),
+          )
+          .limit(101);
+        await audit(
+          reader,
+          companyId,
+          v5HumanActorId(actor),
+          "customer_feedback.internal_read",
+          randomUUID(),
         );
-      if (!row) throw notFound("Feedback not found");
-      const [boundary] = beforeEventId
-        ? await db
-            .select()
-            .from(customerFeedbackEvents)
-            .where(
-              and(
-                eq(customerFeedbackEvents.companyId, companyId),
-                eq(customerFeedbackEvents.feedbackId, id),
-                eq(customerFeedbackEvents.id, beforeEventId),
-              ),
-            )
-            .limit(1)
-        : [];
-      if (beforeEventId && !boundary)
-        throw notFound("Feedback event not found");
-      const events = await db
-        .select({
-          id: customerFeedbackEvents.id,
-          kind: customerFeedbackEvents.kind,
-          body: customerFeedbackEvents.body,
-          internalNote: customerFeedbackEvents.internalNote,
-          linkType: customerFeedbackEvents.linkType,
-          linkId: customerFeedbackEvents.linkId,
-          createdAt: customerFeedbackEvents.createdAt,
-        })
-        .from(customerFeedbackEvents)
-        .where(
-          and(
+        const page = events.slice(0, 100).map(event => ({
+          ...event,
+          internalNote: decodeTriageInternalNote(event.internalNote).note,
+        }));
+        const [latestClassificationEvent] = await reader.select({ internalNote: customerFeedbackEvents.internalNote })
+          .from(customerFeedbackEvents)
+          .where(and(
             eq(customerFeedbackEvents.companyId, companyId),
             eq(customerFeedbackEvents.feedbackId, id),
-            boundary
-              ? sql`(${customerFeedbackEvents.createdAt},${customerFeedbackEvents.id}) < (select created_at, id from customer_feedback_events where company_id = ${companyId}::uuid and feedback_id = ${id}::uuid and id = ${boundary.id}::uuid)`
-              : undefined,
-          ),
-        )
-        .orderBy(
-          desc(customerFeedbackEvents.createdAt),
-          desc(customerFeedbackEvents.id),
-        )
-        .limit(101);
-      await audit(
-        db,
-        companyId,
-        v5HumanActorId(actor),
-        "customer_feedback.internal_read",
-        randomUUID(),
-      );
-      const page = events.slice(0, 100);
-      const result = feedbackInternalDetailSchema.parse({
-        ...(await receipt(db, row)),
-        internalState: row.internalState,
-        ...(!row.omitName && row.submittedByUserId
-          ? { submittedByUserId: row.submittedByUserId }
-          : {}),
-        context: row.context,
-        diagnostics: row.diagnostics,
-        events: page.reverse().map((event) => ({
-          ...event,
-          createdAt: event.createdAt.toISOString(),
-        })),
-        nextEventCursor: events.length > 100 ? events[99]!.id : null,
+            like(customerFeedbackEvents.internalNote, `${CLASSIFICATION_NOTE_PREFIX}%`),
+          ))
+          .orderBy(desc(customerFeedbackEvents.createdAt), desc(customerFeedbackEvents.id))
+          .limit(1);
+        const classification = latestClassificationEvent ? decodeTriageInternalNote(latestClassificationEvent.internalNote).classification : undefined;
+        const issueLinkVisibility = await currentIssueLinkVisibility(reader, actor, companyId,
+          page.flatMap((event) => event.linkType === "issue" && event.linkId ? [event.linkId] : []));
+        const visiblePage = page.map((event) => event.linkType === "issue" && event.linkId && !issueLinkVisibility.get(event.linkId)
+          ? { ...event, linkType: null, linkId: null }
+          : event);
+        const hiddenIssueLink = page.some((event) => event.linkType === "issue" && event.linkId && !issueLinkVisibility.get(event.linkId));
+        const feedbackReceipt = await receipt(reader, row, true, false);
+        const experience = await storedExperienceMeasure(reader, row);
+        const customerProblemEvidence = projectFeedbackProblemEvidence({
+          companyId,
+          sourceId: row.id,
+          category: feedbackReceipt.category,
+          internalState: feedbackInternalStateSchema.parse(row.internalState),
+          blocksWork: row.blocksWork,
+          ...(classification ? { classification: classification.area, triageImpact: classification.impact } : {}),
+          linkedIssueIds: [...new Set(visiblePage.flatMap((event) =>
+            event.linkType === "issue" && event.linkId ? [event.linkId] : [],
+          ))],
+          linkCoverage: hiddenIssueLink ? "unavailable" : events.length > 100 ? "current_page" : "complete",
+        });
+        const result = feedbackInternalDetailSchema.parse({
+          ...feedbackReceipt,
+          internalState: row.internalState,
+          customerProblemEvidence,
+          ...(!row.omitName && row.submittedByUserId
+            ? { submittedByUserId: row.submittedByUserId }
+            : {}),
+          context: {
+            ...row.context,
+            ...(experience ? { experienceMeasure: experience } : {}),
+            ...(classification ? { problemClassification: classification } : {}),
+          },
+          diagnostics: row.diagnostics,
+          events: visiblePage.reverse().map((event) => ({
+            ...event,
+            createdAt: event.createdAt.toISOString(),
+          })),
+          nextEventCursor: events.length > 100 ? events[99]!.id : null,
+        });
+        await operator(reader, actor);
+        return result;
       });
-      await operator(db, actor);
-      return result;
     },
     async create(actor: AuthorizationActor, companyId: string, raw: unknown) {
       await enabled();
@@ -465,7 +627,7 @@ export function customerFeedbackService(
         // preliminary read must not admit a new submission or guessed context.
         await tx.execute(sql`select singleton_key from instance_settings where singleton_key='default' for share`);
         await enabled(reader);
-        const hash = digest(input);
+        const hash = feedbackRequestHash(input);
         const [old] = await tx
           .select()
           .from(customerFeedbackAccess)
@@ -481,10 +643,16 @@ export function customerFeedbackService(
             throw conflict(
               "This request key was already used for different feedback",
             );
-          return receipt(
-            reader,
-            await owned(reader, companyId, principal, old.feedbackId),
-          );
+          const existing = await owned(reader, companyId, principal, old.feedbackId);
+          if (input.experienceMeasure?.consent === "granted") {
+            const [storedMeasure] = await reader.select().from(customerFeedbackExperienceMeasures).where(and(
+              eq(customerFeedbackExperienceMeasures.companyId, companyId),
+              eq(customerFeedbackExperienceMeasures.feedbackId, existing.id),
+            ));
+            if (storedMeasure && (storedMeasure.satisfaction !== input.experienceMeasure.satisfaction || storedMeasure.effort !== input.experienceMeasure.effort))
+              throw conflict("This request key was already used for different experience ratings");
+          }
+          return receipt(reader, existing);
         }
         const flags = await instanceSettingsService(reader).getExperimental();
         const [row] = await tx
@@ -499,6 +667,10 @@ export function customerFeedbackService(
             submittedByUserId: input.omitName ? null : principal,
             context: {
               ...input.context,
+              ...(input.experienceMeasure ? { experienceMeasure: {
+                offered: true,
+                ...(input.experienceMeasure.consent === "granted" ? { consent: "granted" } : {}),
+              } } : {}),
               routeTemplate: input.context.screenContractId === "SUPPORT-ACCESS" ? "/company/support-access" : routeTemplates[input.context.surfaceKey],
               relevantFeatureFlagIds: FEEDBACK_CONTEXT_FEATURE_IDS.filter((id) => v9FeatureEnabled(flags, id)),
               releaseBuildId:
@@ -512,6 +684,14 @@ export function customerFeedbackService(
               : null,
           })
           .returning();
+        if (input.experienceMeasure?.consent === "granted") {
+          await tx.insert(customerFeedbackExperienceMeasures).values({
+            companyId,
+            feedbackId: row!.id,
+            satisfaction: input.experienceMeasure.satisfaction!,
+            effort: input.experienceMeasure.effort!,
+          });
+        }
         const [link] = await tx
           .insert(customerFeedbackAccess)
           .values({
@@ -561,7 +741,7 @@ export function customerFeedbackService(
         .orderBy(desc(customerFeedback.createdAt), desc(customerFeedback.id))
         .limit(25);
       const results = await Promise.all(
-        rows.map((row) => receipt(db, row.feedback, false)),
+        rows.map((row) => receipt(db, row.feedback, false, false)),
       );
       await access(db, actor, companyId);
       return results;
@@ -667,6 +847,48 @@ export function customerFeedbackService(
         return receipt(reader, updated);
       });
     },
+    async withdrawExperienceMeasure(actor: AuthorizationActor, companyId: string, id: string, raw: unknown) {
+      const input = withdrawCustomerExperienceMeasureSchema.parse(raw);
+      const principal = await access(db, actor, companyId);
+      return db.transaction(async tx => {
+        const reader = tx as unknown as Db;
+        await access(reader, actor, companyId, true);
+        const row = await owned(reader, companyId, principal, id, true);
+        const hash = digest(input);
+        const [prior] = await tx.select().from(customerFeedbackEvents).where(and(
+          eq(customerFeedbackEvents.companyId, companyId),
+          eq(customerFeedbackEvents.feedbackId, id),
+          eq(customerFeedbackEvents.requestKey, input.idempotencyKey),
+        ));
+        if (prior) {
+          if (prior.requestHash !== hash || prior.kind !== "product_message" || prior.linkType !== FEEDBACK_MEASURE_WITHDRAWAL_EVENT)
+            throw conflict("Request key already used");
+          return receipt(reader, row);
+        }
+        const marker = customerFeedbackExperienceMeasureMarkerSchema.safeParse(row.context.experienceMeasure);
+        if (!marker.success || marker.data.consent !== "granted") throw conflict("No consented experience response exists");
+        const [deleted] = await tx.delete(customerFeedbackExperienceMeasures).where(and(
+          eq(customerFeedbackExperienceMeasures.companyId, companyId),
+          eq(customerFeedbackExperienceMeasures.feedbackId, id),
+        )).returning({ feedbackId: customerFeedbackExperienceMeasures.feedbackId });
+        if (!deleted) throw conflict("Experience ratings were already withdrawn");
+        await tx.insert(customerFeedbackEvents).values({
+          companyId,
+          feedbackId: id,
+          kind: "product_message",
+          body: "",
+          internalNote: "Optional experience ratings withdrawn by the submitter.",
+          linkType: FEEDBACK_MEASURE_WITHDRAWAL_EVENT,
+          linkId: null,
+          customerVisible: false,
+          requestKey: input.idempotencyKey,
+          requestHash: hash,
+        });
+        await audit(reader, companyId, principal, "customer_feedback.experience_measure_withdrawn", randomUUID());
+        await access(reader, actor, companyId);
+        return receipt(reader, row);
+      });
+    },
     async triage(
       actor: AuthorizationActor,
       companyId: string,
@@ -676,7 +898,7 @@ export function customerFeedbackService(
       const input = feedbackTriageSchema.parse(raw);
       return db.transaction(async (tx) => {
         const reader = tx as unknown as Db,
-          principal = await operator(reader, actor);
+          principal = await operator(reader, actor, true);
         const [company] = await tx
           .select()
           .from(companies)
@@ -709,7 +931,28 @@ export function customerFeedbackService(
               ),
             );
           if (!linked) throw notFound("Linked work is unavailable");
+          if (input.link.type === "issue") {
+            try {
+              await assertV5Authorization(tx, actor, companyId, "issue:read", {
+                type: "issue", companyId, issueId: linked.id,
+              });
+            } catch (error) {
+              if (error && typeof error === "object" && "status" in error && [403, 404].includes(Number(error.status)))
+                throw notFound("Linked work is unavailable");
+              throw error;
+            }
+          }
         }
+        // Keep the existing feedback record as the authoritative source and
+        // use only a company-scoped pointer for the governed Issue handoff.
+        const issueEvidence = input.link?.type === "issue"
+          ? customerProblemEvidencePointerSchema.parse({
+              companyId,
+              source: "product_feedback",
+              sourceId: row.id,
+              issueId: input.link.id,
+            })
+          : null;
         const hash = digest(input),
           [prior] = await tx
             .select()
@@ -723,18 +966,30 @@ export function customerFeedbackService(
         if (prior) {
           if (prior.requestHash !== hash || prior.kind !== "product_message")
             throw conflict("Request key already used");
-          return receipt(reader, row);
+          const result = await receipt(reader, row);
+          await operator(reader, actor, true);
+          return result;
         }
         if (row.version !== input.expectedVersion)
           throw conflict("Feedback changed; refresh before triage");
+        const classification = input.problemClassification === null ? null : input.problemClassification
+          ? feedbackProblemClassificationSchema.parse({
+              ...input.problemClassification,
+              provenance: "human_feedback_triage",
+              classifiedAt: new Date().toISOString(),
+            })
+          : undefined;
+        const internalNote = classification !== undefined || input.problemClassification === null
+          ? encodeTriageInternalNote(input.internalNote, classification)
+          : input.internalNote || null;
         await tx.insert(customerFeedbackEvents).values({
           companyId,
           feedbackId: id,
           kind: "product_message",
           body: input.customerMessage,
-          internalNote: input.internalNote || null,
-          linkType: input.link?.type ?? null,
-          linkId: input.link?.id ?? null,
+          internalNote,
+          linkType: issueEvidence ? "issue" : input.link?.type ?? null,
+          linkId: issueEvidence?.issueId ?? input.link?.id ?? null,
           customerVisible: !!input.customerMessage,
           requestKey: input.idempotencyKey,
           requestHash: hash,
@@ -764,7 +1019,9 @@ export function customerFeedbackService(
           randomUUID(),
         );
         if (input.customerMessage) await notify(reader, updated);
-        return receipt(reader, updated);
+        const result = await receipt(reader, updated);
+        await operator(reader, actor, true);
+        return result;
       });
     },
   };

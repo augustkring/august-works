@@ -31,9 +31,11 @@ function buildInstallSimulationCommand(commandPath: string): string {
 function createSandboxRunner(options: { homeDir: string; installCommandPath: string }) {
   let counter = 0;
   const installCommands: string[] = [];
+  const executedCommands: Array<{ command: string; args: string[] }> = [];
   const systemPath = "/usr/bin:/bin";
   return {
     installCommands,
+    executedCommands,
     execute: async (input: {
       command: string;
       args?: string[];
@@ -46,6 +48,7 @@ function createSandboxRunner(options: { homeDir: string; installCommandPath: str
     }) => {
       counter += 1;
       const args = [...(input.args ?? [])];
+      executedCommands.push({ command: input.command, args });
       if (args[1] === SANDBOX_INSTALL_COMMAND) {
         installCommands.push(args[1]);
         args[1] = buildInstallSimulationCommand(options.installCommandPath);
@@ -70,7 +73,7 @@ function createSandboxRunner(options: { homeDir: string; installCommandPath: str
 }
 
 describe("cursor testEnvironment", () => {
-  it("re-resolves the installed agent under ~/.cursor/bin and verifies --version before the hello probe", async () => {
+  it("keeps install and version checks while refusing the paid hello probe", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-envtest-"));
     const homeDir = path.join(root, "home");
     const workspace = path.join(root, "workspace");
@@ -105,8 +108,11 @@ describe("cursor testEnvironment", () => {
         },
       });
 
-      expect(result.status).toBe("pass");
+      expect(result.status).toBe("fail");
       expect(runner.installCommands).toEqual([SANDBOX_INSTALL_COMMAND]);
+      expect(runner.executedCommands).toContainEqual({ command: agentPath, args: ["--version"] });
+      expect(runner.executedCommands.some((call) => call.args.includes("Respond with hello."))).toBe(false);
+      expect(result.checks.some((check) => check.code === "cursor_hello_probe_passed")).toBe(false);
       expect(result.checks).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -120,8 +126,8 @@ describe("cursor testEnvironment", () => {
             detail: "Cursor Agent 1.2.3",
           }),
           expect.objectContaining({
-            code: "cursor_hello_probe_passed",
-            level: "info",
+            code: "paid_transport_unqualified",
+            level: "error",
           }),
         ]),
       );

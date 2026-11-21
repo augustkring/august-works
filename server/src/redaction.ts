@@ -332,16 +332,30 @@ const NATIVE_RUN_SPAN_NAMES = new Set([
   "provider.turn.queue",
   "question_response.to_run_created",
   "runner.artifact.discover",
+  "runner.artifact.link",
   "runner.artifact.prepare",
+  "runner.artifact.verify",
+  "runner.artifact.verify_preinstalled",
+  "runner.artifact.verify_retained",
   "runner.prp.authenticate",
   "runner.prp.route.register",
   "runner.runtime.stage",
+  "runner.process.dispatch",
+  "runner.process.identity_failure_cleanup",
+  "runner.process.launch",
   "runner.session.bootstrap",
   "runner.session.resume",
   "runner.session.startup",
+  "runner.transport.activation",
   "runner.transport.connect",
+  "runner.transport.ready",
+  "runner.transport.resolve",
   "runner.transport.selected",
+  "runner.ingress.acquire",
+  "runner.ingress.wait_for_process",
   "runner.turn.submit",
+  "session.checkpoint.restore",
+  "stage.asset.home",
   "task.prepare",
   "task.run",
   "task.run.measured",
@@ -923,6 +937,12 @@ export function sanitizeRecord(
     }
     if (AUDIT_SURFACE_PAYLOAD_KEY_RE.test(key) && typeof value === "string") {
       redacted[key] = redactSensitiveText(value);
+      continue;
+    }
+    // This public lifecycle discriminator is emitted by the Task owner; its
+    // dotted shape must not erase the administrative-expiry audit proof.
+    if (key === "source" && value === "issue.status_transition.issue_closed") {
+      redacted[key] = value;
       continue;
     }
     if (

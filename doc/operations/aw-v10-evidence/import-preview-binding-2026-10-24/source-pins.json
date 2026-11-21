@@ -1,0 +1,13 @@
+{
+  "packages/shared/src/types/company-portability.ts": "f86bee077ce8e06660f179f65c2b0774f11f3c498c92ed32cc52e33c88e63efc",
+  "packages/shared/src/validators/company-portability.ts": "39aed1a55b2812f3b711b242ac5b0f6d7c712d878ef6e0ad92e71a48925a57f2",
+  "server/src/errors.ts": "5162cc8d7261c0fe522ae31389026366ee642727112ef7f15ef033379f16a3b7",
+  "server/src/routes/companies.ts": "9bbebebe3c6ebe407f0568a633ea7a08c84cb9bcd22b9516ed7bbb65dcf3e245",
+  "server/src/services/company-portability.ts": "fc3b794f29637b03b2861998c06bc908ee49337ad783e81c6212923c5076dbe2",
+  "server/src/services/company-import-jobs.ts": "05492521e9a0a52766fb63f33724a9713d4a609679c0f9b108bb83e27d1b98b8",
+  "ui/src/pages/CompanyImport.tsx": "6288b954c6dc4fb181800961fd0ed05419ebfbdfd5fc2a600769dbdabfa738f6",
+  "ui/src/pages/CompanyImport.test.tsx": "9a2eaeb53a5a2b7e037044d9dfe7f90559774b4d4b2b6e604b7c01ec4d7250f3",
+  "server/src/__tests__/company-import-source-preview.integration.test.ts": "b149df8b28b931d2653ee5a3715b2600ebf4f37895563655698cbe1aacd4cd7b",
+  "server/src/__tests__/company-import-process-recovery.integration.test.ts": "6492729e11ff003458b35960d27151ef0dbcca4f0061fe3bddc4c705040eae70",
+  "server/src/__tests__/company-portability-routes.test.ts": "f1c31cb0aa62ff3de7be2d99955812e322e8bf06ce9b311f57787634c4b896e0"
+}

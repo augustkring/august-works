@@ -22,6 +22,16 @@ vi.mock("./grok-auth-copyback.js", () => ({ copyBackGrokAuth: vi.fn(async () => 
 import { existsSync } from "node:fs";
 import { parseGrokModelsOutput, testEnvironment } from "./test.js";
 
+function expectPaidHelloProbeUnavailable(result: Awaited<ReturnType<typeof testEnvironment>>) {
+  expect(result.status).toBe("fail");
+  expect(result.checks).toContainEqual(
+    expect.objectContaining({ code: "paid_transport_unqualified", level: "error" }),
+  );
+  expect(result.checks.some((check: { code: string }) => check.code.startsWith("grok_hello_probe_"))).toBe(false);
+  expect(runProcessMock).toHaveBeenCalledTimes(1);
+  expect(runProcessMock.mock.calls[0]?.[3]).toEqual(["models"]);
+}
+
 describe("parseGrokModelsOutput", () => {
   it("extracts auth state and models from `grok models` output", () => {
     expect(parseGrokModelsOutput([
@@ -49,7 +59,7 @@ describe("grok_local testEnvironment", () => {
     stageGrokHomeMock.mockClear();
   });
 
-  it("reports a healthy authenticated host with a working hello probe", async () => {
+  it("reports non-paid model diagnostics without starting an unqualified hello probe", async () => {
     runProcessMock
       .mockResolvedValueOnce({
         exitCode: 0,
@@ -64,16 +74,6 @@ describe("grok_local testEnvironment", () => {
           "  * grok-build (default)",
         ].join("\n"),
         stderr: "",
-      })
-      .mockResolvedValueOnce({
-        exitCode: 0,
-        signal: null,
-        timedOut: false,
-        stdout: [
-          JSON.stringify({ type: "text", data: "hello" }),
-          JSON.stringify({ type: "end", stopReason: "EndTurn", sessionId: "sess-1", requestId: "req-1" }),
-        ].join("\n"),
-        stderr: "",
       });
 
     const result = await testEnvironment({
@@ -86,35 +86,18 @@ describe("grok_local testEnvironment", () => {
       },
     });
 
-    expect(result.status).toBe("pass");
+    expectPaidHelloProbeUnavailable(result);
     expect(result.checks.map((check: { code: string }) => check.code)).toEqual(
       expect.arrayContaining([
         "grok_command_resolvable",
         "grok_models_probe_passed",
         "grok_model_configured",
-        "grok_hello_probe_passed",
+        "paid_transport_unqualified",
       ]),
-    );
-    expect(runProcessMock).toHaveBeenNthCalledWith(
-      2,
-      expect.any(String),
-      null,
-      "grok",
-      expect.arrayContaining([
-        "--output-format",
-        "streaming-json",
-        "--always-approve",
-        "--permission-mode",
-        "dontAsk",
-        "--disable-web-search",
-        "--single",
-        "Respond with exactly hello.",
-      ]),
-      expect.any(Object),
     );
   });
 
-  it("does not warn when the default-sentinel model is absent from the real model list", async () => {
+  it("does not warn about the default sentinel while refusing the paid hello probe", async () => {
     // Real grok never lists the "grok-build" sentinel; execute.ts never sends
     // it. The probe must treat the default as valid (info), not warn.
     runProcessMock
@@ -132,16 +115,6 @@ describe("grok_local testEnvironment", () => {
           "  * grok-4",
         ].join("\n"),
         stderr: "",
-      })
-      .mockResolvedValueOnce({
-        exitCode: 0,
-        signal: null,
-        timedOut: false,
-        stdout: [
-          JSON.stringify({ type: "text", data: "hello" }),
-          JSON.stringify({ type: "end", stopReason: "EndTurn", sessionId: "s", requestId: "r" }),
-        ].join("\n"),
-        stderr: "",
       });
 
     const result = await testEnvironment({
@@ -153,10 +126,10 @@ describe("grok_local testEnvironment", () => {
     const codes = result.checks.map((check: { code: string }) => check.code);
     expect(codes).toContain("grok_model_configured");
     expect(codes).not.toContain("grok_model_not_found");
-    expect(result.status).toBe("pass");
+    expectPaidHelloProbeUnavailable(result);
   });
 
-  it("warns when an explicitly configured real model is not available", async () => {
+  it("warns when an explicitly configured model is missing without a paid hello", async () => {
     runProcessMock
       .mockResolvedValueOnce({
         exitCode: 0,
@@ -171,16 +144,6 @@ describe("grok_local testEnvironment", () => {
           "  * grok-4",
         ].join("\n"),
         stderr: "",
-      })
-      .mockResolvedValueOnce({
-        exitCode: 0,
-        signal: null,
-        timedOut: false,
-        stdout: [
-          JSON.stringify({ type: "text", data: "hello" }),
-          JSON.stringify({ type: "end", stopReason: "EndTurn", sessionId: "s", requestId: "r" }),
-        ].join("\n"),
-        stderr: "",
       });
 
     const result = await testEnvironment({
@@ -190,17 +153,11 @@ describe("grok_local testEnvironment", () => {
     });
 
     expect(result.checks.map((check: { code: string }) => check.code)).toContain("grok_model_not_found");
+    expectPaidHelloProbeUnavailable(result);
   });
 
-  it("downgrades auth failures to warnings", async () => {
+  it("reports auth failure as a warning and keeps paid hello unavailable", async () => {
     runProcessMock
-      .mockResolvedValueOnce({
-        exitCode: 1,
-        signal: null,
-        timedOut: false,
-        stdout: "",
-        stderr: "Not logged in. Run `grok login`.",
-      })
       .mockResolvedValueOnce({
         exitCode: 1,
         signal: null,
@@ -218,11 +175,11 @@ describe("grok_local testEnvironment", () => {
       },
     });
 
-    expect(result.status).toBe("warn");
+    expectPaidHelloProbeUnavailable(result);
     expect(result.checks.map((check: { code: string }) => check.code)).toEqual(
       expect.arrayContaining([
         "grok_auth_required",
-        "grok_hello_probe_auth_required",
+        "paid_transport_unqualified",
       ]),
     );
   });
@@ -231,13 +188,6 @@ describe("grok_local testEnvironment", () => {
     // The user interface reads this neutral canonical code to decide login
     // eligibility for the sandbox; it does not parse the message text.
     runProcessMock
-      .mockResolvedValueOnce({
-        exitCode: 1,
-        signal: null,
-        timedOut: false,
-        stdout: "",
-        stderr: "Not logged in. Run `grok login`.",
-      })
       .mockResolvedValueOnce({
         exitCode: 1,
         signal: null,
@@ -256,9 +206,10 @@ describe("grok_local testEnvironment", () => {
     expect(result.checks.some((check: { code: string }) => check.code === "adapter_auth_missing")).toBe(
       true,
     );
+    expectPaidHelloProbeUnavailable(result);
   });
 
-  it("stages the managed account through a host temp workspace, never the remote cwd", async () => {
+  it("stages the managed account through a host temp workspace, never the remote cwd, then refuses paid hello", async () => {
     // The remote cwd is a path inside the sandbox. Handing it to the runtime
     // as `workspaceLocalDir` made the host-side ignore scan fail on a
     // directory that does not exist (git-ignore-scan-failed in production).
@@ -270,8 +221,7 @@ describe("grok_local testEnvironment", () => {
       return { assetDirs: { home: "/sandbox/assets/home" }, restoreWorkspace: async () => {} };
     });
     runProcessMock
-      .mockResolvedValueOnce({ exitCode: 0, signal: null, timedOut: false, stdout: "You are logged in with grok.com.\n\nDefault model: grok-4\n\nAvailable models:\n  * grok-4", stderr: "" })
-      .mockResolvedValueOnce({ exitCode: 0, signal: null, timedOut: false, stdout: [JSON.stringify({ type: "text", data: "hello" }), JSON.stringify({ type: "end", stopReason: "EndTurn", sessionId: "s", requestId: "r" })].join("\n"), stderr: "" });
+      .mockResolvedValueOnce({ exitCode: 0, signal: null, timedOut: false, stdout: "You are logged in with grok.com.\n\nDefault model: grok-4\n\nAvailable models:\n  * grok-4", stderr: "" });
 
     const result = await testEnvironment({
       companyId: "company-1",
@@ -288,7 +238,7 @@ describe("grok_local testEnvironment", () => {
     expect(workspaceExistedAtCall).toBe(true);
     // The staged home dir the runtime uploaded is what the probe must use.
     expect(runProcessMock.mock.calls[0]?.[4]).toMatchObject({ env: expect.objectContaining({ GROK_HOME: "/sandbox/assets/home" }) });
-    expect(result.status).toBe("pass");
+    expectPaidHelloProbeUnavailable(result);
   });
 
   it("reports a failed runtime preparation as a check instead of crashing", async () => {
@@ -320,13 +270,6 @@ describe("grok_local testEnvironment", () => {
         timedOut: false,
         stdout: "",
         stderr: "Not logged in. Run `grok login`.",
-      })
-      .mockResolvedValueOnce({
-        exitCode: 1,
-        signal: null,
-        timedOut: false,
-        stdout: "",
-        stderr: "Not logged in. Run `grok login`.",
       });
 
     const result = await testEnvironment({
@@ -338,5 +281,6 @@ describe("grok_local testEnvironment", () => {
     expect(result.checks.some((check: { code: string }) => check.code === "adapter_auth_missing")).toBe(
       false,
     );
+    expectPaidHelloProbeUnavailable(result);
   });
 });

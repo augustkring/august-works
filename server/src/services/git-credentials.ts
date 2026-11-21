@@ -239,12 +239,19 @@ export function createGitRemoteAuthProvider(
       return managed.credential;
     }
     for (const secretName of secretNames) {
-      const secret = await Promise.resolve(secrets.getByName(companyId, secretName)).catch(() => null);
+      let secret: Awaited<ReturnType<GitCredentialSecretsDeps["getByName"]>>;
+      try {
+        secret = await secrets.getByName(companyId, secretName);
+      } catch {
+        throw new Error("GitHub company credential configuration is unavailable");
+      }
       if (!secret) continue;
-      // A resolution failure (inactive secret, provider outage) records its own failure audit
-      // event; fall through to the next source instead of failing the whole git operation here.
-      const token = await secrets
-        .resolveSecretValue(companyId, secret.id, "latest", {
+      // A configured company credential is an explicit source choice. If its value is
+      // expired, unavailable, or empty, do not silently authenticate as another secret or
+      // the server operator; the secret service retains its normal resolution audit.
+      let token: string;
+      try {
+        token = (await secrets.resolveSecretValue(companyId, secret.id, "latest", {
           accessContext: {
             consumerType: "system",
             consumerId: "workspace-git-credential",
@@ -253,10 +260,12 @@ export function createGitRemoteAuthProvider(
             heartbeatRunId: context?.heartbeatRunId ?? null,
             responsibleUserId: context?.responsibleUserId ?? null,
           },
-        })
-        .then((value) => value.trim())
-        .catch(() => "");
-      if (token) return { token, source: "company_secret", secretName };
+        })).trim();
+      } catch {
+        throw new Error("Configured GitHub company credential is unavailable");
+      }
+      if (!token) throw new Error("Configured GitHub company credential is unavailable");
+      return { token, source: "company_secret", secretName };
     }
     const envToken = env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim() || "";
     if (envToken) return { token: envToken, source: "server_env", secretName: null };

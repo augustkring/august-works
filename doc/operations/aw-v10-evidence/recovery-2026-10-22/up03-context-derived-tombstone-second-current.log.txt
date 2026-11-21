@@ -1,0 +1,60 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts (8 tests | 2 failed) 19011ms
+     × retains the context source UUID when insertion commits before concurrent deletion 290ms
+     × retains the observation source UUID when insertion commits before concurrent deletion 199ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts > Source deletion preserves Context and model restrictions > retains the context source UUID when insertion commits before concurrent deletion
+Error: Failed query: delete from "companies" where "companies"."id" = $1
+params: e4e6ff6e-c054-4260-8e44-797dfc3bfa6e
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/context-derived-source-tombstones.integration.test.ts:141:5
+    139|     // correctly blocks deletion until that prerequisite is removed.
+    140|     await db.delete(issues).where(eq(issues.companyId, f.companyId));
+    141|     await db.delete(companies).where(eq(companies.id, f.companyId));
+       |     ^
+    142|     expect(await f.read()).toEqual([]);
+    143|   });
+
+Caused by: PostgresError: update or delete on table "companies" violates foreign key constraint "company_memberships_company_id_companies_id_fk" on table "company_memberships"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23503', detail: 'Key (id)=(e4e6ff6e-c054-4260-8e44-797dfc3bfa6e) is still referenced from table "company_memberships".', schema_name: 'public', table_name: 'company_memberships', constraint_name: 'company_memberships_company_id_companies_id_fk', file: 'ri_triggers.c', routine: 'ri_ReportViolation', query: 'delete from "companies" where "companies"."id" = $1', parameters: [ 'e4e6ff6e-c054-4260-8e44-797dfc3bfa6e' ], args: [ 'e4e6ff6e-c054-4260-8e44-797dfc3bfa6e' ], types: [ 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts > Source deletion preserves Context and model restrictions > retains the observation source UUID when insertion commits before concurrent deletion
+Error: Failed query: delete from "companies" where "companies"."id" = $1
+params: 5e03f0b4-8937-4ae0-862b-b2d098749397
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/context-derived-source-tombstones.integration.test.ts:141:5
+    139|     // correctly blocks deletion until that prerequisite is removed.
+    140|     await db.delete(issues).where(eq(issues.companyId, f.companyId));
+    141|     await db.delete(companies).where(eq(companies.id, f.companyId));
+       |     ^
+    142|     expect(await f.read()).toEqual([]);
+    143|   });
+
+Caused by: PostgresError: update or delete on table "companies" violates foreign key constraint "company_memberships_company_id_companies_id_fk" on table "company_memberships"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23503', detail: 'Key (id)=(5e03f0b4-8937-4ae0-862b-b2d098749397) is still referenced from table "company_memberships".', schema_name: 'public', table_name: 'company_memberships', constraint_name: 'company_memberships_company_id_companies_id_fk', file: 'ri_triggers.c', routine: 'ri_ReportViolation', query: 'delete from "companies" where "companies"."id" = $1', parameters: [ '5e03f0b4-8937-4ae0-862b-b2d098749397' ], args: [ '5e03f0b4-8937-4ae0-862b-b2d098749397' ], types: [ 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 passed (8)
+   Start at  23:48:22
+   Duration  73.68s (transform 36.68s, setup 193ms, import 54.12s, tests 19.01s, environment 0ms)
+

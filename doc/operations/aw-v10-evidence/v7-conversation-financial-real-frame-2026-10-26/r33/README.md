@@ -1,0 +1,3 @@
+# Actual conversation financial frame R33
+
+Fresh snapshot and syntax preflights passed; the selected test executed and exited 1 (1 failed, 30 skipped). Actual provider usage settlement and canonical purge completed, but the runtime erasure row still ended queued. The snapshot includes the first production fix that schedules stopped Native OpenCode runs even when the provider directory is already absent, and the test confirms the latest row had attempt 1, no retry parent, no error code, and the exact run/operation binding. The added scheduler call and run-driver facts in R34 will isolate whether the offboarding selector recognizes this actual run and whether its original worker completes the row before purge.

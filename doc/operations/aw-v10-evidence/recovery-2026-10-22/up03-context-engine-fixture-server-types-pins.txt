@@ -1,0 +1,3 @@
+9faba98432ebd0b868b03fb1a3a44eef1771a706b5b1691b604a41631db377d9  server/src/services/context/context-engine-integration.test.ts
+652b971adfb417c02d1e2172da961e499bae7d3b518a576bdc08c7f14b232a67  server/src/services/context/context-manifest.ts
+873914b12cc2fd374c53c1596ad8d47cbbfc73603a99ce6f806103206480db95  packages/db/src/schema/context_memory_roots.ts

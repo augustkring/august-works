@@ -66,4 +66,11 @@ export interface ExecutionReconciliation {
   outcomeEvidence: string;
   /** Operator evidence bound to this failed run; required after workspace restore failure. */
   workspaceRepairEvidence?: string;
+  /** An explicit owner selection, accepted only with a verified native
+   * physical-destruction receipt and current attachment source hashes. */
+  workspaceReconstruction?: {
+    confirmed: true;
+    destructionReceiptHash: string;
+    selectedSources: Array<{ attachmentId: string; sha256: string }>;
+  };
 }

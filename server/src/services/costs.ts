@@ -1,4 +1,4 @@
-import { agentAvatarUrl, resolveAgentAppearance } from "@paperclipai/shared";
+import { agentAvatarUrl, resolveAgentAppearance, NATIVE_CONVERSATION_MODEL_BILLING_PREFIX, type CostSummary } from "@paperclipai/shared";
 import { and, desc, eq, gte, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
@@ -17,6 +17,10 @@ const SUBSCRIPTION_BILLING_TYPES = ["subscription_included", "subscription_overa
 
 function sumAsNumber(column: typeof costEvents.costCents | typeof costEvents.inputTokens | typeof costEvents.cachedInputTokens | typeof costEvents.outputTokens) {
   return sql<number>`coalesce(sum(${column}), 0)::double precision`;
+}
+
+function unpricedEventCount() {
+  return sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced')::int`;
 }
 
 function currentUtcMonthWindow(now = new Date()) {
@@ -54,6 +58,9 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
   const budgets = budgetService(db, budgetHooks);
   return {
     createEvent: async (companyId: string, data: Omit<typeof costEvents.$inferInsert, "companyId">) => {
+      if (data.billingCode?.startsWith(NATIVE_CONVERSATION_MODEL_BILLING_PREFIX)) {
+        throw unprocessable("Native conversation billing codes are reserved for the model ledger");
+      }
       const agent = await db
         .select()
         .from(agents)
@@ -116,12 +123,46 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
       if (range?.from) conditions.push(gte(costEvents.occurredAt, range.from));
       if (range?.to) conditions.push(lte(costEvents.occurredAt, range.to));
 
-      const [{ total }] = await db
+      const [{ total, unpriced }] = await db
         .select({
           total: sumAsNumber(costEvents.costCents),
+          unpriced: unpricedEventCount(),
         })
         .from(costEvents)
         .where(and(...conditions));
+
+      const successfulRunConditions: ReturnType<typeof eq>[] = [
+        eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.status, "succeeded"),
+      ];
+      if (range?.from) successfulRunConditions.push(gte(heartbeatRuns.finishedAt, range.from));
+      if (range?.to) successfulRunConditions.push(lte(heartbeatRuns.finishedAt, range.to));
+      const [runProviderCosts] = await db
+        .select({
+          runCount: sql<number>`count(distinct ${heartbeatRuns.id})::int`,
+          runsWithCostEvents: sql<number>`count(distinct case when ${costEvents.id} is not null then ${heartbeatRuns.id} end)::int`,
+          unpricedEventCount: sql<number>`count(case when ${costEvents.costStatus} = 'unpriced' then ${costEvents.id} end)::int`,
+          estimatedEventCount: sql<number>`count(case when ${costEvents.costStatus} = 'estimated' then ${costEvents.id} end)::int`,
+          providerCostCents: sumAsNumber(costEvents.costCents),
+        })
+        .from(heartbeatRuns)
+        .leftJoin(costEvents, and(
+          eq(costEvents.companyId, companyId),
+          eq(costEvents.heartbeatRunId, heartbeatRuns.id),
+        ))
+        .where(and(...successfulRunConditions));
+
+      const successfulRunCount = Number(runProviderCosts?.runCount ?? 0);
+      const successfulRunsWithCostEvents = Number(runProviderCosts?.runsWithCostEvents ?? 0);
+      const successfulRunsWithoutCostEvents = Math.max(0, successfulRunCount - successfulRunsWithCostEvents);
+      const successfulRunProviderCostCents = Number(runProviderCosts?.providerCostCents ?? 0);
+      const runCostStatus: CostSummary["providerCostPerSuccessfulRunStatus"] = successfulRunCount === 0
+        ? "no_successful_runs"
+        : successfulRunsWithoutCostEvents > 0 || Number(runProviderCosts?.unpricedEventCount ?? 0) > 0
+          ? "incomplete_events"
+          : Number(runProviderCosts?.estimatedEventCount ?? 0) > 0
+            ? "estimated_events"
+            : "reported_events";
 
       const spendCents = Number(total);
       const utilization =
@@ -132,8 +173,20 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
       return {
         companyId,
         spendCents,
+        unpricedEventCount: Number(unpriced),
         budgetCents: company.budgetMonthlyCents,
         utilizationPercent: Number(utilization.toFixed(2)),
+        successfulRunCount,
+        successfulRunsWithCostEvents,
+        successfulRunsWithoutCostEvents,
+        successfulRunProviderCostCents,
+        successfulRunEstimatedEventCount: Number(runProviderCosts?.estimatedEventCount ?? 0),
+        successfulRunUnpricedEventCount: Number(runProviderCosts?.unpricedEventCount ?? 0),
+        providerCostPerSuccessfulRunCents: runCostStatus === "reported_events" || runCostStatus === "estimated_events"
+          ? successfulRunProviderCostCents / successfulRunCount
+          : null,
+        providerCostPerSuccessfulRunCoverage: "recorded_events_only",
+        providerCostPerSuccessfulRunStatus: runCostStatus,
       };
     },
 
@@ -238,6 +291,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
           .select({
             issueCount: sql<number>`count(distinct ${issues.id})::int`,
             costCents: sumAsNumber(costEvents.costCents),
+            unpricedEventCount: unpricedEventCount(),
             inputTokens: sumAsNumber(costEvents.inputTokens),
             cachedInputTokens: sumAsNumber(costEvents.cachedInputTokens),
             outputTokens: sumAsNumber(costEvents.outputTokens),
@@ -270,6 +324,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
         issueCount: Number(costRow?.issueCount ?? 0),
         includeDescendants: true,
         costCents: Number(costRow?.costCents ?? 0),
+        unpricedEventCount: Number(costRow?.unpricedEventCount ?? 0),
         inputTokens: Number(costRow?.inputTokens ?? 0),
         cachedInputTokens: Number(costRow?.cachedInputTokens ?? 0),
         outputTokens: Number(costRow?.outputTokens ?? 0),
@@ -290,6 +345,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
           agentAppearance: agents.appearance,
           agentStatus: agents.status,
           costCents: sumAsNumber(costEvents.costCents),
+          unpricedEventCount: unpricedEventCount(),
           inputTokens: sumAsNumber(costEvents.inputTokens),
           cachedInputTokens: sumAsNumber(costEvents.cachedInputTokens),
           outputTokens: sumAsNumber(costEvents.outputTokens),
@@ -327,6 +383,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
           billingType: costEvents.billingType,
           model: costEvents.model,
           costCents: sumAsNumber(costEvents.costCents),
+          unpricedEventCount: unpricedEventCount(),
           inputTokens: sumAsNumber(costEvents.inputTokens),
           cachedInputTokens: sumAsNumber(costEvents.cachedInputTokens),
           outputTokens: sumAsNumber(costEvents.outputTokens),
@@ -356,6 +413,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
         .select({
           biller: costEvents.biller,
           costCents: sumAsNumber(costEvents.costCents),
+          unpricedEventCount: unpricedEventCount(),
           inputTokens: sumAsNumber(costEvents.inputTokens),
           cachedInputTokens: sumAsNumber(costEvents.cachedInputTokens),
           outputTokens: sumAsNumber(costEvents.outputTokens),
@@ -398,6 +456,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
               provider: costEvents.provider,
               biller: sql<string>`case when count(distinct ${costEvents.biller}) = 1 then min(${costEvents.biller}) else 'mixed' end`,
               costCents: sumAsNumber(costEvents.costCents),
+              unpricedEventCount: unpricedEventCount(),
               inputTokens: sumAsNumber(costEvents.inputTokens),
               cachedInputTokens: sumAsNumber(costEvents.cachedInputTokens),
               outputTokens: sumAsNumber(costEvents.outputTokens),
@@ -418,6 +477,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
             window: label as string,
             windowHours: hours,
             costCents: row.costCents,
+            unpricedEventCount: row.unpricedEventCount,
             inputTokens: row.inputTokens,
             cachedInputTokens: row.cachedInputTokens,
             outputTokens: row.outputTokens,
@@ -447,6 +507,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
           billingType: costEvents.billingType,
           model: costEvents.model,
           costCents: sumAsNumber(costEvents.costCents),
+          unpricedEventCount: unpricedEventCount(),
           inputTokens: sumAsNumber(costEvents.inputTokens),
           cachedInputTokens: sumAsNumber(costEvents.cachedInputTokens),
           outputTokens: sumAsNumber(costEvents.outputTokens),
@@ -508,6 +569,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
           projectId: effectiveProjectId,
           projectName: projects.name,
           costCents: costCentsExpr,
+          unpricedEventCount: unpricedEventCount(),
           inputTokens: sumAsNumber(costEvents.inputTokens),
           cachedInputTokens: sumAsNumber(costEvents.cachedInputTokens),
           outputTokens: sumAsNumber(costEvents.outputTokens),

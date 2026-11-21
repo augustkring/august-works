@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/issue-recovery-actions.test.ts
+test_pattern=delivers a reconciled execution once|reconciles a lost wake acknowledgement|keeps reconciliation pending behind unrelated issue work|does not overwrite a newer reconciliation decision

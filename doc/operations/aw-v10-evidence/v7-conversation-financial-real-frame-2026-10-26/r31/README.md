@@ -1,0 +1,3 @@
+# Actual conversation financial frame R31
+
+The fresh snapshot and syntax preflights passed. The single selected real-frame test executed and exited 1 after settlement and canonical purge. The token-priced conversation usage and content-free financial aggregate checks passed before the final assertion. The final failure was the runtime erasure outbox receipt: no row existed before purge; afterwards the latest row was `queued` with kind `runtime_asset_erasure`, the exact run ID, and the exact current company-purge operation ID. This is not full financial/offboarding acceptance. A follow-up test-only diagnostic now records the outbox attempt number, retry-parent presence, and error code to explain the queued state without logging payloads.

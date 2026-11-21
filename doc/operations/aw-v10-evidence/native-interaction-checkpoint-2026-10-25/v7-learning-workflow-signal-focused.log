@@ -1,0 +1,30 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ❯ src/__tests__/v7-learning.integration.test.ts (42 tests | 1 failed | 41 skipped) 185317ms
+     × retains current Optimizer source authority and erases native compiler copies: workflow_signal 180114ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: workflow_signal
+Error: Test timed out in 180000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-learning.integration.test.ts:210:3
+    208|   });
+    209|   for (const sourceKind of ["verified_memory","artifact_signal","workf…
+    210|   it(`retains current Optimizer source authority and erases native com…
+       |   ^
+    211|     const generated=sourceKind==="artifact_signal"||sourceKind==="prom…
+    212|     const signal=sourceKind==="verified_memory"?null:await analyticalS…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  23:12:49
+   Duration  201.77s (transform 11.91s, setup 77ms, import 16.23s, tests 185.32s, environment 0ms)
+
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run --config vitest.config.ts src/__tests__/v7-learning.integration.test.ts --testNamePattern=retains current Optimizer source authority and erases native compiler copies: workflow_signal --no-file-parallelism

@@ -6,8 +6,11 @@ import { expect, test, type APIResponse } from "@playwright/test";
 import { createDb, closeRegisteredClients, issues, businessMetricObservations } from "../../packages/db/src/index.ts";
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
 import { businessMetricService } from "../../server/src/services/business-metrics/service.ts";
+import { analyticalPrincipalId } from "../../server/src/services/analytical-reader.ts";
 import { aiGovernanceService } from "../../server/src/services/ai-governance/governance-service.ts";
 import { analyticalPurpose, metricDefinition } from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
@@ -23,7 +26,9 @@ test("Insights reads a retained Native measurement without creating another calc
   expect(path.resolve(config.database.embeddedPostgresDataDir)).toBe(path.join(path.dirname(configPath), "db"));
   const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
   const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`, db = createDb(databaseUrl);
-  const actor = { type: "board" as const, source: "local_implicit" as const };
+  const session = await json(await request.get("/api/auth/get-session"));
+  const actor = { type: "board" as const, source: "session" as const, userId: session.user.id,
+    sessionId: session.session.id, companyIds: [company.id] };
   let writes = 0;
   page.on("request", req => { if (req.method() !== "GET" && /\/business-metrics/.test(req.url())) writes++; });
   try {
@@ -31,7 +36,7 @@ test("Insights reads a retained Native measurement without creating another calc
       analytical_lineage_v8: true, business_metrics_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true } }));
     const policy = await aiGovernanceService(db).obligation(actor, company.id, analyticalPurpose());
     const owner = businessMetricService(db);
-    const created = await owner.create(company.id, actor, { key: "recorded_completion", definition: { ...metricDefinition(policy.id), name: "Recorded delivery proportion" } });
+    const created = await owner.create(company.id, actor, { key: "recorded_completion", definition: { ...metricDefinition(policy.id), ownerUserId: analyticalPrincipalId(actor), name: "Recorded delivery proportion" } });
     await owner.publish(company.id, actor, created.metric.id, { expectedRevision: 1, versionId: created.version.id });
     await db.insert(issues).values(["done", "todo", "todo"].map(status => ({ companyId: company.id, status, title: "PRIVATE source title is not an insight", description: "PRIVATE source prose", createdAt: new Date("2026-01-01T12:00:00Z") })));
     const measured = await owner.query(company.id, actor, { metricId: created.metric.id, versionId: created.version.id,

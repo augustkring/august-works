@@ -1,0 +1,40 @@
+{
+  "scope": "Revalidate actual Better Auth cookie session after original Foundation Source waits",
+  "sources": {
+    "server/src/services/authorization.ts": "1e6418ce2e545beaf041d4c9293e7960e75c9bd43f75c044f9060064819d7cdd",
+    "server/src/__tests__/foundation-read-source-authority.integration.test.ts": "aef9c3805d778b68bbe444cdde447b31858aeeab0014cb6ff195c7ecfca354b7",
+    "server/src/auth/better-auth.ts": "5116014e3a904bcd801090de479a4fda8a57ad4b83abe89f8460d22cfa99c719"
+  },
+  "baseline": {
+    "failed": 1,
+    "filtered": 14,
+    "seconds": 76.41,
+    "exit": 1,
+    "log": "up03-session-logout-baseline.log",
+    "finding": "Actual signup/signin cookie requests Source through real middleware/native callback. Physical PG Task FOR UPDATE blocks Source SHARE. Real Better Auth sign-out deletes the actual session row before release, yet original pending request returns200. Failed source and pins retained."
+  },
+  "implementation": "Canonical pinFoundationActor reads the actual supplied sessionId under existing SHARE NOWAIT, requires same current user and live persisted expiry, adds expiry to existing final callback deadline. Existing trusted server board actors without HTTP sessionId are retained; normal HTTP session middleware always supplies an ID. Original auth library, schema, role/grant/scope/run/key policy unchanged.",
+  "verification": {
+    "actualSourceAndUnchangedMiddleware": {
+      "passed": 46,
+      "files": 2,
+      "seconds": 99.6,
+      "exit": 0,
+      "log": "up03-session-logout-source.log",
+      "assertions": "Real logged-out pending cookie403, newly signed-in cookie actual Source200 and original logged-out cookie fresh authenticated probe401. Prior Agent/Board hash, expiry, canonical role/grant/locking/scope and unchanged middleware tests preserved."
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "up03-session-logout-server-types.log"
+    },
+    "finalPinsMatch": true,
+    "processesClosed": true
+  },
+  "review": "Root traced real cookie resolver/schema/middleware/canonical owner and applied minimal shared-owner check. Bounded gpt-6-luna proposed actual regression and independently found no concrete lock-order defect. NOWAIT preserves fail-closed busy mapping; actual session SHARE can serialize later logout through outer commit.",
+  "limits": [
+    "Test-only HTTP route invokes actual middleware/native Foundation callback; not all customer routes/credential transports, session APIs or deployment qualification.",
+    "General SQL current credential lifetimes and complete source graph remain open.",
+    "Current bounded source tests and server compilation are distinct from full recursive typecheck at earlier ba7cd42ca.",
+    "Private Memory/temporal regressions, complete input receipts and broad V10/PR/release gates remain open."
+  ]
+}

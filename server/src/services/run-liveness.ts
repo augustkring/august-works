@@ -1,5 +1,64 @@
 import type { HeartbeatRunStatus, IssueStatus, RunLivenessState } from "@paperclipai/shared";
 
+// Activity rows that describe heartbeat/runtime recovery plumbing rather than
+// work performed for the issue. Kept shared by live classification and activity
+// backfill so both paths use the same durable-effect evidence.
+export const RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS: string[] = [
+  "environment.lease_acquired",
+  "environment.lease_released",
+  "environment_lease.cleanup_retried",
+  "issue.successful_run_handoff_required",
+  "issue.review_path_recovery_queued",
+  "issue.monitor_recovery_issue_created",
+  "issue.monitor_escalated_to_board",
+  "issue.monitor_recovery_wake_queued",
+  "issue.monitor_exhausted",
+  "issue.monitor_triggered",
+  "issue.monitor_skipped",
+  "execution_workspace.workspace_validation_quarantined",
+  "issue.tree_hold_run_interrupted",
+  "provider_trace.capture_requested",
+  "issue.thread_interaction_updated",
+  "tool_gateway.call_allowed",
+  "tool_gateway.call_denied",
+  "tool_gateway.call_failed",
+  "tool_gateway.call_deferred",
+  "tool_gateway.approval_requested",
+  "tool_gateway.session_rejected",
+  "tool_gateway.session_created",
+  "tool_gateway.session_revoked",
+  "tool_gateway.discovery",
+  "tool_gateway.runtime_mcp_delivery",
+  "tool_gateway.call_completed",
+];
+
+/**
+ * Activity rows the platform writes for every managed Native Run, identified by
+ * actor and source rather than by action name alone. They are bookkeeping for
+ * liveness, not task progress: the bootstrap context-assembly audit, the
+ * Native status arbiter's recorded status change and the run presentation
+ * comment. The same actions written by the agent's own Run through a tool keep
+ * counting as concrete evidence.
+ */
+export type RunLivenessActivityRow = {
+  action: string; actorType: string; actorId: string; entityType: string; details: Record<string, unknown> | null;
+};
+
+export function isRunLivenessPlatformActivity(row: RunLivenessActivityRow): boolean {
+  const source = row.details?.source;
+  return (row.action === "context.assembled" && row.entityType === "context_manifest") ||
+    (row.action === "issue.updated" && row.actorType === "system" && row.actorId === "native-status-committer" &&
+      source === "native_status_decision") ||
+    (row.action === "issue.comment_added" && source === "run_presentation_resolver");
+}
+
+/** Count activity evidence for liveness: excludes recovery bookkeeping actions
+ * and the platform-written rows above. */
+export function countRunLivenessActivityEvidence(rows: readonly RunLivenessActivityRow[]): number {
+  return rows.filter(row => !RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS.includes(row.action) &&
+    !isRunLivenessPlatformActivity(row)).length;
+}
+
 export type RunLivenessActionability =
   | "runnable"
   | "manager_review"

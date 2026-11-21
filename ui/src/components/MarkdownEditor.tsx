@@ -100,6 +100,8 @@ interface MarkdownEditorProps {
   onSubmit?: () => void;
   /** Render the rich editor without allowing edits. */
   readOnly?: boolean;
+  /** Id of an element that describes the editing surface (for example a composer hint). */
+  ariaDescribedBy?: string;
 }
 
 export interface MarkdownEditorRef {
@@ -717,6 +719,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   actionCommands = [],
   onSubmit,
   readOnly = false,
+  ariaDescribedBy,
 }: MarkdownEditorProps, forwardedRef) {
   const editorValue = useMemo(() => prepareMarkdownForEditor(value), [value]);
   const { slashCommands: sharedSlashCommands } = useEditorAutocomplete();
@@ -728,6 +731,27 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   const ref = useRef<MDXEditorMethods>(null);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
   const valueRef = useRef(editorValue);
+  // MDXEditor owns its contenteditable node and can remount it, so keep the
+  // description attached to whichever editable surface is current.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const apply = () => {
+      for (const editable of container.querySelectorAll<HTMLElement>('[contenteditable="true"], textarea')) {
+        if (ariaDescribedBy) {
+          if (editable.getAttribute("aria-describedby") !== ariaDescribedBy)
+            editable.setAttribute("aria-describedby", ariaDescribedBy);
+        } else if (editable.hasAttribute("aria-describedby")) {
+          editable.removeAttribute("aria-describedby");
+        }
+      }
+    };
+    apply();
+    if (typeof MutationObserver === "undefined") return;
+    const observer = new MutationObserver(apply);
+    observer.observe(container, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [ariaDescribedBy]);
   valueRef.current = editorValue;
   const latestValueRef = useRef(editorValue);
   const initialChildOnChangeRef = useRef(true);

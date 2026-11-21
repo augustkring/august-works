@@ -1,0 +1,40 @@
+{
+  "caseNames": [
+    "captures first-bootstrap Task, plan, and wake sources without secret redaction before provider dispatch",
+    "captures first-bootstrap Task, plan, and wake sources with secret redaction before provider dispatch",
+    "holds a completed Native Text result for canonical Human Plan verification",
+    "continues once after a Human withdraws the last review interaction, then creates a fresh review path",
+    "coalesces wakes behind an owner-managed active execution hold and resumes through the installed controller",
+    "retains a resolved no-replay fence until an execution owner records safe continuation",
+    "keeps an unknown NativeText charge blocked until a Human continues through the stopped-run owner",
+    "resumes a reopened Task from its captured continuation summary on a fresh Human assignment wake",
+    "keeps a one-document Task idle while blocked, then completes one scheduler Run for Human review",
+    "adopts another Human's retained comment queue only through the installed Native startup owner: manual",
+    "adopts another Human's retained comment queue only through the installed Native startup owner: forged_payload",
+    "keeps the Task owner as Native Run responsibility for a canonical automated wake requested by another Human",
+    "contains a queued second Human Run after canonical membership withdrawal (withdraw: false)",
+    "contains a queued second Human Run after canonical membership withdrawal (withdraw: true)",
+    "keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment (trigger question: false)",
+    "keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment (trigger question: true)"
+  ],
+  "observedPassedNames": [
+    "captures first-bootstrap Task, plan, and wake sources without secret redaction before provider dispatch",
+    "captures first-bootstrap Task, plan, and wake sources with secret redaction before provider dispatch",
+    "holds a completed Native Text result for canonical Human Plan verification",
+    "continues once after a Human withdraws the last review interaction, then creates a fresh review path",
+    "coalesces wakes behind an owner-managed active execution hold and resumes through the installed controller",
+    "retains a resolved no-replay fence until an execution owner records safe continuation",
+    "keeps an unknown NativeText charge blocked until a Human continues through the stopped-run owner",
+    "resumes a reopened Task from its captured continuation summary on a fresh Human assignment wake",
+    "keeps a one-document Task idle while blocked, then completes one scheduler Run for Human review",
+    "adopts another Human's retained comment queue only through the installed Native startup owner: manual",
+    "adopts another Human's retained comment queue only through the installed Native startup owner: forged_payload",
+    "keeps the Task owner as Native Run responsibility for a canonical automated wake requested by another Human",
+    "contains a queued second Human Run after canonical membership withdrawal (withdraw: false)",
+    "contains a queued second Human Run after canonical membership withdrawal (withdraw: true)",
+    "keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment (trigger question: false)",
+    "keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment (trigger question: true)"
+  ],
+  "selectedPasses": 16,
+  "otherCohortUnselected": 16
+}

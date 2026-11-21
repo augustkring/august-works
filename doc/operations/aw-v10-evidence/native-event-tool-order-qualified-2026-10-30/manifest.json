@@ -1,0 +1,52 @@
+{
+  "scope": "single actual PostgreSQL control-plane port scheduling/persistence regression; no full Native or server typecheck claim",
+  "sourceHead": "4bef172aae8095c69ed7e4c08e5be477002c601b",
+  "copiedSourceFiles": 1199,
+  "result": {
+    "passed": 1,
+    "unselected": 14
+  },
+  "fullNative9SameSource": {
+    "passed": 1,
+    "skipped": 8,
+    "result": "failed on source-graph total-work bound; context insert lock collision absent in this attempt"
+  },
+  "qualificationFiles": [
+    {
+      "path": "temporal9-event-tool-order-r49-20261030-source-pins.json",
+      "sha256": "41568b0a4c4311e1318763e76d67a61f82a65eb238b4bb596338cd9e5cb6fa42",
+      "bytes": 196509
+    },
+    {
+      "path": "temporal9-event-tool-order-r49-20261030-source-pins.source.patch",
+      "sha256": "030a18cde6ebac039dfae95ad58821f4a457fc6e2d1738fe9cce7ff042c3d859",
+      "bytes": 1886763
+    },
+    {
+      "path": "temporal9-event-tool-order-r49-20261030-snapshot.log",
+      "sha256": "243a94e2fa9a414d8b2460558a8de02794f7ad840abc4a82eb1c3acbbd602782",
+      "bytes": 38
+    },
+    {
+      "path": "temporal9-event-tool-order-r49-20261030-syntax.log",
+      "sha256": "066d53d788c86616201ba35d81061153a39a087c306598dded7b6375815ae8c1",
+      "bytes": 62
+    },
+    {
+      "path": "temporal9-event-tool-order-r49-20261030-port-order-test.log",
+      "sha256": "c4d0513db2d48a924c7b35a427e3c5d223ebd6b3b0c8ef05913678d42667bfa2",
+      "bytes": 3103
+    },
+    {
+      "path": "native-event-order-r49-candidate/candidate.diff",
+      "sha256": "095b037f32cbc869f990338d79c2192c29537d0b0db7a6ed5feee916dfb476d8",
+      "bytes": 8808
+    },
+    {
+      "path": "native-event-order-r49-candidate/manifest.json",
+      "sha256": "b96dbd0473faed3743bdb4334271b4c0b7fbc393700180490205e460b8a11434",
+      "bytes": 770
+    }
+  ],
+  "archiveSha256": "4614787754e4e654280292f3ffa3e0968434812ab03d83245a109869b392ca9d"
+}

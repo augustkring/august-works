@@ -310,6 +310,20 @@ describe("createHostClientHandlers invocation company scope", () => {
 describe("createHostClientHandlers capability gating for LOOA-641 methods", () => {
   const context = { invocationScope: { companyId: "company-a" } };
 
+  it("requires lifecycle ownership for agents.getRuntime independently of agents.read", async () => {
+    const getRuntime = vi.fn(async () => ({ revision: "1", skillsReady: false }));
+    const services = { agents: { getRuntime } } as unknown as HostServices;
+    const readOnly = createHostClientHandlers({ pluginId: "paperclip.test", capabilities: ["agents.read"], services });
+    await expect(readOnly["agents.getRuntime"]({ agentId: "agent-a", companyId: "company-a" }, context))
+      .rejects.toBeInstanceOf(CapabilityDeniedError);
+    expect(getRuntime).not.toHaveBeenCalled();
+
+    const owner = createHostClientHandlers({ pluginId: "paperclip.test", capabilities: ["agents.lifecycle.manage"], services });
+    await expect(owner["agents.getRuntime"]({ agentId: "agent-a", companyId: "company-a" }, context))
+      .resolves.toEqual({ revision: "1", skillsReady: false });
+    expect(getRuntime).toHaveBeenCalledWith({ agentId: "agent-a", companyId: "company-a" });
+  });
+
   it("denies issues.respondInteraction without issue.interactions.respond", async () => {
     const respondInteraction = vi.fn(async () => ({ interaction: { id: "i" }, applied: true }));
     const services = { issues: { respondInteraction } } as unknown as HostServices;

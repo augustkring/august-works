@@ -1,0 +1,1270 @@
+{
+  "uniquePassingCases": 147,
+  "invocations": [
+    {
+      "label": "local-managed-project-get-r7",
+      "passingCases": 1,
+      "tests": [
+        {
+          "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+          "test": "managed OpenCode source-closure binary integration binds a managed Project GET result to the exact current public Project projection"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+          "-t",
+          "binds a managed Project GET result",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/local-managed-project-get-r7.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.193300264887512e-05,
+        "sourceManifest": "local-managed-project-get-r7-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 176.02337590599927,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 2876653568,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 149394,
+            "parentPid": 149370,
+            "executable": "node",
+            "rssBytes": 887275520,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 149370,
+            "parentPid": 149322,
+            "executable": "node",
+            "rssBytes": 792367104,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 149451,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 323493888
+          },
+          {
+            "pid": 149435,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 279465984
+          },
+          {
+            "pid": 149454,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 272855040
+          },
+          {
+            "pid": 150338,
+            "parentPid": 149394,
+            "executable": "node",
+            "rssBytes": 234442752,
+            "nodeOptions": ""
+          },
+          {
+            "pid": 149421,
+            "parentPid": 149394,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 149422,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 14409728
+          },
+          {
+            "pid": 149428,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 9236480
+          },
+          {
+            "pid": 149429,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 8089600
+          },
+          {
+            "pid": 149430,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 7225344
+          },
+          {
+            "pid": 149426,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 6791168
+          },
+          {
+            "pid": 149423,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 5713920
+          },
+          {
+            "pid": 149425,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 5435392
+          },
+          {
+            "pid": 149424,
+            "parentPid": 149421,
+            "executable": "postgres",
+            "rssBytes": 5263360
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 28,
+        "observedPostgresRelatedPids": [
+          149408,
+          149418,
+          149421,
+          149422,
+          149423,
+          149424,
+          149425,
+          149426,
+          149428,
+          149429,
+          149430,
+          149433,
+          149435,
+          149451,
+          149454,
+          150166,
+          150327
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-o0wg260k",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 829,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "local-managed-project-workspace-r2",
+      "passingCases": 1,
+      "tests": [
+        {
+          "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+          "test": "managed OpenCode source-closure binary integration refuses the next managed request after the captured Project workspace changes"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+          "-t",
+          "refuses the next managed request after the captured Project workspace changes",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/local-managed-project-workspace-r2.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 3.830700006801635e-05,
+        "sourceManifest": "local-managed-project-workspace-r2-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 166.48326096899837,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 2885230592,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 154044,
+            "parentPid": 154020,
+            "executable": "node",
+            "rssBytes": 1111560192,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 154020,
+            "parentPid": 153973,
+            "executable": "node",
+            "rssBytes": 799428608,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 154169,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 424927232
+          },
+          {
+            "pid": 154178,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 258961408
+          },
+          {
+            "pid": 154181,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 206815232
+          },
+          {
+            "pid": 154139,
+            "parentPid": 154044,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 154140,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 13058048
+          },
+          {
+            "pid": 154146,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 9154560
+          },
+          {
+            "pid": 154147,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 7901184
+          },
+          {
+            "pid": 154148,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 7217152
+          },
+          {
+            "pid": 154144,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 6524928
+          },
+          {
+            "pid": 154141,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 5410816
+          },
+          {
+            "pid": 154143,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 5251072
+          },
+          {
+            "pid": 154142,
+            "parentPid": 154139,
+            "executable": "postgres",
+            "rssBytes": 4431872
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 26,
+        "observedPostgresRelatedPids": [
+          154126,
+          154136,
+          154139,
+          154140,
+          154141,
+          154142,
+          154143,
+          154144,
+          154146,
+          154147,
+          154148,
+          154151,
+          154168,
+          154169,
+          154178,
+          154181,
+          155129
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-7frv0i6f",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 781,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "project-gateway-and-source-regression-r3",
+      "passingCases": 100,
+      "tests": [
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture captures the stored direct Project body and keeps the receipt private"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture captures the original Human-owned workspace rows before exposing them in the Project DTO"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture captures the exact public Project rendition returned through its authenticated read route"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture preserves the capture for operational edits and irreversibly invalidates a changed body"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture does not infer source capture from service-only Human attribution"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture keeps 'Board key source' Projects unknown when legacy route access permits the write"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture keeps 'session without ID' Projects unknown when legacy route access permits the write"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture leaves a project carrying an environment policy unknown, including its idempotent replay"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture rejects capture with 'stale session'"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture rejects capture with 'deleted session'"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture rejects capture with 'session owned by another user'"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture rejects capture with 'viewer membership'"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture rejects capture with 'missing membership'"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture does not commit a Project when its capture audit cannot be written"
+        },
+        {
+          "path": "server/src/__tests__/manual-project-payload-source.integration.test.ts",
+          "test": "manual Human Project payload source capture rechecks the native session after waiting on the Project privacy-tree lock"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway qualifies only the explicit private Native draft selector without decrypting or spending"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway rejects native draft qualification after current configuration drift"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway rejects native draft qualification after current runtime_binding drift"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway rejects native draft qualification after current membership drift"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway rejects native draft qualification after current grant drift"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway rejects native draft qualification after current price drift"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway refuses plan start when the actual one-call draft cannot fit remaining budgets: {\"maxModelCostMinor\":2,\"maxToolActions\":2}"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway refuses plan start when the actual one-call draft cannot fit remaining budgets: {\"maxModelCostMinor\":6,\"maxToolActions\":1}"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway rejects actual Native admission after a private grant is revoked, before a worker attempt or model dispatch"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway reviewed proposal: saves bounded data and requests Human approval before any backlog task exists"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway reviewed proposal: explicit absence saves a draft without requesting task approval"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway reviewed proposal: erased run Source prevents Human task creation and rolls back the verdict"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway reviewed proposal: current Human membership withdrawal prevents separate task creation"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway reviewed proposal: an unverified Human cannot approve a separate task"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway reviewed proposal: refuses an insufficient retained tool budget before any model dispatch"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway reviewed proposal: refuses model-selected assignees before saving output or an interaction"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway reviewed proposal: withdraws publication when the Original Agent version changes during inference"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway runs the real one-call Native draft backend, saves its declared Task output and proposes only review"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway rejects changed draft session and undeclared output bindings before a tool or model dispatch"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway cannot resume, replace, open another session or silently repeat a completed draft model call"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway refuses continuation and plan turns before spending for a draft"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway withholds draft output on ambiguous provider failure and emits only a fixed Native error"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway fences an empty provider draft while retaining the completed financial receipt"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway revokes a pending Native draft synchronously, settles iterators and retains the ambiguous debit without writing output"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway retains the model debit and fences if authority changes before a canonical draft can be returned"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway charges assigned-tool catalog search and keeps actual MCP invocation charging at its existing gateway"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway shares one tool ceiling across both Native protocol authority paths"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway charges actual Native Task read/write dispatch before effect and stops at the shared tool ceiling"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway deduplicates concurrent Native protocol calls and refuses changed or completed dispatch identities"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway keeps unknown/material Native API paths and undeclared document keys outside the draft qualification"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway charges current Plan discovery and a Human connection card without installing or dispatching access"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway withholds both connection tools when the current Plan binding is expired"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway withholds both connection tools when the current Plan binding is revoked"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway withholds both connection tools when the current Plan binding is cross_run"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway withholds both connection tools when the current Plan binding is unadmitted_plan"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway binds dispatch-time Worker issuance to the current accountable attempt and rejects stale ownership"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway fences Native Task tools before dispatch after pause changes"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway fences Native Task tools before dispatch after membership changes"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway fences Native Task tools before dispatch after stop changes"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway fences Native Task tools before dispatch after flag changes"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway fences Native Task tools before dispatch after identity changes"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway fences Native Task tools before dispatch after company changes"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway fences Native Task tools before dispatch after attempt changes"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway retains a Native tool debit and does not resend an ambiguous side effect"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway limits plan-created Tasks to C0 backlog drafts without delegation"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway withholds Native read output after membership changes during dispatch without retaining source bodies"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway drains an in-flight authority watch before settling the caller: success"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway drains an in-flight authority watch before settling the caller: revoked"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway drains an in-flight authority watch before settling the caller: provider_error"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway withholds a known response when caller cancellation arrives during the final current-authority read"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway permits one durable dispatch winner under concurrent duplicate calls"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway refuses cost overrun before any further model request"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway blocks membership changes before spend"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway blocks grant changes before spend"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway blocks assignment changes before spend"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway blocks Stop changes before spend"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway blocks flag changes before spend"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway blocks plan version changes before spend"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway blocks identity changes before spend"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway blocks company changes before spend"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway preserves known or unknown provider usage without disclosure when membership changes during inference"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway preserves known or unknown provider usage without disclosure when grant changes during inference"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway preserves known or unknown provider usage without disclosure when assignment changes during inference"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway preserves known or unknown provider usage without disclosure when Stop changes during inference"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway preserves known or unknown provider usage without disclosure when flag changes during inference"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway preserves known or unknown provider usage without disclosure when identity changes during inference"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway preserves known or unknown provider usage without disclosure when company changes during inference"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway preserves known or unknown provider usage without disclosure when Task source changes during inference"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway rejects qualified token overflow and keeps the full conservative charge"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway revalidates the exact represented-Human guest read binding before bounded worker admission"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway binds company, run, attempt, manifest and current source instead of accepting caller prices or destinations"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway uses a distinct five-minute capability and cannot widen another runtime scope"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway scrubs admitted source material during dispatch without releasing its financial debit or replaying the model call"
+        },
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "test": "Native bounded worker model gateway mounts only the scoped runtime transport, rejects browser and ordinary credentials, and returns no provider key"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection keeps only closed enums, booleans and counts from persisted model/evidence fields"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection bounds and sanitizes a real nested TypeError and PostgreSQL error"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection closes missing and invalid PostgreSQL owner fields"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection projects only closed cause facts from a persisted finalization failure"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection reduces unknown future values to other and missing fields to missing"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection projects native interruption recovery facts without retaining its free-form message"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection closes unknown interruption enums and marks absent facts as missing"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
+          "test": "synthetic Host proc namespace links reuses only exact existing symlinks and rejects conflicting entries"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "src/__tests__/manual-project-payload-source.integration.test.ts",
+          "src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
+          "src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/project-gateway-and-source-regression-r3.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.121100209886208e-05,
+        "sourceManifest": "project-gateway-and-source-regression-r3-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 174.25722600000154,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 3101532160,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 156859,
+            "parentPid": 156812,
+            "executable": "node",
+            "rssBytes": 877760512,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 156937,
+            "parentPid": 156859,
+            "executable": "node",
+            "rssBytes": 857948160,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 157013,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 515096576
+          },
+          {
+            "pid": 157014,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 399863808
+          },
+          {
+            "pid": 157012,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 366587904
+          },
+          {
+            "pid": 156998,
+            "parentPid": 156937,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 156999,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 13074432
+          },
+          {
+            "pid": 157005,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 8843264
+          },
+          {
+            "pid": 157006,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 8073216
+          },
+          {
+            "pid": 157007,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 7208960
+          },
+          {
+            "pid": 157003,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 6508544
+          },
+          {
+            "pid": 157002,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 5431296
+          },
+          {
+            "pid": 157000,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 5427200
+          },
+          {
+            "pid": 157001,
+            "parentPid": 156998,
+            "executable": "postgres",
+            "rssBytes": 5120000
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 46,
+        "observedPostgresRelatedPids": [
+          156907,
+          156917,
+          156920,
+          156921,
+          156922,
+          156923,
+          156924,
+          156925,
+          156927,
+          156928,
+          156929,
+          156932,
+          156933,
+          156934,
+          156935,
+          156936,
+          156962,
+          156972,
+          156985,
+          156995,
+          156998,
+          156999,
+          157000,
+          157001,
+          157002,
+          157003,
+          157005,
+          157006,
+          157007,
+          157010,
+          157011,
+          157012,
+          157013,
+          157014,
+          157760
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-gv9ydpc4",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 813,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "project-dispatch-source-current-r2",
+      "passingCases": 45,
+      "tests": [
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent retains the exact document read before later revision edits without inventing source history"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent authenticates a single-use native HTTP effect claim against the current dispatch, lease and exact request"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent denies native Task output until the provider input boundary is attested"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent creates no Project effects for malformed or foreign managed Project captures"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent revalidates retained foreign Project workspace roots through their exact current parent"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent binds an unknown Project tool result to its actual acknowledged dispatch without qualifying inputs"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent keeps the document dispatch unknown for missing_ack without retroactive rebinding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent keeps the document dispatch unknown for missing_call without retroactive rebinding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent keeps the document dispatch unknown for other_tool without retroactive rebinding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent keeps the document dispatch unknown for ambiguous_turn without retroactive rebinding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent keeps the document dispatch unknown for prior_attempt without retroactive rebinding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent keeps the document dispatch unknown for prior_launch without retroactive rebinding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent retains an actual direct Human revision snapshot and rejects a substituted owner"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent binds actual rendered task/document sources to the canonical model envelope and acknowledged PG dispatch"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent rechecks a captured interaction against current item verdicts after an acknowledged PG dispatch"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent appends only an actual acknowledged Native history read with current source owners"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent appends a real same-conversation attachment read only under its acknowledged Native call"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent merges legacy and current result histories, deduplicating only exact facts"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses document capture with a changed launch binding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses document capture with a changed lease binding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses document capture with a changed attempt binding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses document capture with a changed foreign_task binding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses exhausted document result history without replacing the retained facts"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses a silently suppressed document fact and hides private database diagnostics"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent stores bounded factual input metadata without message bytes (responsible user: '9ff4dade-b007-411c-9f41-5100e02a1475')"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent stores bounded factual input metadata without message bytes (responsible user: null)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent binds backend turn acknowledgements to exact same-input dispatch UUIDs"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses acknowledgement with 'wrong dispatch' mismatch without changing the intent"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses acknowledgement with 'wrong event' mismatch without changing the intent"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses acknowledgement with 'wrong attempt' mismatch without changing the intent"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses acknowledgement with 'different input' mismatch without changing the intent"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses duplicate and invalid backend turn acknowledgements"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent associates an actual backend tool call only with its unique acknowledged turn"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses malformed association history without replacing it"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent refuses duplicate or misbound prior call associations without changing history"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent does not acknowledge after lease expiry"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent keeps an intent unacknowledged when adding the backend id would exceed the profile budget"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent rejects a dispatch without its 'wrong launch sequence' binding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent rejects a dispatch without its 'wrong run' binding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent rejects a dispatch without its 'wrong lease owner' binding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent rejects a dispatch without its 'wrong attempt' binding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent rejects exhausted and oversized histories atomically"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent rechecks lease expiry with database wall time after a transaction wait"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent returns a private stable error when the dispatch profile write is rejected"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "test": "native model input dispatch intent rejects a database update that silently suppresses the dispatch intent"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+          "-t",
+          "^(?!.*qualifies only the current PG attachment bytes staged by executor admission)",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/project-dispatch-source-current-r2.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 147.47727562799992,
+        "sourceManifest": "project-dispatch-source-current-r2-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 34.65041589100292,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 3150262272,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 158077,
+            "parentPid": 158053,
+            "executable": "node",
+            "rssBytes": 871165952,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 158053,
+            "parentPid": 156947,
+            "executable": "node",
+            "rssBytes": 814981120,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 158207,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 295796736
+          },
+          {
+            "pid": 158212,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 243945472
+          },
+          {
+            "pid": 158205,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 236011520
+          },
+          {
+            "pid": 158206,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 216600576
+          },
+          {
+            "pid": 158213,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 196186112
+          },
+          {
+            "pid": 158211,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 192847872
+          },
+          {
+            "pid": 158141,
+            "parentPid": 158077,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 158142,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 12763136
+          },
+          {
+            "pid": 158148,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 9089024
+          },
+          {
+            "pid": 158149,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 7766016
+          },
+          {
+            "pid": 158150,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 7081984
+          },
+          {
+            "pid": 158146,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 5853184
+          },
+          {
+            "pid": 158145,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 5300224
+          },
+          {
+            "pid": 158143,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 5296128
+          },
+          {
+            "pid": 158144,
+            "parentPid": 158141,
+            "executable": "postgres",
+            "rssBytes": 4988928
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 22,
+        "observedPostgresRelatedPids": [
+          158128,
+          158138,
+          158141,
+          158142,
+          158143,
+          158144,
+          158145,
+          158146,
+          158148,
+          158149,
+          158150,
+          158153,
+          158205,
+          158206,
+          158207,
+          158211,
+          158212,
+          158213
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-xqtw476z",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 163,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    }
+  ],
+  "serverTypecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 92.86296698299702,
+        "peakGroupRssBytes": 6236073984,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "limits": [
+    "The two SDK cases use actual pinned OpenCode/runnerd binaries and a local signed software Host with deterministic HTTP responses. They do not qualify a live provider, physical isolation, prices or a release. Existing fixture discovery is not reclassified as genuine OpenCode provider conformance.",
+    "The 45 selected Native dispatch owner cases exclude the retained legacy attachment-staging case. That case still fails its original unsupported mock transport admission and must be ported through real admission before suite acceptance. No assertion or production admission is weakened.",
+    "The namespace-link regression proves exact-target-only idempotence; the complete second temporal journey still needs actual requalification. SDK6 closed interruption diagnostic wiring compiles but has no passing SDK6 claim.",
+    "All 169 requirement statuses and migration phase statuses remain unchanged. Earlier failed, deadline-stopped and memory-stopped attempts remain private diagnostics and are not passing evidence."
+  ]
+}

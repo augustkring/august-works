@@ -1,0 +1,5 @@
+
+> paperclip@ check:help-docs /workspace/blentera-v10
+> node scripts/check-help-docs.mjs
+
+Help Center docs metadata, registry references, navigation, and local links are valid.

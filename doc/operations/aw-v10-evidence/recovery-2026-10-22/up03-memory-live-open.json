@@ -1,0 +1,39 @@
+{
+  "status": "OPEN: native private Memory identity reaches unrelated current Human live reader",
+  "actualResult": {
+    "tests": 1,
+    "failedTests": 1,
+    "privacyAssertionsFailed": 3,
+    "durationSeconds": 34.84,
+    "exitCode": 1,
+    "sourcePinsUnchanged": true,
+    "cleanup": "actual test completed after socket/server and embedded PostgreSQL cleanup"
+  },
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=2GiB GOMAXPROCS=2 node node_modules/vitest/vitest.mjs run server/src/__tests__/memory-private-live-events.integration.test.ts --maxWorkers=1",
+  "proof": [
+    "Actual native Agent/Alice on public Task/run created private Memory via original memoryService.",
+    "Captured original memory.private_created publication identifies actual Memory record/run.",
+    "Bob actual native Memory get denied403; current source ACL returned false.",
+    "Live helper nevertheless returned full activity with private record UUID.",
+    "Actual Bob authenticated session WebSocket received private record UUID, then subsequent authorized barrier."
+  ],
+  "limitations": [
+    "No production fix or GREEN capture.",
+    "Baseline Agent helper-positive used noncanonical responsibleUserId field instead of onBehalfOfUserId/companyId; this public-run positive does not qualify future Memory-source positive. Three Bob privacy failures are independent.",
+    "Initial --project server invocation failed at startup because no project has that name; preserved separately, no behavioral result.",
+    "Related job/observation/model/Learning/cognitive event source branches have source-only inventory, no runtime qualification yet."
+  ],
+  "pins": {
+    "server/src/services/analytical-live-events.ts": "ee9cc8779aa53db463601bb9b6b5b4a16871d390e103a24eac36802fc7fa7bc5",
+    "server/src/realtime/live-events-ws.ts": "38e30f5a72ddcbf2622affac4fef3a3d96daaae92aab94743f0cdae5e7cd01e9",
+    "server/src/services/memory/memory-service.ts": "94c0a50d3068747641d18fd2a561ef5c9fe59a3f26930dfa03df9df1a0a75938",
+    "server/src/services/memory/memory-privacy.ts": "3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470",
+    "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+    "server/src/__tests__/memory-private-live-events.integration.test.ts": "0b0fdafe4790bee8b17f5b724910d59a982963da9273acfd6a4e6a60cae0c3a8"
+  },
+  "artifacts": {
+    "up03-memory-live-red.log.txt": "997e396242203a573e41899eb2046afc710672c15207c7002007ae8273689f22",
+    "up03-memory-live-startup-failure.log.txt": "a5aa929bde2bb496e3663eb620d8b4a371577e9ab93835e68fc5064baeb6dd8d",
+    "up03-memory-live-red.test-source.txt": "0b0fdafe4790bee8b17f5b724910d59a982963da9273acfd6a4e6a60cae0c3a8"
+  }
+}

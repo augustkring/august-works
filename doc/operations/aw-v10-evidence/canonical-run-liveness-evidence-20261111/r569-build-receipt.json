@@ -1,0 +1,44 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.331312301015714,
+      "filesAdvised": 512575,
+      "memoryAfter": 5825413120,
+      "contentChanged": false
+    },
+    {
+      "elapsedSeconds": 4.3794558160007,
+      "filesAdvised": 512576,
+      "memoryAfter": 12231581696,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "pnpm",
+        "--filter",
+        "@paperclipai/server",
+        "typecheck"
+      ],
+      "exit": 0,
+      "seconds": 122.13075684700743,
+      "peakGroupRssBytes": 6493151232,
+      "stopped": null
+    },
+    {
+      "command": [
+        "pnpm",
+        "--filter",
+        "@paperclipai/server",
+        "build"
+      ],
+      "exit": 0,
+      "seconds": 122.67138071899535,
+      "peakGroupRssBytes": 6259372032,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

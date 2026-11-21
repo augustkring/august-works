@@ -3,12 +3,14 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { INSTANCE_FEATURE_KEYS, v5FeatureFlagsSchema } from "@paperclipai/shared";
+import { MemoryRouter } from "react-router-dom";
+import { INSTANCE_FEATURE_CATALOG, INSTANCE_FEATURE_KEYS, v5FeatureFlagsSchema } from "@paperclipai/shared";
 import type {
   InstanceExperimentalSettings as InstanceExperimentalSettingsPayload,
   InstanceExperimentalSettingsWithManaged,
 } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { i18n } from "@/i18n";
 import { InstanceExperimentalSettings } from "./InstanceExperimentalSettings";
 import { queryKeys } from "../lib/queryKeys";
 
@@ -56,7 +58,7 @@ const DECISIONS_TOGGLE_SELECTOR =
 const SERVER_INFO_TOGGLE_SELECTOR =
   'button[aria-label="Toggle server info debug view experimental setting"]';
 const PAPERCLIP_DEVELOPER_MODE_TOGGLE_SELECTOR =
-  'button[aria-label="Toggle Paperclip developer mode experimental setting"]';
+  'button[aria-label="Toggle Blentera developer mode experimental setting"]';
 const BUILT_IN_AGENTS_TOGGLE_SELECTOR =
   'button[aria-label="Toggle built-in agents experimental setting"]';
 const BETA_SKILLS_TOGGLE_SELECTOR =
@@ -66,7 +68,7 @@ const SUMMARIES_TOGGLE_SELECTOR =
 const STATUS_CARDS_TOGGLE_SELECTOR =
   'button[aria-label="Toggle status cards experimental setting"]';
 const PAPERCLIP_RUNNER_TOGGLE_SELECTOR =
-  'button[aria-label="Toggle Paperclip Runner experimental setting"]';
+  'button[aria-label="Toggle Blentera Runner experimental setting"]';
 
 function defaultExperimentalSettings(): InstanceExperimentalSettingsPayload {
   return {
@@ -179,9 +181,11 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     });
     flushSync(() => {
       root!.render(
-        <QueryClientProvider client={queryClient}>
-          <InstanceExperimentalSettings />
-        </QueryClientProvider>,
+        <MemoryRouter initialEntries={["/company/settings/instance/experimental"]}>
+          <QueryClientProvider client={queryClient}>
+            <InstanceExperimentalSettings />
+          </QueryClientProvider>
+        </MemoryRouter>,
       );
     });
     await flushReact();
@@ -200,7 +204,8 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
     flushSync(() => {
       root?.unmount();
     });
@@ -219,6 +224,33 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     );
     expect(warning?.textContent).toContain("Experimental features may break at any time.");
     expect(warning?.textContent).toContain("no compatibility guarantees");
+  });
+
+  it("projects lifecycle and unqualified release evidence from the shared catalog", async () => {
+    await renderPage();
+
+    await act(() => container.querySelector<HTMLDetailsElement>('[data-testid="capability-lifecycle-registry"]')?.querySelector("summary")?.click());
+    await flushReact();
+    const lifecycle = container.querySelector('[data-testid="capability-lifecycle-enableAgentChat"]');
+    expect(container.querySelector('[aria-label="Capability maturity: Experimental"]')).not.toBeNull();
+    expect(lifecycle?.textContent).toContain("No compatibility guarantee");
+    expect(lifecycle?.textContent).toContain("Not recorded");
+    expect(lifecycle?.textContent).toContain("Not linked");
+    expect(lifecycle?.textContent).toContain("Not scheduled");
+    expect(lifecycle?.textContent).toContain("Open Help");
+  });
+
+  it("uses Danish lifecycle labels and accessible maturity wording", async () => {
+    await i18n.changeLanguage("da");
+    await renderPage();
+    await act(() => container.querySelector<HTMLDetailsElement>('[data-testid="capability-lifecycle-registry"]')?.querySelector("summary")?.click());
+    await flushReact();
+
+    expect(container.querySelector('[aria-label="Kapabilitetens modenhed: Eksperimentel"]')).not.toBeNull();
+    const summary = container.querySelector('[data-testid="capability-lifecycle-enableAgentChat"] summary')?.textContent;
+    expect(summary).toContain("Agent Chat");
+    expect(summary).toContain("Eksperimentel");
+    expect(container.textContent).toContain("Åbn hjælp");
   });
 
   it("does not render an Apps experimental setting", async () => {
@@ -243,8 +275,10 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
 
   it("does not offer a retired MCP aggregators toggle", async () => {
     await renderPage();
+    await act(() => container.querySelector<HTMLDetailsElement>('[data-testid="capability-lifecycle-registry"]')?.querySelector("summary")?.click());
+    await flushReact();
     expect(container.querySelector('button[aria-label="Toggle MCP aggregators experimental setting"]')).toBeNull();
-    expect(container.textContent).not.toContain("MCP aggregators");
+    expect(container.querySelector('[data-testid="capability-lifecycle-enableMcpAggregators"] [aria-label="Capability maturity: Deprecated"]')).not.toBeNull();
   });
 
   it("defaults chat connectors off and persists an explicit toggle in both directions", async () => {
@@ -332,10 +366,10 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     )).toBeNull();
   });
 
-  it("keeps Paperclip Runner default-off and exposes an explicit opt-in", async () => {
+  it("keeps Blentera Runner default-off and exposes an explicit opt-in", async () => {
     await renderPage();
 
-    expect(container.textContent).toContain("Paperclip Runner");
+    expect(container.textContent).toContain("Blentera Runner");
     expect(container.textContent).toContain("Onboarding continues to use legacy adapters");
     const toggle = container.querySelector<HTMLButtonElement>(
       PAPERCLIP_RUNNER_TOGGLE_SELECTOR,
@@ -620,7 +654,7 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     await renderPage();
 
     expect(container.textContent).toContain("Built-in Agents");
-    expect(container.textContent).toContain("Show Paperclip-managed built-in agent surfaces");
+    expect(container.textContent).toContain("Show Blentera-managed built-in agent surfaces");
 
     const toggle = container.querySelector<HTMLButtonElement>(BUILT_IN_AGENTS_TOGGLE_SELECTOR);
     expect(toggle?.getAttribute("aria-checked")).toBe("false");
@@ -640,7 +674,7 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     await renderPage();
 
     expect(container.textContent).toContain("Beta skills");
-    expect(container.textContent).toContain("pin beta releases of the Paperclip core skill");
+    expect(container.textContent).toContain("pin beta releases of the Blentera core skill");
 
     const toggle = container.querySelector<HTMLButtonElement>(BETA_SKILLS_TOGGLE_SELECTOR);
     expect(toggle?.getAttribute("aria-checked")).toBe("false");
@@ -746,10 +780,10 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
     expect(toggle?.getAttribute("aria-checked")).toBe("true");
   });
 
-  it("renders and patches Paperclip Developer Mode", async () => {
+  it("renders and patches Blentera Developer Mode", async () => {
     await renderPage();
 
-    expect(container.textContent).toContain("Paperclip Developer Mode");
+    expect(container.textContent).toContain("Blentera Developer Mode");
     expect(container.textContent).toContain("including Honeycomb trace queries on run pages");
 
     const toggle = container.querySelector<HTMLButtonElement>(
@@ -771,7 +805,7 @@ describe("InstanceExperimentalSettings — Conference Room Chat card (PAP-11233)
 });
 
 describe("InstanceExperimentalSettings — cloud-managed keys", () => {
-  const MANAGED_BADGE_TEXT = "Managed by Paperclip Cloud";
+  const MANAGED_BADGE_TEXT = "Managed by legacy Paperclip Cloud";
 
   let container: HTMLDivElement;
   let root: Root | null = null;
@@ -785,9 +819,11 @@ describe("InstanceExperimentalSettings — cloud-managed keys", () => {
     });
     flushSync(() => {
       root!.render(
-        <QueryClientProvider client={queryClient}>
-          <InstanceExperimentalSettings />
-        </QueryClientProvider>,
+        <MemoryRouter initialEntries={["/company/settings/instance/experimental"]}>
+          <QueryClientProvider client={queryClient}>
+            <InstanceExperimentalSettings />
+          </QueryClientProvider>
+        </MemoryRouter>,
       );
     });
     await flushReact();
@@ -938,9 +974,11 @@ describe("InstanceExperimentalSettings — card ordering and headings (PAP-393)"
     });
     flushSync(() => {
       root!.render(
-        <QueryClientProvider client={queryClient}>
-          <InstanceExperimentalSettings />
-        </QueryClientProvider>,
+        <MemoryRouter initialEntries={["/company/settings/instance/experimental"]}>
+          <QueryClientProvider client={queryClient}>
+            <InstanceExperimentalSettings />
+          </QueryClientProvider>
+        </MemoryRouter>,
       );
     });
     await flushReact();
@@ -975,7 +1013,7 @@ describe("InstanceExperimentalSettings — card ordering and headings (PAP-393)"
     expect(headings).toEqual([
       "Experimental features",
       "V5 agent runtime and project control",
-      "Paperclip Developer Mode",
+      "Blentera Developer Mode",
       "Legacy",
     ]);
 
@@ -1012,13 +1050,16 @@ describe("InstanceExperimentalSettings — card ordering and headings (PAP-393)"
     expect(cards.every((card) => card.classList.contains("bg-transparent"))).toBe(true);
   });
 
-  it("no longer renders an 'Experimental' secondary badge on any card", async () => {
+  it("shows the maturity recorded for each settings capability", async () => {
     await renderPage(defaultExperimentalSettings());
+    await act(() => container.querySelector<HTMLDetailsElement>('[data-testid="capability-lifecycle-registry"]')?.querySelector("summary")?.click());
+    await flushReact();
 
-    const badges = [...container.querySelectorAll('[data-slot="badge"]')].map(
-      (badge) => badge.textContent?.trim(),
-    );
-    expect(badges).not.toContain("Experimental");
+    for (const key of ["enableAgentChat", "enablePipelines", "skill_lifecycle_v5"] as const) {
+      const maturity = INSTANCE_FEATURE_CATALOG[key].lifecycle.maturity;
+      const localizedMaturity = maturity === "internal" ? "Internal" : maturity === "preview" ? "Preview" : "Experimental";
+      expect(container.querySelector(`[aria-label="Capability maturity: ${localizedMaturity}"]`)).not.toBeNull();
+    }
   });
 });
 
@@ -1054,9 +1095,11 @@ describe("InstanceExperimentalSettings — operator-hidden cards", () => {
     });
     flushSync(() => {
       root!.render(
-        <QueryClientProvider client={queryClient}>
-          <InstanceExperimentalSettings />
-        </QueryClientProvider>,
+        <MemoryRouter initialEntries={["/company/settings/instance/experimental"]}>
+          <QueryClientProvider client={queryClient}>
+            <InstanceExperimentalSettings />
+          </QueryClientProvider>
+        </MemoryRouter>,
       );
     });
     await flushReact();
@@ -1101,7 +1144,7 @@ describe("InstanceExperimentalSettings — operator-hidden cards", () => {
   it("retains a section when one of its controls is visible", async () => {
     const visible = new Set(["enablePaperclipDeveloperMode", "enableGoalsSidebarLink"]);
     await renderPage(INSTANCE_FEATURE_KEYS.filter((key) => !visible.has(key)).map((key) => `instance.experimental.${key}`));
-    expect(container.querySelector('[aria-labelledby="developer-mode-heading"] h3')?.textContent).toBe("Paperclip Developer Mode");
+    expect(container.querySelector('[aria-labelledby="developer-mode-heading"] h3')?.textContent).toBe("Blentera Developer Mode");
     expect(container.querySelector('[aria-labelledby="legacy-heading"] h3')?.textContent).toBe("Goals Sidebar Link");
   });
 

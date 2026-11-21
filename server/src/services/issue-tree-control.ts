@@ -502,31 +502,80 @@ export function issueTreeControlService(db: Db) {
       .sort((a, b) => a.issueId.localeCompare(b.issueId) || a.createdAt.getTime() - b.createdAt.getTime());
   }
 
-  async function activeHoldsByIssueId(companyId: string, issueIds: string[]) {
-    const byIssueId = new Map<string, { all: string[]; pause: string[] }>();
-    if (issueIds.length === 0) return byIssueId;
-    const rows = await db
-      .select({
-        issueId: issueTreeHoldMembers.issueId,
-        holdId: issueTreeHolds.id,
-        mode: issueTreeHolds.mode,
-      })
-      .from(issueTreeHoldMembers)
-      .innerJoin(issueTreeHolds, eq(issueTreeHoldMembers.holdId, issueTreeHolds.id))
-      .where(
-        and(
-          eq(issueTreeHoldMembers.companyId, companyId),
-          eq(issueTreeHolds.status, "active"),
-          inArray(issueTreeHoldMembers.issueId, issueIds),
-        ),
-      )
-      .orderBy(asc(issueTreeHolds.createdAt), asc(issueTreeHolds.id));
+  async function loadActivePauseHolds(companyId: string) {
+    return db.select({
+      id: issueTreeHolds.id, rootIssueId: issueTreeHolds.rootIssueId,
+      reason: issueTreeHolds.reason, releasePolicy: issueTreeHolds.releasePolicy,
+    }).from(issueTreeHolds).where(and(
+      eq(issueTreeHolds.companyId, companyId),
+      eq(issueTreeHolds.status, "active"), eq(issueTreeHolds.mode, "pause"),
+    )).orderBy(asc(issueTreeHolds.createdAt), asc(issueTreeHolds.id));
+  }
 
+  type CurrentPause = Awaited<ReturnType<typeof loadActivePauseHolds>>[number];
+  function pauseHoldsByRoot(rows: CurrentPause[]) {
+    const byRoot = new Map<string, CurrentPause[]>();
+    for (const row of rows) byRoot.set(row.rootIssueId, [row, ...(byRoot.get(row.rootIssueId) ?? [])]);
+    return byRoot;
+  }
+
+  async function pauseHoldsInAncestry(
+    issueId: string,
+    byRoot: Map<string, CurrentPause[]>,
+    readParent: (id: string) => Promise<string | null>,
+    closestOnly: boolean,
+  ) {
+    const found: CurrentPause[] = [];
+    const visited = new Set<string>();
+    let current: string | null = issueId;
+    while (current && !visited.has(current) && visited.size < MAX_PAUSE_HOLD_ANCESTOR_DEPTH) {
+      visited.add(current);
+      const holds = byRoot.get(current) ?? [];
+      found.push(...holds);
+      if (closestOnly && holds.length) break;
+      current = await readParent(current);
+    }
+    return found;
+  }
+
+  async function activeHoldsByIssueId(companyId: string, treeIssues: TreeIssue[]) {
+    const byIssueId = new Map<string, { all: string[]; pause: string[] }>();
+    const issueIds = treeIssues.map(issue => issue.id);
+    if (issueIds.length === 0) return byIssueId;
+    const rows = await db.select({
+      issueId: issueTreeHoldMembers.issueId, holdId: issueTreeHolds.id, mode: issueTreeHolds.mode,
+    }).from(issueTreeHoldMembers)
+      .innerJoin(issueTreeHolds, eq(issueTreeHoldMembers.holdId, issueTreeHolds.id))
+      .where(and(eq(issueTreeHoldMembers.companyId, companyId),
+        eq(issueTreeHolds.companyId, companyId), eq(issueTreeHolds.status, "active"),
+        inArray(issueTreeHoldMembers.issueId, issueIds)))
+      .orderBy(asc(issueTreeHolds.createdAt), asc(issueTreeHolds.id));
+    // Cancel/restore records retain their original snapshot semantics. Pause is
+    // enforced against today's ancestry, including children created after it.
     for (const row of rows) {
+      if (row.mode === "pause") continue;
       const current = byIssueId.get(row.issueId) ?? { all: [], pause: [] };
-      current.all.push(row.holdId);
-      if (row.mode === "pause") current.pause.push(row.holdId);
-      byIssueId.set(row.issueId, current);
+      current.all.push(row.holdId); byIssueId.set(row.issueId, current);
+    }
+    const parents = new Map<string, string | null>(treeIssues.map(issue => [issue.id, issue.parentId] as const));
+    let frontier = [...new Set(treeIssues.map(issue => issue.parentId)
+      .filter((id): id is string => typeof id === "string" && !parents.has(id)))];
+    for (let depth = 0; frontier.length && depth < MAX_PAUSE_HOLD_ANCESTOR_DEPTH; depth++) {
+      const ancestors = await db.select({ id: issues.id, parentId: issues.parentId }).from(issues)
+        .where(and(eq(issues.companyId, companyId), inArray(issues.id, frontier)));
+      for (const id of frontier) parents.set(id, null);
+      for (const ancestor of ancestors) parents.set(ancestor.id, ancestor.parentId);
+      frontier = [...new Set(ancestors.map(row => row.parentId)
+        .filter((id): id is string => typeof id === "string" && !parents.has(id)))];
+    }
+    const currentPauseHolds = pauseHoldsByRoot(await loadActivePauseHolds(companyId));
+    for (const issue of treeIssues) {
+      const held = await pauseHoldsInAncestry(issue.id, currentPauseHolds,
+        async id => parents.get(id) ?? null, false);
+      const current = byIssueId.get(issue.id) ?? { all: [], pause: [] };
+      current.pause = held.map(hold => hold.id);
+      current.all = [...new Set([...current.all, ...current.pause])];
+      byIssueId.set(issue.id, current);
     }
     return byIssueId;
   }
@@ -569,56 +618,20 @@ export function issueTreeControlService(db: Db) {
     companyId: string,
     issueId: string,
   ): Promise<ActiveIssueTreePauseHoldGate | null> {
-    const activePauseHolds = await db
-      .select({
-        id: issueTreeHolds.id,
-        rootIssueId: issueTreeHolds.rootIssueId,
-        reason: issueTreeHolds.reason,
-        releasePolicy: issueTreeHolds.releasePolicy,
-      })
-      .from(issueTreeHolds)
-      .where(
-        and(
-          eq(issueTreeHolds.companyId, companyId),
-          eq(issueTreeHolds.status, "active"),
-          eq(issueTreeHolds.mode, "pause"),
-        ),
-      )
-      .orderBy(asc(issueTreeHolds.createdAt), asc(issueTreeHolds.id));
-    if (activePauseHolds.length === 0) return null;
-
-    const holdByRootIssueId = new Map(activePauseHolds.map((hold) => [hold.rootIssueId, hold]));
-    let currentIssueId: string | null = issueId;
-    const visited = new Set<string>();
-
-    while (
-      currentIssueId
-      && !visited.has(currentIssueId)
-      && visited.size < MAX_PAUSE_HOLD_ANCESTOR_DEPTH
-    ) {
-      visited.add(currentIssueId);
-      const hold = holdByRootIssueId.get(currentIssueId);
-      if (hold) {
-        return {
-          holdId: hold.id,
-          rootIssueId: hold.rootIssueId,
-          issueId,
-          isRoot: hold.rootIssueId === issueId,
-          mode: "pause",
-          reason: hold.reason,
-          releasePolicy: (hold.releasePolicy as IssueTreeHoldReleasePolicy | null) ?? null,
-        };
-      }
-
-      const parent: { parentId: string | null } | null = await db
-        .select({ parentId: issues.parentId })
-        .from(issues)
-        .where(and(eq(issues.id, currentIssueId), eq(issues.companyId, companyId)))
-        .then((rows) => rows[0] ?? null);
-      currentIssueId = parent?.parentId ?? null;
-    }
-
-    return null;
+    const byRoot = pauseHoldsByRoot(await loadActivePauseHolds(companyId));
+    if (byRoot.size === 0) return null;
+    const [hold] = await pauseHoldsInAncestry(issueId, byRoot, async id => {
+      const parent = await db.select({ parentId: issues.parentId }).from(issues)
+        .where(and(eq(issues.id, id), eq(issues.companyId, companyId)))
+        .then(rows => rows[0] ?? null);
+      return parent?.parentId ?? null;
+    }, true);
+    return hold ? {
+      holdId: hold.id, rootIssueId: hold.rootIssueId, issueId,
+      isRoot: hold.rootIssueId === issueId, mode: "pause",
+      reason: hold.reason,
+      releasePolicy: (hold.releasePolicy as IssueTreeHoldReleasePolicy | null) ?? null,
+    } : null;
   }
 
   async function preview(
@@ -633,7 +646,7 @@ export function issueTreeControlService(db: Db) {
     const issueIds = treeIssues.map((issue) => issue.id);
     const [activeRunRows, holdsByIssueId, activeCancelSnapshots] = await Promise.all([
       activeRunsForTree(companyId, treeIssues),
-      activeHoldsByIssueId(companyId, issueIds),
+      activeHoldsByIssueId(companyId, treeIssues),
       input.mode === "restore"
         ? activeCancelSnapshotsByIssueId(companyId, rootIssueId)
         : Promise.resolve(new Map<string, ActiveCancelSnapshot>()),

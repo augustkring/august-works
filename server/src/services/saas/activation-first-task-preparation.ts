@@ -1,11 +1,13 @@
 import { and, eq, sql } from "drizzle-orm";
-import { agents, companyAgentPackageInstallations, type Db } from "@paperclipai/db";
-import { activationFirstTaskPreparationSchema, type ActivationCommand, type ActivationState } from "@paperclipai/shared";
+import { agentPackageVersions, agentPackages, agents, companyAgentPackageInstallations, type Db } from "@paperclipai/db";
+import { activationFirstTaskPreparationSchema, BLENTERA_MANAGED_STARTER_PROFILE, SPECIALIST_CANDIDATES, specialistCompletionContract, type ActivationCommand, type ActivationState } from "@paperclipai/shared";
 import type { ActivityPublication } from "../activity-log.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { conflict, HttpError, notFound } from "../../errors.js";
-import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
+import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { assertDerivedManager } from "../memory/derived-memory.js";
+import { companySkillService } from "../company-skills.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { aiGovernanceService } from "../ai-governance/governance-service.js";
 import { issueService } from "../issues.js";
 import { orchestrationService } from "../orchestration/orchestration-service.js";
@@ -72,14 +74,37 @@ export async function prepareActivationFirstTask(rootDb: Db, tx: Db, publication
   const { installation, useCase } = await preparationSource(rootDb, tx, actor, companyId, onboarding, input.installationId);
   if (installation.version !== input.expectedInstallationVersion || installation.activationHash !== input.expectedInstallationHash || useCase.version !== input.expectedUseCaseVersion || useCase.purposeVersion !== input.expectedPurposeVersion)
     throw conflict("The reviewed capability or intended purpose changed; review it again");
+  // The first purpose deployment is bound below, before a heartbeat Run exists.
+  // Admit the canonical platform Skill in this original transaction first so
+  // the deployment authority hash and the later Run admission observe the same
+  // company Skill inventory. Runtime preparation still pins the exact Skill on
+  // the Run and rejects drift; this pre-run step does not create a Run or grant.
+  const platformActor: AuthorizationActor = {
+    type: "agent", source: "none", companyId, agentId: installation.agentId,
+    onBehalfOfUserId: v7HumanActorId(actor),
+  };
+  await companySkillService(tx).requiredPlatformSkill(companyId, platformActor, blenteraPlatformContractHashes(), {
+    admitContractRefresh: true,
+  });
+  const [installedPackage] = await tx.select({ key: agentPackages.key }).from(agentPackageVersions)
+    .innerJoin(agentPackages, eq(agentPackages.id, agentPackageVersions.packageId))
+    .where(eq(agentPackageVersions.id, installation.installedVersionId)).limit(1);
+  if (!installedPackage) throw conflict("The installed package identity is unavailable; review the activation again");
+  const businessInvariants = installedPackage.key === BLENTERA_MANAGED_STARTER_PROFILE.packageKey
+    ? SPECIALIST_CANDIDATES[BLENTERA_MANAGED_STARTER_PROFILE.packageKey].cases.flatMap(testCase =>
+      specialistCompletionContract(BLENTERA_MANAGED_STARTER_PROFILE.packageKey, testCase.key).businessInvariants)
+    : ["Use only currently authorized approved Source context", "Missing facts and uncertainty remain explicit"];
   const task = await issueService(rootDb).create(companyId, {
     title: state.intent.slice(0, 500), description: state.intent,
     status: "todo", workMode: "standard", assigneeAgentId: installation.agentId,
     createdByUserId: onboarding.createdByUserId, actorResponsibleUserId: onboarding.createdByUserId,
-    originKind: "v9_activation", originId: onboarding.id,
+    // This Task body is the current Human's explicit onboarding intent. Keep
+    // the onboarding/plan/install provenance in the activation receipt below;
+    // do not misclassify that origin metadata as an upstream source owner.
+    originKind: "manual",
     allowDuplicate: true,
     idempotencyKey: `activation-first-task:${onboarding.id}:${input.requestId}`,
-  }, tx);
+  }, tx, publications, { manualInputActor: actor });
   if (!task) throw conflict("The original first Task could not be prepared");
   await aiGovernanceService(rootDb).bindWithinTransaction(tx, publications, actor, companyId, useCase.id, {
     issueId: task.id, agentId: installation.agentId, expectedVersion: input.expectedUseCaseVersion,
@@ -87,7 +112,7 @@ export async function prepareActivationFirstTask(rootDb: Db, tx: Db, publication
   const plan = await orchestrationService(rootDb).createWithinTransaction(tx, publications, actor, companyId, {
     issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(), riskClass: "C1", actionClass: "internal_draft", workload: "semantic",
     completionContract: { objective: state.intent, requiredOutputs: [{ key: "result" }],
-      businessInvariants: ["Use only currently authorized approved Source context", "Missing facts and uncertainty remain explicit"],
+      businessInvariants,
       prohibitedOutcomes: ["Do not send externally, spend money, delete data or change permissions"],
     },
     budgets: { maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 0, maxRetries: 0, maxWallClockSeconds: 300, maxModelCostMinor: 0, maxToolActions: 2 },

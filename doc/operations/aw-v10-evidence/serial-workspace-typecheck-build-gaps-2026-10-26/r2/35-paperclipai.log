@@ -1,0 +1,5 @@
+../server/src/services/authorization.ts(684,51): error TS2345: Argument of type '{ stage: string; actorType: string; actorSource: string; caller: string; count: number; totalMs: number; maxMs: number; } | { stage: "effective_acl" | "retained_source_graph"; actorType: "agent" | ... 1 more ... | "none"; ... 4 more ...; maxMs: number; }' is not assignable to parameter of type '{ stage: string; actorType: string; actorSource: string; caller: string; count: number; totalMs: number; maxMs: number; }'.
+  Type '{ stage: "effective_acl" | "retained_source_graph"; actorType: "agent" | "board" | "none"; actorSource: "agent_jwt" | "agent_key" | "board_key" | "chat_link" | "cloud_control" | ... 4 more ... | undefined; caller: string; count: number; totalMs: number; maxMs: number; }' is not assignable to type '{ stage: string; actorType: string; actorSource: string; caller: string; count: number; totalMs: number; maxMs: number; }'.
+    Types of property 'actorSource' are incompatible.
+      Type 'string | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.

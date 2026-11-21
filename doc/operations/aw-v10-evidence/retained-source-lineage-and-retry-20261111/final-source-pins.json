@@ -1,0 +1,137 @@
+{
+  "sourceHead": "d1555bce44864ab22007fc33cb0dd48dbdbf0bf8",
+  "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "paths": [
+    {
+      "path": ".github/workflows/aw-v4-verification.yml",
+      "sha256": "1663807bb5cf90b859b466ad3c55e5ee4d3e040149c628b910edd4c01d7b5942",
+      "bytes": 27965,
+      "mtimeNs": 1794419284232386754,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "2a7c0e01ab839055d3143b90301032839239b51394e772dfe463e06bb774c503"
+      }
+    },
+    {
+      "path": "scripts/__tests__/ci-canonicalize-ubuntu-apt-mirrors.test.mjs",
+      "sha256": "822eb7c4379103b58d4c6eeddd1d9c7b2c6f440328235a5216ddb14a3ba6b961",
+      "bytes": 1868,
+      "mtimeNs": 1794419284233111793,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "scripts/ci-canonicalize-ubuntu-apt-mirrors.sh",
+      "sha256": "ba226819c7a54b20ef795fae8b014b33cdf983cddef0a177649c97ffc0dde449",
+      "bytes": 469,
+      "mtimeNs": 1794419284233007216,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "scripts/ci-install-native-sandbox.sh",
+      "sha256": "6f28e2a6c13c34278137e75d5cae7d9076faafdc1b28767014b13ae33b873ed6",
+      "bytes": 2149,
+      "mtimeNs": 1794419284232757421,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "59fb9487dc1eb7aa4f2ac5675177ddfb6928e634a4c5cb38b9d26a5714147d51"
+      }
+    },
+    {
+      "path": "scripts/ci-install-native-sandbox.test.mjs",
+      "sha256": "04911c10b5b7df393599d5f77eec1eee062460fb8ae0b6e00095502bccc65db9",
+      "bytes": 3541,
+      "mtimeNs": 1794419284232771412,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/__tests__/chat-channels.integration.test.ts",
+      "sha256": "918f51d63b6431d8895f84d6ca673d3bc8f969fb6661985ba759c2c0794989c3",
+      "bytes": 2627585,
+      "mtimeNs": 1794419212087329119,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "3a5f87add0b9c8a5d3fe7f0b4bc5e830f425a02784545b8acae55b69e89da880"
+      }
+    },
+    {
+      "path": "server/src/__tests__/controlled-native-signoff-backend.test.ts",
+      "sha256": "6365d5beca59aa735fb303874e3b4473a521f37d7fc0f38674c9b1b07ca5ffd1",
+      "bytes": 2570,
+      "mtimeNs": 1794418613561662248,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-managed-native-runtime-skills.integration.test.ts",
+      "sha256": "82e1b9c4af75a2565de419c5744b6a1bc158fe44cbd22f0254c581dfe33cb957",
+      "bytes": 19354,
+      "mtimeNs": 1794418281067424561,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
+      "sha256": "d3a5efd9a4edb65c587230d25f2d06c86327dd901808fc4cb1543d64f87d8096",
+      "bytes": 5924,
+      "mtimeNs": 1794418613561662248,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
+      "sha256": "8d69b198143a1f707f0f363394f094d8a3dcb8ba77314c55ebcd713bde649bae",
+      "bytes": 83592,
+      "mtimeNs": 1794418281067173604,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts",
+      "sha256": "bf528dac77d774e1dffba552ad6549c9437d49226307993119ce80758cc12b0c",
+      "bytes": 27623,
+      "mtimeNs": 1794418430843391181,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts",
+      "sha256": "cc141f0643047d9cebb28f3f78be7fa1c912da59cdfb806347ef41ac5bc88f27",
+      "bytes": 18525,
+      "mtimeNs": 1794418526104064107,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "sha256": "133c56adc73854e60f26cca19f38c625971d8dab8f667871ffff90b00066685e",
+      "bytes": 140130,
+      "mtimeNs": 1794418281067890201,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    }
+  ],
+  "qualificationPromoted": false
+}

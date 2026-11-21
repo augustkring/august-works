@@ -1,0 +1,94 @@
+{
+  "purpose": "RECOVERY ONLY; no qualification, activation, publication, commit or merge claim",
+  "baseCheckpoint": {
+    "path": "/workspace/v10-preparation/r56-recovery-prepared-nov01",
+    "manifestSha256": "a0927b8fa40d9ed7833b46337bb62b58efebfc9ed8d95edc6c511be72466264b",
+    "archiveSha256": "d4455b16fab06c63febfd607ff1623b06997d6b1521a3b18a3c215ee8c14ae1f",
+    "head": "8d92ef8a911070bef88560abaca9f886992d8b93",
+    "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d"
+  },
+  "components": [
+    {
+      "name": "finalguard55",
+      "sourcePinsSha256": "682dc3b844d2b76e1b0f85b9efe2bf73f883b2c1983c2c16a869004cb4647576",
+      "patchSha256": "672820a50e337519f7120a4aabe36f33d0409fa0b16c5bae97701ff9a6ef512a",
+      "sourceFiles": 55,
+      "status": "Private source candidate; final aggregate pending."
+    },
+    {
+      "name": "host-r14.38.4.12",
+      "sourcePinsSha256": "8b30bfd6bf8688802428cdbcb4f73d70ca6268e3bde8cc81832c15d8a3222578",
+      "sourceFiles": 72,
+      "status": "Frozen private source; actual qualification pending; only compact exit/toolchain receipts captured."
+    },
+    {
+      "name": "native-r94-profile",
+      "candidateManifestSha256": "aa7821839634fdfe340a2a7611cb6b40519c4ca205108c8e85c230413d953fb0",
+      "sourceFiles": 17,
+      "scopedReceipt": "R2 passed 13/13, exit 0; full Native9, Project2, Learning42 and aggregate remain pending."
+    },
+    {
+      "name": "native-r96-actual-sdk-process",
+      "sourcePath": "packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
+      "priorSha256": "7f5832727fd9471e3c9d7fefdb5e22f7f4538d3c337d745d6af565cabc9007aa",
+      "candidateSha256": "421b606d30bd4396ac0d6e31da114f6339bfbf5aea4d000e5df9a3c92a96d2f0",
+      "patchSha256": "6fbfe13e993f4e269a6c74363bd60ff8d93d72c4f404685ee83938f359a3e906",
+      "reconstructionVerified": true,
+      "receipt": "1/1 actual real nonpaid qualifier passed, exit 0; worker-default delta excluded."
+    },
+    {
+      "name": "tool-gateway-146",
+      "expectedTestsPassed": 146,
+      "patchSha256": "4a83ec2a556b5959926949d1e5806917b3fe79c54b176ad7e756ce27d359548c",
+      "status": "Exact patch/pins and compact exits captured; scoped suite only."
+    },
+    {
+      "name": "opaque-mcp-91",
+      "expectedTestsPassed": 91,
+      "patchSha256": "dc9f610b365e077118faa1b57b8ca931b6af0d786a59240433d1f6c4c3c97217",
+      "status": "Exact patch/pins and compact exits captured; scoped suite only."
+    },
+    {
+      "name": "qualification-original-owner-37",
+      "expectedTestsPassed": 37,
+      "patchSha256": "f10eb1877fb897be5db8c5c084a2c47ca215675345e1c34c626ea9e6b6b93d2c",
+      "status": "Exact patch/pins and compact exits captured; scoped suite only."
+    },
+    {
+      "name": "qualification-boundary-37",
+      "expectedTestsPassed": 37,
+      "patchSha256": "17975fe5e2e5d0ccb6c5b61df98690e2aac711658f8b9ffdf63936210ed43422",
+      "status": "Exact patch/pins and compact exits captured; scoped suite only."
+    },
+    {
+      "name": "adapter-paid-probe-47",
+      "expectedTestsPassed": 47,
+      "patchSha256": "697fcd2bca61e6c5bf5be62f2bf7df280d75d6fcc9d17d4fb67044b6f62c2bb7",
+      "status": "Exact patch/pins and compact exits captured; scoped suite only."
+    },
+    {
+      "name": "peer-reviews",
+      "status": "Frozen independent reviewer receipts captured; no acceptance claim widened."
+    },
+    {
+      "name": "runtime-unavailable-workflow-help",
+      "sourceFiles": 3,
+      "metadataEntries": 28,
+      "status": "Metadata/navigation/link preflight passed; paired review/search/source freeze pending."
+    },
+    {
+      "name": "explicit-owner-plans",
+      "sourceFiles": 2
+    }
+  ],
+  "sourceSelection": "Latest specified frozen private milestones since R56; R96 capture is restricted to its actual SDK-process proof file and excludes worker-default changes.",
+  "excluded": [
+    "Git staging/commit/push and MAIN/MIRROR source mutation",
+    "active Native worker factory delta and R96 worker-default-only.diff",
+    "dependency stores/node_modules/build/dist/target outputs/PG data/provider packs",
+    "raw logs and logs with runtime payloads or credentials",
+    "Help metadata-view tree",
+    "unrelated historical backups"
+  ],
+  "qualificationStatus": "R57 is recovery evidence only. Host actual qualification, full Native9, Project2, Learning42, final aggregate and CI remain pending."
+}

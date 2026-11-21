@@ -821,7 +821,7 @@ describe("paperclipai CLI invocation safety", () => {
       { agents: [], projects: [], skills: [], issues: [] } as never,
       { companyName: "Acme", companyDescription: null },
     );
-    expect(readme).toContain("npx paperclipai company import this-github-url-or-folder");
+    expect(readme).toContain("blentera company import this-github-url-or-folder");
     expect(readme).not.toContain("pnpm paperclipai company import");
     expect(readme).not.toContain("pnpm exec paperclipai company import");
   });
@@ -830,7 +830,7 @@ describe("paperclipai CLI invocation safety", () => {
     const source = read("ui/src/pages/CompanyExport.tsx");
     expect(source).not.toContain("pnpm paperclipai company import");
     expect(source).not.toContain("pnpm exec paperclipai company import");
-    expect(source).toContain("npx paperclipai company import");
+    expect(source).toContain("blentera company import this-github-url-or-folder");
   });
 
   // ── Runtime surfaces and their fixed literal lifecycle hints ─────────────

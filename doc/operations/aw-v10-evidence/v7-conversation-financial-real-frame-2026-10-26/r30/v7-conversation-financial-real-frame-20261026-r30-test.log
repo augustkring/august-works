@@ -1,0 +1,29 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 30 skipped) 28807ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 23865ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_provider_frame_missing_for_purge:{"providerCallCount":0,"providerHookInvoked":false,"providerStubFailure":null,"runStatus":"failed","runErrorCode":"adapter_failed","runNativePhase":"committed","runExecutionStage":"preparing","runRuntimeMode":"native","runSourceProtocol":1,"manifestPresent":true,"sourceReceiptPresent":true,"reservationStatus":null}
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:705:67
+    703|         async facts => {
+    704|           const providerFrame = factsHolder.value;
+    705|           if (!facts.providerHookInvoked || !providerFrame) throw new …
+       |                                                                   ^
+    706|             providerCallCount: facts.providerCallCount,
+    707|             providerHookInvoked: facts.providerHookInvoked,
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:460:19
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:702:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  18:40:39
+   Duration  45.00s (transform 11.28s, setup 89ms, import 15.97s, tests 28.81s, environment 0ms)
+

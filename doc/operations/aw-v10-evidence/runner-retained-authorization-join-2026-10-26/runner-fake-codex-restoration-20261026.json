@@ -1,0 +1,10 @@
+{
+  "purpose": "Restore missing generated software fake-provider test executable from preserved backup with byte-identical current Rust source; no application/provider executable replaced.",
+  "currentSource": "/workspace/blentera-v10/packages/paperclip-runner/runner/crates/runner-core/src/bin/fake-codex-app-server.rs",
+  "backupSource": "/workspace/v5-recovery/backups/restored-workspace-20261004T154255Z/august-works/packages/paperclip-runner/runner/crates/runner-core/src/bin/fake-codex-app-server.rs",
+  "sourceSha256": "115d44dc60f3da4214691dd090731042ec8f05ae5d5d90e4a0fa5ee5a8e873f2",
+  "backupExecutable": "/workspace/v5-recovery/backups/restored-workspace-20261004T154255Z/august-works/packages/paperclip-runner/runner/target/release/fake-codex-app-server",
+  "destination": "/workspace/v10-dep-qualification/packages/paperclip-runner/runner/target/debug/fake-codex-app-server",
+  "executableSha256": "32e09dc52d6e16b8693d9ec93721120f9913b2d22e9d310cc2033253521ff7ff",
+  "scope": "Controlled test fixture, not production artifact build qualification. Fresh CI still builds its own fixture."
+}

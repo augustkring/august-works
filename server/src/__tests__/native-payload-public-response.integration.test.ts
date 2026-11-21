@@ -1,0 +1,162 @@
+import { randomUUID } from "node:crypto";
+import express from "express";
+import request from "supertest";
+import { eq, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { authUsers, authSessions, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
+  agents, heartbeatRuns, issueComments, issues, memoryBindings, memoryRecords, projects } from "@paperclipai/db";
+import { agentRoutes } from "../routes/agents.js";
+import { issueRoutes } from "../routes/issues.js";
+import { memoryRoutes } from "../routes/memory.js";
+import { projectControlRoutes } from "../routes/project-control.js";
+import { projectRoutes } from "../routes/projects.js";
+import { errorHandler } from "../middleware/error-handler.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
+import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+
+describe("Native payload proofs stay on the server at public response boundaries", () => {
+  let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
+  beforeAll(async () => {
+    database = await startEmbeddedPostgresTestDatabase("v10-payload-public-response-"); db = createDb(database.connectionString);
+    await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableContextEngineV1: true,
+      enableCollectiveMemoryV1: true, project_roadmap_v5: true, project_forecast_v5: true });
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  afterAll(async () => { await database?.cleanup(); }, 30000);
+
+  async function seed() {
+    const companyId = randomUUID(), userId = randomUUID(), sessionId = randomUUID();
+    const now = new Date();
+    await db.insert(companies).values({ id: companyId, name: "Public native payload", issuePrefix: randomUUID() });
+    await db.insert(authUsers).values({ id: userId, name: "Actual Human", email: `${userId}@example.test`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "admin", status: "active" });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    const app = express(); app.use(express.json());
+    // API serialization proof only; the actor is backed by a current session
+    // row so service authorization exercises the same current-principal gate.
+    app.use((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "admin", status: "active" }] }; next(); });
+    app.use("/api", issueRoutes(db, {} as never)); app.use("/api", projectRoutes(db)); app.use("/api", projectControlRoutes(db)); app.use("/api", memoryRoutes(db));
+    app.use("/run-api", agentRoutes(db)); app.use(errorHandler);
+    return { companyId, userId, http: request(app) };
+  }
+  // Structural source-free DB fixture. Neither its digest nor protocol bit
+  // supplies producer truth or authorization to any private input.
+  async function bind(table: "issues" | "projects" | "memory_records" | "issue_comments", kind: "issue" | "project" | "memory_record" | "comment", id: string) {
+    await db.execute(sql`update ${sql.identifier(table)} target set payload_source_snapshot=(
+      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind',${kind}::text,'companyId',target.company_id,'id',target.id,
+          'contentHash',public.aw_native_payload_body_hash(${kind},to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,
+            'projectIds',case when ${kind}='issue' then coalesce((select jsonb_agg(distinct edge.source_id::text order by edge.source_id::text)
+              from issue_privacy_sources edge where edge.company_id=target.company_id and edge.issue_id=target.id
+                and edge.source_kind='project'),'[]'::jsonb) else '[]'::jsonb end,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+      ) actual_body
+    ) where target.id=${id}::uuid`);
+  }
+  function publicRow(row: Record<string, unknown>, id: string) {
+    expect(row.id).toBe(id);
+    expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion");
+    expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+    expect.soft(row).not.toHaveProperty("payloadSourceSnapshotInvalidated");
+  }
+
+  it("keeps Task list and detail payloads public while retaining their actual DB proof", async () => {
+    const s = await seed();
+    const [task] = await db.insert(issues).values({ companyId: s.companyId, title: "Visible Task", description: "Visible body", createdByUserId: s.userId,
+      responsibleUserId: s.userId, payloadSourceProtocolVersion: 1 }).returning();
+    await bind("issues", "issue", task!.id);
+    const detail = await s.http.get(`/api/issues/${task!.id}`).expect(200);
+    publicRow(detail.body, task!.id); expect(detail.body.description).toBe("Visible body");
+    const list = await s.http.get(`/api/companies/${s.companyId}/issues`).expect(200);
+    publicRow(list.body.find((row: { id: string }) => row.id === task!.id), task!.id);
+    expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]!.payloadSourceSnapshot).not.toBeNull();
+  });
+
+  it("keeps forecast response proofs server-side while preserving an unchanged captured reason", async () => {
+    const s = await seed();
+    const [project] = await db.insert(projects).values({ companyId: s.companyId, name: "Forecast project", sourceProvenanceQualified: true }).returning();
+    const reason = "The original captured forecast explanation";
+    const [task] = await db.insert(issues).values({ companyId: s.companyId, projectId: project!.id, title: "Forecast Task",
+      createdByUserId: s.userId, responsibleUserId: s.userId, forecastReason: reason, payloadSourceProtocolVersion: 1 }).returning();
+    await bind("issues", "issue", task!.id);
+    const response = await s.http.patch(`/api/companies/${s.companyId}/projects/${project!.id}/roadmap/tasks/${task!.id}/forecast`)
+      .send({ expectedUpdatedAt: task!.updatedAt.toISOString(), forecastStartAt: null, forecastEndAt: null,
+        forecastConfidence: 0.7, forecastReason: reason });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    publicRow(response.body, task!.id); expect(response.body.forecastReason).toBe(reason);
+    expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]!.payloadSourceSnapshot).not.toBeNull();
+  });
+
+  it("omits Project proofs from list and detail while retaining their actual DB proof", async () => {
+    const s = await seed();
+    const [project] = await db.insert(projects).values({ companyId: s.companyId, name: "Visible project", description: "Visible project body",
+      sourceProvenanceQualified: true, payloadSourceProtocolVersion: 1 }).returning();
+    await bind("projects", "project", project!.id);
+    const detail = await s.http.get(`/api/projects/${project!.id}`).expect(200); publicRow(detail.body, project!.id);
+    const list = await s.http.get(`/api/companies/${s.companyId}/projects`).expect(200);
+    publicRow(list.body.find((row: { id: string }) => row.id === project!.id), project!.id);
+    const [mentioningTask] = await db.insert(issues).values({ companyId: s.companyId, title: "Public project reference",
+      description: `[Visible project](project://${project!.id})`, createdByUserId: s.userId, responsibleUserId: s.userId }).returning();
+    const taskDetail = await s.http.get(`/api/issues/${mentioningTask!.id}`).expect(200);
+    publicRow(taskDetail.body.mentionedProjects.find((row: { id: string }) => row.id === project!.id), project!.id);
+    expect((await db.select().from(projects).where(eq(projects.id, project!.id)))[0]!.payloadSourceSnapshot).not.toBeNull();
+  });
+
+  it("omits Memory proofs from detail, list and export and preserves arbitrary user metadata", async () => {
+    const s = await seed();
+    const [binding] = await db.insert(memoryBindings).values({ companyId: s.companyId, key: randomUUID(), name: "Actual binding", providerKey: "local" }).returning();
+    const metadata = { payloadSourceSnapshot: "User-authored metadata", payloadSourceSnapshotInvalidated: "User-authored metadata",
+      nested: { payloadSourceProtocolVersion: "User-authored metadata" } };
+    const [record] = await db.insert(memoryRecords).values({ companyId: s.companyId, bindingId: binding!.id, providerKey: "local", memoryType: "lesson",
+      scopeType: "company", content: "Visible Memory", observedAt: new Date(), createdByActorType: "user", createdByActorId: s.userId,
+      sourceProvenanceQualified: true, payloadSourceProtocolVersion: 1, metadata }).returning();
+    await bind("memory_records", "memory_record", record!.id);
+    const detail = await s.http.get(`/api/companies/${s.companyId}/memory/records/${record!.id}`).expect(200);
+    publicRow(detail.body.record, record!.id); expect(detail.body.record.metadata).toEqual(metadata);
+    const list = await s.http.get(`/api/companies/${s.companyId}/memory/records`).expect(200);
+    publicRow(list.body.find((row: { id: string }) => row.id === record!.id), record!.id);
+    const exported = await s.http.get(`/api/companies/${s.companyId}/memory/export`).expect(200);
+    publicRow(exported.body.records.find((row: { id: string }) => row.id === record!.id), record!.id);
+    expect(exported.body.records[0].metadata).toEqual(metadata);
+    expect((await db.select().from(memoryRecords).where(eq(memoryRecords.id, record!.id)))[0]!.payloadSourceSnapshot).not.toBeNull();
+  });
+  it("keeps actual Comment list and detail proofs server-side while retaining the comment body", async () => {
+    const s = await seed();
+    const [task] = await db.insert(issues).values({ companyId: s.companyId, title: "Public comment owner", createdByUserId: s.userId,
+      responsibleUserId: s.userId }).returning();
+    const [comment] = await db.insert(issueComments).values({ companyId: s.companyId, issueId: task!.id, authorType: "user",
+      authorUserId: s.userId, body: "Visible comment body", payloadSourceProtocolVersion: 1 }).returning();
+    await bind("issue_comments", "comment", comment!.id);
+    const detail = await s.http.get(`/api/issues/${task!.id}/comments/${comment!.id}`).expect(200);
+    publicRow(detail.body, comment!.id); expect(detail.body.body).toBe("Visible comment body");
+    const list = await s.http.get(`/api/issues/${task!.id}/comments`).expect(200);
+    publicRow(list.body.find((row: { id: string }) => row.id === comment!.id), comment!.id);
+    const heartbeatContext = await s.http.get(`/api/issues/${task!.id}/heartbeat-context?wakeCommentId=${comment!.id}`).expect(200);
+    publicRow(heartbeatContext.body.wakeComment, comment!.id); expect(heartbeatContext.body.wakeComment.body).toBe("Visible comment body");
+    expect((await db.select().from(issueComments).where(eq(issueComments.id, comment!.id)))[0]!.payloadSourceSnapshot).not.toBeNull();
+  });
+
+  it("keeps internal Run input proofs out of the actual HTTP detail and preserves user result keys", async () => {
+    const s = await seed();
+    const [agent] = await db.insert(agents).values({ companyId: s.companyId, name: "Public Run worker", adapterType: "paperclip_runner", status: "running" }).returning();
+    const resultJson = { summary: "Visible result", runnerProfileJson: "User result field",
+      nested: { nativeInputSourceProtocolVersion: "User result field" } };
+    // Structural internal profile only: this is not a native input receipt or
+    // qualification of any producer, provider, or source permission.
+    const runnerProfileJson = { internalCanary: "Server-only input profile" };
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: s.companyId, agentId: agent!.id,
+      responsibleUserId: s.userId, status: "succeeded", runtimeMode: "native", nativeInputSourceProtocolVersion: 1,
+      runnerProfileJson, resultJson }).returning();
+    const detail = await s.http.get(`/run-api/heartbeat-runs/${run!.id}`).expect(200);
+    expect(detail.body.id).toBe(run!.id);
+    expect(detail.body.resultJson).toEqual(resultJson);
+    expect.soft(detail.body).not.toHaveProperty("runnerProfileJson");
+    expect.soft(detail.body).not.toHaveProperty("nativeInputSourceProtocolVersion");
+    const [persisted] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+    expect(persisted!.runnerProfileJson).toEqual(runnerProfileJson);
+    expect(persisted!.nativeInputSourceProtocolVersion).toBe(1);
+  });
+
+});

@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/services/native-runtime/paperclip-runner-tool-authority.test.ts
+test_pattern=PaperclipRunnerToolAuthority

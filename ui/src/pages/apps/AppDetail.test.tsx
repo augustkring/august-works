@@ -1399,6 +1399,33 @@ describe("AppDetail", () => {
     expect(container.textContent).not.toContain("Connected by");
   });
 
+  it("shows normalized grant recovery state, scopes, and token freshness", async () => {
+    getConnectionMock.mockResolvedValue(perUserConnection());
+    listConnectionGrantsMock.mockResolvedValue({
+      connection: { id: "conn-1", uid: "conn-1" },
+      grants: [personalGrant({ lifecycle: {
+        state: "REQUIRES_REAUTH", reason: "grant_requires_reauthorization", action: "reauthorize",
+        grantStatus: "needs_reauthorization", scopeNames: ["read:user", "repo"], scopeHash: "a".repeat(64),
+        credentialExpirySource: "oauth_access_token",
+        credentialExpiresAt: "2026-10-28T12:00:00.000Z", credentialFreshness: "expired",
+        refreshTokenExpiresAt: null, refreshCredentialFreshness: "unknown", accessVersion: null,
+        secretReferenceExpiresAt: null, secretReferenceFreshness: "unknown",
+        connectionHealth: { state: "ok", checkedAt: "2026-10-27T12:00:00.000Z" },
+        lastAccessVerifiedAt: null, lastCredentialRefreshedAt: "2026-10-27T12:00:00.000Z",
+        webhook: null, providerLifecycle: "not_reported",
+        syncReconciliation: { state: "not_reported", mode: "not_reported", accessRevision: null,
+          accessRevisionKind: "not_reported", lastFullReconciledAt: null, gapDetection: "not_reported" },
+      } })],
+      capabilities: fullCapabilities(), currentUserId: "user-1", members: [],
+    });
+    await renderAppDetail();
+    expect(container.textContent).toContain("Reconnect required");
+    expect(container.textContent).toContain("Current authorized scopes: read:user, repo");
+    expect(container.textContent).toContain("OAuth access-token expiry:");
+    expect(container.textContent).toContain("Credential last refreshed:");
+    expect(findButton("Reconnect")).toBeTruthy();
+  });
+
   it("lets a regular member connect their own identity and never someone else's", async () => {
     mockParams.tab = "permissions";
     getConnectionMock.mockResolvedValue(perUserConnection());

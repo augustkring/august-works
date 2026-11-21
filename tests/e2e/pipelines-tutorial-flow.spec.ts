@@ -1,6 +1,16 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { expect, request as pwRequest, test, type APIRequestContext, type APIResponse, type Locator, type Page } from "@playwright/test";
-import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { authUsers, closeRegisteredClients, companyMemberships, createDb, heartbeatRuns, issues,
+  pipelineCaseEvents } from "../../packages/db/src/index.ts";
+import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
+import { withManagedPipelineProducer } from "./fixtures/managed-pipeline-producer";
+import { canActorReadHeartbeatRunPrivacy } from "../../server/src/services/authorization.ts";
+
+registerEnglishAccountLocaleIsolation(test);
 
 const PORT = Number(process.env.PAPERCLIP_E2E_PORT ?? 3199);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -69,54 +79,89 @@ async function createCompanyAgent(
   return response.json() as Promise<{ id: string }>;
 }
 
-async function createPipelineWriterAgentKey(board: APIRequestContext, companyId: string) {
-  await createCompanyAgent(board, companyId, {
-    name: "Pipeline CEO",
-    role: "ceo",
-    title: "CEO",
-    capabilities: "Approves agent join requests during e2e setup.",
-  });
-
-  const inviteResponse = await board.post(`/api/companies/${companyId}/invites`, {
-    data: {
-      allowedJoinTypes: "agent",
-      defaultsPayload: {
-        agent: {
-          grants: [
-            { permissionKey: "pipelines:write", scope: null },
-          ],
-        },
-      },
-    },
-  });
-  await expectOk(inviteResponse, "create pipeline-writer invite");
-  const invite = await inviteResponse.json() as { token: string };
-
-  const acceptResponse = await board.post(`/api/invites/${invite.token}/accept`, {
-    data: {
-      requestType: "agent",
-      agentName: "Pipeline Fanout Agent",
-      adapterType: "process",
-      capabilities: "Creates pipeline child work during e2e coverage.",
-    },
-  });
-  await expectOk(acceptResponse, "accept pipeline-writer invite");
-  const accepted = await acceptResponse.json() as { id: string };
-
-  const approveResponse = await board.post(`/api/companies/${companyId}/join-requests/${accepted.id}/approve`);
-  await expectOk(approveResponse, "approve pipeline-writer join");
-  const approved = await approveResponse.json() as { createdAgentId: string };
-
-  const runId = randomUUID();
-  const token = createLocalAgentJwt(approved.createdAgentId, companyId, "process", runId);
-  if (!token) throw new Error("PAPERCLIP_AGENT_JWT_SECRET is required for pipeline writer JWT setup");
-  return { agentId: approved.createdAgentId, runId, token };
+async function assertCurrentHumanReadableProducerRun(
+  board: APIRequestContext,
+  input: { runId: string; agentId: string; companyId: string; taskId: string },
+  db: ReturnType<typeof createDb>,
+) {
+  // This exact Db also backs the owned authenticated app and actual Native
+  // Run. The fixture retains pool lifetime; no global E2E DB assumption.
+    const sessionResponse = await board.get("/api/auth/get-session");
+    await expectOk(sessionResponse, "read authenticated Human owner for producer proof");
+    const session = await sessionResponse.json() as { user: { id: string }; session: { id: string } };
+    const actor = {
+      type: "board" as const,
+      source: "session" as const,
+      userId: session.user.id,
+      sessionId: session.session.id,
+      companyIds: [input.companyId],
+    };
+    const [run] = await db
+      .select({
+        id: heartbeatRuns.id,
+        companyId: heartbeatRuns.companyId,
+        agentId: heartbeatRuns.agentId,
+        issueId: heartbeatRuns.issueId,
+        status: heartbeatRuns.status,
+        contextSnapshot: heartbeatRuns.contextSnapshot,
+        responsibleUserId: heartbeatRuns.responsibleUserId,
+      })
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, input.runId))
+      .limit(1);
+    const [task] = await db
+      .select({
+        id: issues.id,
+        companyId: issues.companyId,
+        createdByUserId: issues.createdByUserId,
+        assigneeAgentId: issues.assigneeAgentId,
+        status: issues.status,
+      })
+      .from(issues)
+      .where(eq(issues.id, input.taskId))
+      .limit(1);
+    expect(run).toBeTruthy();
+    expect(task).toMatchObject({ id: input.taskId, companyId: input.companyId,
+      createdByUserId: session.user.id, assigneeAgentId: input.agentId, status: "in_progress" });
+    expect(run).toMatchObject({ companyId: input.companyId, agentId: input.agentId, status: "running" });
+    expect(run!.issueId ?? run!.contextSnapshot?.issueId).toBe(input.taskId);
+    expect(run!.responsibleUserId).toBe(session.user.id);
+    expect(await canActorReadHeartbeatRunPrivacy(db, actor, { id: input.runId, companyId: input.companyId })).toBe(true);
 }
 
-async function createPipeline(board: APIRequestContext, companyId: string) {
+async function seedPrivateCaseEventSource(board: APIRequestContext, companyId: string, caseId: string) {
+  const configPath = process.env.PAPERCLIP_E2E_SERVER_CONFIG;
+  if (!configPath) throw new Error("Pipeline private-source fixture requires the isolated E2E server config");
+  const config = JSON.parse(await readFile(configPath, "utf8")) as { database: { embeddedPostgresDataDir: string } };
+  const pidFile = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
+  const port = pidFile.split("\n")[3];
+  if (!/^\d+$/.test(port ?? "")) throw new Error("Isolated E2E Postgres port is unavailable");
+  const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`, db = createDb(databaseUrl);
+  try {
+    const sessionResponse = await board.get("/api/auth/get-session");
+  await expectOk(sessionResponse, "read current Human identity for the source-privacy fixture");
+    const session = await sessionResponse.json() as { user: { id: string } };
+    const ownerId = randomUUID(), issueId = randomUUID(), now = new Date();
+    if (ownerId === session.user.id) throw new Error("Private issue source owner must be a different Human");
+    await db.insert(authUsers).values({ id: ownerId, name: "Private source owner fixture",
+      email: `${ownerId}@example.test`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: ownerId,
+      status: "active", membershipRole: "member" });
+    await db.insert(issues).values({ id: issueId, companyId, title: "Private event source title",
+      description: "Private event source body", visibility: "private", status: "todo",
+      createdByUserId: ownerId, responsibleUserId: ownerId });
+    await db.insert(pipelineCaseEvents).values({ companyId, caseId, type: "automation_executed",
+      actorType: "user", actorUserId: session.user.id, payload: { issueId, status: "source_fixture" } });
+    return { issueId };
+  } finally {
+    await closeRegisteredClients(databaseUrl);
+  }
+}
+
+async function createPipeline(board: APIRequestContext, companyId: string, key = "content-production") {
   const response = await board.post(`/api/companies/${companyId}/pipelines`, {
     data: {
-      key: "content-production",
+      key,
       name: "Content production",
       description: "Draft, review, and publish launch content.",
       enforceTransitions: true,
@@ -279,164 +324,156 @@ test.describe("Pipelines tutorial UI flow", () => {
   test.setTimeout(240_000);
 
   test("covers agent fan-out, drift acknowledgement gates, child-terminal gates, and stale approvals", async () => {
-    const board = await pwRequest.newContext({ baseURL: BASE_URL });
-    const company = await createCompany(board);
-    const pipeline = await createPrimitivePipeline(board, company.id);
-    const key = await createPipelineWriterAgentKey(board, company.id);
-    const agentApi = await pwRequest.newContext({
-      baseURL: BASE_URL,
-      extraHTTPHeaders: {
-        Authorization: `Bearer ${key.token}`,
-        "X-Paperclip-Run-Id": key.runId,
-      },
-    });
+    // Existing240s case budget; actual current Native API scope, no model claim.
+    await withManagedPipelineProducer(Date.now() + 240_000, async ({ board, agentApi, company, key, db }) => {
+      const pipeline = await createPrimitivePipeline(board, company.id);
+      await assertCurrentHumanReadableProducerRun(board, {
+        runId: key.runId, agentId: key.agentId, companyId: company.id, taskId: key.taskId,
+      }, db);
+      const parent = await createItem(board, pipeline.id, {
+        caseKey: "fanout-parent",
+        title: "Fan-out parent",
+        stageKey: "fanout",
+        fields: { expectedChildren: 2, release: "v1" },
+      });
 
-    const parent = await createItem(board, pipeline.id, {
-      caseKey: "fanout-parent",
-      title: "Fan-out parent",
-      stageKey: "fanout",
-      fields: { expectedChildren: 2, release: "v1" },
-    });
-
-    const childA = await createItem(agentApi, pipeline.id, {
-      caseKey: "asset-a",
-      title: "Asset A",
-      stageKey: "dependent_work",
-      parentCaseId: parent.id,
-      requestKey: "fanout:asset-a",
-      fields: { asset: "hero", briefedFromVersion: parent.version },
-    });
-    expect(childA.parentCaseVersion).toBe(parent.version);
-    expect(childA.requestKey).toBe("fanout:asset-a");
-
-    const retryResponse = await agentApi.post(`/api/pipelines/${pipeline.id}/cases`, {
-      data: {
-        caseKey: "asset-a-retry",
-        title: "Duplicate Asset A",
+      const childA = await createItem(agentApi, pipeline.id, {
+        caseKey: "asset-a",
+        title: "Asset A",
         stageKey: "dependent_work",
         parentCaseId: parent.id,
         requestKey: "fanout:asset-a",
-        fields: { asset: "changed" },
-      },
+        fields: { asset: "hero", briefedFromVersion: parent.version },
+      });
+      expect(childA.parentCaseVersion).toBe(parent.version);
+      expect(childA.requestKey).toBe("fanout:asset-a");
+
+      const retryResponse = await agentApi.post(`/api/pipelines/${pipeline.id}/cases`, {
+        data: {
+          caseKey: "asset-a-retry",
+          title: "Duplicate Asset A",
+          stageKey: "dependent_work",
+          parentCaseId: parent.id,
+          requestKey: "fanout:asset-a",
+          fields: { asset: "changed" },
+        },
+      });
+      await expectOk(retryResponse, "retry request-key child create");
+      const retry = await retryResponse.json() as { case: CaseSummary; created: boolean };
+      expect(retry.created).toBe(false);
+      expect(retry.case.id).toBe(childA.id);
+
+      const childB = await createItem(agentApi, pipeline.id, {
+        caseKey: "asset-b",
+        title: "Asset B",
+        stageKey: "dependent_work",
+        parentCaseId: parent.id,
+        requestKey: "fanout:asset-b",
+        blockedByCaseIds: [childA.id],
+        fields: { asset: "social", briefedFromVersion: parent.version },
+      });
+      const blockedDetail = await getItem(board, childB.id);
+      expect(blockedDetail.blockers?.map((blocker) => blocker.blockedByCaseId)).toContain(childA.id);
+
+      await expectError(
+        await board.post(`/api/cases/${parent.id}/transition`, {
+          data: { toStageKey: "done", expectedVersion: parent.version },
+        }),
+        "parent children-terminal gate",
+        409,
+        "children_not_terminal",
+        /Asset A/,
+      );
+
+      await expectError(
+        await agentApi.post(`/api/cases/${childB.id}/transition`, {
+          data: { toStageKey: "approved", expectedVersion: childB.version },
+        }),
+        "blocked sibling sequencing",
+        409,
+        "blocked",
+      );
+
+      const changedA = await board.patch(`/api/cases/${childA.id}`, {
+        data: {
+          expectedVersion: childA.version,
+          fields: { asset: "hero", briefedFromVersion: parent.version, materialChange: "new art direction" },
+        },
+      });
+      await expectOk(changedA, "materially edit upstream child");
+      const editedA = await changedA.json() as CaseSummary;
+
+      await moveItem(agentApi, childA.id, "done");
+      await expectError(
+        await agentApi.post(`/api/cases/${childB.id}/transition`, {
+          data: { toStageKey: "review", expectedVersion: childB.version },
+        }),
+        "unacknowledged drift gate",
+        409,
+        "unresolved_drift",
+        /not acknowledged/,
+      );
+
+      const ackResponse = await board.post(`/api/cases/${childB.id}/acknowledge-drift`, {
+        data: { expectedVersion: childB.version },
+      });
+      await expectOk(ackResponse, "acknowledge drift");
+      expect((await ackResponse.json() as { acknowledged: boolean }).acknowledged).toBe(true);
+      await moveItem(agentApi, childB.id, "done");
+
+      const refreshedParent = await getItem(board, parent.id);
+      expect(refreshedParent.case.childCount).toBe(2);
+      expect(refreshedParent.case.terminalChildCount).toBe(2);
+      await moveItem(board, parent.id, "done");
+
+      const reviewCase = await createItem(board, pipeline.id, {
+        caseKey: "review-pinned",
+        title: "Revision-pinned review",
+        stageKey: "review",
+        fields: { revision: "first" },
+      });
+      const approval = await board.post(`/api/cases/${reviewCase.id}/review`, {
+        data: { decision: "approve", expectedVersion: reviewCase.version },
+      });
+      await expectOk(approval, "approve review case");
+      const approved = await approval.json() as { case: CaseSummary };
+
+      const changedAfterApproval = await board.patch(`/api/cases/${reviewCase.id}`, {
+        data: { expectedVersion: approved.case.version, fields: { revision: "materially changed" } },
+      });
+      await expectOk(changedAfterApproval, "edit after review approval");
+      const changedReview = await changedAfterApproval.json() as CaseSummary;
+
+      await expectError(
+        await board.post(`/api/cases/${reviewCase.id}/transition`, {
+          data: { toStageKey: "done", expectedVersion: changedReview.version },
+        }),
+        "stale approval publish gate",
+        409,
+        "review_outdated",
+        /changed since review approval/,
+      );
+      await moveItem(board, reviewCase.id, "review");
+      const rereviewVersion = await getItemVersion(board, reviewCase.id);
+      const rereview = await board.post(`/api/cases/${reviewCase.id}/review`, {
+        data: { decision: "approve", expectedVersion: rereviewVersion },
+      });
+      await expectOk(rereview, "approve rereviewed case");
+      const rereviewed = await rereview.json() as { case: CaseSummary };
+      await moveItem(board, reviewCase.id, "done");
+
+      const finalEvents = await board.get(`/api/cases/${childB.id}/events`);
+      await expectOk(finalEvents, "child drift events");
+      const eventTypes = ((await finalEvents.json()) as { items: Array<{ type: string }> }).items.map((event) => event.type);
+      expect(eventTypes).toContain("upstream_drift");
+      expect(eventTypes).toContain("drift_acknowledged");
+      expect(editedA.version).toBeGreaterThan(childA.version);
+      expect(rereviewed.case.version).toBeGreaterThan(changedReview.version);
+
     });
-    await expectOk(retryResponse, "retry request-key child create");
-    const retry = await retryResponse.json() as { case: CaseSummary; created: boolean };
-    expect(retry.created).toBe(false);
-    expect(retry.case.id).toBe(childA.id);
-
-    const childB = await createItem(agentApi, pipeline.id, {
-      caseKey: "asset-b",
-      title: "Asset B",
-      stageKey: "dependent_work",
-      parentCaseId: parent.id,
-      requestKey: "fanout:asset-b",
-      blockedByCaseIds: [childA.id],
-      fields: { asset: "social", briefedFromVersion: parent.version },
-    });
-    const blockedDetail = await getItem(board, childB.id);
-    expect(blockedDetail.blockers?.map((blocker) => blocker.blockedByCaseId)).toContain(childA.id);
-
-    await expectError(
-      await board.post(`/api/cases/${parent.id}/transition`, {
-        data: { toStageKey: "done", expectedVersion: parent.version },
-      }),
-      "parent children-terminal gate",
-      409,
-      "children_not_terminal",
-      /Asset A/,
-    );
-
-    await expectError(
-      await agentApi.post(`/api/cases/${childB.id}/transition`, {
-        data: { toStageKey: "approved", expectedVersion: childB.version },
-      }),
-      "blocked sibling sequencing",
-      409,
-      "blocked",
-    );
-
-    const changedA = await board.patch(`/api/cases/${childA.id}`, {
-      data: {
-        expectedVersion: childA.version,
-        fields: { asset: "hero", briefedFromVersion: parent.version, materialChange: "new art direction" },
-      },
-    });
-    await expectOk(changedA, "materially edit upstream child");
-    const editedA = await changedA.json() as CaseSummary;
-
-    await moveItem(agentApi, childA.id, "done");
-    await expectError(
-      await agentApi.post(`/api/cases/${childB.id}/transition`, {
-        data: { toStageKey: "review", expectedVersion: childB.version },
-      }),
-      "unacknowledged drift gate",
-      409,
-      "unresolved_drift",
-      /not acknowledged/,
-    );
-
-    const ackResponse = await board.post(`/api/cases/${childB.id}/acknowledge-drift`, {
-      data: { expectedVersion: childB.version },
-    });
-    await expectOk(ackResponse, "acknowledge drift");
-    expect((await ackResponse.json() as { acknowledged: boolean }).acknowledged).toBe(true);
-    await moveItem(agentApi, childB.id, "done");
-
-    const refreshedParent = await getItem(board, parent.id);
-    expect(refreshedParent.case.childCount).toBe(2);
-    expect(refreshedParent.case.terminalChildCount).toBe(2);
-    await moveItem(board, parent.id, "done");
-
-    const reviewCase = await createItem(board, pipeline.id, {
-      caseKey: "review-pinned",
-      title: "Revision-pinned review",
-      stageKey: "review",
-      fields: { revision: "first" },
-    });
-    const approval = await board.post(`/api/cases/${reviewCase.id}/review`, {
-      data: { decision: "approve", expectedVersion: reviewCase.version },
-    });
-    await expectOk(approval, "approve review case");
-    const approved = await approval.json() as { case: CaseSummary };
-
-    const changedAfterApproval = await board.patch(`/api/cases/${reviewCase.id}`, {
-      data: { expectedVersion: approved.case.version, fields: { revision: "materially changed" } },
-    });
-    await expectOk(changedAfterApproval, "edit after review approval");
-    const changedReview = await changedAfterApproval.json() as CaseSummary;
-
-    await expectError(
-      await board.post(`/api/cases/${reviewCase.id}/transition`, {
-        data: { toStageKey: "done", expectedVersion: changedReview.version },
-      }),
-      "stale approval publish gate",
-      409,
-      "review_outdated",
-      /changed since review approval/,
-    );
-    await moveItem(board, reviewCase.id, "review");
-    const rereviewVersion = await getItemVersion(board, reviewCase.id);
-    const rereview = await board.post(`/api/cases/${reviewCase.id}/review`, {
-      data: { decision: "approve", expectedVersion: rereviewVersion },
-    });
-    await expectOk(rereview, "approve rereviewed case");
-    const rereviewed = await rereview.json() as { case: CaseSummary };
-    await moveItem(board, reviewCase.id, "done");
-
-    const finalEvents = await board.get(`/api/cases/${childB.id}/events`);
-    await expectOk(finalEvents, "child drift events");
-    const eventTypes = ((await finalEvents.json()) as { items: Array<{ type: string }> }).items.map((event) => event.type);
-    expect(eventTypes).toContain("upstream_drift");
-    expect(eventTypes).toContain("drift_acknowledged");
-    expect(editedA.version).toBeGreaterThan(childA.version);
-    expect(rereviewed.case.version).toBeGreaterThan(changedReview.version);
-
-    await agentApi.dispose();
-    await board.dispose();
   });
 
-  test("walks setup, intake, board moves, item detail, review queue, and learnings", async ({ page }) => {
-    const board = await pwRequest.newContext({ baseURL: BASE_URL });
+  test("walks setup, intake, board moves, item detail, review queue, and learnings", async ({ page, request: board }) => {
     const company = await createCompany(board);
     await createCompanyAgent(board, company.id, {
       name: "Pipeline Writer",
@@ -645,6 +682,28 @@ test.describe("Pipelines tutorial UI flow", () => {
       sentBackStage: configured.stages.find((stage) => stage.key === "drafting")!.id,
     });
 
+    const humanOnlyPipeline = await createPipeline(board, company.id, `human-only-${crypto.randomUUID()}`);
+    const humanOnlyCase = await createItem(board, humanOnlyPipeline.id, {
+      caseKey: "human-only-history", title: "Human-only case history", stageKey: "drafting",
+    });
+    const sourceFreeEventsResponse = await board.get(`/api/cases/${humanOnlyCase.id}/events`);
+    await expectOk(sourceFreeEventsResponse, "read the source-free Human case history");
+    expect(sourceFreeEventsResponse.headers()["cache-control"]).toBe("private, no-store");
+    expect((await sourceFreeEventsResponse.json() as { items: Array<{ type: string }> }).items.map(event => event.type))
+      .toContain("ingested");
+    const privateSource = await seedPrivateCaseEventSource(board, company.id, humanOnlyCase.id);
+    const privateEventsResponse = await board.get(`/api/cases/${humanOnlyCase.id}/events`);
+    expect(privateEventsResponse.status()).toBe(404);
+    expect(privateEventsResponse.headers()["cache-control"]).toBe("private, no-store");
+    expect(await privateEventsResponse.text()).not.toContain(privateSource.issueId);
+    const learningEventsResponse = await board.get(`/api/companies/${company.id}/case-events?types=review_decided,transition_forced&limit=100`);
+    await expectOk(learningEventsResponse, "read company learning events");
+    const learningEvents = await learningEventsResponse.json() as { items: Array<{
+      type: string; case?: { id: string }; payload?: Record<string, unknown>;
+    }> };
+    expect(learningEvents.items.find((event) => event.case?.id === changelog!.id && event.type === "review_decided")?.payload)
+      .toMatchObject({ decision: "request_changes", reason: "Tighten the framing before publishing." });
+
     await page.goto(`${companyPath}/learnings`);
     await expect(page.getByRole("heading", { name: "Learnings" }).first()).toBeVisible();
     await expect(page.getByText("Tighten the framing before publishing.")).toBeVisible();
@@ -655,7 +714,6 @@ test.describe("Pipelines tutorial UI flow", () => {
         await board.patch("/api/instance/settings/experimental", { data: { enablePipelines: false } }),
         "disable pipelines experimental flag",
       );
-      await board.dispose();
     }
   });
 });

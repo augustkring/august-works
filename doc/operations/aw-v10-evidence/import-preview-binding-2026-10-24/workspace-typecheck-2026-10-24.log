@@ -1,0 +1,799 @@
+Scope: 35 of 36 workspace projects
+packages/google-sheets-mcp-server typecheck$ tsc --noEmit
+packages/kv-demo-mcp-server typecheck$ tsc --noEmit
+packages/paperclip-eval-kernel typecheck$ tsc -p tsconfig.json --noEmit
+packages/shared typecheck$ tsc --noEmit
+packages/paperclip-eval-kernel typecheck: Done
+packages/tailscale-https-broker typecheck$ tsc --noEmit
+packages/kv-demo-mcp-server typecheck: Done
+packages/teams-catalog typecheck$ tsc -p tsconfig.json --noEmit
+packages/tailscale-https-broker typecheck: Done
+packages/teams-catalog typecheck: Done
+packages/google-sheets-mcp-server typecheck: Done
+packages/shared typecheck: Done
+packages/adapter-utils typecheck$ tsc --noEmit
+packages/db typecheck$ pnpm run check:migrations && tsc --noEmit
+packages/mcp-server typecheck$ tsc --noEmit
+packages/paperclip-runner typecheck$ pnpm run typecheck:typescript && pnpm run typecheck:rust
+packages/paperclip-runner typecheck: > @paperclipai/paperclip-runner@0.0.0 typecheck:typescript /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner typecheck: > pnpm run ensure:eval-build-deps && node --check scripts/protocol-contract.mjs && node --check scripts/generate-protocol-manifest.mjs && node --check scripts/generate-protocol-schema-module.mjs && node --check scripts/generate-acpx-sidecar-contract.mjs && node --check scripts/generate-replay-goldens.mjs && node --check scripts/generate-semantic-action-catalog.mjs && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json --noEmit && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json --noEmit
+packages/db typecheck: > @paperclipai/db@0.3.1 check:migrations /workspace/blentera-v10/packages/db
+packages/db typecheck: > tsx src/check-migration-numbering.ts && tsx src/check-migration-safety.ts
+packages/paperclip-runner typecheck: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner typecheck: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+packages/db typecheck: Migration safety check passed: 20 historical finding(s) covered by baseline (1 stale baseline id(s) ignored).
+packages/paperclip-runner typecheck: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+packages/paperclip-runner typecheck: > tsc -p tsconfig.json
+packages/paperclip-runner typecheck: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner typecheck: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+packages/mcp-server typecheck: Done
+packages/paperclip-runner typecheck: Generated PRP schema modules match the JSON Schema sources.
+packages/plugins/sdk typecheck$ pnpm --filter @paperclipai/shared build && tsc --noEmit
+packages/paperclip-runner typecheck: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+packages/paperclip-runner typecheck: Version 7.0.2
+packages/plugins/sdk typecheck: > @paperclipai/shared@0.3.1 build /workspace/blentera-v10/packages/shared
+packages/plugins/sdk typecheck: > tsc && mkdir -p dist/cliplab && cp src/cliplab/LICENSE src/cliplab/PROVENANCE.md dist/cliplab/
+packages/adapter-utils typecheck: Done
+packages/skills-catalog typecheck$ tsc -p tsconfig.json --noEmit
+packages/skills-catalog typecheck: Done
+packages/paperclip-runner typecheck: > @paperclipai/paperclip-runner@0.0.0 typecheck:rust /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner typecheck: > cargo fmt --manifest-path runner/Cargo.toml --all -- --check && cargo check --manifest-path runner/Cargo.toml --locked --workspace
+packages/paperclip-runner typecheck:    Compiling libc v0.2.189
+packages/paperclip-runner typecheck:    Compiling proc-macro2 v1.0.107
+packages/paperclip-runner typecheck:    Compiling unicode-ident v1.0.24
+packages/paperclip-runner typecheck:    Compiling quote v1.0.47
+packages/paperclip-runner typecheck:     Checking cfg-if v1.0.4
+packages/paperclip-runner typecheck:     Checking zeroize v1.9.0
+packages/paperclip-runner typecheck:     Checking typenum v1.20.1
+packages/paperclip-runner typecheck:    Compiling version_check v0.9.5
+packages/paperclip-runner typecheck:     Checking bytes v1.12.1
+packages/paperclip-runner typecheck:     Checking itoa v1.0.18
+packages/paperclip-runner typecheck:     Checking pin-project-lite v0.2.17
+packages/paperclip-runner typecheck:    Compiling generic-array v0.14.7
+packages/paperclip-runner typecheck:     Checking subtle v2.6.1
+packages/paperclip-runner typecheck:    Compiling syn v2.0.119
+packages/paperclip-runner typecheck:     Checking memchr v2.8.3
+packages/paperclip-runner typecheck:     Checking futures-core v0.3.34
+packages/plugins/sdk typecheck: Done
+packages/paperclip-runner typecheck:     Checking getrandom v0.2.17
+packages/paperclip-runner typecheck:    Compiling syn v3.0.4
+packages/paperclip-runner typecheck:     Checking once_cell v1.21.4
+packages/paperclip-runner typecheck:    Compiling autocfg v1.5.1
+packages/paperclip-runner typecheck:     Checking rand_core v0.6.4
+packages/paperclip-runner typecheck:     Checking mio v1.2.2
+packages/paperclip-runner typecheck:    Compiling num-traits v0.2.19
+packages/paperclip-runner typecheck:     Checking socket2 v0.6.5
+packages/paperclip-runner typecheck:     Checking futures-sink v0.3.34
+packages/paperclip-runner typecheck:     Checking tokio v1.53.1
+packages/paperclip-runner typecheck:     Checking http v1.5.0
+packages/paperclip-runner typecheck:     Checking num-integer v0.1.47
+packages/paperclip-runner typecheck:     Checking crypto-common v0.1.7
+packages/paperclip-runner typecheck:     Checking fnv v1.0.7
+packages/paperclip-runner typecheck:     Checking slab v0.4.12
+packages/paperclip-runner typecheck:     Checking http-body v1.1.0
+packages/paperclip-runner typecheck:     Checking futures-task v0.3.34
+packages/paperclip-runner typecheck:     Checking futures-io v0.3.34
+packages/paperclip-runner typecheck:     Checking futures-util v0.3.34
+packages/paperclip-runner typecheck:    Compiling jobserver v0.1.35
+packages/paperclip-runner typecheck:     Checking tokio-util v0.7.19
+packages/paperclip-runner typecheck:     Checking tracing-core v0.1.36
+packages/paperclip-runner typecheck:    Compiling find-msvc-tools v0.1.11
+packages/paperclip-runner typecheck:    Compiling shlex v2.0.1
+packages/paperclip-runner typecheck:    Compiling cc v1.4.4
+packages/paperclip-runner typecheck:     Checking vsimd v0.8.0
+packages/paperclip-runner typecheck:     Checking outref v0.5.2
+packages/paperclip-runner typecheck:     Checking const-oid v0.9.6
+packages/paperclip-runner typecheck:     Checking ryu v1.0.23
+packages/paperclip-runner typecheck:    Compiling synstructure v0.13.2
+packages/paperclip-runner typecheck:     Checking http-body-util v0.1.5
+packages/paperclip-runner typecheck:    Compiling tracing-attributes v0.1.31
+packages/paperclip-runner typecheck:     Checking http v0.2.12
+packages/paperclip-runner typecheck:     Checking num-conv v0.2.2
+packages/paperclip-runner typecheck:     Checking deranged v0.5.8
+packages/paperclip-runner typecheck:     Checking time-core v0.1.9
+packages/db typecheck: Done
+packages/paperclip-runner typecheck:     Checking either v1.18.0
+packages/paperclip-runner typecheck:     Checking powerfmt v0.2.0
+packages/paperclip-runner typecheck:     Checking bytes-utils v0.1.4
+packages/paperclip-runner typecheck:     Checking http-body v0.4.6
+packages/paperclip-runner typecheck:     Checking base64-simd v0.8.0
+packages/paperclip-runner typecheck:     Checking pin-utils v0.1.0
+packages/paperclip-runner typecheck:     Checking smallvec v1.15.2
+packages/paperclip-runner typecheck:    Compiling zerofrom-derive v0.1.7
+packages/paperclip-runner typecheck:     Checking tracing v0.1.44
+packages/paperclip-runner typecheck:    Compiling cmake v0.1.58
+packages/paperclip-runner typecheck:     Checking block-buffer v0.10.4
+packages/paperclip-runner typecheck:     Checking percent-encoding v2.3.2
+packages/paperclip-runner typecheck:     Checking time v0.3.55
+packages/paperclip-runner typecheck:    Compiling pkg-config v0.3.34
+packages/paperclip-runner typecheck:    Compiling dunce v1.0.5
+packages/paperclip-runner typecheck:    Compiling fs_extra v1.3.0
+packages/paperclip-runner typecheck:     Checking digest v0.10.7
+packages/paperclip-runner typecheck:    Compiling aws-lc-sys v0.45.0
+packages/paperclip-runner typecheck:    Compiling yoke-derive v0.8.2
+packages/paperclip-runner typecheck:     Checking zerofrom v0.1.8
+packages/paperclip-runner typecheck:    Compiling aws-smithy-runtime-api-macros v1.1.0
+packages/paperclip-runner typecheck:     Checking aws-smithy-async v1.3.0
+packages/paperclip-runner typecheck:     Checking equivalent v1.0.2
+packages/paperclip-runner typecheck:     Checking allocator-api2 v0.2.21
+packages/paperclip-runner typecheck:     Checking stable_deref_trait v1.2.1
+packages/paperclip-runner typecheck:     Checking aws-smithy-types v1.6.2
+packages/paperclip-runner typecheck:     Checking foldhash v0.2.0
+packages/paperclip-runner typecheck:     Checking yoke v0.8.3
+packages/paperclip-runner typecheck:     Checking hashbrown v0.17.1
+packages/paperclip-runner typecheck:    Compiling ring v0.17.14
+packages/paperclip-runner typecheck:    Compiling zerovec-derive v0.11.6
+packages/paperclip-runner typecheck:     Checking rustls-pki-types v1.15.1
+packages/paperclip-runner typecheck:     Checking aws-smithy-runtime-api v1.15.0
+packages/paperclip-runner typecheck:    Compiling aws-lc-rs v1.18.1
+packages/paperclip-runner typecheck:    Compiling displaydoc v0.2.7
+packages/paperclip-runner typecheck:     Checking zerovec v0.11.8
+packages/paperclip-runner typecheck:     Checking base64ct v1.8.3
+packages/paperclip-runner typecheck:     Checking hybrid-array v0.4.14
+packages/paperclip-runner typecheck:     Checking pem-rfc7468 v0.7.0
+packages/paperclip-runner typecheck:     Checking untrusted v0.9.0
+packages/paperclip-runner typecheck:     Checking cpufeatures v0.2.17
+packages/paperclip-runner typecheck:    Compiling httparse v1.10.1
+packages/paperclip-runner typecheck:     Checking der v0.7.10
+packages/paperclip-runner typecheck:     Checking indexmap v2.14.1
+packages/paperclip-runner typecheck:     Checking cmov v0.5.4
+packages/paperclip-runner typecheck:    Compiling rustls v0.23.43
+packages/paperclip-runner typecheck:     Checking ctutils v0.4.2
+packages/paperclip-runner typecheck:     Checking spki v0.7.3
+packages/paperclip-runner typecheck:     Checking block-buffer v0.12.1
+packages/paperclip-runner typecheck:     Checking crypto-common v0.2.2
+packages/paperclip-runner typecheck:     Checking tinystr v0.8.4
+packages/paperclip-runner typecheck:     Checking writeable v0.6.4
+packages/paperclip-runner typecheck:     Checking tower-service v0.3.3
+packages/paperclip-runner typecheck:     Checking const-oid v0.10.2
+packages/paperclip-runner typecheck:    Compiling serde_core v1.0.229
+packages/paperclip-runner typecheck:     Checking atomic-waker v1.1.2
+packages/paperclip-runner typecheck:     Checking try-lock v0.2.5
+packages/paperclip-runner typecheck:     Checking litemap v0.8.3
+packages/paperclip-runner typecheck:    Compiling crc32fast v1.5.1
+packages/paperclip-runner typecheck:     Checking icu_locale_core v2.3.0
+packages/paperclip-runner typecheck:     Checking want v0.3.1
+packages/paperclip-runner typecheck:     Checking h2 v0.4.19
+packages/paperclip-runner typecheck:     Checking digest v0.11.3
+packages/paperclip-runner typecheck:     Checking pkcs8 v0.10.2
+packages/paperclip-runner typecheck:     Checking zerotrie v0.2.5
+packages/paperclip-runner typecheck:     Checking potential_utf v0.1.6
+packages/paperclip-runner typecheck:     Checking futures-channel v0.3.34
+packages/paperclip-runner typecheck:     Checking ff v0.13.1
+packages/paperclip-runner typecheck:    Compiling icu_properties_data v2.3.0
+packages/paperclip-runner typecheck:    Compiling icu_normalizer_data v2.3.0
+packages/paperclip-runner typecheck:     Checking base16ct v0.2.0
+packages/paperclip-runner typecheck:     Checking openssl-probe v0.2.1
+packages/paperclip-runner typecheck:     Checking utf8_iter v1.0.4
+packages/paperclip-runner typecheck:     Checking icu_collections v2.3.0
+packages/paperclip-runner typecheck:     Checking rustls-native-certs v0.8.4
+packages/paperclip-runner typecheck:     Checking sec1 v0.7.3
+packages/paperclip-runner typecheck:     Checking group v0.13.0
+packages/paperclip-runner typecheck:     Checking icu_provider v2.3.1
+packages/paperclip-runner typecheck:     Checking hyper v1.11.1
+packages/paperclip-runner typecheck:     Checking aws-smithy-schema v0.2.0
+packages/paperclip-runner typecheck:     Checking form_urlencoded v1.2.2
+packages/paperclip-runner typecheck:     Checking crypto-bigint v0.5.5
+packages/paperclip-runner typecheck:     Checking sync_wrapper v1.0.2
+packages/paperclip-runner typecheck:     Checking base64 v0.22.1
+packages/paperclip-runner typecheck:     Checking ipnet v2.12.1
+packages/paperclip-runner typecheck:    Compiling zerocopy v0.8.56
+packages/paperclip-runner typecheck:    Compiling serde v1.0.229
+packages/paperclip-runner typecheck:    Compiling getrandom v0.3.4
+packages/paperclip-runner typecheck:     Checking tower-layer v0.3.3
+packages/paperclip-runner typecheck:     Checking tower v0.5.3
+packages/paperclip-runner typecheck:     Checking elliptic-curve v0.13.8
+packages/paperclip-runner typecheck:     Checking hyper-util v0.1.20
+packages/paperclip-runner typecheck:     Checking aws-smithy-eventstream v0.61.2
+packages/paperclip-runner typecheck:     Checking webpki-roots v1.0.9
+packages/paperclip-runner typecheck:     Checking hmac v0.12.1
+packages/paperclip-runner typecheck:    Compiling serde_derive v1.0.229
+packages/paperclip-runner typecheck:    Compiling semver v1.0.28
+packages/paperclip-runner typecheck:     Checking cpufeatures v0.3.1
+packages/paperclip-runner typecheck:    Compiling rustc_version v0.4.1
+packages/paperclip-runner typecheck:     Checking rfc6979 v0.4.0
+packages/paperclip-runner typecheck:     Checking icu_normalizer v2.3.0
+packages/paperclip-runner typecheck:     Checking icu_properties v2.3.0
+packages/paperclip-runner typecheck:     Checking aws-smithy-http v0.64.0
+packages/paperclip-runner typecheck:     Checking signature v2.2.0
+packages/paperclip-runner typecheck:    Compiling getrandom v0.4.3
+packages/paperclip-runner typecheck:     Checking ecdsa v0.16.9
+packages/paperclip-runner typecheck:     Checking idna_adapter v1.2.2
+packages/paperclip-runner typecheck:    Compiling aws-types v1.5.0
+packages/paperclip-runner typecheck:     Checking sha2 v0.11.0
+packages/paperclip-runner typecheck:     Checking primeorder v0.13.6
+packages/paperclip-runner typecheck:     Checking sha2 v0.10.9
+packages/paperclip-runner typecheck:     Checking aws-credential-types v1.3.0
+packages/paperclip-runner typecheck:    Compiling rustversion v1.0.23
+packages/paperclip-runner typecheck:    Compiling zmij v1.0.23
+packages/paperclip-runner typecheck:     Checking hex v0.4.3
+packages/paperclip-runner typecheck:     Checking p256 v0.13.2
+packages/paperclip-runner typecheck:     Checking idna v1.1.0
+packages/paperclip-runner typecheck:     Checking hmac v0.13.0
+packages/paperclip-runner typecheck:     Checking aws-smithy-observability v0.3.0
+packages/paperclip-runner typecheck:    Compiling serde_json v1.0.151
+packages/paperclip-runner typecheck:     Checking fastrand v2.5.0
+packages/paperclip-runner typecheck:     Checking aws-sigv4 v1.5.1
+packages/paperclip-runner typecheck:     Checking uuid v1.26.0
+packages/paperclip-runner typecheck:     Checking num-bigint v0.4.8
+packages/paperclip-runner typecheck:    Compiling ahash v0.8.12
+packages/paperclip-runner typecheck:     Checking xmlparser v0.13.6
+packages/paperclip-runner typecheck:     Checking regex-syntax v0.8.11
+packages/paperclip-runner typecheck:    Compiling ref-cast v1.0.27
+packages/paperclip-runner typecheck:    Compiling parking_lot_core v0.9.12
+packages/paperclip-runner typecheck:     Checking aws-smithy-xml v0.62.0
+packages/paperclip-runner typecheck:     Checking num-rational v0.4.2
+packages/paperclip-runner typecheck:     Checking arc-swap v1.9.2
+packages/paperclip-runner typecheck:     Checking url v2.5.8
+packages/paperclip-runner typecheck:     Checking aws-smithy-json v0.63.0
+packages/paperclip-runner typecheck:    Compiling ref-cast-impl v1.0.27
+packages/paperclip-runner typecheck:     Checking num-iter v0.1.46
+packages/paperclip-runner typecheck:     Checking num-complex v0.4.6
+packages/paperclip-runner typecheck:     Checking inout v0.1.4
+packages/paperclip-runner typecheck:     Checking aho-corasick v1.1.5
+packages/paperclip-runner typecheck:     Checking regex-lite v0.1.9
+packages/paperclip-runner typecheck:     Checking scopeguard v1.2.0
+packages/paperclip-runner typecheck:     Checking lock_api v0.4.14
+packages/paperclip-runner typecheck:     Checking num v0.4.3
+packages/paperclip-runner typecheck:     Checking cipher v0.4.4
+packages/paperclip-runner typecheck:     Checking ppv-lite86 v0.2.21
+packages/paperclip-runner typecheck:     Checking rand_core v0.9.5
+packages/paperclip-runner typecheck:     Checking regex-automata v0.4.18
+packages/paperclip-runner typecheck:     Checking universal-hash v0.5.1
+packages/paperclip-runner typecheck:    Compiling thiserror v2.0.20
+packages/paperclip-runner typecheck:     Checking opaque-debug v0.3.1
+packages/paperclip-runner typecheck:     Checking bit-vec v0.8.0
+packages/paperclip-runner typecheck:     Checking bitflags v2.13.1
+packages/paperclip-runner typecheck:     Checking urlencoding v2.1.3
+packages/paperclip-runner typecheck:     Checking borrow-or-share v0.2.4
+packages/paperclip-runner typecheck:    Compiling heck v0.5.0
+packages/paperclip-runner typecheck:    Compiling unicode-general-category v1.1.0
+packages/paperclip-runner typecheck:     Checking spin v0.10.1
+packages/paperclip-runner typecheck:     Checking crc-fast v1.10.0
+packages/paperclip-runner typecheck:    Compiling strum_macros v0.28.0
+packages/paperclip-runner typecheck:     Checking fluent-uri v0.4.1
+packages/paperclip-runner typecheck:     Checking aws-smithy-query v0.62.0
+packages/paperclip-runner typecheck:     Checking bit-set v0.8.0
+packages/paperclip-runner typecheck:     Checking polyval v0.6.2
+packages/paperclip-runner typecheck:     Checking rand_chacha v0.9.0
+packages/paperclip-runner typecheck:     Checking parking_lot v0.12.5
+packages/paperclip-runner typecheck:     Checking fraction v0.16.0
+packages/paperclip-runner typecheck:     Checking sha1 v0.11.0
+packages/paperclip-runner typecheck:     Checking md-5 v0.11.0
+packages/paperclip-runner typecheck:    Compiling thiserror-impl v2.0.20
+packages/paperclip-runner typecheck:    Compiling rustix v1.1.4
+packages/paperclip-runner typecheck:     Checking bytecount v0.6.9
+packages/paperclip-runner typecheck:     Checking micromap v0.3.0
+packages/paperclip-runner typecheck:     Checking log v0.4.34
+packages/paperclip-runner typecheck:     Checking num-cmp v0.1.0
+packages/paperclip-runner typecheck:     Checking data-encoding v2.11.1
+packages/paperclip-runner typecheck:     Checking jsonschema-value v0.50.1
+packages/paperclip-runner typecheck:     Checking referencing v0.50.1
+packages/paperclip-runner typecheck:     Checking strum v0.28.0
+packages/paperclip-runner typecheck:     Checking aws-smithy-checksums v0.65.0
+packages/paperclip-runner typecheck:     Checking rand v0.9.5
+packages/paperclip-runner typecheck:     Checking ghash v0.5.1
+packages/paperclip-runner typecheck:     Checking fancy-regex v0.19.0
+packages/paperclip-runner typecheck:     Checking regex v1.13.1
+packages/paperclip-runner typecheck:     Checking tower-http v0.6.11
+packages/paperclip-runner typecheck:     Checking aes v0.8.4
+packages/paperclip-runner typecheck:     Checking ctr v0.9.2
+packages/paperclip-runner typecheck:     Checking jsonschema-regex v0.50.1
+packages/paperclip-runner typecheck:     Checking serde_urlencoded v0.7.1
+packages/paperclip-runner typecheck:     Checking email_address v0.2.9
+packages/paperclip-runner typecheck:     Checking sha1 v0.10.7
+packages/paperclip-runner typecheck:     Checking lru v0.18.3
+packages/paperclip-runner typecheck:     Checking uuid-simd v0.8.0
+packages/paperclip-runner typecheck:     Checking aead v0.5.2
+packages/paperclip-runner typecheck:     Checking toml_write v0.1.2
+packages/paperclip-runner typecheck:     Checking utf-8 v0.7.6
+packages/paperclip-runner typecheck:     Checking toml_datetime v0.6.11
+packages/paperclip-runner typecheck:     Checking linux-raw-sys v0.12.1
+packages/paperclip-runner typecheck:     Checking winnow v0.7.15
+packages/paperclip-runner typecheck:     Checking aes-gcm v0.10.3
+packages/paperclip-runner typecheck:     Checking jsonschema v0.50.1
+packages/paperclip-runner typecheck:     Checking toml_edit v0.22.27
+packages/paperclip-runner typecheck:     Checking rustls-pemfile v2.2.0
+packages/paperclip-runner typecheck:     Checking rustls-webpki v0.103.15
+packages/paperclip-runner typecheck:     Checking tokio-rustls v0.26.4
+packages/paperclip-runner typecheck:     Checking tungstenite v0.28.0
+packages/paperclip-runner typecheck:     Checking hyper-rustls v0.27.9
+packages/paperclip-runner typecheck:     Checking aws-smithy-http-client v1.4.0
+packages/paperclip-runner typecheck:     Checking reqwest v0.12.28
+packages/paperclip-runner typecheck:     Checking aws-smithy-runtime v1.14.0
+packages/paperclip-runner typecheck:     Checking aws-runtime v1.9.1
+packages/paperclip-runner typecheck:     Checking aws-sdk-sts v1.113.0
+packages/paperclip-runner typecheck:     Checking aws-sdk-bedrockagentcore v1.65.0
+packages/paperclip-runner typecheck:     Checking aws-sdk-s3 v1.144.0
+packages/paperclip-runner typecheck:     Checking aws-config v1.11.0
+packages/paperclip-runner typecheck:     Checking paperclip-runner-core v0.0.0 (/workspace/blentera-v10/packages/paperclip-runner/runner/crates/runner-core)
+packages/paperclip-runner typecheck: warning: unused imports: `OpenOptions` and `self`
+packages/paperclip-runner typecheck:  --> crates/runner-core/src/process_supervisor.rs:3:15
+packages/paperclip-runner typecheck:   |
+packages/paperclip-runner typecheck: 3 | use std::fs::{self, File, OpenOptions};
+packages/paperclip-runner typecheck:   |               ^^^^        ^^^^^^^^^^^
+packages/paperclip-runner typecheck:   |
+packages/paperclip-runner typecheck:   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+packages/paperclip-runner typecheck: warning: variable does not need to be mutable
+packages/paperclip-runner typecheck:    --> crates/runner-core/src/process_supervisor.rs:709:17
+packages/paperclip-runner typecheck:     |
+packages/paperclip-runner typecheck: 709 |             let mut inherited = launch.inherited_command()?;
+packages/paperclip-runner typecheck:     |                 ----^^^^^^^^^
+packages/paperclip-runner typecheck:     |                 |
+packages/paperclip-runner typecheck:     |                 help: remove this `mut`
+packages/paperclip-runner typecheck:     |
+packages/paperclip-runner typecheck:     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+packages/paperclip-runner typecheck: warning: variable does not need to be mutable
+packages/paperclip-runner typecheck:    --> crates/runner-core/src/process_supervisor.rs:710:17
+packages/paperclip-runner typecheck:     |
+packages/paperclip-runner typecheck: 710 |             let mut result = Self::spawn_command(
+packages/paperclip-runner typecheck:     |                 ----^^^^^^
+packages/paperclip-runner typecheck:     |                 |
+packages/paperclip-runner typecheck:     |                 help: remove this `mut`
+packages/paperclip-runner typecheck: warning: fields `config` and `system_instructions` are never read
+packages/paperclip-runner typecheck:     --> crates/runner-core/src/claude_managed_provider.rs:1248:5
+packages/paperclip-runner typecheck:      |
+packages/paperclip-runner typecheck: 1232 | pub struct ClaudeManagedProvider {
+packages/paperclip-runner typecheck:      |            --------------------- fields in this struct
+packages/paperclip-runner typecheck: ...
+packages/paperclip-runner typecheck: 1248 |     config: ClaudeManagedProviderConfig,
+packages/paperclip-runner typecheck:      |     ^^^^^^
+packages/paperclip-runner typecheck: 1249 |     system_instructions: String,
+packages/paperclip-runner typecheck:      |     ^^^^^^^^^^^^^^^^^^^
+packages/paperclip-runner typecheck:      |
+packages/paperclip-runner typecheck:      = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+packages/paperclip-runner typecheck: warning: function `receive_plain` is never used
+packages/paperclip-runner typecheck:     --> crates/runner-core/src/durable/transport.rs:1545:4
+packages/paperclip-runner typecheck:      |
+packages/paperclip-runner typecheck: 1545 | fn receive_plain(
+packages/paperclip-runner typecheck:      |    ^^^^^^^^^^^^^
+packages/paperclip-runner typecheck: warning: function `validate_tool_result_contract` is never used
+packages/paperclip-runner typecheck:     --> crates/runner-core/src/provider_bridge.rs:1043:4
+packages/paperclip-runner typecheck:      |
+packages/paperclip-runner typecheck: 1043 | fn validate_tool_result_contract(
+packages/paperclip-runner typecheck:      |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/paperclip-runner typecheck: warning: `paperclip-runner-core` (lib) generated 6 warnings (run `cargo fix --lib -p paperclip-runner-core` to apply 3 suggestions)
+packages/paperclip-runner typecheck:     Finished `dev` profile [unoptimized + debuginfo] target(s) in 59.51s
+packages/paperclip-runner typecheck: Done
+packages/adapters/claude-local typecheck$ tsc --noEmit
+packages/adapters/codex-local typecheck$ tsc --noEmit
+packages/adapters/cursor-cloud typecheck$ tsc --noEmit
+packages/adapters/cursor-local typecheck$ tsc --noEmit
+packages/adapters/codex-local typecheck: Done
+packages/adapters/gemini-local typecheck$ tsc --noEmit
+packages/adapters/cursor-cloud typecheck: Done
+packages/adapters/grok-local typecheck$ tsc --noEmit
+packages/adapters/claude-local typecheck: Done
+packages/adapters/hermes typecheck$ tsc --noEmit
+packages/adapters/cursor-local typecheck: Done
+packages/adapters/kimi-local typecheck$ tsc --noEmit
+packages/adapters/gemini-local typecheck: Done
+packages/adapters/openclaw-gateway typecheck$ tsc --noEmit
+packages/adapters/kimi-local typecheck: Done
+packages/adapters/opencode-local typecheck$ tsc --noEmit
+packages/adapters/hermes typecheck: Done
+packages/adapters/pi-local typecheck$ tsc --noEmit
+packages/adapters/grok-local typecheck: Done
+packages/plugins/create-paperclip-plugin typecheck$ tsc --noEmit
+packages/plugins/create-paperclip-plugin typecheck: Done
+.../plugin-authoring-smoke-example typecheck$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+.../plugin-authoring-smoke-example typecheck: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../plugin-authoring-smoke-example typecheck: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../plugin-authoring-smoke-example typecheck: [paperclip] Building @paperclipai/shared...
+packages/adapters/openclaw-gateway typecheck: Done
+.../examples/plugin-file-browser-example typecheck$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+.../examples/plugin-file-browser-example typecheck: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../examples/plugin-file-browser-example typecheck: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../examples/plugin-file-browser-example typecheck: [paperclip] Waiting for another workspace build (/workspace/blentera-v10/node_modules/.cache/paperclip-plugin-build-deps.lock)...
+packages/adapters/pi-local typecheck: Done
+.../examples/plugin-hello-world-example typecheck$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+packages/adapters/opencode-local typecheck: Done
+.../examples/plugin-kitchen-sink-example typecheck$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+.../examples/plugin-hello-world-example typecheck: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../examples/plugin-hello-world-example typecheck: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../examples/plugin-hello-world-example typecheck: [paperclip] Waiting for another workspace build (/workspace/blentera-v10/node_modules/.cache/paperclip-plugin-build-deps.lock)...
+.../examples/plugin-kitchen-sink-example typecheck: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../examples/plugin-kitchen-sink-example typecheck: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../examples/plugin-kitchen-sink-example typecheck: [paperclip] Waiting for another workspace build (/workspace/blentera-v10/node_modules/.cache/paperclip-plugin-build-deps.lock)...
+.../plugin-authoring-smoke-example typecheck: [paperclip] Building @paperclipai/plugin-sdk...
+.../plugin-authoring-smoke-example typecheck: Done
+.../paperclip-plugin-fake-sandbox typecheck$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+.../examples/plugin-hello-world-example typecheck: Done
+packages/plugins/plugin-llm-wiki typecheck$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+.../paperclip-plugin-fake-sandbox typecheck: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../paperclip-plugin-fake-sandbox typecheck: > node ../../../scripts/ensure-plugin-build-deps.mjs
+packages/plugins/plugin-llm-wiki typecheck: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+packages/plugins/plugin-llm-wiki typecheck: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../paperclip-plugin-fake-sandbox typecheck: [paperclip] Building @paperclipai/shared...
+packages/plugins/plugin-llm-wiki typecheck: [paperclip] Waiting for another workspace build (/workspace/blentera-v10/node_modules/.cache/paperclip-plugin-build-deps.lock)...
+.../examples/plugin-file-browser-example typecheck: Done
+packages/plugins/plugin-workspace-diff typecheck$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit && tsc --noEmit -p tsconfig.test.json
+.../examples/plugin-kitchen-sink-example typecheck: Done
+packages/plugins/plugin-workspace-diff typecheck: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+packages/plugins/plugin-workspace-diff typecheck: > node ../../../scripts/ensure-plugin-build-deps.mjs
+packages/plugins/plugin-workspace-diff typecheck: [paperclip] Waiting for another workspace build (/workspace/blentera-v10/node_modules/.cache/paperclip-plugin-build-deps.lock)...
+.../paperclip-plugin-fake-sandbox typecheck: [paperclip] Building @paperclipai/plugin-sdk...
+.../paperclip-plugin-fake-sandbox typecheck: Done
+packages/plugins/plugin-llm-wiki typecheck: Done
+packages/plugins/plugin-workspace-diff typecheck: Done
+packages/adapters/hermes-gateway typecheck$ tsc --noEmit
+server typecheck$ pnpm run prepare:runner-vendor && pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit --singleThreaded
+ui typecheck$ tsc -b
+server typecheck: > @paperclipai/server@0.3.1 prepare:runner-vendor /workspace/blentera-v10/server
+server typecheck: > pnpm --filter @paperclipai/paperclip-runner build
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 build /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > pnpm run check:protocol-manifest && pnpm run build:typescript && pnpm run check:capability-contract && pnpm run check:capability-inventory && pnpm run check:protocol-coverage && pnpm run check:semantic-contracts && pnpm run check:runner-workflow-traceability && pnpm run build:binary && node scripts/generate-replay-goldens.mjs --check && node scripts/generate-semantic-action-catalog.mjs --check
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 check:protocol-manifest /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > node scripts/generate-protocol-manifest.mjs --check
+server typecheck: The generated PRP contract manifest matches its sources.
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+packages/adapters/hermes-gateway typecheck: Done
+server typecheck: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+server typecheck: > tsc -p tsconfig.json
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+server typecheck: Generated PRP schema modules match the JSON Schema sources.
+server typecheck: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+server typecheck: Version 7.0.2
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 check:capability-contract /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > node scripts/generate-capability-contract.mjs --check
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 check:capability-inventory /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > node scripts/check-capability-inventory.mjs
+server typecheck: Capability inventory completeness and generated-output checks passed.
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 check:protocol-coverage /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > node scripts/generate-protocol-coverage.mjs --check
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 check:semantic-contracts /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > pnpm run build:typescript && node scripts/generate-semantic-contracts.mjs --check
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+server typecheck: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+server typecheck: > tsc -p tsconfig.json
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+server typecheck: Generated PRP schema modules match the JSON Schema sources.
+server typecheck: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+server typecheck: Version 7.0.2
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 check:runner-workflow-traceability /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > pnpm run build:typescript && node scripts/check-runner-workflow-traceability.mjs
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+server typecheck: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+server typecheck: > tsc -p tsconfig.json
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+server typecheck: Generated PRP schema modules match the JSON Schema sources.
+server typecheck: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+server typecheck: Version 7.0.2
+server typecheck: Runner stress traceability passed: 44 findings, 12 workflows, 1 explicit exclusion.
+server typecheck: > @paperclipai/paperclip-runner@0.0.0 build:binary /workspace/blentera-v10/packages/paperclip-runner
+server typecheck: > cargo build --release --manifest-path runner/Cargo.toml --locked -p paperclip-runner-core --bin paperclip-runnerd && node scripts/stage-runner-binary.mjs
+server typecheck:    Compiling libc v0.2.189
+server typecheck:    Compiling proc-macro2 v1.0.107
+server typecheck:    Compiling quote v1.0.47
+server typecheck:    Compiling unicode-ident v1.0.24
+server typecheck:    Compiling cfg-if v1.0.4
+server typecheck:    Compiling zeroize v1.9.0
+server typecheck:    Compiling version_check v0.9.5
+server typecheck:    Compiling typenum v1.20.1
+server typecheck:    Compiling bytes v1.12.1
+server typecheck:    Compiling itoa v1.0.18
+server typecheck:    Compiling syn v2.0.119
+server typecheck:    Compiling getrandom v0.2.17
+server typecheck:    Compiling pin-project-lite v0.2.17
+server typecheck:    Compiling generic-array v0.14.7
+server typecheck:    Compiling memchr v2.8.3
+server typecheck:    Compiling subtle v2.6.1
+server typecheck:    Compiling futures-core v0.3.34
+server typecheck:    Compiling syn v3.0.4
+server typecheck:    Compiling once_cell v1.21.4
+server typecheck:    Compiling autocfg v1.5.1
+server typecheck:    Compiling rand_core v0.6.4
+server typecheck:    Compiling socket2 v0.6.5
+server typecheck:    Compiling num-traits v0.2.19
+server typecheck:    Compiling mio v1.2.2
+server typecheck:    Compiling futures-sink v0.3.34
+server typecheck:    Compiling tokio v1.53.1
+server typecheck:    Compiling http v1.5.0
+server typecheck:    Compiling num-integer v0.1.47
+server typecheck:    Compiling crypto-common v0.1.7
+server typecheck:    Compiling fnv v1.0.7
+server typecheck:    Compiling slab v0.4.12
+server typecheck:    Compiling http-body v1.1.0
+server typecheck:    Compiling futures-task v0.3.34
+server typecheck:    Compiling futures-io v0.3.34
+server typecheck:    Compiling futures-util v0.3.34
+server typecheck:    Compiling tracing-attributes v0.1.31
+server typecheck:    Compiling jobserver v0.1.35
+server typecheck:    Compiling tokio-util v0.7.19
+server typecheck:    Compiling tracing-core v0.1.36
+ui typecheck: Done
+server typecheck:    Compiling find-msvc-tools v0.1.11
+server typecheck:    Compiling shlex v2.0.1
+server typecheck:    Compiling tracing v0.1.44
+server typecheck:    Compiling outref v0.5.2
+server typecheck:    Compiling cc v1.4.4
+server typecheck:    Compiling const-oid v0.9.6
+server typecheck:    Compiling vsimd v0.8.0
+server typecheck:    Compiling ryu v1.0.23
+server typecheck:    Compiling http-body-util v0.1.5
+server typecheck:    Compiling http v0.2.12
+server typecheck:    Compiling synstructure v0.13.2
+server typecheck:    Compiling powerfmt v0.2.0
+server typecheck:    Compiling num-conv v0.2.2
+server typecheck:    Compiling either v1.18.0
+server typecheck:    Compiling time-core v0.1.9
+server typecheck:    Compiling deranged v0.5.8
+server typecheck:    Compiling bytes-utils v0.1.4
+server typecheck:    Compiling http-body v0.4.6
+server typecheck:    Compiling base64-simd v0.8.0
+server typecheck:    Compiling pin-utils v0.1.0
+server typecheck:    Compiling smallvec v1.15.2
+server typecheck:    Compiling zerofrom-derive v0.1.7
+server typecheck:    Compiling time v0.3.55
+server typecheck:    Compiling cmake v0.1.58
+server typecheck:    Compiling block-buffer v0.10.4
+server typecheck:    Compiling pkg-config v0.3.34
+server typecheck:    Compiling fs_extra v1.3.0
+server typecheck:    Compiling dunce v1.0.5
+server typecheck:    Compiling percent-encoding v2.3.2
+server typecheck:    Compiling aws-lc-sys v0.45.0
+server typecheck:    Compiling zerofrom v0.1.8
+server typecheck:    Compiling digest v0.10.7
+server typecheck:    Compiling yoke-derive v0.8.2
+server typecheck:    Compiling aws-smithy-types v1.6.2
+server typecheck:    Compiling aws-smithy-async v1.3.0
+server typecheck:    Compiling aws-smithy-runtime-api-macros v1.1.0
+server typecheck:    Compiling allocator-api2 v0.2.21
+server typecheck:    Compiling foldhash v0.2.0
+server typecheck:    Compiling equivalent v1.0.2
+server typecheck:    Compiling stable_deref_trait v1.2.1
+server typecheck:    Compiling hashbrown v0.17.1
+server typecheck:    Compiling aws-smithy-runtime-api v1.15.0
+server typecheck:    Compiling yoke v0.8.3
+server typecheck:    Compiling ring v0.17.14
+server typecheck:    Compiling zerovec-derive v0.11.6
+server typecheck:    Compiling rustls-pki-types v1.15.1
+server typecheck:    Compiling aws-lc-rs v1.18.1
+server typecheck:    Compiling zerovec v0.11.8
+server typecheck:    Compiling displaydoc v0.2.7
+server typecheck:    Compiling base64ct v1.8.3
+server typecheck:    Compiling pem-rfc7468 v0.7.0
+server typecheck:    Compiling hybrid-array v0.4.14
+server typecheck:    Compiling untrusted v0.9.0
+server typecheck:    Compiling httparse v1.10.1
+server typecheck:    Compiling cpufeatures v0.2.17
+server typecheck:    Compiling der v0.7.10
+server typecheck:    Compiling indexmap v2.14.1
+server typecheck:    Compiling cmov v0.5.4
+server typecheck:    Compiling rustls v0.23.43
+server typecheck:    Compiling ctutils v0.4.2
+server typecheck:    Compiling spki v0.7.3
+server typecheck:    Compiling block-buffer v0.12.1
+server typecheck:    Compiling crypto-common v0.2.2
+server typecheck:    Compiling tinystr v0.8.4
+server typecheck:    Compiling try-lock v0.2.5
+server typecheck:    Compiling serde_core v1.0.229
+server typecheck:    Compiling tower-service v0.3.3
+server typecheck:    Compiling writeable v0.6.4
+server typecheck:    Compiling const-oid v0.10.2
+server typecheck:    Compiling crc32fast v1.5.1
+server typecheck:    Compiling litemap v0.8.3
+server typecheck:    Compiling atomic-waker v1.1.2
+server typecheck:    Compiling icu_locale_core v2.3.0
+server typecheck:    Compiling h2 v0.4.19
+server typecheck:    Compiling digest v0.11.3
+server typecheck:    Compiling want v0.3.1
+server typecheck:    Compiling pkcs8 v0.10.2
+server typecheck:    Compiling zerotrie v0.2.5
+server typecheck:    Compiling potential_utf v0.1.6
+server typecheck:    Compiling futures-channel v0.3.34
+server typecheck:    Compiling ff v0.13.1
+server typecheck:    Compiling base16ct v0.2.0
+server typecheck:    Compiling utf8_iter v1.0.4
+server typecheck:    Compiling icu_properties_data v2.3.0
+server typecheck:    Compiling openssl-probe v0.2.1
+server typecheck:    Compiling icu_normalizer_data v2.3.0
+server typecheck:    Compiling rustls-native-certs v0.8.4
+server typecheck:    Compiling icu_collections v2.3.0
+server typecheck:    Compiling sec1 v0.7.3
+server typecheck:    Compiling group v0.13.0
+server typecheck:    Compiling hyper v1.11.1
+server typecheck:    Compiling icu_provider v2.3.1
+server typecheck:    Compiling aws-smithy-schema v0.2.0
+server typecheck:    Compiling form_urlencoded v1.2.2
+server typecheck:    Compiling crypto-bigint v0.5.5
+server typecheck:    Compiling sync_wrapper v1.0.2
+server typecheck:    Compiling serde v1.0.229
+server typecheck:    Compiling ipnet v2.12.1
+server typecheck:    Compiling tower-layer v0.3.3
+server typecheck:    Compiling base64 v0.22.1
+server typecheck:    Compiling getrandom v0.3.4
+server typecheck:    Compiling zerocopy v0.8.56
+server typecheck:    Compiling hyper-util v0.1.20
+server typecheck:    Compiling tower v0.5.3
+server typecheck:    Compiling elliptic-curve v0.13.8
+server typecheck:    Compiling aws-smithy-eventstream v0.61.2
+server typecheck:    Compiling webpki-roots v1.0.9
+server typecheck:    Compiling hmac v0.12.1
+server typecheck:    Compiling serde_derive v1.0.229
+server typecheck:    Compiling semver v1.0.28
+server typecheck:    Compiling cpufeatures v0.3.1
+server typecheck:    Compiling rustc_version v0.4.1
+server typecheck:    Compiling rfc6979 v0.4.0
+server typecheck:    Compiling aws-smithy-http v0.64.0
+server typecheck:    Compiling icu_normalizer v2.3.0
+server typecheck:    Compiling icu_properties v2.3.0
+server typecheck:    Compiling signature v2.2.0
+server typecheck:    Compiling getrandom v0.4.3
+server typecheck:    Compiling ecdsa v0.16.9
+server typecheck:    Compiling idna_adapter v1.2.2
+server typecheck:    Compiling aws-types v1.5.0
+server typecheck:    Compiling sha2 v0.11.0
+server typecheck:    Compiling primeorder v0.13.6
+server typecheck:    Compiling sha2 v0.10.9
+server typecheck:    Compiling aws-credential-types v1.3.0
+server typecheck:    Compiling zmij v1.0.23
+server typecheck:    Compiling hex v0.4.3
+server typecheck:    Compiling rustversion v1.0.23
+server typecheck:    Compiling p256 v0.13.2
+server typecheck:    Compiling idna v1.1.0
+server typecheck:    Compiling hmac v0.13.0
+server typecheck:    Compiling aws-smithy-observability v0.3.0
+server typecheck:    Compiling serde_json v1.0.151
+server typecheck:    Compiling fastrand v2.5.0
+server typecheck:    Compiling aws-sigv4 v1.5.1
+server typecheck:    Compiling uuid v1.26.0
+server typecheck:    Compiling num-bigint v0.4.8
+server typecheck:    Compiling ahash v0.8.12
+server typecheck:    Compiling ref-cast v1.0.27
+server typecheck:    Compiling parking_lot_core v0.9.12
+server typecheck:    Compiling regex-syntax v0.8.11
+server typecheck:    Compiling xmlparser v0.13.6
+server typecheck:    Compiling aws-smithy-xml v0.62.0
+server typecheck:    Compiling num-rational v0.4.2
+server typecheck:    Compiling arc-swap v1.9.2
+server typecheck:    Compiling url v2.5.8
+server typecheck:    Compiling aws-smithy-json v0.63.0
+server typecheck:    Compiling num-iter v0.1.46
+server typecheck:    Compiling num-complex v0.4.6
+server typecheck:    Compiling ref-cast-impl v1.0.27
+server typecheck:    Compiling inout v0.1.4
+server typecheck:    Compiling aho-corasick v1.1.5
+server typecheck:    Compiling scopeguard v1.2.0
+server typecheck:    Compiling regex-lite v0.1.9
+server typecheck:    Compiling regex-automata v0.4.18
+server typecheck:    Compiling lock_api v0.4.14
+server typecheck:    Compiling cipher v0.4.4
+server typecheck:    Compiling num v0.4.3
+server typecheck:    Compiling ppv-lite86 v0.2.21
+server typecheck:    Compiling rand_core v0.9.5
+server typecheck:    Compiling universal-hash v0.5.1
+server typecheck:    Compiling bit-vec v0.8.0
+server typecheck:    Compiling borrow-or-share v0.2.4
+server typecheck:    Compiling spin v0.10.1
+server typecheck:    Compiling bitflags v2.13.1
+server typecheck:    Compiling heck v0.5.0
+server typecheck:    Compiling opaque-debug v0.3.1
+server typecheck:    Compiling thiserror v2.0.20
+server typecheck:    Compiling urlencoding v2.1.3
+server typecheck:    Compiling unicode-general-category v1.1.0
+server typecheck:    Compiling aws-smithy-query v0.62.0
+server typecheck:    Compiling polyval v0.6.2
+server typecheck:    Compiling strum_macros v0.28.0
+server typecheck:    Compiling crc-fast v1.10.0
+server typecheck:    Compiling fluent-uri v0.4.1
+server typecheck:    Compiling bit-set v0.8.0
+server typecheck:    Compiling rand_chacha v0.9.0
+server typecheck:    Compiling parking_lot v0.12.5
+server typecheck:    Compiling fraction v0.16.0
+server typecheck:    Compiling sha1 v0.11.0
+server typecheck:    Compiling md-5 v0.11.0
+server typecheck:    Compiling thiserror-impl v2.0.20
+server typecheck:    Compiling data-encoding v2.11.1
+server typecheck:    Compiling log v0.4.34
+server typecheck:    Compiling rustix v1.1.4
+server typecheck:    Compiling num-cmp v0.1.0
+server typecheck:    Compiling bytecount v0.6.9
+server typecheck:    Compiling micromap v0.3.0
+server typecheck:    Compiling referencing v0.50.1
+server typecheck:    Compiling jsonschema-value v0.50.1
+server typecheck:    Compiling aws-smithy-checksums v0.65.0
+server typecheck:    Compiling rand v0.9.5
+server typecheck:    Compiling fancy-regex v0.19.0
+server typecheck:    Compiling strum v0.28.0
+server typecheck:    Compiling ghash v0.5.1
+server typecheck:    Compiling regex v1.13.1
+server typecheck:    Compiling tower-http v0.6.11
+server typecheck:    Compiling aes v0.8.4
+server typecheck:    Compiling ctr v0.9.2
+server typecheck:    Compiling jsonschema-regex v0.50.1
+server typecheck:    Compiling serde_urlencoded v0.7.1
+server typecheck:    Compiling email_address v0.2.9
+server typecheck:    Compiling sha1 v0.10.7
+server typecheck:    Compiling lru v0.18.3
+server typecheck:    Compiling uuid-simd v0.8.0
+server typecheck:    Compiling aead v0.5.2
+server typecheck:    Compiling winnow v0.7.15
+server typecheck:    Compiling toml_datetime v0.6.11
+server typecheck:    Compiling utf-8 v0.7.6
+server typecheck:    Compiling toml_write v0.1.2
+server typecheck:    Compiling linux-raw-sys v0.12.1
+server typecheck:    Compiling toml_edit v0.22.27
+server typecheck:    Compiling aes-gcm v0.10.3
+server typecheck:    Compiling jsonschema v0.50.1
+server typecheck:    Compiling rustls-pemfile v2.2.0
+server typecheck:    Compiling rustls-webpki v0.103.15
+server typecheck:    Compiling tokio-rustls v0.26.4
+server typecheck:    Compiling tungstenite v0.28.0
+server typecheck:    Compiling hyper-rustls v0.27.9
+server typecheck:    Compiling aws-smithy-http-client v1.4.0
+server typecheck:    Compiling aws-smithy-runtime v1.14.0
+server typecheck:    Compiling aws-runtime v1.9.1
+server typecheck:    Compiling aws-sdk-sts v1.113.0
+server typecheck:    Compiling aws-sdk-s3 v1.144.0
+server typecheck:    Compiling aws-config v1.11.0
+server typecheck:    Compiling aws-sdk-bedrockagentcore v1.65.0
+server typecheck:    Compiling reqwest v0.12.28
+server typecheck:    Compiling paperclip-runner-core v0.0.0 (/workspace/blentera-v10/packages/paperclip-runner/runner/crates/runner-core)
+server typecheck: warning: unused imports: `OpenOptions` and `self`
+server typecheck:  --> crates/runner-core/src/process_supervisor.rs:3:15
+server typecheck:   |
+server typecheck: 3 | use std::fs::{self, File, OpenOptions};
+server typecheck:   |               ^^^^        ^^^^^^^^^^^
+server typecheck:   |
+server typecheck:   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+server typecheck: warning: variable does not need to be mutable
+server typecheck:    --> crates/runner-core/src/process_supervisor.rs:709:17
+server typecheck:     |
+server typecheck: 709 |             let mut inherited = launch.inherited_command()?;
+server typecheck:     |                 ----^^^^^^^^^
+server typecheck:     |                 |
+server typecheck:     |                 help: remove this `mut`
+server typecheck:     |
+server typecheck:     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+server typecheck: warning: variable does not need to be mutable
+server typecheck:    --> crates/runner-core/src/process_supervisor.rs:710:17
+server typecheck:     |
+server typecheck: 710 |             let mut result = Self::spawn_command(
+server typecheck:     |                 ----^^^^^^
+server typecheck:     |                 |
+server typecheck:     |                 help: remove this `mut`
+server typecheck: warning: fields `config` and `system_instructions` are never read
+server typecheck:     --> crates/runner-core/src/claude_managed_provider.rs:1248:5
+server typecheck:      |
+server typecheck: 1232 | pub struct ClaudeManagedProvider {
+server typecheck:      |            --------------------- fields in this struct
+server typecheck: ...
+server typecheck: 1248 |     config: ClaudeManagedProviderConfig,
+server typecheck:      |     ^^^^^^
+server typecheck: 1249 |     system_instructions: String,
+server typecheck:      |     ^^^^^^^^^^^^^^^^^^^
+server typecheck:      |
+server typecheck:      = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+server typecheck: warning: function `receive_plain` is never used
+server typecheck:     --> crates/runner-core/src/durable/transport.rs:1545:4
+server typecheck:      |
+server typecheck: 1545 | fn receive_plain(
+server typecheck:      |    ^^^^^^^^^^^^^
+server typecheck: warning: function `validate_tool_result_contract` is never used
+server typecheck:     --> crates/runner-core/src/provider_bridge.rs:1043:4
+server typecheck:      |
+server typecheck: 1043 | fn validate_tool_result_contract(
+server typecheck:      |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+server typecheck: warning: `paperclip-runner-core` (lib) generated 6 warnings (run `cargo fix --lib -p paperclip-runner-core` to apply 3 suggestions)
+server typecheck:     Finished `release` profile [optimized] target(s) in 3m 12s
+server typecheck: Replay golden snapshots and parity summaries are current.
+server typecheck: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+server typecheck: > node ../../../scripts/ensure-plugin-build-deps.mjs
+server typecheck: [paperclip] Building @paperclipai/shared...
+server typecheck: [paperclip] Building @paperclipai/plugin-sdk...
+server typecheck: Done
+cli typecheck$ tsc --noEmit --singleThreaded
+cli typecheck: Done

@@ -1,0 +1,43 @@
+{
+  "head": "8c75fa6bbbc877646e5eda008ee47d4b6452e4d5",
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "packages/paperclip-runner/spec/paperclip-agent-operation-groups.md": "18e3a31593a69920ff00eea448ca74c21b06cdfbbd5003ef56f6c62554df3885",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/issues-service.test.ts": "cee391d9d06152dccf7223df76606027fe6dcef9f7a757387d2ad6b46d9061bd",
+    "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts": "49b21c829ebc294bc88f04dafd651f0b923bc7614af42762c1c8d68117101638",
+    "server/src/modules/wake-queue/adapters/postgres.test.ts": "dff75ff4fc20b5c47b084a436d5c3c336b04821d151fea56ae1e8d7380058579",
+    "server/src/modules/wake-queue/adapters/postgres.ts": "7fc8bb527cd2f00362f91bc38dd6cb5564cb5a65373265245b77db76b8ef8049",
+    "server/src/services/issue-thread-interactions.ts": "fa0cdd76b25ddc4ed98b10a217efe6dc407a9bea44daab6fe99ecb632f387cd5",
+    "server/src/services/issues.ts": "0fdf7e89d67910247315adb184e6543bf3f547d0a95be81b7db9c88fb6edc152",
+    "server/src/services/native-owner-release.ts": "2839ac229b9b0e4f7b880e4e81eb8c321a0cd439e7561bb898208f2f313ffb55",
+    "server/src/services/native-runtime/native-interaction-bridge.ts": "ba1470b7ece5ff76f23e4ac9289f5473197f267087c4ad2dc31c89ae81b23c7e",
+    "server/src/services/native-runtime/native-managed-question-owner.integration.test.ts": "3fe7801fb15bcff161f62bfd1f9f021320b00683d65f9ffc7f50ddba7191594d",
+    "server/src/services/native-runtime/native-session-executor.ts": "6197b8a856a98a4b21382aaf17393f9166011d917e2946931361b5b7c7161961",
+    "server/src/services/native-runtime/native-session-resume.ts": "d0e0e87804851fdf72c929ed5fa3baaa5e0cb37cdc400cbe367378445cc494ec",
+    "server/src/services/native-runtime/paperclip-runner-tool-authority.ts": "10997323a7f9bb8879dcea34f521a9a0d0a4594fb68f9afbf5e6cb80ddd55324",
+    "server/src/services/orchestration/worker-model-gateway.ts": "2d306dd10640e2b3d40e22044e5f5ca2a95235605e5ae106115f7091c0db06a3",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "mtimeNs": {
+    "package.json": 1794226790631675063,
+    "packages/paperclip-runner/spec/paperclip-agent-operation-groups.md": 1794391417267712527,
+    "pnpm-lock.yaml": 1794226790807960284,
+    "server/package.json": 1794226790837478863,
+    "server/src/__tests__/issues-service.test.ts": 1794391416415699528,
+    "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts": 1794390606751306611,
+    "server/src/modules/wake-queue/adapters/postgres.test.ts": 1794391415859691052,
+    "server/src/modules/wake-queue/adapters/postgres.ts": 1794391341764313397,
+    "server/src/services/issue-thread-interactions.ts": 1794391341764313397,
+    "server/src/services/issues.ts": 1794391341764184684,
+    "server/src/services/native-owner-release.ts": 1794391341764466116,
+    "server/src/services/native-runtime/native-interaction-bridge.ts": 1794390727750013439,
+    "server/src/services/native-runtime/native-managed-question-owner.integration.test.ts": 1794391610918686011,
+    "server/src/services/native-runtime/native-session-executor.ts": 1794390606755186603,
+    "server/src/services/native-runtime/native-session-resume.ts": 1794390606755516699,
+    "server/src/services/native-runtime/paperclip-runner-tool-authority.ts": 1794390606755354676,
+    "server/src/services/orchestration/worker-model-gateway.ts": 1794390606755186603,
+    "server/tsconfig.json": 1794226791073414900
+  }
+}

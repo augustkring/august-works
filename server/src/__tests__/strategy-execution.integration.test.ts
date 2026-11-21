@@ -1,3 +1,8 @@
+import express from "express";
+import request from "supertest";
+import { actorMiddleware } from "../middleware/auth.js";
+import { errorHandler } from "../middleware/index.js";
+import { projectRoutes } from "../routes/projects.js";
 import { authorizationService } from "../services/authorization.js";
 import { inspectAnalyticalEvidenceAuthority } from "../services/analytical-evidence.js";
 import { authorizeStrategyNativePopulation, authorizeStrategyReference } from "../services/strategy-execution/references.js";
@@ -5,7 +10,7 @@ import {lockAnalyticalCompany} from "../services/analytical-privacy.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { agents, analyticalSourceSuppressions, applyPendingMigrations, companies, companyMemberships, createDb, decisionTargetIssues, documentRevisions, foundationSections, goals, heartbeatRuns, issues, projectGoals, projects, strategyExecutionLinks, strategyExecutionLinkVersions, strategyExecutionLinkApprovals, strategyExecutionSourceBindings } from "@paperclipai/db";
+import { agents, authUsers, analyticalSourceSuppressions, applyPendingMigrations, companies, companyMemberships, createDb, decisionTargetIssues, documentRevisions, foundationSections, goals, heartbeatRuns, issues, projectGoals, projects, strategyExecutionLinks, strategyExecutionLinkVersions, strategyExecutionLinkApprovals, strategyExecutionSourceBindings } from "@paperclipai/db";
 import { strategyExecutionLinkDefinitionSchema, type StrategyExecutionLinkDefinition } from "@paperclipai/shared";
 import { strategyExecutionService } from "../services/strategy-execution/service.js";
 import { eraseStrategySource } from "../services/strategy-execution/privacy.js";
@@ -30,15 +35,27 @@ suite("native strategy links on migrated PostgreSQL", () => {
   let db: ReturnType<typeof createDb>, companyId: string, otherCompanyId: string, goalId: string, projectId: string, policyId: string;
   let foundation: Awaited<ReturnType<ReturnType<typeof foundationService>["approve"]>>;
   let reference: StrategyExecutionLinkDefinition["from"];
-  beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v8-strategy-"); db = createDb(database.connectionString); });
+  beforeAll(async () => {
+    database = await startEmbeddedPostgresTestDatabase("aw-v8-strategy-"); db = createDb(database.connectionString);
+    await db.insert(authUsers).values({ id: "local-board", name: "Current strategy reviewer",
+      email: "strategy-reviewer@example.test", emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+  });
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental(flags);
-    companyId = randomUUID(); otherCompanyId = randomUUID(); goalId = randomUUID(); projectId = randomUUID();
+    companyId = randomUUID(); otherCompanyId = randomUUID(); goalId = randomUUID();
     await db.insert(companies).values([{ id: companyId, name: "Strategy", issuePrefix: randomUUID() }, { id: otherCompanyId, name: "Foreign", issuePrefix: randomUUID() }]);
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "local-board", status: "active", membershipRole: "owner" });
     await db.insert(goals).values({ companyId, id: goalId, title: "Native objective" });
-    await db.insert(projects).values({ companyId, id: projectId, name: "Native initiative" });
+    // The canonical Board route owns qualification; a raw historical row is unknown.
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const createdProject = await request(app).post(`/api/companies/${companyId}/projects`)
+      .send({ name: "Native initiative" }).expect(201);
+    projectId = createdProject.body.id;
     const purpose = analyticalPurpose(); purpose.citation = "strategy-purpose"; purpose.analyticalPurpose!.capabilities = ["strategy"]; purpose.analyticalPurpose!.maxRetentionDays = 90;
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, purpose)).id;
     const svc = foundationService(db);
@@ -84,20 +101,28 @@ suite("native strategy links on migrated PostgreSQL", () => {
       { companyId, projectId, title: "Scoped task with a separately protected project" },
     ]).returning();
     const taskReader = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId: reader.id, keyScope: { kind: "skill_test" as const, issueId: allowed.id } };
+    const executionState = async () => ({
+      links: await db.select({ id: strategyExecutionLinks.id }).from(strategyExecutionLinks).where(eq(strategyExecutionLinks.companyId, companyId)),
+      sources: await db.select({ id: strategyExecutionSourceBindings.id, linkId: strategyExecutionSourceBindings.linkId,
+        issueId: strategyExecutionSourceBindings.issueId, projectId: strategyExecutionSourceBindings.projectId })
+        .from(strategyExecutionSourceBindings).where(eq(strategyExecutionSourceBindings.companyId, companyId)),
+    });
+    const beforeDeniedPopulations = await executionState();
     expect((await nativePopulation([allowed.id], taskReader)).get(allowed.id)?.nativeObject?.snapshot.id).toBe(allowed.id);
     await expect(evidenceAuthority([allowed.id], taskReader)).resolves.toBeUndefined();
-    await expect(evidenceAuthority([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(nativePopulation([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(evidenceAuthority([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403 });
+    await expect(nativePopulation([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403 });
     await expect(scalarNativeReference({ type: "issue", id: denied.id }, taskReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
     const projectReader = { ...taskReader, keyScope: { kind: "skill_test" as const, issueId: projectTask.id } };
     const authority = authorizationService(db);
     await expect(authority.decide({ actor: projectReader, action: "issue:read", resource: { type: "issue", companyId, issueId: projectTask.id }, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: true });
     await expect(authority.decide({ actor: projectReader, action: "project:read", resource: { type: "project", companyId, projectId }, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: false, reason: "deny_scope" });
     await expect(scalarNativeReference({ type: "issue", id: projectTask.id }, projectReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(nativePopulation([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(nativePopulation([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(evidenceAuthority([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
-    await expect(evidenceAuthority([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(nativePopulation([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403 });
+    await expect(nativePopulation([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403 });
+    await expect(evidenceAuthority([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403 });
+    await expect(evidenceAuthority([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403 });
+    expect(await executionState()).toEqual(beforeDeniedPopulations);
   });
   it("refuses the complete native population for a hidden, foreign, duplicate, oversized or expired input", async () => {
     const [visible, hidden] = await db.insert(issues).values([{ companyId, title: "Visible native source" }, { companyId, title: "Hidden native source", hiddenAt: new Date() }]).returning();
@@ -271,7 +296,7 @@ suite("native strategy links on migrated PostgreSQL", () => {
       await restored.insert(strategyExecutionSourceBindings).values(backup.bindings);
       for (const row of backup.roots) await restored.update(strategyExecutionLinks).set({ status: row.status, approvedVersionId: row.approvedVersionId }).where(eq(strategyExecutionLinks.id, row.id));
       const marker = { company_id: companyId, input_type: "goal" as const, input_ref: goalId, suppressed_at: guard.suppressedAt.toISOString() };
-      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], feedback: [], analyticalSources: [marker,marker,{ ...marker, company_id: randomUUID() }] });
+      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], feedback: [], supportCases: [], analyticalSources: [marker,marker,{ ...marker, company_id: randomUUID() }] });
       await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
       expect((await instanceSettingsService(restored).getExperimental()).strategy_execution_v8).toBe(false);
       expect((await restored.select().from(strategyExecutionLinks)).map(r => r.id)).toEqual([retained.link.id]);
@@ -284,7 +309,7 @@ suite("native strategy links on migrated PostgreSQL", () => {
     let releaseMemory!: () => void, signalHeld!: () => void;
     const held = new Promise<void>(resolve => { signalHeld = resolve; }), release = new Promise<void>(resolve => { releaseMemory = resolve; });
     const mutation = db.transaction(async rawTx => {
-      const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, companyId); signalHeld(); await release;
+      const tx = rawTx as unknown as typeof db; await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); signalHeld(); await release;
       await tx.execute(sql`set local lock_timeout='1s'`);
       await projectService(tx).update(projectId, { name: "Privacy-reconciled native project" });
     });

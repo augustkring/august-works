@@ -1,0 +1,11 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[02:23:35] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"dc94295c-ec08-43ad-9758-10ff764758c1","failureCode":"setup_failed"}[39m
+[02:23:35] [32mINFO[39m: [36mskipping late setup failure finalization because the run already left running state[39m [90m{"runId":"dc94295c-ec08-43ad-9758-10ff764758c1","attemptedStatus":"failed","currentStatus":"cancelled"}[39m
+
+ Test Files  3 passed (3)
+      Tests  59 passed (59)
+   Start at  02:22:51
+   Duration  45.32s (transform 10.91s, setup 230ms, import 17.08s, tests 27.63s, environment 0ms)
+

@@ -1,0 +1,28 @@
+{
+  "baseCommit": "2ea1f2003",
+  "sources": {
+    "server/src/services/issues.ts": "63d3b29c28c13e90176065c2ac4c3498391025b592932c1e1b034a0fd8247750",
+    "server/src/__tests__/native-payload-source-binding.integration.test.ts": "c878e3cd46cc9f52c1a6f3276cdd61577a6de87852bce0919dddea6857d20071"
+  },
+  "baseline": {
+    "result": "2 failed,6 filtered;41.60s;actual exit1. Original native updater rejects text and JSON payload edits with SQLSTATE23514.",
+    "log": "baseline.log"
+  },
+  "initial": {
+    "result": "7 passed;38.80s;actual exit0. Before SQL-expression and JSON cases.",
+    "log": "initial.log"
+  },
+  "final": {
+    "result": "8 passed;40.04s;actual exit0. Unchanged body/JSON, operational SQL expression, actual body invalidation, original direct DB integrity rejection and irreversible invalidation.",
+    "log": "final.log"
+  },
+  "serverCompiler": {
+    "result": "actual exit0;current product source;test files excluded by native server tsconfig",
+    "log": "server-types.log"
+  },
+  "limits": [
+    "Structural snapshots are fixtures; this does not qualify an authenticated producer or actual input closure.",
+    "Only issueService.update is covered. Other payload writers must be qualified before any constructor is activated.",
+    "No migration, protocol activation, read-graph shortcut, historical upgrade or full V10/PR qualification."
+  ]
+}

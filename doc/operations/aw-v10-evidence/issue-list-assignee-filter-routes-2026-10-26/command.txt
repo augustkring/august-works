@@ -1,0 +1,5 @@
+source snapshot: python3 /workspace/v10-preparation/snapshot-current-source-for-dependency-check.py <source-pins.json>
+syntax preflight: node /workspace/v10-preparation/check-snapshot-syntax.cjs <source-pins.json>
+test: timeout --signal=TERM --kill-after=5s 180s ../node_modules/.bin/vitest run src/__tests__/issue-list-assignee-filter-routes.test.ts --maxWorkers=1
+working directory: /workspace/v10-dep-qualification/server
+host lock: /workspace/v10-preparation/v10-pg-tests.lock

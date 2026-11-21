@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import express from "express";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
+  authSessions,
+  authUsers,
   companies,
   companyMemberships,
   createDb,
@@ -15,6 +17,7 @@ import {
   heartbeatRuns,
   instanceSettings,
   issueComments,
+  issueDocuments,
   issues,
   pipelineAutomationExecutions,
   pipelineCaseBlockers,
@@ -38,14 +41,21 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { issueRoutes } from "../routes/issues.js";
+import { projectRoutes } from "../routes/projects.js";
+import { companyRoutes } from "../routes/companies.js";
 import { pipelineRoutes } from "../routes/pipelines.js";
 import {
   PIPELINE_AUTOMATION_DEFAULT_TITLE_TEMPLATE,
   PIPELINE_CASE_EVENTS_MAX_LIMIT,
   PIPELINE_CONTEXT_PACK_EVENT_LIMIT,
+  pipelineService,
 } from "../services/pipelines.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { listCompanyCaseEvents } from "../services/pipelines-aggregation.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe.sequential : describe.skip;
@@ -91,6 +101,8 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await db.delete(projects);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(authSessions);
+    await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(companies);
     await db.delete(instanceSettings);
@@ -100,15 +112,16 @@ describeEmbeddedPostgres("pipeline routes", () => {
     await tempDb?.cleanup();
   });
 
-  function app(actor: Express.Request["actor"]) {
+  function app(actor: Express.Request["actor"], service?: ReturnType<typeof pipelineService>) {
     const instance = express();
     instance.use(express.json());
     instance.use((req, _res, next) => {
       req.actor = actor;
       next();
     });
-    instance.use("/api", pipelineRoutes(db, { heartbeat: noopHeartbeat }));
+    instance.use("/api", pipelineRoutes(db, { heartbeat: noopHeartbeat }, service));
     instance.use("/api", issueRoutes(db, {} as any));
+    instance.use("/api", projectRoutes(db));
     instance.use(errorHandler);
     return instance;
   }
@@ -119,6 +132,24 @@ describeEmbeddedPostgres("pipeline routes", () => {
       issuePrefix: `P${randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
     }).returning();
     return company!;
+  }
+
+  async function seedHumanMember(companyId: string, name: string) {
+    const userId = randomUUID();
+    const sessionId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name, email: `${userId}@pipeline.test`, emailVerified: true,
+      createdAt: now, updatedAt: now });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      status: "active", membershipRole: "owner", permissionsInitializedAt: now });
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+      companyId, principalType: "user" as const, principalId: userId, ...grant,
+    })));
+    const actor: Express.Request["actor"] = { type: "board", source: "session", userId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+    return { userId, sessionId, actor };
   }
 
   async function seedPublishedWorkflow(companyId: string) {
@@ -179,17 +210,13 @@ describeEmbeddedPostgres("pipeline routes", () => {
     return agent!;
   }
 
-  async function seedProjectWorkspaceFixture(companyId: string, name = "Automation") {
-    const projectId = randomUUID();
+  async function seedProjectWorkspaceFixture(companyId: string, actor: Express.Request["actor"], name = "Automation") {
+    const created = await request(app(actor)).post(`/api/companies/${companyId}/projects`)
+      .send({ name: `${name} project`, status: "in_progress" }).expect(201);
+    const projectId = created.body.id as string;
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: `${name} project`,
-      status: "in_progress",
-    });
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId,
@@ -219,6 +246,44 @@ describeEmbeddedPostgres("pipeline routes", () => {
     source: "local_implicit",
     isInstanceAdmin: true,
   };
+
+  it("allows company owners to create pipelines by role default and denies after current grant revocation", async () => {
+    const userId = randomUUID();
+    const sessionId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Pipeline owner", email: `${userId}@pipeline.test`,
+      emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    const companyCreator: Express.Request["actor"] = { type: "board", source: "session", userId, sessionId,
+      isInstanceAdmin: true };
+    const companyApp = express();
+    companyApp.use(express.json());
+    companyApp.use((req, _res, next) => { req.actor = companyCreator; next(); });
+    companyApp.use("/api", companyRoutes(db));
+    companyApp.use(errorHandler);
+    const created = await request(companyApp).post("/api").send({ name: "Pipeline owner role default" }).expect(201);
+    const company = created.body;
+    const actor: Express.Request["actor"] = { ...companyCreator, isInstanceAdmin: false,
+      companyIds: [company.id], memberships: [{ companyId: company.id, membershipRole: "owner", status: "active" }] };
+    const http = request(app(actor));
+    await http.post(`/api/companies/${company.id}/pipelines`).send({
+      key: "owner-default",
+      name: "Owner default pipeline",
+    }).expect(201);
+
+    await db.delete(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, company.id),
+      eq(principalPermissionGrants.principalType, "user"),
+      eq(principalPermissionGrants.principalId, userId),
+      eq(principalPermissionGrants.permissionKey, "pipelines:write"),
+    ));
+    const revoked = await http.post(`/api/companies/${company.id}/pipelines`).send({
+      key: "owner-after-revocation",
+      name: "Owner after revocation",
+    }).expect(403);
+    expect(revoked.body).toMatchObject({ code: "pipeline_write_forbidden" });
+  });
 
   it("exposes the pipeline and case route surface", async () => {
     const company = await seedCompany();
@@ -541,6 +606,9 @@ describeEmbeddedPostgres("pipeline routes", () => {
       scope: null,
     });
     const runId = randomUUID();
+    const runOwner = await seedHumanMember(company.id, "Pipeline run owner");
+    await db.insert(heartbeatRuns).values({ id: runId, companyId: company.id, agentId: agent!.id,
+      responsibleUserId: runOwner.userId, scopeKind: "company", status: "succeeded", contextSnapshot: {} });
     const agentActor: Express.Request["actor"] = {
       type: "agent",
       agentId: agent!.id,
@@ -676,10 +744,12 @@ describeEmbeddedPostgres("pipeline routes", () => {
 
   it("carries route-saved stage automation workspace context into detail responses and execution issues", async () => {
     const company = await seedCompany();
-    const http = request(app(boardActor));
+    const responsible = await seedHumanMember(company.id, "Automation owner");
+    await db.update(companies).set({ defaultResponsibleUserId: responsible.userId }).where(eq(companies.id, company.id));
+    const http = request(app(responsible.actor));
     const agent = await seedAutomationAgent(company.id);
     const { projectId, projectWorkspaceId, executionWorkspaceId } =
-      await seedProjectWorkspaceFixture(company.id, "Route automation");
+      await seedProjectWorkspaceFixture(company.id, responsible.actor, "Route automation");
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
     const pipeline = await http
@@ -753,10 +823,12 @@ describeEmbeddedPostgres("pipeline routes", () => {
 
   it("fails automation execution when the selected project workspace belongs to a different project", async () => {
     const company = await seedCompany();
-    const http = request(app(boardActor));
+    const responsible = await seedHumanMember(company.id, "Automation owner");
+    await db.update(companies).set({ defaultResponsibleUserId: responsible.userId }).where(eq(companies.id, company.id));
+    const http = request(app(responsible.actor));
     const agent = await seedAutomationAgent(company.id);
-    const source = await seedProjectWorkspaceFixture(company.id, "Source project");
-    const mismatched = await seedProjectWorkspaceFixture(company.id, "Mismatched project");
+    const source = await seedProjectWorkspaceFixture(company.id, responsible.actor, "Source project");
+    const mismatched = await seedProjectWorkspaceFixture(company.id, responsible.actor, "Mismatched project");
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
     const pipeline = await http
@@ -803,7 +875,9 @@ describeEmbeddedPostgres("pipeline routes", () => {
 
   it("keeps legacy stage automation with only assignee and instructions compatible", async () => {
     const company = await seedCompany();
-    const http = request(app(boardActor));
+    const responsible = await seedHumanMember(company.id, "Automation owner");
+    await db.update(companies).set({ defaultResponsibleUserId: responsible.userId }).where(eq(companies.id, company.id));
+    const http = request(app(responsible.actor));
     const agent = await seedAutomationAgent(company.id);
 
     const pipeline = await http
@@ -960,6 +1034,327 @@ describeEmbeddedPostgres("pipeline routes", () => {
       ),
     );
   });
+
+  it("keeps company-shared manual cases visible while withholding private linked outputs and producer runs", async () => {
+    const company = await seedCompany("Pipeline source privacy");
+    const first = await seedHumanMember(company.id, "Manual case author");
+    const second = await seedHumanMember(company.id, "Other company member");
+    const setupHttp = request(app(boardActor));
+    const pipeline = await setupHttp.post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "source-privacy", name: "Source privacy" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "manual-shared", title: "Company shared manual case", summary: "Human-authored shared body",
+      actor: { type: "user", userId: first.userId } });
+    const taskId = randomUUID();
+    const documentId = randomUUID();
+    const revisionId = randomUUID();
+    await db.insert(issues).values({ id: taskId, companyId: company.id, title: "PRIVATE TASK TITLE",
+      description: "PRIVATE TASK BODY", status: "done", visibility: "private", createdByUserId: first.userId,
+      responsibleUserId: first.userId });
+    await db.insert(documents).values({ id: documentId, companyId: company.id, title: "PRIVATE DOCUMENT TITLE",
+      latestBody: "PRIVATE DOCUMENT EXCERPT", latestRevisionId: revisionId, latestRevisionNumber: 1 });
+    await db.insert(documentRevisions).values({ id: revisionId, companyId: company.id, documentId, revisionNumber: 1,
+      title: "PRIVATE DOCUMENT TITLE", format: "markdown", body: "PRIVATE DOCUMENT EXCERPT", createdByUserId: first.userId });
+    await db.insert(issueDocuments).values({ companyId: company.id, issueId: taskId, documentId, key: "report" });
+    await db.insert(pipelineCaseIssueLinks).values({ companyId: company.id, caseId: manualCase.case.id, issueId: taskId, role: "work" });
+    const firstHttp = request(app(first.actor));
+    const secondHttp = request(app(second.actor));
+    const secondCase = await secondHttp.get(`/api/cases/${manualCase.case.id}`).expect(200);
+    expect(secondCase.body.case.title).toBe("Company shared manual case");
+    expect(JSON.stringify(secondCase.body)).not.toContain(taskId);
+    expect(JSON.stringify(secondCase.body)).not.toContain("PRIVATE TASK TITLE");
+    const sourceFreeHistory = await secondHttp.get(`/api/cases/${manualCase.case.id}/events`).expect(200);
+    expect(sourceFreeHistory.headers["cache-control"]).toBe("private, no-store");
+    expect(sourceFreeHistory.body.items.map((event: { type: string }) => event.type)).toContain("ingested");
+    const secondOutputs = await secondHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200);
+    expect(secondOutputs.body).toMatchObject({ items: [], sources: [], counts: { documents: 0, workProducts: 0, attachments: 0 } });
+    expect(JSON.stringify(secondOutputs.body)).not.toContain("PRIVATE DOCUMENT");
+    const secondContext = await secondHttp.get(`/api/cases/${manualCase.case.id}/context-pack`).expect(200);
+    expect(secondContext.body.case.title).toBe("Company shared manual case");
+    expect(secondContext.body.outputSummaries).toMatchObject({ itemCount: 0, totalItemCount: 0, items: [] });
+    expect(JSON.stringify(secondContext.body)).not.toContain(taskId);
+    expect(JSON.stringify(secondContext.body)).not.toContain("PRIVATE DOCUMENT");
+    const caseSearch = await secondHttp.get(`/api/pipelines/${pipeline.body.id}/cases?q=Company%20shared`).expect(200);
+    expect(caseSearch.body.map((row: { case: { id: string } }) => row.case.id)).toContain(manualCase.case.id);
+    const firstOutputs = await firstHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200);
+    expect(firstOutputs.body.items.map((item: { documentId: string }) => item.documentId)).toContain(documentId);
+    await db.delete(issueDocuments).where(eq(issueDocuments.documentId, documentId));
+    expect((await firstHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200)).body.items).toEqual([]);
+    const afterDocumentUnlink = await secondHttp.get(`/api/cases/${manualCase.case.id}/context-pack`).expect(200);
+    expect(JSON.stringify(afterDocumentUnlink)).not.toContain("PRIVATE DOCUMENT EXCERPT");
+
+    const eventProducer = await seedAutomationAgent(company.id);
+    const inaccessibleHistoryRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: inaccessibleHistoryRunId, companyId: company.id,
+      agentId: eventProducer.id, responsibleUserId: first.userId, nativeIssueId: taskId,
+      scopeKind: "issue", status: "succeeded", contextSnapshot: {} });
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: first.userId,
+      payload: { decision: "request_changes", reason: "Keep this learning visible." } });
+    // This unrelated non-learning event inherits a private Task/run source.
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "automation_executed", actorType: "agent", actorAgentId: eventProducer.id, runId: inaccessibleHistoryRunId,
+      payload: { automationId: randomUUID() } });
+    const privateLearningCase = await pipelineService(db).ingestCase({ companyId: company.id,
+      pipelineId: pipeline.body.id, caseKey: "private-learning-source", title: "Shared human case",
+      actor: { type: "user", userId: first.userId } });
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: privateLearningCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: first.userId,
+      payload: { decision: "request_changes", reason: "This learning has a private source.", issueId: taskId } });
+    const sharedLearning = await secondHttp.get(`/api/companies/${company.id}/case-events?types=review_decided`).expect(200);
+    const visibleLearning = sharedLearning.body.items.find((event: { caseId: string }) => event.caseId === manualCase.case.id);
+    expect(visibleLearning).toMatchObject({ type: "review_decided", payload: {
+      decision: "request_changes", reason: "Keep this learning visible.",
+    } });
+    expect(visibleLearning).toBeTruthy();
+    const authorizedEventId = visibleLearning.id;
+    // Model a private event appended after the route's source snapshot. The
+    // canonical projector must honor the exact checked IDs and never widen
+    // back to all events for this otherwise readable case.
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: first.userId,
+      payload: { decision: "request_changes", reason: "Late private event.", issueId: taskId } });
+    const snapshotProjection = await listCompanyCaseEvents(db, {
+      companyId: company.id, types: ["review_decided"], caseIds: [manualCase.case.id], eventIds: [authorizedEventId],
+    });
+    expect(snapshotProjection.items.map((row) => row.id)).toEqual([authorizedEventId]);
+    expect(JSON.stringify(snapshotProjection)).not.toContain("Late private event.");
+    expect(sharedLearning.body.items.some((event: { caseId: string }) => event.caseId === privateLearningCase.case.id)).toBe(false);
+    await secondHttp.get(`/api/cases/${manualCase.case.id}/events`).expect(404);
+
+    const opened = await firstHttp.post(`/api/cases/${manualCase.case.id}/open-conversation`);
+    expect([200, 201]).toContain(opened.status);
+    expect(opened.body.issue.description).toContain("PRIVATE TASK BODY");
+    expect((await secondHttp.post(`/api/cases/${manualCase.case.id}/open-conversation`)).status).toBe(404);
+
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, taskId));
+    expect((await firstHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200)).body.items).toEqual([]);
+    const postErasureConversation = await firstHttp.post(`/api/cases/${manualCase.case.id}/open-conversation`).expect(201);
+    expect(postErasureConversation.body.issue.description).not.toContain("PRIVATE TASK BODY");
+    expect(postErasureConversation.body.issue.description).not.toContain("PRIVATE DOCUMENT EXCERPT");
+
+    const agent = await seedAutomationAgent(company.id);
+    const producerRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: producerRunId, companyId: company.id, agentId: agent.id,
+      responsibleUserId: first.userId, nativeIssueId: taskId, scopeKind: "issue", status: "succeeded",
+      contextSnapshot: {} });
+    const agentCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "agent-private", title: "PRIVATE AGENT CASE BODY", actor: { type: "agent", agentId: agent.id, runId: producerRunId } });
+    await db.update(issues).set({ hiddenAt: null }).where(eq(issues.id, taskId));
+    expect((await firstHttp.get(`/api/cases/${agentCase.case.id}`).expect(200)).body.case.title).toBe("PRIVATE AGENT CASE BODY");
+    const agentConversation = await firstHttp.post(`/api/cases/${agentCase.case.id}/open-conversation`).expect(201);
+    expect(agentConversation.body.issue.description).toContain("PRIVATE AGENT CASE BODY");
+    expect((await secondHttp.post(`/api/cases/${agentCase.case.id}/open-conversation`)).status).toBe(404);
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, taskId));
+    expect((await firstHttp.post(`/api/cases/${agentCase.case.id}/open-conversation`)).status).toBe(404);
+    await db.update(issues).set({ hiddenAt: null }).where(eq(issues.id, taskId));
+    const denied = await secondHttp.get(`/api/cases/${agentCase.case.id}`);
+    expect(denied.status).toBe(404);
+    expect(JSON.stringify(denied.body)).not.toContain("PRIVATE AGENT CASE BODY");
+    const agentSearch = await secondHttp.get(`/api/pipelines/${pipeline.body.id}/cases?q=PRIVATE%20AGENT`).expect(200);
+    expect(agentSearch.body.map((row: { case: { id: string } }) => row.case.id)).not.toContain(agentCase.case.id);
+  });
+
+  it("excludes a private event appended after the raw case-event route captures checked event IDs", async () => {
+    const company = await seedCompany("Pipeline checked event snapshot");
+    const owner = await seedHumanMember(company.id, "Private event source owner");
+    const viewer = await seedHumanMember(company.id, "Company case event reader");
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "checked-event-snapshot", name: "Checked event snapshot" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "checked-event-snapshot", title: "Shared case before private event", actor: { type: "user", userId: owner.userId } });
+    const privateTaskId = randomUUID();
+    await db.insert(issues).values({ id: privateTaskId, companyId: company.id, title: "Late private source task",
+      description: "Late private source body", status: "done", visibility: "private", createdByUserId: owner.userId,
+      responsibleUserId: owner.userId });
+
+    const service = pipelineService(db, { heartbeat: noopHeartbeat });
+    const listCaseEventsPage = service.listCaseEventsPage.bind(service);
+    let appendedEventId: string | null = null;
+    service.listCaseEventsPage = async (companyId, caseId, options) => {
+      if (caseId === manualCase.case.id && appendedEventId === null) {
+        const [event] = await db.insert(pipelineCaseEvents).values({ companyId, caseId,
+          type: "review_decided", actorType: "user", actorUserId: owner.userId,
+          payload: { decision: "request_changes", reason: "Late private event marker.", issueId: privateTaskId } }).returning({ id: pipelineCaseEvents.id });
+        appendedEventId = event!.id;
+      }
+      return listCaseEventsPage(companyId, caseId, options);
+    };
+
+    const response = await request(app(viewer.actor, service)).get(`/api/cases/${manualCase.case.id}/events`).expect(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.body.items.map((event: { type: string }) => event.type)).toContain("ingested");
+    expect(response.body.items.map((event: { id: string }) => event.id)).not.toContain(appendedEventId);
+    expect(JSON.stringify(response.body)).not.toContain("Late private event marker.");
+    expect(JSON.stringify(response.body)).not.toContain(privateTaskId);
+
+    const nextRead = await request(app(viewer.actor)).get(`/api/cases/${manualCase.case.id}/events`).expect(404);
+    expect(nextRead.headers["cache-control"]).toBe("private, no-store");
+    expect(JSON.stringify(nextRead.body)).not.toContain("Late private event marker.");
+    expect(JSON.stringify(nextRead.body)).not.toContain(privateTaskId);
+  });
+
+  it("rechecks source privacy after the case-event read waits behind a source writer", async () => {
+    const company = await seedCompany("Pipeline event source writer");
+    const owner = await seedHumanMember(company.id, "Pipeline event source reader");
+    const http = request(app(owner.actor));
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "event-source-writer", name: "Event source writer" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "event-source-writer", title: "Shared case", actor: { type: "user", userId: owner.userId } });
+    const sourceTaskId = randomUUID();
+    await db.insert(issues).values({ id: sourceTaskId, companyId: company.id, title: "Private source task",
+      description: "Private source body", status: "done", visibility: "private", createdByUserId: owner.userId,
+      responsibleUserId: owner.userId });
+    const [event] = await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: owner.userId,
+      payload: { decision: "request_changes", reason: "Source-backed review", issueId: sourceTaskId } }).returning();
+    const before = await http.get(`/api/companies/${company.id}/case-events?types=review_decided`).expect(200);
+    expect(before.body.items.map((row: { id: string }) => row.id)).toContain(event!.id);
+
+    let signalWriterReady!: () => void;
+    let releaseWriter!: () => void;
+    const writerReady = new Promise<void>(resolve => { signalWriterReady = resolve; });
+    const writerGate = new Promise<void>(resolve => { releaseWriter = resolve; });
+    const sourceWriter = db.transaction(async tx => {
+      await lockAnalyticalCompany(tx, company.id);
+      await lockMemoryPrivacy(tx, company.id);
+      await tx.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, sourceTaskId));
+      signalWriterReady();
+      await writerGate;
+    });
+    await writerReady;
+    const pendingRead = http.get(`/api/companies/${company.id}/case-events?types=review_decided`).then(response => response);
+    const pendingCaseHistory = http.get(`/api/cases/${manualCase.case.id}/events`).then(response => response);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      releaseWriter();
+      await sourceWriter;
+      const after = await pendingRead;
+      expect(after.status).toBe(200);
+      expect(after.body.items.some((row: { id: string }) => row.id === event!.id)).toBe(false);
+      expect(JSON.stringify(after.body)).not.toContain("Source-backed review");
+      expect(after.headers["cache-control"]).toContain("private");
+      expect(after.headers["cache-control"]).toContain("no-store");
+      const deniedHistory = await pendingCaseHistory;
+      expect(deniedHistory.status).toBe(404);
+      expect(JSON.stringify(deniedHistory.body)).not.toContain("Private source body");
+      expect(deniedHistory.headers["cache-control"]).toBe("private, no-store");
+    } finally {
+      releaseWriter();
+      await sourceWriter;
+    }
+  }, 90_000);
+
+  it("denies company case-events when membership is revoked while waiting for privacy locks", async () => {
+    const company = await seedCompany("Pipeline event membership revoke");
+    const owner = await seedHumanMember(company.id, "Pipeline event revoked reader");
+    const http = request(app(owner.actor));
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "event-membership-revoke", name: "Event membership revoke" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "event-membership-revoke", title: "Membership protected case", actor: { type: "user", userId: owner.userId } });
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: owner.userId,
+      payload: { decision: "request_changes", reason: "Must remain private after revoke" } });
+
+    let signalLockAcquired!: () => void;
+    let releaseRowLock!: () => void;
+    const lockAcquired = new Promise<void>(resolve => { signalLockAcquired = resolve; });
+    const releaseGate = new Promise<void>(resolve => { releaseRowLock = resolve; });
+    const holdPrivacy = db.transaction(async tx => {
+      await lockAnalyticalCompany(tx, company.id);
+      await lockMemoryPrivacy(tx, company.id);
+      signalLockAcquired();
+      await releaseGate;
+    });
+    await lockAcquired;
+    const pendingRead = http.get(`/api/companies/${company.id}/case-events?types=review_decided`).then(response => response);
+    const pendingCaseHistory = http.get(`/api/cases/${manualCase.case.id}/events`).then(response => response);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await db.update(companyMemberships).set({ status: "revoked" }).where(and(
+        eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, owner.userId)));
+      releaseRowLock();
+      await holdPrivacy;
+      const denied = await pendingRead;
+      expect(denied.status).toBe(404);
+      expect(JSON.stringify(denied.body)).not.toContain("Must remain private after revoke");
+      const deniedHistory = await pendingCaseHistory;
+      expect(deniedHistory.status).toBe(404);
+      expect(JSON.stringify(deniedHistory.body)).not.toContain("Must remain private after revoke");
+      expect(deniedHistory.headers["cache-control"]).toBe("private, no-store");
+    } finally {
+      releaseRowLock();
+      await holdPrivacy;
+    }
+  }, 90_000);
+
+  it("retries a live case-body proof after session-row contention and rechecks the revoked session", async () => {
+    const company = await seedCompany("Pipeline session contention");
+    const owner = await seedHumanMember(company.id, "Contended pipeline reader");
+    const http = request(app(owner.actor));
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "session-contention", name: "Session contention" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "session-contention", title: "Current session owns this body", actor: { type: "user", userId: owner.userId } });
+    await http.get(`/api/cases/${manualCase.case.id}`).expect(200);
+
+    let signalLockAcquired!: () => void;
+    let releaseRowLock!: () => void;
+    const lockAcquired = new Promise<void>(resolve => { signalLockAcquired = resolve; });
+    const releaseGate = new Promise<void>(resolve => { releaseRowLock = resolve; });
+    const holdSession = db.transaction(async tx => {
+      await tx.select({ id: authSessions.id }).from(authSessions)
+        .where(eq(authSessions.id, owner.sessionId)).for("update");
+      signalLockAcquired();
+      await releaseGate;
+    });
+    await lockAcquired;
+
+    const pendingRead = http.get(`/api/cases/${manualCase.case.id}`);
+    await new Promise(resolve => setTimeout(resolve, 900));
+    releaseRowLock();
+    await holdSession;
+    await db.delete(authSessions).where(eq(authSessions.id, owner.sessionId));
+
+    const denied = await pendingRead.expect(404);
+    expect(JSON.stringify(denied.body)).not.toContain("Current session owns this body");
+  }, 90_000);
+
+  it("returns a typed retryable busy response when current case authority stays locked", async () => {
+    const company = await seedCompany("Pipeline authority remains busy");
+    const owner = await seedHumanMember(company.id, "Busy pipeline reader");
+    const http = request(app(owner.actor));
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "authority-busy", name: "Authority remains busy" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "authority-busy", title: "Private while authority changes", actor: { type: "user", userId: owner.userId } });
+
+    let signalLockAcquired!: () => void;
+    let releaseRowLock!: () => void;
+    const lockAcquired = new Promise<void>(resolve => { signalLockAcquired = resolve; });
+    const releaseGate = new Promise<void>(resolve => { releaseRowLock = resolve; });
+    const holdSession = db.transaction(async tx => {
+      await tx.select({ id: authSessions.id }).from(authSessions)
+        .where(eq(authSessions.id, owner.sessionId)).for("update");
+      signalLockAcquired();
+      await releaseGate;
+    });
+    await lockAcquired;
+
+    try {
+      const pendingRead = http.get(`/api/cases/${manualCase.case.id}`);
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const busy = await pendingRead.expect(409);
+      expect(busy.body).toMatchObject({ code: "authentication_state_busy", details: { retryable: true } });
+      expect(JSON.stringify(busy.body)).not.toContain("Private while authority changes");
+    } finally {
+      releaseRowLock();
+      await holdSession;
+    }
+  }, 90_000);
 
   it("returns 404 for cross-company pipeline route classes", async () => {
     const company = await seedCompany();

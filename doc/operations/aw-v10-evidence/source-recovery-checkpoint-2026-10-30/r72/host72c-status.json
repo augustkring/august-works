@@ -1,0 +1,7 @@
+{
+  "candidate": "72c",
+  "pinsSha256": "81d0fee0bc0578613db078cbff30886308c9099bdfb6feb129183046efa844b9",
+  "runnerSha256": "4a4f84aa46ceb4a1f154257bbd29beb2ab8d593ef3f0c289649e2a9f7b15585a",
+  "status": "Worker model/tool path succeeded, then provider-session shutdown receipt validation failed",
+  "restore": "pinned sources restored to pre-snapshot source bytes and modes; compiled outputs and tsbuildinfo restored byte-for-byte"
+}

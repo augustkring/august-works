@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 
 import {
   createPaperclipCloudConnector,
+  appWithSlackManagedOAuthAvailability,
   invalidatePaperclipCloudConnectorCapabilities,
   GMAIL_CONNECTOR_SCOPES,
   GOOGLE_WORKSPACE_CONNECTOR_PROFILES,
@@ -20,6 +21,7 @@ import {
   PaperclipCloudConnectorError,
   type PaperclipCloudConnectorConfig,
 } from "./paperclip-cloud-connector.js";
+import { getConnectableAppDefinition } from "@paperclipai/shared";
 
 const instanceId = "inst_test";
 const companyId = "company_test";
@@ -54,6 +56,25 @@ function config() {
 }
 
 describe("Paperclip Cloud connector", () => {
+  it("advertises the managed Slack path only when both operator OAuth credentials exist", () => {
+    const app = getConnectableAppDefinition("slack")!;
+    const unconfigured = appWithSlackManagedOAuthAvailability(app, {});
+    expect(unconfigured.ownershipAvailability?.platform_shared).toBe(false);
+    expect(unconfigured.methods.map((method) => method.key)).not.toContain("managed-oauth");
+    expect(unconfigured.methods.map((method) => method.key)).toContain("mcp-oauth");
+
+    const configured = appWithSlackManagedOAuthAvailability(app, {
+      PAPERCLIP_TOOL_OAUTH_SLACK_CLIENT_ID: "operator-client-id",
+      PAPERCLIP_TOOL_OAUTH_SLACK_CLIENT_SECRET: "operator-client-secret",
+    });
+    expect(configured.ownershipAvailability?.platform_shared).toBe(true);
+    expect(configured.methods.map((method) => method.key)).toEqual([
+      "managed-oauth",
+      "mcp-oauth",
+      "chat-agent",
+    ]);
+  });
+
   async function rejection(response: Response) {
     const connector = createPaperclipCloudConnector({
       config: config().config,

@@ -1,0 +1,36 @@
+{
+  "command": "NODE_OPTIONS=--max-old-space-size=6144 CARGO_NET_OFFLINE=true GOMEMLIMIT=6GiB GOMAXPROCS=2 pnpm --filter @paperclipai/server typecheck",
+  "verdict": "FAIL exit1: normal Runner and SDK prerequisites passed, actual server compiler reported seven errors",
+  "diagnostics": [
+    "Native analytical helper Db type requires pool-only $client, while caller legitimately passes native transaction.",
+    "Six nullable targetCompany narrowing errors inside new portability transaction callbacks."
+  ],
+  "sourcePinsVerifiedUnchanged": {
+    "server/src/services/issues.ts": "9c5fad51c58256f0f650db7f2390a1ba3704d19d0300a40f2870bd85010b846e",
+    "server/src/services/projects.ts": "d6858aa1c0fb219a016bb06d135553b3550bc2a8893be8c61c44c742f475fe0c",
+    "server/src/services/company-portability.ts": "6f159180430d3dc42c4ce4fc4fbb20fb20431d5fee0714adce128bead342ad8d",
+    "server/src/services/documents.ts": "44d1a3ab531db3cd40b3fdb045fc0a8d90b353c3340dea6955ad62237e527055",
+    "server/src/services/work-products.ts": "a36eeb7cb016c3bc4656b9b743e2132fd55a92790c3ec083ebce78c6717064ba",
+    "server/src/services/company-search.ts": "eb90e237e04336cd610d79c1b881a0f1115cfbd8c0d32ce068cc8b312f3173c9",
+    "server/src/services/company-search-extract.ts": "75086d85e0871ec6570c6e2b7e888016f72d3c4c39f712eb862fbff2f3bb155b",
+    "server/src/services/task-search.ts": "1a2624ec337b814229188d87ff3d4cb55ca74dcda3b072147b1c5661fac4ffd5",
+    "server/src/routes/issues.ts": "85290fc1bfcf0734ddf8015edc9b75b8a9d7e1d7f05a0bc1fddac5e80af8c249",
+    "server/src/routes/projects.ts": "72dfdb5d8c346778e88ce58ff7538b9e49fb3ac7f3d1e146b183748dc971ff6d",
+    "server/src/routes/companies.ts": "cde03012827f0d9745f7faf83b773dad143819122c845990c69974c66931b3c4",
+    "packages/shared/src/index.ts": "795fad3cb56c04bca566696102be2c39994ed89b376b662da4f1118356497c90",
+    "packages/shared/src/types/company-portability.ts": "81e2f4cc84167cd3e879dfbdb067cf50d0395a3b96fb3e7fb57ce9e5ad86cf39",
+    "packages/shared/src/validators/company-portability.ts": "5de9e8929cae3d32c5b183028436ed9bd7ec85ac49603e03fa9790db14801bb7",
+    "packages/shared/src/validators/index.ts": "5e7e9bcc2746a5ddbb906edbf614a6e61cadba83323970d2ceea76cc552a7c4d",
+    "server/src/__tests__/issues-service.test.ts": "93b52f200e5ee5ca2b9f80f250026d6ab93da1dcbee7f8299cf682ad4109c77c",
+    "server/src/__tests__/issue-list-assignee-filter-routes.test.ts": "cfaac94be187cf77fde8f7f4c838e3aae83c36c367f38c4288329b6e93770c2a",
+    "server/src/__tests__/company-search-service.test.ts": "aae6a07f5faf638a636d9b8470f25a79758ce3b1d50fd2e792e871c1165aee2a",
+    "server/src/__tests__/company-search-extract-service.test.ts": "b3df9c28a505b193096921f490077ad656fa528cfc0f259b24cac8c31b32b161",
+    "server/src/__tests__/company-portability-import-batching.test.ts": "1bc10eff3ad65a24433866fe475a2901372f90afd4961e79ea2ed5fff4c839b6"
+  },
+  "log": "up03-domain-normal-types-current.log.txt",
+  "logSha256": "9ced30b8f8f0e8e0d3e93d42f66912ae20d0f66b94e7016d5932461e2ca269ef",
+  "limitations": [
+    "Diagnostic only; no current typecheck success claimed.",
+    "Planned source/graph/default-search corrections and native portability runtime tests remain pending."
+  ]
+}

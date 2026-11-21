@@ -1,0 +1,57 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > executes the actual immutable draft as test without publishing, cloning or admitting live work
+ × src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > serializes identical original requests and recovers one receipt after draft replacement and publication 413ms
+   → {"bodies":[{"companyId":"21a00cd7-c70e-4e7c-844f-dbd822a4c11b","workflowId":"e1621776-fbfb-429b-8b18-0892b25cd06f","requestId":"2bf7e024-e2f0-4899-a4b4-065719834c5d","runId":"2a909712-61eb-4ec9-b4e4-7d9f99340ca8","revisionId":"47eba55a-a496-4640-9d1a-229d7cedae38","purpose":"test","disposition":"admitted"},{"error":"Internal server error"}],"routeErrors":[{"name":"Error","message":"Failed query: select set_config('paperclip.native_workflow_run_ids', '', true),\n          set_config('paperclip.native_workflow_actor_hash', '', true),\n          set_config('paperclip.native_workflow_scope_token', '', true)\nparams: ","top":["Error: Failed query: select set_config('paperclip.native_workflow_run_ids', '', true),","          set_config('paperclip.native_workflow_actor_hash', '', true),","          set_config('paperclip.native_workflow_scope_token', '', true)","params: ","    at PostgresJsPreparedQuery.queryWithCache (file:///workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at withReadScope (/workspace/v10-dep-qualification/server/src/services/authorization.ts:2345:15)"]}]}: expected [ 200, 500 ] to deeply equal [ 200, 200 ]
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > retains queued test recovery on the original revision after draft replacement
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects stale before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects revision before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects workflow before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects false_ack before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects production_input before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects wrong_expected_result before native admission
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > does not allow retry or optimizer correction/trace to convert a test to live evidence
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rechecks the initiating human's current role during queued recovery
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > revokes original test receipt and queued execution after actual workflows:read grant loss
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > revokes original test receipt and queued execution after actual workflows:edit grant loss
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > revokes original test receipt and queued execution after actual workflows:run grant loss
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > refuses a native draft requiring long_deadline before any test run
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > refuses a native draft requiring input_contract before any test run
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > refuses a native draft requiring variables before any test run
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > keeps another human's original receipt private and rejects reused UUID with changed command
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects altered retained receipt bindings instead of displaying a different run
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > keeps legacy manual admission from choosing an unpublished test source
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > enforces rollout at the native enqueue owner as well as the customer route
+ ↓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > blocks fresh admission on Pause and rollout rollback while preserving the native run
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > serializes identical original requests and recovers one receipt after draft replacement and publication
+AssertionError: {"bodies":[{"companyId":"21a00cd7-c70e-4e7c-844f-dbd822a4c11b","workflowId":"e1621776-fbfb-429b-8b18-0892b25cd06f","requestId":"2bf7e024-e2f0-4899-a4b4-065719834c5d","runId":"2a909712-61eb-4ec9-b4e4-7d9f99340ca8","revisionId":"47eba55a-a496-4640-9d1a-229d7cedae38","purpose":"test","disposition":"admitted"},{"error":"Internal server error"}],"routeErrors":[{"name":"Error","message":"Failed query: select set_config('paperclip.native_workflow_run_ids', '', true),\n          set_config('paperclip.native_workflow_actor_hash', '', true),\n          set_config('paperclip.native_workflow_scope_token', '', true)\nparams: ","top":["Error: Failed query: select set_config('paperclip.native_workflow_run_ids', '', true),","          set_config('paperclip.native_workflow_actor_hash', '', true),","          set_config('paperclip.native_workflow_scope_token', '', true)","params: ","    at PostgresJsPreparedQuery.queryWithCache (file:///workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at withReadScope (/workspace/v10-dep-qualification/server/src/services/authorization.ts:2345:15)"]}]}: expected [ 200, 500 ] to deeply equal [ 200, 200 ]
+
+- Expected
++ Received
+
+  [
+    200,
+-   200,
++   500,
+  ]
+
+ ❯ src/__tests__/v9-workflow-test-routes.test.ts:277:7
+    275|       [first.status, second.status],
+    276|       JSON.stringify({ bodies: [first.body, second.body], routeErrors …
+    277|     ).toEqual([200, 200]);
+       |       ^
+    278|     expect(first.body).toEqual(second.body);
+    279|     const changed = await workflowService(db).updateDraft(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 21 skipped (22)
+   Start at  22:32:44
+   Duration  18.60s (transform 9.88s, setup 79ms, import 13.99s, tests 4.41s, environment 0ms)
+

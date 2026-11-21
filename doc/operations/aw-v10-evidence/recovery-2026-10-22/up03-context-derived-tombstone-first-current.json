@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-22T23:45:27.346894+00:00",
+  "sessionId": 41471,
+  "exitCode": 1,
+  "passedTests": 6,
+  "failedTests": 2,
+  "durationSeconds": 95.27,
+  "sourcePins": {
+    "at": "2026-10-22T23:43:30.487890+00:00",
+    "files": {
+      "server/src/__tests__/context-derived-source-tombstones.integration.test.ts": "56d675cec3e1a1d0164733a9fb675226b6fc92d95903aa37a27d9748a8222e03",
+      "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502",
+      "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+      "server/src/services/memory/derived-memory.ts": "596ade491fbd79ac542dc292d3558717b08a17553f8e123aaf031b4f63a6fa1f",
+      "server/src/services/memory/memory-privacy.ts": "3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470",
+      "server/src/services/memory/cognitive-memory.ts": "d8bd66dc75d9bc2932d29839ce5323a0dfb4257d9c6afe580752d765d8f8f451",
+      "server/src/services/memory/memory-jobs.ts": "31529c8a3477585b4ef772924e4eb7ee7b7b10a2856bf17ecf0fdece5083a016",
+      "packages/db/src/schema/context_memory_roots.ts": "1c0163c1c7acdccb7527d7196229b2353febb1884af740eb1ad8004825455c3a",
+      "packages/db/src/schema/derived_memory.ts": "24931170801f2e353ef301cd8d53f66f38cb3a3563d35128b35eb8d8f229d2dd",
+      "packages/db/src/migrations/0508_deep_black_cat.sql": "9687be3d6e5624d267740293992965cc8ef5dea08b052b4319fefe67d66bcd70"
+    }
+  },
+  "sourcePinsUnchanged": 10,
+  "log": "up03-context-derived-tombstone-first-current.log.txt",
+  "failure": "Both insert-first cases pass source UUID retention then fail owning-company cleanup: this fixture also creates a Task, whose pre-existing company FK correctly refuses company deletion. No source privacy or insertion-order assertion failed. Fixture must remove its unrelated Task before checking owning-company cascades.",
+  "scope": "Current eight-case suite is failed, not a green capture."
+}

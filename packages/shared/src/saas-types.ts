@@ -117,6 +117,7 @@ export interface SaasDeletion {
   errorCode: string | null;
   createdAt: string;
   completedAt: string | null;
+  notBefore: string;
   evidence: Record<string, unknown>;
 }
 

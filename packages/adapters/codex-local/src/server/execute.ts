@@ -552,6 +552,7 @@ export async function ensureCodexSkillsInjected(
         `[paperclip] ${result === "repaired" ? "Repaired" : "Injected"} Codex skill "${entry.runtimeName}" into ${skillsHome}\n`,
       );
     } catch (err) {
+      if (entry.key === "blentera-platform") throw err;
       await onLog(
         "stderr",
         `[paperclip] Failed to inject Codex skill "${entry.key}" into ${skillsHome}: ${err instanceof Error ? err.message : String(err)}\n`,

@@ -17,12 +17,34 @@ vi.mock("@paperclipai/adapter-utils/execution-target", () => ({
 
 import { testEnvironment } from "./test.js";
 
+let unexpectedCommandEntries = 0;
+function expectPaidHelloUnavailable(result: Awaited<ReturnType<typeof testEnvironment>>) {
+  expect(result.status).toBe("fail");
+  expect(result.checks.filter(check => check.level === "error").map(check => check.code))
+    .toEqual(["paid_transport_unqualified"]);
+  expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified", level: "error" }));
+  expect(result.checks.some(check => check.code.startsWith("kimi_hello_probe_"))).toBe(false);
+  expect(result.checks.map(check => check.code)).toEqual(expect.arrayContaining([
+    "kimi_cwd_valid", "kimi_command_resolvable", "kimi_version_detected",
+  ]));
+  expect(unexpectedCommandEntries).toBe(0);
+  expect(runProcessMock).toHaveBeenCalledTimes(1);
+  expect(runProcessMock).toHaveBeenCalledWith(expect.any(String), null, "kimi", ["--version"], expect.any(Object));
+}
+
 describe("kimi_local testEnvironment", () => {
   beforeEach(() => {
     ensureDirectoryMock.mockClear();
     ensureCommandMock.mockClear();
     maybeInstallMock.mockClear();
-    runProcessMock.mockReset();
+    unexpectedCommandEntries = 0;
+    runProcessMock.mockReset().mockImplementation(async (_runId, _target, _command, args) => {
+      if (JSON.stringify(args) !== JSON.stringify(["--version"])) {
+        unexpectedCommandEntries++;
+        throw new Error("unexpected paid or non-version command entry");
+      }
+      return { exitCode: 0, signal: null, timedOut: false, stdout: "kimi 0.27.0\n", stderr: "" };
+    });
     // Keep auth detection deterministic on hosts that really have kimi set up.
     vi.stubEnv("KIMI_MODEL_NAME", "");
     vi.stubEnv("KIMI_MODEL_API_KEY", "");
@@ -33,26 +55,7 @@ describe("kimi_local testEnvironment", () => {
     vi.unstubAllEnvs();
   });
 
-  it("reports a healthy host with a working version and hello probe", async () => {
-    runProcessMock
-      .mockResolvedValueOnce({
-        exitCode: 0,
-        signal: null,
-        timedOut: false,
-        stdout: "kimi 0.27.0\n",
-        stderr: "",
-      })
-      .mockResolvedValueOnce({
-        exitCode: 0,
-        signal: null,
-        timedOut: false,
-        stdout: [
-          JSON.stringify({ role: "assistant", content: "hello" }),
-          JSON.stringify({ role: "meta", type: "session.resume_hint", session_id: "session_1" }),
-        ].join("\n"),
-        stderr: "",
-      });
-
+  it("keeps command, version and auth metadata while refusing an unqualified paid hello", async () => {
     const result = await testEnvironment({
       companyId: "company-1",
       adapterType: "kimi_local",
@@ -67,13 +70,13 @@ describe("kimi_local testEnvironment", () => {
       },
     });
 
-    expect(result.status).toBe("pass");
+    expectPaidHelloUnavailable(result);
     expect(result.checks.map((check: { code: string }) => check.code)).toEqual(
       expect.arrayContaining([
         "kimi_command_resolvable",
         "kimi_version_detected",
         "kimi_auth_detected",
-        "kimi_hello_probe_passed",
+        "paid_transport_unqualified",
       ]),
     );
     expect(runProcessMock).toHaveBeenNthCalledWith(
@@ -84,33 +87,10 @@ describe("kimi_local testEnvironment", () => {
       ["--version"],
       expect.any(Object),
     );
-    expect(runProcessMock).toHaveBeenNthCalledWith(
-      2,
-      expect.any(String),
-      null,
-      "kimi",
-      expect.arrayContaining([
-        "--output-format",
-        "stream-json",
-        "-p",
-        "Respond with hello.",
-      ]),
-      expect.any(Object),
-    );
   });
 
-  it("passes -m to the hello probe when a model is configured", async () => {
-    runProcessMock
-      .mockResolvedValueOnce({ exitCode: 0, signal: null, timedOut: false, stdout: "kimi 0.27.0\n", stderr: "" })
-      .mockResolvedValueOnce({
-        exitCode: 0,
-        signal: null,
-        timedOut: false,
-        stdout: JSON.stringify({ role: "assistant", content: "hello" }),
-        stderr: "",
-      });
-
-    await testEnvironment({
+  it("keeps configured model credentials in the version check without entering a paid hello", async () => {
+    const result = await testEnvironment({
       companyId: "company-1",
       adapterType: "kimi_local",
       config: {
@@ -122,27 +102,14 @@ describe("kimi_local testEnvironment", () => {
       },
     });
 
-    expect(runProcessMock).toHaveBeenNthCalledWith(
-      2,
-      expect.any(String),
-      null,
-      "kimi",
-      expect.arrayContaining(["-m", "kimi-code/k3"]),
-      expect.any(Object),
+    expectPaidHelloUnavailable(result);
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.any(String), null, "kimi", ["--version"],
+      expect.objectContaining({ env: { KIMI_MODEL_NAME: "kimi-code/k3", KIMI_MODEL_API_KEY: "test-key" } }),
     );
   });
 
-  it("downgrades missing auth and auth probe failures to warnings", async () => {
-    runProcessMock
-      .mockResolvedValueOnce({ exitCode: 0, signal: null, timedOut: false, stdout: "kimi 0.27.0\n", stderr: "" })
-      .mockResolvedValueOnce({
-        exitCode: 1,
-        signal: null,
-        timedOut: false,
-        stdout: "",
-        stderr: "Not authenticated. Run `kimi login` to authenticate with a device code.",
-      });
-
+  it("keeps missing-auth metadata as a warning while refusing the unqualified paid hello", async () => {
     const result = await testEnvironment({
       companyId: "company-1",
       adapterType: "kimi_local",
@@ -154,11 +121,12 @@ describe("kimi_local testEnvironment", () => {
       },
     });
 
-    expect(result.status).toBe("warn");
+    expectPaidHelloUnavailable(result);
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "kimi_auth_missing", level: "warn" }));
     expect(result.checks.map((check: { code: string }) => check.code)).toEqual(
       expect.arrayContaining([
         "kimi_auth_missing",
-        "kimi_hello_probe_auth_required",
+        "paid_transport_unqualified",
       ]),
     );
   });

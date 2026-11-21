@@ -51,6 +51,8 @@ type SequenceDefinition = {
   maximum_value: string;
   increment: string;
   cycle_option: "YES" | "NO";
+  cache_size: string;
+  identity_generation: "a" | "d" | "";
   owner_schema: string | null;
   owner_table: string | null;
   owner_column: string | null;
@@ -621,26 +623,29 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
 
     const allSequences = await sql<SequenceDefinition[]>`
       SELECT
-        s.sequence_schema,
-        s.sequence_name,
-        s.data_type,
-        s.start_value,
-        s.minimum_value,
-        s.maximum_value,
-        s.increment,
-        s.cycle_option,
+        n.nspname AS sequence_schema,
+        seq.relname AS sequence_name,
+        format_type(s.seqtypid, NULL) AS data_type,
+        s.seqstart::text AS start_value,
+        s.seqmin::text AS minimum_value,
+        s.seqmax::text AS maximum_value,
+        s.seqincrement::text AS increment,
+        CASE WHEN s.seqcycle THEN 'YES' ELSE 'NO' END AS cycle_option,
+        s.seqcache::text AS cache_size,
+        coalesce(attr.attidentity, '') AS identity_generation,
         tblns.nspname AS owner_schema,
         tbl.relname AS owner_table,
         attr.attname AS owner_column
-      FROM information_schema.sequences s
-      JOIN pg_class seq ON seq.relname = s.sequence_name
-      JOIN pg_namespace n ON n.oid = seq.relnamespace AND n.nspname = s.sequence_schema
-      LEFT JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype = 'a'
+      FROM pg_sequence s
+      JOIN pg_class seq ON seq.oid = s.seqrelid
+      JOIN pg_namespace n ON n.oid = seq.relnamespace
+      LEFT JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype IN ('a', 'i')
+        AND dep.classid = 'pg_class'::regclass AND dep.refclassid = 'pg_class'::regclass
       LEFT JOIN pg_class tbl ON tbl.oid = dep.refobjid
       LEFT JOIN pg_namespace tblns ON tblns.oid = tbl.relnamespace
       LEFT JOIN pg_attribute attr ON attr.attrelid = tbl.oid AND attr.attnum = dep.refobjsubid
-      WHERE ${sql.unsafe(nonSystemSchemaPredicate("s.sequence_schema"))}
-      ORDER BY s.sequence_schema, s.sequence_name
+      WHERE ${sql.unsafe(nonSystemSchemaPredicate("n.nspname"))}
+      ORDER BY n.nspname, seq.relname
     `;
     const sequences = allSequences.filter(
       (seq) => !seq.owner_table || includedTableNames.has(tableKey(seq.owner_schema ?? "public", seq.owner_table)),
@@ -684,11 +689,11 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
 
     if (sequences.length > 0) {
       emit("-- Sequences");
-      for (const seq of sequences) {
+      for (const seq of sequences.filter(seq => !seq.identity_generation)) {
         const qualifiedSequenceName = quoteQualifiedName(seq.sequence_schema, seq.sequence_name);
         emitStatement(`DROP SEQUENCE IF EXISTS ${qualifiedSequenceName} CASCADE;`);
         emitStatement(
-          `CREATE SEQUENCE ${qualifiedSequenceName} AS ${seq.data_type} INCREMENT BY ${seq.increment} MINVALUE ${seq.minimum_value} MAXVALUE ${seq.maximum_value} START WITH ${seq.start_value}${seq.cycle_option === "YES" ? " CYCLE" : " NO CYCLE"};`,
+          `CREATE SEQUENCE ${qualifiedSequenceName} AS ${seq.data_type} INCREMENT BY ${seq.increment} MINVALUE ${seq.minimum_value} MAXVALUE ${seq.maximum_value} START WITH ${seq.start_value} CACHE ${seq.cache_size}${seq.cycle_option === "YES" ? " CYCLE" : " NO CYCLE"};`,
         );
       }
       emit("");
@@ -704,12 +709,14 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
         udt_name: string;
         is_nullable: string;
         column_default: string | null;
+        is_identity: "YES" | "NO";
+        identity_generation: "ALWAYS" | "BY DEFAULT" | null;
         character_maximum_length: number | null;
         numeric_precision: number | null;
         numeric_scale: number | null;
       }[]>`
         SELECT column_name, data_type, udt_schema, udt_name, is_nullable, column_default,
-               character_maximum_length, numeric_precision, numeric_scale
+               is_identity, identity_generation, character_maximum_length, numeric_precision, numeric_scale
         FROM information_schema.columns
         WHERE table_schema = ${schema_name} AND table_name = ${tablename}
         ORDER BY ordinal_position
@@ -742,7 +749,14 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
         }
 
         let def = `  "${col.column_name}" ${typeStr}`;
-        if (col.column_default != null) def += ` DEFAULT ${col.column_default}`;
+        if (col.is_identity === "YES") {
+          const seq = sequences.find(sequence => sequence.owner_schema === schema_name &&
+            sequence.owner_table === tablename && sequence.owner_column === col.column_name && sequence.identity_generation);
+          if (!seq || !["ALWAYS", "BY DEFAULT"].includes(col.identity_generation ?? "")) {
+            throw new Error("Database backup cannot resolve identity sequence metadata");
+          }
+          def += ` GENERATED ${col.identity_generation} AS IDENTITY (SEQUENCE NAME ${quoteQualifiedName(seq.sequence_schema, seq.sequence_name)} INCREMENT BY ${seq.increment} MINVALUE ${seq.minimum_value} MAXVALUE ${seq.maximum_value} START WITH ${seq.start_value} CACHE ${seq.cache_size}${seq.cycle_option === "YES" ? " CYCLE" : " NO CYCLE"})`;
+        } else if (col.column_default != null) def += ` DEFAULT ${col.column_default}`;
         if (col.is_nullable === "NO") def += " NOT NULL";
         colDefs.push(def);
       }
@@ -770,7 +784,7 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
       emit("");
     }
 
-    const ownedSequences = sequences.filter((seq) => seq.owner_table && seq.owner_column);
+    const ownedSequences = sequences.filter((seq) => seq.owner_table && seq.owner_column && !seq.identity_generation);
     if (ownedSequences.length > 0) {
       emit("-- Sequence ownership");
       for (const seq of ownedSequences) {
@@ -946,8 +960,8 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
       if (excludedTableNames.has(currentTableKey) || (count[0]?.n ?? 0) === 0) continue;
 
       // Get column info for this table
-      const cols = await sql<{ column_name: string; data_type: string }[]>`
-        SELECT column_name, data_type
+      const cols = await sql<{ column_name: string; data_type: string; is_identity: "YES" | "NO" }[]>`
+        SELECT column_name, data_type, is_identity
         FROM information_schema.columns
         WHERE table_schema = ${schema_name} AND table_name = ${tablename}
         ORDER BY ordinal_position
@@ -986,7 +1000,7 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
           const values = row.map((rawValue, index) =>
             formatSqlValue(rawValue, cols[index]?.column_name, nullifiedColumns, cols[index]?.data_type),
           );
-          emitStatement(`INSERT INTO ${qualifiedTableName} (${colNames}) VALUES (${values.join(", ")});`);
+          emitStatement(`INSERT INTO ${qualifiedTableName} (${colNames})${cols.some(col => col.is_identity === "YES") ? " OVERRIDING SYSTEM VALUE" : ""} VALUES (${values.join(", ")});`);
         }
         await writer.drain();
       }

@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 25 skipped) 175031ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 15539ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: Managed OpenCode runtime data must be erased before company content purge
+ ❯ conflict src/errors.ts:29:10
+     27|
+     28| export function conflict(message: string, details?: unknown) {
+     29|   return new HttpError(409, message, details);
+       |          ^
+     30| }
+     31|
+ ❯ assertCompanyManagedOpenCodeRuntimeDataErased src/services/native-runtime/runtime-asset-retention.ts:63:11
+ ❯ src/services/saas/company-purge.ts:42:5
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ purgeConversationCompany src/__tests__/v7-model-reservations.integration.test.ts:433:7
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:567:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed | 25 skipped (31)
+   Start at  14:26:05
+   Duration  193.93s (transform 13.25s, setup 88ms, import 18.68s, tests 175.03s, environment 0ms)
+

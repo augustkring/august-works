@@ -626,7 +626,7 @@ function buildDefaultExtractRuntimeAssetCommand(input: {
 // before extraction (destroy-then-replace); when null the tarball is overlaid on
 // top of the existing tree (e.g. a git overlay merge). Every path is
 // shell-quoted; no untrusted value is concatenated into the shell (C1/C3).
-function buildWorkspaceTarExtractCommand(input: {
+export function buildWorkspaceTarExtractCommand(input: {
   workspaceRemoteDir: string;
   remoteTar: string;
   wipeExceptNames: string[] | null;
@@ -654,7 +654,7 @@ function buildWorkspaceTarExtractCommand(input: {
 // Named builder (C3): remove paths deleted in the host git worktree from the
 // sandbox workspace. Every path is shell-quoted; the caller supplies only
 // already-confined relative paths from the git snapshot.
-function buildRemoveDeletedPathsCommand(input: {
+export function buildRemoveDeletedPathsCommand(input: {
   remoteDir: string;
   deletedPaths: string[];
 }): string {
@@ -985,6 +985,28 @@ function createRemoteTarballFromDirectoryCommand(input: {
   ].join(" && ");
 }
 
+// Named builder (C3) for the outbound workspace restore archive, as the restore
+// passes it to `client.run` (one nested `sh -c` word). RuntimeControl matches
+// the provider-conformance restore against this exact string.
+export function buildWorkspaceRestoreTarCommand(input: {
+  workspaceRemoteDir: string;
+  archivePath: string;
+  exclude: string[];
+}): string {
+  return `sh -c ${shellQuote(createRemoteTarballFromDirectoryCommand({
+    remoteDir: input.workspaceRemoteDir,
+    archivePath: input.archivePath,
+    exclude: input.exclude,
+  }))}`;
+}
+
+// The restore exclusions of a server-verified projectless workspace (no Git
+// snapshot, no ignore scan, no caller excludes). The runtime root is never
+// exported. `prepareSandboxManagedRuntime` derives the same list below.
+export function serverVerifiedWorkspaceRestoreExclude(): string[] {
+  return mergeExcludes(SANDBOX_WORKSPACE_HEAVY_DIR_EXCLUDES, [...GIT_ARCHIVE_EXCLUDES], [".paperclip-runtime"]);
+}
+
 async function emitRuntimeStatus(
   sink: RuntimeStatusSink | undefined,
   phase: RuntimeStatusPhase,
@@ -1063,6 +1085,13 @@ export async function prepareSandboxManagedRuntime(input: {
   /** Durable snapshots supplied when reconstructing an interrupted restore. */
   workspaceBaseline?: DirectorySnapshot;
   workspaceGitSnapshot?: GitWorkspaceSnapshot | null;
+  /**
+   * Server-derived proof that this isolated task root has no configured
+   * repository owner. This is only valid after the caller verifies the exact
+   * server-owned, projectless task workspace; ordinary workspaces must leave
+   * discovery enabled so Git ignore rules continue to fail closed.
+   */
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
   workspaceExclude?: string[];
   preserveAbsentOnRestore?: string[];
   assets?: SandboxManagedRuntimeAsset[];
@@ -1135,8 +1164,14 @@ export async function prepareSandboxManagedRuntime(input: {
   // The git enumeration (`git status --ignored`, the HEAD diffs, `ls-files`).
   // It reads git's own bookkeeping to decide what to include/exclude, so it is
   // usually fast, but on a large working tree the `--ignored` walk is not free.
+  const verifiedNoRepository = input.workspaceRepositoryMode === "server_verified_none";
+  if (verifiedNoRepository && input.workspaceGitSnapshot != null) {
+    throw new Error("workspace_repository_mode_conflicts_with_git_snapshot");
+  }
   const gitSnapshot = syncWorkspace
-    ? input.workspaceGitSnapshot !== undefined
+    ? verifiedNoRepository
+      ? null
+      : input.workspaceGitSnapshot !== undefined
       ? input.workspaceGitSnapshot
       : await runStepSpan("snapshot.git", () =>
           readGitWorkspaceSnapshot(input.workspaceLocalDir),
@@ -1145,7 +1180,7 @@ export async function prepareSandboxManagedRuntime(input: {
   // A selected subfolder has no cloneable Git snapshot, but its parent
   // repository's ignore rules still govern which files may leave the host.
   // Use the same bounded, path-relative resolver as referenced project trees.
-  const directoryIgnore = syncWorkspace && !gitSnapshot
+  const directoryIgnore = syncWorkspace && !gitSnapshot && !verifiedNoRepository
     ? await resolveReferencedSourceIgnore(input.workspaceLocalDir)
     : null;
   if (directoryIgnore?.kind === "failed") {
@@ -1843,11 +1878,11 @@ export async function prepareSandboxManagedRuntime(input: {
                 } else {
                   const remoteWorkspaceTar = path.posix.join(runtimeRootDir, "workspace-download.tar");
                   await input.client.run(
-                    `sh -c ${shellQuote(createRemoteTarballFromDirectoryCommand({
-                      remoteDir: workspaceRemoteDir,
+                    buildWorkspaceRestoreTarCommand({
+                      workspaceRemoteDir,
                       archivePath: remoteWorkspaceTar,
                       exclude: workspaceRestoreExclude,
-                    }))}`,
+                    }),
                     { timeoutMs: input.spec.timeoutMs },
                   );
                   const workspaceRestore = makeTransferProgress(

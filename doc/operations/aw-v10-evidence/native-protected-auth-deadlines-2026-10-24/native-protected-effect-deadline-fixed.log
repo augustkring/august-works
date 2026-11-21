@@ -1,0 +1,44 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[08:54:52] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:55:21] [31mERROR[39m: [36mNative authentication request failed[39m [90m{"component":"native-authentication"}[39m
+ ❯ |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts (21 tests | 2 failed) 41607ms
+     × rolls back a protected native effect 'change-password' after its 'session' deadline expires 5830ms
+     × rolls back a protected native effect 'two-factor/disable' after its 'session' deadline expires 5963ms
+[08:55:42] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:55:42] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:55:43] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:55:47] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts > maintained native TOTP and recovery lifecycle > rolls back a protected native effect 'change-password' after its 'session' deadline expires
+ FAIL  |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts > maintained native TOTP and recovery lifecycle > rolls back a protected native effect 'two-factor/disable' after its 'session' deadline expires
+AssertionError: expected 200 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 200
+
+ ❯ src/__tests__/native-two-factor.integration.test.ts:284:28
+    282|       .toMatchObject({ secret: factor.secret, backupCodes: factor.back…
+    283|     const current = await request(app).get("/api/auth/get-session").se…
+    284|     expect(current.status).toBe(expiry === "mfa" ? 200 : 401);
+       |                            ^
+    285|     if (expiry === "mfa") expect(current.body.session.id).toBe(origina…
+    286|   }, 60_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  2 failed | 46 passed (48)
+   Start at  08:54:04
+   Duration  116.27s (transform 24.75s, setup 394ms, import 49.29s, tests 65.31s, environment 1ms)
+

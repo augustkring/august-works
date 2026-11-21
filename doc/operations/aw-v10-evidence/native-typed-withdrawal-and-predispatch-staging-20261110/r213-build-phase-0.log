@@ -1,0 +1,6 @@
+src/services/native-runtime/native-execution-input.test.ts(837,82): error TS2322: Type '{ companyId: `${string}-${string}-${string}-${string}-${string}`; issueId: `${string}-${string}-${string}-${string}-${string}`; agentId: `${string}-${string}-${string}-${string}-${string}`; sourceRunId: `${string}-${string}-${string}-${string}-${string}`; ... 9 more ...; parentReceipt: { ...; }; }' is not assignable to type 'NativeAcceptedFinalizedSummaryOwner'.
+  The types of 'parentReceipt.version' are incompatible between these types.
+    Type 'number' is not assignable to type '1'.
+src/services/native-runtime/native-execution-input.test.ts(855,84): error TS2322: Type '{ companyId: `${string}-${string}-${string}-${string}-${string}`; issueId: `${string}-${string}-${string}-${string}-${string}`; agentId: `${string}-${string}-${string}-${string}-${string}`; sourceRunId: `${string}-${string}-${string}-${string}-${string}`; ... 9 more ...; parentReceipt: { ...; }; }' is not assignable to type 'NativeAcceptedFinalizedSummaryOwner'.
+  The types of 'parentReceipt.version' are incompatible between these types.
+    Type 'number' is not assignable to type '1'.

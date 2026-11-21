@@ -46,6 +46,35 @@ import type {
 
 export type { IssueWorkMode };
 
+export type IssueVisibility = "open" | "private";
+export interface IssuePrivacyConstraints {
+  publicBlockedBy: "parent" | "project" | null;
+  leavesPersonalProject: boolean;
+}
+export type IssueAccessGrantSubjectType = "user" | "agent";
+export type IssueAccessGrantSource = "explicit" | "assignment" | "project" | "owner";
+export type IssueAccessGrantAgentVisibility = "discoverable" | "private";
+export interface IssueAccessGrant {
+  id: string;
+  companyId: string;
+  issueId: string;
+  subjectType: IssueAccessGrantSubjectType;
+  subjectId: string;
+  source: IssueAccessGrantSource;
+  inherited?: boolean;
+  grantedByUserId: string | null;
+  grantedByAgentId: string | null;
+  createdAt: Date;
+  revokedAt: Date | null;
+  subjectDisplayName: string | null;
+  subjectAvatarUrl: string | null;
+  subjectInitials: string | null;
+  agentVisibility: IssueAccessGrantAgentVisibility | null;
+}
+/** Only an explicitly permitted relation projection may disclose this stub. */
+export interface IssueLockedStub { id: string; identifier: string | null; locked: true; }
+
+
 export interface IssueAncestorProject {
   id: string;
   name: string;
@@ -786,6 +815,9 @@ export interface Issue {
   projectWorkspaceId: string | null;
   goalId: string | null;
   parentId: string | null;
+  visibility?: IssueVisibility;
+  privacyRootIssueId?: string | null;
+  privacyParentIssueId?: string | null;
   ancestors?: IssueAncestor[];
   title: string;
   description: string | null;
@@ -886,6 +918,8 @@ export type CompactIssue = Pick<
   | "projectWorkspaceId"
   | "goalId"
   | "parentId"
+  | "visibility"
+  | "privacyRootIssueId"
   | "title"
   | "description"
   | "status"

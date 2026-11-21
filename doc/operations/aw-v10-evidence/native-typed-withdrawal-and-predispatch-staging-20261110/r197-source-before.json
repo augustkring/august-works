@@ -1,0 +1,21 @@
+{
+  "head": "7b5124a00fdcc8261fdf94171c4f5761e1ba3d97",
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "4689275de0f14d3d53d142310fa133b5503eb3b7e17d11859cdfe7b539833a01",
+    "server/src/__tests__/native-opencode-conformance.integration.test.ts": "45ceec36f36376ec887f067f2aed3c26a0c1f3af9198c1882ec96cf8e79f52c8",
+    "server/src/__tests__/v7-agent-packages.integration.test.ts": "2128dcdef25deccf9a301ce2072a2f7cd35eb9082c7936c0de04c32fd97cb3c9",
+    "server/src/services/execution-sandbox/sandbox-service.ts": "668c6c3dff4f457bfb4483f971cb4e7aa152056a68cb28404e970005b7918608",
+    "server/src/services/heartbeat.ts": "a7743e4d2a2dd52b0a82a55ef7347456207ab53db1b645e8f8eba0701c41f479",
+    "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts": "f486c4e35c69cdbf808e884ec30b1fd49a134bf5b97b28dd4bf09e37f8e4baa2",
+    "server/src/services/native-runtime/native-attachment-remote-stage.test.ts": "bcdd58969ebd5d93c854f39df790c81b54cdae34f5f307fa8f83426bf5355507",
+    "server/src/services/native-runtime/native-attachment-remote-stage.ts": "45ecc6fcf1ab01f4444a626ff28f928f105dcff8aa3e905194ddedc94fdfaf56",
+    "server/src/services/native-runtime/native-execution-input.test.ts": "7010309e969f1fbafcd29961ef943475efe551ba1bb5a47696e01a8725ed951d",
+    "server/src/services/native-runtime/native-execution-input.ts": "09e1a3591ae31459175729749d065371714266bfbef6c34cbf9cb6a68ae12b1a",
+    "server/src/services/native-runtime/native-session-executor.ts": "135507e8a26f7bc6b19b497173e95b64d9000568e654034f5fbf440ec35a5d1e",
+    "server/src/services/runtime/control.ts": "9126fc02f7e05a9075e470d7e1fc786f683065d3d7fa2c69a0c283ff79304593",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  }
+}

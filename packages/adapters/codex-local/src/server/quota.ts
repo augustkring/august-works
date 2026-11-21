@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { ProviderQuotaResult, QuotaWindow } from "@paperclipai/adapter-utils";
+import { guardChildStdin } from "@paperclipai/adapter-utils/child-stdin";
 import {
   classifyCodexAuthRefreshFailure,
   type CodexAuthRefreshFailureClass,
@@ -493,13 +494,18 @@ class CodexRpcClient {
       }
       this.pending.clear();
     });
-    this.proc.on("error", (err: Error) => {
+    const rejectPending = (err: Error) => {
       for (const request of this.pending.values()) {
         clearTimeout(request.timer);
         request.reject(err);
       }
       this.pending.clear();
-    });
+    };
+    this.proc.on("error", rejectPending);
+    // A codex process that exits before reading a request raises EPIPE on
+    // stdin; the exit handler above rejects the pending requests. Any other
+    // stdin error rejects them too, instead of becoming an uncaught exception.
+    guardChildStdin(this.proc, { onError: rejectPending });
   }
 
   private onStdout(chunk: string) {

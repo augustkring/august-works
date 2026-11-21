@@ -1,0 +1,97 @@
+{
+  "schema": "aw.v10.scoped-test-evidence.v1",
+  "attempts": {
+    "ci-source-denial-cancel-r1-20261029": {
+      "test.log": {
+        "artifact": "ci-source-denial-cancel-r1-20261029-test.log.gz",
+        "rawSha256": "19aaca2b394314ed837349c8872ec5ba0136b5795107d610dae156238d251cd5"
+      },
+      "source-pins.json": {
+        "artifact": "ci-source-denial-cancel-r1-20261029-source-pins.json.gz",
+        "rawSha256": "30d72342da8a9d01154b4f48a798f16bf96baaf45c900075b0dbfa1a06b0167c"
+      },
+      "exitCode": 1
+    },
+    "ci-source-denial-cancel-r2-20261029": {
+      "test.log": {
+        "artifact": "ci-source-denial-cancel-r2-20261029-test.log.gz",
+        "rawSha256": "c15b60295239dd288b64613203dfc2d0469845074484e5307eeb0ebb4b18c12f"
+      },
+      "source-pins.json": {
+        "artifact": "ci-source-denial-cancel-r2-20261029-source-pins.json.gz",
+        "rawSha256": "d3f9a352983ecf66fd4ecc41f4a04b9e5e14c504b8e98c62a6f2b5251977d12b"
+      },
+      "exitCode": 0
+    }
+  },
+  "result": {
+    "passed": 3,
+    "failed": 0,
+    "unselectedSkipped": 226,
+    "durationSeconds": 32.15
+  },
+  "perFileExecution": {
+    "passedPerFile": {
+      "src/__tests__/issue-attachment-routes.test.ts": 1,
+      "src/__tests__/issue-agent-mutation-ownership-routes.test.ts": 1,
+      "src/__tests__/issue-queued-comments-routes.test.ts": 1
+    },
+    "guardExitCode": 0
+  },
+  "sourceHead": "bc6a6afbc0e52c0a379a1be0ebdbcedf85073c7b",
+  "selectedSourcePins": [
+    {
+      "path": "server/src/__tests__/issue-agent-mutation-ownership-routes.test.ts",
+      "sha256": "31fd156c541431ba8abe0a0ec798d5b409ae368aca9db9a09eb61ebe23ab02e2",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/__tests__/issue-attachment-routes.test.ts",
+      "sha256": "8dc660736ec9107207f6269b0483aa3888c61eeaaf7c5f86f316f8f0a6cd1a06",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/__tests__/issue-queued-comments-routes.test.ts",
+      "sha256": "632b168ce2371375bd134b7673d2161df6dc58dc9b48c8f806c3f2fa031d1421",
+      "matchesCurrentAtArchive": true
+    }
+  ],
+  "rootCauses": [
+    "Two negative privacy tests already returned403 and avoided byte/comment access; expected spy signature lacked explicit privacyLockMode:read options. Expectations now require the exact current6arg guard call.",
+    "Queue fixture Task and promoted run lacked a responsible Human; deleting comments removed its last fallback, so current dispatch correctly refused422 before cancellation. Fixture now uses actual seeded Human/native passkey session/membership, canonical literal Task producer and same actual responsibility."
+  ],
+  "qualifiedScope": [
+    "Exactly3 named absent-stack/cancelled d0 CI cases, at least1 real executed test from each selectedfile",
+    "Source denial remains403 and suppresses storage/comment access",
+    "Disappeared-comment queued continuation cancels through original owner with current Human responsibility",
+    "All72 original queued-comment file cases after shared canonical Human Task fixture upgrade, zero skips; no production-code changes."
+  ],
+  "excludedScope": [
+    "Other226 unselected tests",
+    "Production provider or physical-host qualification",
+    "Real WebAuthn ceremony: session fixture is structural only"
+  ],
+  "fullQueueFixtureRegression": {
+    "test.log": {
+      "artifact": "ci-queued-comments-canonical-human-full-r2-20261029-test.log.gz",
+      "rawSha256": "324bcf09602be58e9026d87fd58e97715a7af4c5d4f3336458d63a77915b32f1"
+    },
+    "source-pins.json": {
+      "artifact": "ci-queued-comments-canonical-human-full-r2-20261029-source-pins.json.gz",
+      "rawSha256": "fc3628816d5628761ab60e930436b0c331d76fb9aa6ce79bc49aecdcf1d93be4"
+    },
+    "exitCode": 0,
+    "passed": 72,
+    "failed": 0,
+    "skipped": 0,
+    "durationSeconds": 125.08
+  },
+  "precedingUnexecutedAttempt": {
+    "attempt": "ci-queued-comments-canonical-human-full-r1-20261029",
+    "exitCode": 1,
+    "testExecution": false,
+    "reason": "Source syntax snapshot caught unrelated Temporal memory-service transaction-close edit before tests. Original owner fixed it; r2 uses next canonical snapshot.",
+    "syntaxLogArtifact": "ci-queued-comments-canonical-human-full-r1-20261029-syntax.log.gz",
+    "syntaxLogRawSha256": "8908fb2dd776753984d4a8680eb5c41ad714faf3d1b40fff3d0965517228bde9"
+  }
+}

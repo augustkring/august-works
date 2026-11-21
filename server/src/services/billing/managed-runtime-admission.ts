@@ -13,6 +13,15 @@ export async function assertManagedRuntimeCommercialAuthority(
   db: Db,
   companyId: string,
   agentId: string,
+  options: {
+    /** APR-E2E-10. Only the server-side execution of a call a human approved
+     * while it was parked: the requesting Run has ended and native cleanup
+     * stopped its cell, but the action runs on the server, not in the cell.
+     * A STOPPED cell is accepted only with every other condition below
+     * (same cell and generation, not deleted, not suspended, commercially
+     * current). Live agent calls never pass this. */
+    acceptStoppedCell?: boolean;
+  } = {},
 ) {
   const [binding] = await db
     .select()
@@ -51,7 +60,7 @@ export async function assertManagedRuntimeCommercialAuthority(
     cell.providerBindingId !== binding.providerBindingId ||
     binding.providerProfileRef !==
       `aw:cell:${cell.id}:generation:${cell.generation}` ||
-    cell.status !== "HEALTHY" ||
+    !(cell.status === "HEALTHY" || (options.acceptStoppedCell === true && cell.status === "STOPPED")) ||
     cell.suspendedReason ||
     (await runtimeCommercialReason(db, cell, new Date()))
   )

@@ -1,0 +1,1 @@
+Clean approve and continuation test passed 1/1 in 40.9s; Playwright and wrapper exits were 0. This run omits the temporary immediate-result GET diagnostic used in attempt 017. The source pin contains the safe MCP content[] summary parser fix.

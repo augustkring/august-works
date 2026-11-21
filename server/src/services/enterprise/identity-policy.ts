@@ -34,7 +34,10 @@ import {
 } from "../v7-authorization.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { accessService, type AccessTransaction } from "../access.js";
+import { heartbeatService } from "../heartbeat.js";
 type Policy = typeof enterpriseIdentityPolicies.$inferSelect;
 export interface EnterprisePublisherOptions {
   operatorUserIds: readonly string[];
@@ -313,6 +316,12 @@ export function enterpriseIdentityPolicyService(
           "Current protected identity qualification evidence is required",
         );
       return withV7ActivityTransaction(db, async (tx, p) => {
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds,
+          { requireRecent: true },
+        );
         await enabled(tx);
         const [operator] = await tx
           .select()
@@ -408,6 +417,14 @@ export function enterpriseIdentityPolicyService(
           userId,
           organizationId: null,
         };
+        // Secret resolution and provider construction can take time. Recheck
+        // DB-clock recency immediately before the qualification write.
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds,
+          { requireRecent: true },
+        );
         await tx
           .insert(ssoProvider)
           .values({ id: randomUUID(), ...provider })
@@ -616,8 +633,8 @@ export function enterpriseIdentityPolicyService(
       actor: AuthorizationActor,
       companyId: string,
       expectedVersion: number,
-    ) =>
-      withV7ActivityTransaction(db, async (tx, p) => {
+    ) => {
+      const result = await withV7ActivityTransaction(db, async (tx, p) => {
         const userId = await owner(tx, actor, companyId),
           row = await current(tx, companyId, true);
         if (row.version !== expectedVersion || row.status === "retired")
@@ -634,12 +651,23 @@ export function enterpriseIdentityPolicyService(
             ),
           )
           .for("update");
-        const [counts] = await tx.execute<{ count: number }>(
-          sql`with suspended as (update company_memberships set status='suspended', updated_at=now() where company_id=${companyId}::uuid and principal_type='user' and membership_role<>'owner' and principal_id in (select user_id from enterprise_subject_bindings where company_id=${companyId}::uuid and provider_id=${row.providerId} and managed_membership) returning principal_id) select count(*)::int as count from suspended`,
-        );
-        await tx.execute(
-          sql`delete from principal_permission_grants g using company_memberships m where g.company_id=${companyId}::uuid and g.principal_type='user' and m.company_id=g.company_id and m.principal_id=g.principal_id and m.principal_type='user' and m.membership_role<>'owner' and g.principal_id in (select user_id from enterprise_subject_bindings where company_id=${companyId}::uuid and provider_id=${row.providerId} and managed_membership)`,
-        );
+        const access = accessService(tx as unknown as Db);
+        let suspendedMemberships = 0;
+        for (const binding of managed) {
+          const [membership] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+            eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, binding.userId),
+          ));
+          if (!membership) continue;
+          const result = await access.suspendMemberForSecurityInTransaction(
+            tx as unknown as AccessTransaction,
+            companyId,
+            membership.id,
+            actor,
+            "enterprise_decommission",
+          );
+          if (result?.changed) suspendedMemberships++;
+        }
         await tx
           .update(enterpriseSubjectBindings)
           .set({ status: "revoked", updatedAt: new Date() })
@@ -688,14 +716,37 @@ export function enterpriseIdentityPolicyService(
             details: {
               version: updated!.version,
               managedMappings: managed.length,
-              suspendedMemberships: counts?.count ?? 0,
+              suspendedMemberships,
               qualificationWithdrawn: true,
             },
           },
           p,
         );
         return view(updated!);
-      }),
+      });
+      // Membership state committed above denies new work. Ask the existing run
+      // owner to stop already-running work after that durable boundary. Query
+      // again after commit so a retry also finishes containment if a previous
+      // response failed after the decommission itself committed.
+      const withdrawn = await db.select({ userId: enterpriseSubjectBindings.userId })
+        .from(enterpriseSubjectBindings)
+        .innerJoin(companyMemberships, and(
+          eq(companyMemberships.companyId, enterpriseSubjectBindings.companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, enterpriseSubjectBindings.userId),
+        ))
+        .where(and(
+          eq(enterpriseSubjectBindings.companyId, companyId),
+          eq(enterpriseSubjectBindings.managedMembership, true),
+          eq(enterpriseSubjectBindings.status, "revoked"),
+          sql`${companyMemberships.status} <> 'active'`,
+        ));
+      for (const { userId } of withdrawn) {
+        await heartbeatService(db).cancelRunsForResponsibleHuman(companyId, userId,
+          "Cancelled because SCIM decommission withdrew company access");
+      }
+      return result;
+    },
     suspend: async (
       actor: AuthorizationActor,
       companyId: string,

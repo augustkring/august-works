@@ -1,0 +1,34 @@
+{
+  "baseCheckpoint": "R61",
+  "baseHost31SourcePinsSha256": "eb1e8ae187ecc53d1790c96fa5acb378a442564cfaa10eff1582c0b6d42d421e",
+  "candidateHost33SourcePinsSha256": "44a599d932b2fa3ab23ef00c6b169ed64001f5a85c9f7fb9d06eb6105b83e1a2",
+  "pathCounts": {
+    "base": 100,
+    "candidate": 100,
+    "added": 0,
+    "deleted": 0,
+    "changed": 3
+  },
+  "added": [],
+  "deleted": [],
+  "changed": [
+    {
+      "path": "deploy/v6/host-agent/openshell.mjs",
+      "baseSha256": "e61cebb5ed81b899af55cbafd3693739e8839f62be0b8cbe5367258b7ba81d19",
+      "candidateSha256": "bc059f585f6868eeb1a95aeacdc64c396db4d879785fe41e1f6395bc0f5f5393",
+      "bytes": 214460
+    },
+    {
+      "path": "deploy/v6/host-agent/openshell.test.mjs",
+      "baseSha256": "fbad04ca55811d7ed3f45c7b6a30740632c13de74e7fc560af7bcf736252923b",
+      "candidateSha256": "a694a0ad9935f94e702db6fceb88eadc4db99eaa771869c6c89538097cd74e2e",
+      "bytes": 177520
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "baseSha256": "f23276daeab708d1a54f3ce2a6c92dad870faa83c6e093200b73c44fa246407b",
+      "candidateSha256": "03baf7e2fe1a312d050aa2fe92fa6be533a4e1299060057b3c20f35d3111f035",
+      "bytes": 143386
+    }
+  ]
+}

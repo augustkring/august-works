@@ -21,16 +21,23 @@ import type {
   ContextProvider,
   ContextProviderInput,
 } from "../context/context-engine.js";
+import type { AuthorizationActor, NativeContextInspectionOwner } from "../authorization.js";
 
 export interface ConnectedKnowledgeAuthorizationInput {
   request: ConnectedKnowledgeRequest;
   requestFingerprint: string;
   signal: AbortSignal;
   deadlineAt: number;
+  /** Server-only Context owner authority; never enters the parsed request or fingerprint. */
+  authorizationActor?: AuthorizationActor;
+  authorizationDecision?: NativeContextInspectionOwner["decide"];
 }
 
-export interface ConnectedKnowledgeRetrievalInput
-  extends ConnectedKnowledgeAuthorizationInput {
+export interface ConnectedKnowledgeRetrievalInput {
+  request: ConnectedKnowledgeRequest;
+  requestFingerprint: string;
+  signal: AbortSignal;
+  deadlineAt: number;
   authorizedScope: ConnectedKnowledgeAuthorizedScope;
 }
 
@@ -39,6 +46,10 @@ export interface ConnectedKnowledgeProvider {
   authorize(
     input: ConnectedKnowledgeAuthorizationInput,
   ): Promise<ConnectedKnowledgeAccessDecision>;
+  /** Rechecks current authorization with the same owner immediately before retrieval. */
+  reauthorize?(
+    input: ConnectedKnowledgeAuthorizationInput & { authorizedScope: ConnectedKnowledgeAuthorizedScope },
+  ): Promise<void>;
   retrieveAuthorized(
     input: ConnectedKnowledgeRetrievalInput,
   ): Promise<ConnectedKnowledgeProviderResult>;
@@ -49,6 +60,9 @@ export interface ConnectedKnowledgeRegistryRetrieveInput {
   request: ConnectedKnowledgeRequest;
   signal: AbortSignal;
   deadlineAt: number;
+  /** Server-only Context owner authority; never serialized with the request. */
+  authorizationActor?: AuthorizationActor;
+  authorizationDecision?: NativeContextInspectionOwner["decide"];
 }
 
 export interface ConnectedKnowledgeRegistry {
@@ -408,6 +422,8 @@ export function createConnectedKnowledgeRegistry(
           requestFingerprint,
           signal: rawInput.signal,
           deadlineAt: rawInput.deadlineAt,
+          ...(rawInput.authorizationActor ? { authorizationActor: rawInput.authorizationActor } : {}),
+          ...(rawInput.authorizationDecision ? { authorizationDecision: rawInput.authorizationDecision } : {}),
         }),
       );
 
@@ -428,6 +444,18 @@ export function createConnectedKnowledgeRegistry(
         request,
         requestFingerprint,
       );
+
+      // Revalidate through the same server-owned authority immediately before
+      // retrieval. The actor and callback remain out of the retrieval payload.
+      await found.provider.reauthorize?.({
+        request,
+        requestFingerprint,
+        authorizedScope: scope,
+        signal: rawInput.signal,
+        deadlineAt: rawInput.deadlineAt,
+        ...(rawInput.authorizationActor ? { authorizationActor: rawInput.authorizationActor } : {}),
+        ...(rawInput.authorizationDecision ? { authorizationDecision: rawInput.authorizationDecision } : {}),
+      });
 
       // Retrieval is deliberately unreachable until authorization has produced a
       // request-bound scope. Provider implementations must use this scope to
@@ -520,6 +548,8 @@ export function connectedKnowledgeContextProvider(
         request,
         signal: input.signal,
         deadlineAt: input.deadlineAt,
+        ...(input.request.authorizationActor ? { authorizationActor: input.request.authorizationActor } : {}),
+        ...(input.request.authorizationDecision ? { authorizationDecision: input.request.authorizationDecision } : {}),
       });
     },
   };

@@ -1,0 +1,4 @@
+qualification_workspace=/workspace/v10-dep-qualification
+lock=/workspace/v10-preparation/v10-pg-tests.lock
+manifest_hash=52fe608c583066221d3cee9562cd2216e17abdb9d0860ba74d9b9adf33e50e20
+tool_hash=5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825

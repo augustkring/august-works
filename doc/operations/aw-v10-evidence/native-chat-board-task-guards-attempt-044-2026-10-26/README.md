@@ -1,0 +1,3 @@
+# Slack Board task-guard attempt 044
+
+A fresh 230-file source snapshot and syntax preflight passed. The focused four-case Vitest run failed all four variants at the same pre-guard assertion: the injected wakeup mock had zero observed calls. This means the run did not reach the assertions that verify cancelled, paused, blocked, or archived-workspace delivery is denied. No product or assertion change was made. The test log also shows retry warnings for the corresponding Slack Board action records; the cause of the mock-observation mismatch remains unresolved. Numeric exit and exact source pins are preserved here.

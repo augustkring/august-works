@@ -1,5 +1,6 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   Agent,
   CompanyPortabilityFileEntry,
@@ -23,6 +24,8 @@ import { MarkdownBody } from "../components/MarkdownBody";
 import { toCompanyRelativePath } from "@/lib/company-routes";
 import { cn } from "../lib/utils";
 import { queryKeys } from "../lib/queryKeys";
+import { hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
+import { useTranslation } from "react-i18next";
 import { formatBytes } from "../lib/issue-output";
 import { createZipArchive, estimateZipArchiveSize } from "../lib/zip";
 import {
@@ -443,7 +446,7 @@ function generateReadmeFromSelection(
 
   lines.push("## What's Inside");
   lines.push("");
-  lines.push("This is an [Agent Company](https://paperclip.ing) package.");
+  lines.push(`This is an [Agent Company](${PRODUCT_IDENTITY.primaryWebsiteUrl}) package.`);
   lines.push("");
 
   const counts: Array<[string, number]> = [];
@@ -487,13 +490,13 @@ function generateReadmeFromSelection(
   lines.push("## Getting Started");
   lines.push("");
   lines.push("```bash");
-  lines.push("npx paperclipai company import this-github-url-or-folder");
+  lines.push("blentera company import this-github-url-or-folder");
   lines.push("```");
   lines.push("");
-  lines.push("See [Paperclip](https://paperclip.ing) for more information.");
+  lines.push(`See [${PRODUCT_IDENTITY.productName}](${PRODUCT_IDENTITY.primaryWebsiteUrl}) for more information.`);
   lines.push("");
   lines.push("---");
-  lines.push(`Exported from [Paperclip](https://paperclip.ing) on ${new Date().toISOString().split("T")[0]}`);
+  lines.push(`Exported from [${PRODUCT_IDENTITY.productName}](${PRODUCT_IDENTITY.primaryWebsiteUrl}) on ${new Date().toISOString().split("T")[0]}`);
   lines.push("");
 
   return lines.join("\n");
@@ -627,12 +630,14 @@ function previewErrorMessage(error: unknown): string {
 
 export function CompanyExport() {
   const { selectedCompanyId, selectedCompany } = useCompany();
+  const client = useQueryClient();
+  const { t } = useTranslation("experience");
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToastActions();
   const navigate = useNavigate();
   const location = useLocation();
   const initialFileFromUrl = useRef(filePathFromLocation(location.pathname));
-  const { data: session } = useQuery({
+  const { data: session, isFetching: sessionRechecking } = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
   });
@@ -655,14 +660,18 @@ export function CompanyExport() {
   });
 
   const [includeV7State, setIncludeV7State] = useState(false);
+  const [includeSupportCases, setIncludeSupportCases] = useState(false);
+  const supportExportReady = !!session?.user.id && !sessionRechecking && hasCurrentV9Session(client, session.user.id, session.session?.id ?? null);
+  useEffect(() => { setIncludeSupportCases(false); }, [selectedCompanyId, session?.user.id, session?.session?.id]);
   const [exportData, setExportData] = useState<CompanyPortabilityExportPreviewResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<ExportCategorySelection>(() => ({
     ...buildDefaultExportCategorySelection(),
-    // Task history is the expensive part of a large-company export. Keep it
-    // opt-in so opening this settings page uses the lightweight preview path.
-    tasks: false,
+    // A whole-company export carries Task history by default (brief 25.3,
+    // EXIT-R1); the person can untick it. Routine history and attachments are
+    // the heavy optional parts and stay opt-in.
+    tasks: true,
     routines: false,
     attachments: false,
   }));
@@ -804,16 +813,19 @@ export function CompanyExport() {
   const downloadMutation = useMutation({
     mutationFn: async () => {
       const captured={...exportScope.current};
+      const supportSessionId = includeSupportCases ? session?.session?.id ?? null : null;
+      if (includeSupportCases && (!captured.userId || !hasCurrentV9Session(client, captured.userId, supportSessionId))) throw new Error(t("supportCases.exportAccountChanged"));
       const result=await companiesApi.exportBundle(selectedCompanyId!, {
-        include: { company: true, agents: true, projects: true, issues: includeIssues, skills: categories.skills },
+        include: { company: true, agents: true, projects: true, issues: includeIssues, skills: categories.skills, supportCases: includeSupportCases },
         includeV7State,
-        ...(includeV7State ? {expectedUserId:captured.userId} : {}),
-        selectedFiles: Array.from(checkedFiles).sort(),
+        ...((includeV7State || includeSupportCases) ? {expectedUserId:captured.userId} : {}),
+        selectedFiles: [...checkedFiles, ...(includeSupportCases ? ["blentera-support-cases-v1.json"] : [])].sort(),
         sidebarOrder,
       });
-      return {captured,result};
+      return {captured,result,supportSessionId};
     },
-    onSuccess: ({captured,result}) => {
+    onSuccess: ({captured,result,supportSessionId}) => {
+      if (supportSessionId && (!captured.userId || !hasCurrentV9Session(client, captured.userId, supportSessionId))) return;
       if(captured.companyId!==exportScope.current.companyId || captured.userId!==exportScope.current.userId) return;
       const resultCheckedFiles = new Set(Object.keys(result.files));
       downloadZip(result, resultCheckedFiles, result.files);
@@ -1101,7 +1113,7 @@ export function CompanyExport() {
               {selectedCount > 0 && ` (~${formatBytes(estimatedZipBytes)})`}
             </span>
             {warnings.length > 0 && (
-              <span className="text-amber-500">
+              <span className="text-amber-700 dark:text-amber-300">
                 {warnings.length} warning{warnings.length === 1 ? "" : "s"}
               </span>
             )}
@@ -1129,7 +1141,7 @@ export function CompanyExport() {
       {warnings.length > 0 && (
         <div className="mx-5 mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3">
           {warnings.map((w) => (
-            <div key={w} className="text-xs text-amber-500">{w}</div>
+            <div key={w} className="text-xs text-amber-700 dark:text-amber-300">{w}</div>
           ))}
         </div>
       )}
@@ -1143,7 +1155,7 @@ export function CompanyExport() {
               key={warning.code}
               className={cn(
                 "text-xs",
-                warning.severity === "blocker" ? "font-medium text-destructive" : "text-amber-500",
+                warning.severity === "blocker" ? "font-medium text-destructive" : "text-amber-700 dark:text-amber-300",
               )}
             >
               {warning.message}
@@ -1155,6 +1167,10 @@ export function CompanyExport() {
       <label className="flex items-center gap-2 px-5 py-3 text-sm">
         <input type="checkbox" disabled={!session?.user.id} checked={includeV7State} onChange={(e) => setIncludeV7State(e.target.checked)} />
         Include company V7 state: Foundation, shared Memory, eligible observations and models, Playbooks, Role Packs, package deployments, Workflows and governance. Requires current company ownership; private agent Memory and credentials are excluded.
+      </label>
+      <label className="flex items-center gap-2 px-5 py-3 text-sm">
+        <input type="checkbox" disabled={!supportExportReady} checked={includeSupportCases} onChange={(event) => setIncludeSupportCases(event.target.checked)} />
+        {t("supportCases.exportInclude")}
       </label>
       {/* Two-column layout */}
       <div className="grid gap-4 xl:h-(--sz-calc-30) xl:grid-cols-(--gtc-25) xl:gap-0">
@@ -1202,7 +1218,7 @@ export function CompanyExport() {
               })}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Task and routine history is opt-in because it can be large.
+              Tasks are included by default. Routine history and attachments are opt-in because they can be large.
             </p>
           </div>
           <div className="border-b border-border px-3 py-2 shrink-0">

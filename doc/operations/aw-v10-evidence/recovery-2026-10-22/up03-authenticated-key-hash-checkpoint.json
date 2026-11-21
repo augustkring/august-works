@@ -1,0 +1,48 @@
+{
+  "scope": "Bind original same-transaction Foundation Source key revalidation to the actually authenticated credential hash",
+  "sources": {
+    "server/src/services/authorization.ts": "499668baffe9f2b34abb125c0cf02a13d25d239c0936db7596ab6a9fa3e84240",
+    "server/src/middleware/auth.ts": "32dc5c06d912a56fb5d53518d27de44d41c5f8fd4f460745fe9db8403b7be241",
+    "server/src/types/express.d.ts": "bd40aa9238bfdfae7e93c39f3d7ab1c13d62b7044bd378f7021532274cef5122",
+    "server/src/__tests__/foundation-read-source-authority.integration.test.ts": "5023bfff3f131d650c4127706e37eb3c043ba249c3dc305fb5e0c538e120c32b",
+    "server/src/__tests__/agent-auth-middleware.test.ts": "14b33b14768236851b3eb2e15b966317089cf843d04a32adb88b6d90e99d3eb4"
+  },
+  "baseline": {
+    "failed": 2,
+    "filtered": 10,
+    "seconds": 62.61,
+    "exit": 1,
+    "log": "up03-authenticated-key-hash-baseline.log",
+    "finding": "Both actual middleware-authenticated Agent and Board tokens retained200 after a real native Source row SHARE wait while their stored key hash was replaced and committed. Actual row blocking observed; initial token accepted. Exact baseline test source compressed and source pins retained."
+  },
+  "implementation": "Existing bearer verifier retains matched original keyHash as internal authenticatedKeyHash; no raw token, caller flag, schema or authority cache. Existing pinFoundationActor compares against current credential row under original SHARE NOWAIT for Agent and Board keys, failing closed if original hash missing or changed. Original role/grant/run/scope/revocation/expiry/status semantics preserved. Express and authorization actor contracts synchronized. Legacy direct Source fixtures carry their actual stored hash without weakening old assertions.",
+  "verification": {
+    "actualSourceOwner": {
+      "passed": 12,
+      "seconds": 52.13,
+      "exit": 0,
+      "log": "up03-authenticated-key-hash-source.log",
+      "assertions": "All original native callback identity/grant/key/scope/lock/expiry cases retained. Both new actual HTTP races deny stale pending requests403, accept current replacement tokens200 and reject old tokens on fresh authentication401. Missing original fingerprint denies scoped Agent/Board key claims."
+    },
+    "originalMiddlewareSuite": {
+      "passed": 31,
+      "seconds": 55.78,
+      "exit": 0,
+      "log": "up03-authenticated-key-hash-middleware.log",
+      "assertions": "Existing authentication tests unchanged."
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "up03-authenticated-key-hash-server-types.log"
+    },
+    "finalPinsMatch": true,
+    "processesClosed": true
+  },
+  "review": "Root traced original authentication/returned key row and all pinFoundationActor callers, actual principal lock ordering, field forwarding and known actor response/log projections. Read-only gpt-6-luna review found no concrete defect or direct actor serialization in inspected paths; broker JSON builds a separate field-limited actor. No broad all-delivery audit claim.",
+  "limits": [
+    "HTTP regression uses a test route with actual middleware and original native authorization callback in a physical transaction; not complete customer Foundation endpoint/credential transport or cross-channel release qualification.",
+    "This narrows the original Foundation callback only. General private source SQL, broader current key/JWT/session lifetime and all API actions remain separate work.",
+    "Full workspace typecheck separately records earlier ba7cd42ca; this code has final server compilation and bounded tests, not a new full recursive check.",
+    "Complete source receipts/graph, original copied private Memory/temporal regressions and full V10/PR/release gates remain open."
+  ]
+}

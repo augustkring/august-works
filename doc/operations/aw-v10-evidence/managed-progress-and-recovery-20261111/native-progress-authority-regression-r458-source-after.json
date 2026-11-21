@@ -1,0 +1,173 @@
+{
+  "head": "57909d18e090df7295fb0ab64365a5cda3f666e4",
+  "files": {
+    ".nvmrc": {
+      "sha256": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+      "bytes": 8,
+      "mtimeNs": 1794226789204376584
+    },
+    "package.json": {
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "bytes": 14972,
+      "mtimeNs": 1794226790631675063
+    },
+    "packages/db/src/v5-identities-migration.test.ts": {
+      "sha256": "6af2b0d7146f58973e42afa45496fed59c7d5ae91fd1bc967fa358ff0d8a549d",
+      "bytes": 8167,
+      "mtimeNs": 1794387640732169157
+    },
+    "packages/paperclip-runner/generated/semantic-action-catalog.json": {
+      "sha256": "03653dbb32d029e6b98e654a06c2958916453f3bbd4720e2fb67f8f7f112d556",
+      "bytes": 71854,
+      "mtimeNs": 1794387719918958233
+    },
+    "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json": {
+      "sha256": "6974c4fe86fccad0328611fe725511e10427ab289a341c94736d0696be4e106e",
+      "bytes": 8257,
+      "mtimeNs": 1794387713398845336
+    },
+    "packages/paperclip-runner/protocol/manifest.json": {
+      "sha256": "7af10d8c5043b1e6c9da9c77e89345f3959383e21a6d4ac8aec9c0bae7f298b0",
+      "bytes": 19094,
+      "mtimeNs": 1794387713710850140
+    },
+    "packages/paperclip-runner/src/catalog/semantic-action-catalog.ts": {
+      "sha256": "e862da84dd16fbdc4779374aeb8181746defd9898104b31aec76f3b422d190ee",
+      "bytes": 24575,
+      "mtimeNs": 1794387493422895103
+    },
+    "packages/paperclip-runner/src/protocol-actions/report-progress.ts": {
+      "sha256": "1e93303a5bccde43bab2706cf2c12df62c9aea4f58add7302570ed396e85615e",
+      "bytes": 6120,
+      "mtimeNs": 1794387493422708513
+    },
+    "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts": {
+      "sha256": "a3322414e3f01075a0d74117ea27edec67f2cadcd8003bde5f2cd3489c4f8e5d",
+      "bytes": 75229,
+      "mtimeNs": 1794387493417578184
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "bytes": 634978,
+      "mtimeNs": 1794226790807960284
+    },
+    "server/package.json": {
+      "sha256": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "bytes": 6179,
+      "mtimeNs": 1794226790837478863
+    },
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": {
+      "sha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb",
+      "bytes": 210079,
+      "mtimeNs": 1794350044778605461
+    },
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": {
+      "sha256": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+      "bytes": 27192,
+      "mtimeNs": 1794332547705166850
+    },
+    "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts": {
+      "sha256": "032bc94b26fa07b88690d3b98e95a001ec05590956ee12c83db4d7299964cc12",
+      "bytes": 53640,
+      "mtimeNs": 1794388078207646952
+    },
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": {
+      "sha256": "670a82c5ce2ee58690e850a3bd3e34fb5a9ea19cb1c187e37a4713e69fc5b0c5",
+      "bytes": 418636,
+      "mtimeNs": 1794388078207646952
+    },
+    "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts": {
+      "sha256": "f797e77f532efe14ed7b80818ce4d8d6063257fe78abb64dfc645377579e8355",
+      "bytes": 98248,
+      "mtimeNs": 1794388078207422715
+    },
+    "server/src/services/heartbeat.ts": {
+      "sha256": "764825501926ed81bc873b20e97c8277b9d617a9fab5593a9e61c416a7a4bcf1",
+      "bytes": 1279553,
+      "mtimeNs": 1794388078207422715
+    },
+    "server/src/services/issues.ts": {
+      "sha256": "76e0e9deae6cd2cd096373a56d851e98dc02f6067fec592225e5a2310e477c9f",
+      "bytes": 608376,
+      "mtimeNs": 1794387493418023033
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "7a49c327ca6008e8b26cbaff2cfc711ca64b6203ae5a047c7491ec5211aaa31a",
+      "bytes": 548412,
+      "mtimeNs": 1794387493418825699
+    },
+    "server/src/services/native-runtime/native-execution-input.test.ts": {
+      "sha256": "18ad2db8f88d675dac8cc3a4854fd6928b3c79e733e878e51f4cb03e308ad3b0",
+      "bytes": 136739,
+      "mtimeNs": 1794342776160333730
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "sha256": "38208e432d22845713799fcd71c109e23f5f3c9651acca14ee1fa7925fd60296",
+      "bytes": 132857,
+      "mtimeNs": 1794380779668481402
+    },
+    "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts": {
+      "sha256": "e40b8256d532dd23201bafbb89aa54b747cec869e4a279a3e75fa4e672a35eff",
+      "bytes": 11613,
+      "mtimeNs": 1794387493418825699
+    },
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": {
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+      "bytes": 14778,
+      "mtimeNs": 1794233716228964467
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "bytes": 9673,
+      "mtimeNs": 1794234187638120900
+    },
+    "server/src/services/native-runtime/native-session-executor.ts": {
+      "sha256": "e968f133e15764cfaf409fc176cc71ef95595ddd73ffea37c0cc47c390d2b2a5",
+      "bytes": 785616,
+      "mtimeNs": 1794387640725733161
+    },
+    "server/src/services/native-runtime/native-session-resume.ts": {
+      "sha256": "6eb02d4fb69a37acf6963c9eab58f91ace7bf1aaefbf4d7e8d8884e15af300d4",
+      "bytes": 32739,
+      "mtimeNs": 1794387493421200307
+    },
+    "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts": {
+      "sha256": "8805cc8dcb7cf3b5a1e9968e18a3e883bdb9fb6aee80429dac3479d2dc61f16b",
+      "bytes": 108182,
+      "mtimeNs": 1794388078208394960
+    },
+    "server/src/services/native-runtime/paperclip-runner-tool-authority.ts": {
+      "sha256": "1727491d16b5046347f0822465d08318e61ac1a31c9624a62316e45cc936e8c3",
+      "bytes": 174090,
+      "mtimeNs": 1794387493421350713
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": {
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "bytes": 8437,
+      "mtimeNs": 1794229120874977950
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "bytes": 12734,
+      "mtimeNs": 1794228810066234987
+    },
+    "server/src/services/orchestration/native-tool-boundary.ts": {
+      "sha256": "5b4e1d43ffb4363df3cf7782ef2f3475ac36879b64b99c1311b281452ecad61d",
+      "bytes": 25445,
+      "mtimeNs": 1794387493421350713
+    },
+    "server/src/services/orchestration/worker-model-gateway.ts": {
+      "sha256": "5a0d0b508fd7d42516d6d153b09d18b7c87fedf3093fb7dc4c3bf853b390e143",
+      "bytes": 220236,
+      "mtimeNs": 1794387493421659707
+    },
+    "server/vitest.config.ts": {
+      "sha256": "1c32f3f46cb9206de3cdbb1745d43abf17bd2b5c385183675835ba928c2d31b3",
+      "bytes": 1883,
+      "mtimeNs": 1794226791073414900
+    }
+  },
+  "allRecordedSourcePinsUnchanged": true,
+  "allQualificationInputPinsUnchanged": true,
+  "changedRecordedPaths": []
+}

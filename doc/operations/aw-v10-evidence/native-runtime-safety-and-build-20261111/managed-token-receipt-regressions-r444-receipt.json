@@ -1,0 +1,63 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.5828438669850584,
+      "filesAdvised": 370267,
+      "memoryAfter": 6048792576,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "bafea5850649c61ca27cbe7f37c1f0182382e11d0a38cd14e288f9b9d4fd4649",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/runtime-tools-token.test.ts",
+    "src/services/orchestration/worker-model-gateway.receipt.test.ts",
+    "--maxWorkers=1",
+    "--no-file-parallelism",
+    "--reporter=verbose"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 169.62420324099367,
+  "sourceManifest": "managed-token-receipt-regressions-r444-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 17.962966332997894,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 1511538688,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 581361,
+      "parentPid": 581012,
+      "executable": "node",
+      "rssBytes": 824868864,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 581393,
+      "parentPid": 581361,
+      "executable": "node",
+      "rssBytes": 686669824,
+      "nodeOptions": "--max-old-space-size=1536"
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 3,
+  "observedPostgresRelatedPids": [],
+  "uniqueTempRoot": "/var/tmp/mpg-1718eqp_",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 77,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "controlled component modules, no PostgreSQL process observed; no external provider/SDK/host proof"
+}

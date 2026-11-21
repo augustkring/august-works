@@ -1,0 +1,167 @@
+{
+  "candidate": "responsibility-routine-retirement-r8-20261030",
+  "qualificationWorkspace": "/workspace/v10-dep-qualification",
+  "databaseMigration": "none",
+  "testEvidence": {
+    "r6Native0565PostgreSQL": "20/20 passed",
+    "r6FullServerTypeScript": "passed (noEmit; runner proceeded to next command under set -e)",
+    "r6Oxc": "1013 files passed",
+    "r8CompanyAccessUI": "37/37 passed",
+    "r8UITypeScript": "passed (noEmit)",
+    "r8Oxc": "1017 files passed",
+    "mirrorCleanup": "R6 restored 7/7 owned paths; R8 restored 2/2 owned paths; both post-cleanup source guards had zero failures"
+  },
+  "candidateFiles": [
+    {
+      "path": "server/src/services/experience/service.ts",
+      "candidateSha256": "1097d875101c74ac9a779f0a32614371ffeb2a22d66df0f10d45d2ac01bf67e1",
+      "size": 36377,
+      "action": "modified"
+    },
+    {
+      "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "candidateSha256": "6e0e28a1a829654402eb26fa39fdf25fd71c59d1bd92e70f59d86fa5ffaa720a",
+      "size": 52371,
+      "action": "modified"
+    },
+    {
+      "path": "server/src/services/experience/routine-responsibility-attention.ts",
+      "baselineSha256": "d00e93226149f46062da85d3ff5eb96cfed45318066fe9777e0a7803d3ad4777",
+      "size": 7140,
+      "action": "delete_after_review"
+    },
+    {
+      "path": "server/src/__tests__/routine-responsibility-attention.integration.test.ts",
+      "baselineSha256": "e09b8086233cbc953f68c05636254aee6f3fa64c0e8187fab95a3d7e7dd622db",
+      "size": 5493,
+      "action": "delete_after_review"
+    },
+    {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "baselineSha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd",
+      "size": 5637,
+      "action": "delete_after_review"
+    },
+    {
+      "path": "packages/shared/src/experience.ts",
+      "candidateSha256": "b99030a6e1337bb28d64e560f72824acec17de5ecbb72aa76e73066ea479a5d2",
+      "size": 12953,
+      "action": "unchanged_required_closure"
+    },
+    {
+      "path": "server/src/services/experience/projection.ts",
+      "candidateSha256": "5bcc62901a2257382d3f2870ccd9acf43b32933bd1d2c274b5a0925b5cf7f255",
+      "size": 5779,
+      "action": "unchanged_required_closure"
+    },
+    {
+      "path": "ui/src/pages/CompanyAccess.tsx",
+      "baselineSha256": "ef2e4a643a9e16b79de7228d038e8bfbda72fd70bd7b18c8a13c45117ba912d7",
+      "candidateSha256": "cb8e6e85bfa94a7ed88fca1b3d6881c5fee77ad044f84845ef78f59fdfe8d553",
+      "size": 66083,
+      "action": "modified"
+    },
+    {
+      "path": "ui/src/pages/CompanyAccess.test.tsx",
+      "baselineSha256": "195f2051584a15ca763cbea3260c6aff0e2a896fb1ef86614e7e88820a5a96dc",
+      "candidateSha256": "e159d8cfb3f3a34dc1749760a16129323349e95c6413999a4c4f3f09bf6e911b",
+      "size": 49542,
+      "action": "modified"
+    }
+  ],
+  "baselineFiles": [
+    {
+      "path": "server/src/services/experience/service.ts",
+      "baselineSha256": "1b694d00af556e94764349048ae26fd08556a9ed0bc0afcd8a2fff11c23a8fc6",
+      "size": 37660,
+      "candidateAction": "copy_unchanged"
+    },
+    {
+      "path": "server/src/services/experience/routine-responsibility-attention.ts",
+      "baselineSha256": "d00e93226149f46062da85d3ff5eb96cfed45318066fe9777e0a7803d3ad4777",
+      "size": 7140,
+      "candidateAction": "copy_unchanged"
+    },
+    {
+      "path": "server/src/__tests__/routine-responsibility-attention.integration.test.ts",
+      "baselineSha256": "e09b8086233cbc953f68c05636254aee6f3fa64c0e8187fab95a3d7e7dd622db",
+      "size": 5493,
+      "candidateAction": "copy_unchanged"
+    },
+    {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "baselineSha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd",
+      "size": 5637,
+      "candidateAction": "copy_unchanged"
+    },
+    {
+      "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "baselineSha256": "04ee7a7064f8759327c9b1a04ed7e7d9b9bea2d4d1f6ab67d1df8015db74efbe",
+      "size": 46347,
+      "candidateAction": "updated_native_routine_reader_test"
+    },
+    {
+      "path": "server/src/services/experience/projection.ts",
+      "baselineSha256": "5bcc62901a2257382d3f2870ccd9acf43b32933bd1d2c274b5a0925b5cf7f255",
+      "size": 5779,
+      "candidateAction": "copy_unchanged"
+    },
+    {
+      "path": "packages/shared/src/experience.ts",
+      "baselineSha256": "b99030a6e1337bb28d64e560f72824acec17de5ecbb72aa76e73066ea479a5d2",
+      "size": 12953,
+      "candidateAction": "copy_unchanged"
+    },
+    {
+      "path": "ui/src/pages/CompanyAccess.tsx",
+      "baselineSha256": "ef2e4a643a9e16b79de7228d038e8bfbda72fd70bd7b18c8a13c45117ba912d7",
+      "size": 65680,
+      "candidateAction": "privacy_readiness_source"
+    },
+    {
+      "path": "ui/src/pages/CompanyAccess.test.tsx",
+      "baselineSha256": "195f2051584a15ca763cbea3260c6aff0e2a896fb1ef86614e7e88820a5a96dc",
+      "size": 46805,
+      "candidateAction": "privacy_readiness_source"
+    }
+  ],
+  "currentSnapshot": {
+    "sourceHead": "54220ceaa51186499554c08972436b2f08e771b9",
+    "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+    "sourcePinsSha256": "e9bb0bb6f801efa51cf65ec5541209e2c358702f2b95975a7e4d924ac30c1fe5",
+    "overlayPinsSha256": "a530201766e3575e9c9765ed67766b2297a4a77ce757a80f8b5bedd4f4a435b3"
+  },
+  "serverQualificationPins": {
+    "sourcePinsSha256": "685c5c750a0f76cda8f8aed06a74a4969cbd91923bca8a5bcbe4564a99420778",
+    "serviceSha256": "1097d875101c74ac9a779f0a32614371ffeb2a22d66df0f10d45d2ac01bf67e1",
+    "private0565TestSha256": "6e0e28a1a829654402eb26fa39fdf25fd71c59d1bd92e70f59d86fa5ffaa720a"
+  },
+  "scope": "Private candidate only; no MAIN publication, staging, commit, or migration change.",
+  "publication": {
+    "priorHashGuard": "passed for all 9 paths before first write",
+    "postPublicationOxc": "{\"parser\":\"Vitest Vite/Oxc\",\"checked\":1014,\"status\":\"passed\"}",
+    "postPublicationSourceGuard": {
+      "checkedPaths": 9,
+      "failures": []
+    },
+    "untrackedPrototypeRemoval": {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "expectedPriorSha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd",
+      "removed": true
+    },
+    "gitStageablePaths": [
+      "server/src/services/experience/service.ts",
+      "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "server/src/services/experience/routine-responsibility-attention.ts",
+      "server/src/__tests__/routine-responsibility-attention.integration.test.ts",
+      "packages/shared/src/experience.ts",
+      "server/src/services/experience/projection.ts",
+      "ui/src/pages/CompanyAccess.tsx",
+      "ui/src/pages/CompanyAccess.test.tsx"
+    ],
+    "retiredUntrackedPaths": [
+      "server/src/__tests__/company-responsibility-attention.integration.test.ts"
+    ],
+    "sourcePublication": "MAIN files published to shared workspace; no staging/commit/deploy performed"
+  }
+}

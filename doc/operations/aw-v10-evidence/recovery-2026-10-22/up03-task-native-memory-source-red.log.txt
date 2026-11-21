@@ -1,0 +1,233 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts (1 test | 1 failed) 35470ms
+     × withholds copied private Memory content from another Human before list, count, search and extraction 4453ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected [ …(2) ] to not include '741d2c4d-2735-4efd-9097-c22bf68fdf80'
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:92:48
+     90|     const extracted = await companySearchExtractService(db).extract(co…
+     91|       companySearchExtractQuerySchema.parse({ contains: canary }), { i…
+     92|     expect.soft(listed.map(row => row.id)).not.toContain(child.id);
+       |                                                ^
+     93|     expect.soft(JSON.stringify(listed)).not.toContain(canary);
+     94|     expect.soft(count).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected '[{"visibility":"open","privacyRootIss…' not to contain 'privatememorycopycf42701015a4460ebe4d…'
+
+Expected: "privatememorycopycf42701015a4460ebe4d5b6bcdb93030"
+Received: "[{"visibility":"open","privacyRootIssueId":null,"privacyParentIssueId":"061778aa-fadf-42bc-a84b-65d45692fe54","externalConversationState":null,"conversationAgentId":null,"conversationUserId":null,"conversationState":null,"conversationRetiredAt":null,"conversationSessionGeneration":0,"conversationBoundaryCommentId":null,"id":"741d2c4d-2735-4efd-9097-c22bf68fdf80","companyId":"028a9fb4-8e87-4e2a-bd0c-b53363dfd27e","projectId":null,"projectWorkspaceId":null,"goalId":null,"parentId":null,"title":"Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030","description":"Copied retained source: privatememorycopycf42701015a4460ebe4d5b6bcdb93030","descriptionTruncated":false,"status":"todo","statusVersion":0,"lastStatusDecisionId":null,"workMode":"standard","harnessKind":null,"priority":"medium","reviewPolicy":null,"assigneeAgentId":null,"assigneeUserId":null,"checkoutRunId":null,"executionRunId":null,"executionAgentNameKey":null,"executionLockedAt":null,"createdByAgentId":"9baf80f7-9e40-4d9b-9a8c-efb096ec19b6","createdByUserId":null,"responsibleUserId":"4eb7f926-148d-4347-8d7b-e82cb48929ad","issueNumber":1,"identifier":"PM028a9f-1","originKind":"manual","originId":null,"originRunId":"393b597a-68c4-47a7-b291-821f09189d89","originIdentityContextId":null,"continuationIdentityContextId":null,"originFingerprint":"default","requestDepth":0,"billingCode":null,"assigneeAdapterOverrides":null,"executionPolicy":null,"executionState":null,"monitorNextCheckAt":null,"monitorWakeRequestedAt":null,"monitorLastTriggeredAt":null,"monitorAttemptCount":0,"monitorNotes":null,"monitorScheduledBy":null,"executionWorkspaceId":null,"executionWorkspacePreference":null,"executionWorkspaceSettings":null,"sourceTrust":null,"unblockDescriptor":null,"blockedTransitionAt":null,"blockedOwnerNotifiedAt":null,"plannedStartAt":null,"plannedEndAt":null,"forecastStartAt":null,"forecastEndAt":null,"forecastConfidence":null,"forecastReason":null,"milestoneId":null,"estimatedEffortMinutes":null,"startedAt":null,"completedAt":null,"cancelledAt":null,"hiddenAt":null,"createdAt":"2026-10-22T23:04:01.192Z","updatedAt":"2026-10-22T23:04:01.192Z","labels":[],"labelIds":[],"watchdog":null,"activeRun":null,"lastActivityAt":"2026-10-22T23:04:01.192Z","blockerAttention":{"state":"none","reason":null,"unresolvedBlockerCount":0,"coveredBlockerCount":0,"stalledBlockerCount":0,"attentionBlockerCount":0,"pendingFinalizeBlockerIssueIds":[],"sampleBlockerIdentifier":null,"sampleStalledBlockerIdentifier":null,"blockingTreeLive":false,"directBlockerIssueId":null,"terminalBlockerIssueId":null,"terminalBlocker":null},"reviewAttention":{"state":"none","paths":[],"reason":null}},{"visibility":"open","privacyRootIssueId":null,"privacyParentIssueId":null,"externalConversationState":null,"conversationAgentId":null,"conversationUserId":null,"conversationState":null,"conversationRetiredAt":null,"conversationSessionGeneration":0,"conversationBoundaryCommentId":null,"id":"061778aa-fadf-42bc-a84b-65d45692fe54","companyId":"028a9fb4-8e87-4e2a-bd0c-b53363dfd27e","projectId":null,"projectWorkspaceId":null,"goalId":null,"parentId":null,"title":"Public native source task","description":null,"descriptionTruncated":false,"status":"backlog","statusVersion":0,"lastStatusDecisionId":null,"workMode":"standard","harnessKind":null,"priority":"medium","reviewPolicy":null,"assigneeAgentId":"9baf80f7-9e40-4d9b-9a8c-efb096ec19b6","assigneeUserId":null,"checkoutRunId":null,"executionRunId":null,"executionAgentNameKey":null,"executionLockedAt":null,"createdByAgentId":null,"createdByUserId":"4eb7f926-148d-4347-8d7b-e82cb48929ad","responsibleUserId":"4eb7f926-148d-4347-8d7b-e82cb48929ad","issueNumber":null,"identifier":null,"originKind":"manual","originId":null,"originRunId":null,"originIdentityContextId":null,"continuationIdentityContextId":"17488d0f-fd4b-477f-bcc2-f801234ad57b","originFingerprint":"default","requestDepth":0,"billingCode":null,"assigneeAdapterOverrides":null,"executionPolicy":null,"executionState":null,"monitorNextCheckAt":null,"monitorWakeRequestedAt":null,"monitorLastTriggeredAt":null,"monitorAttemptCount":0,"monitorNotes":null,"monitorScheduledBy":null,"executionWorkspaceId":null,"executionWorkspacePreference":null,"executionWorkspaceSettings":null,"sourceTrust":null,"unblockDescriptor":null,"blockedTransitionAt":null,"blockedOwnerNotifiedAt":null,"plannedStartAt":null,"plannedEndAt":null,"forecastStartAt":null,"forecastEndAt":null,"forecastConfidence":null,"forecastReason":null,"milestoneId":null,"estimatedEffortMinutes":null,"startedAt":null,"completedAt":null,"cancelledAt":null,"hiddenAt":null,"createdAt":"2026-10-22T23:03:58.348Z","updatedAt":"2026-10-22T23:03:58.348Z","labels":[],"labelIds":[],"watchdog":null,"activeRun":null,"lastActivityAt":"2026-10-22T23:03:58.348Z","blockerAttention":{"state":"none","reason":null,"unresolvedBlockerCount":0,"coveredBlockerCount":0,"stalledBlockerCount":0,"attentionBlockerCount":0,"pendingFinalizeBlockerIssueIds":[],"sampleBlockerIdentifier":null,"sampleStalledBlockerIdentifier":null,"blockingTreeLive":false,"directBlockerIssueId":null,"terminalBlockerIssueId":null,"terminalBlocker":null},"reviewAttention":{"state":"none","paths":[],"reason":null}}]"
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:93:45
+     91|       companySearchExtractQuerySchema.parse({ contains: canary }), { i…
+     92|     expect.soft(listed.map(row => row.id)).not.toContain(child.id);
+     93|     expect.soft(JSON.stringify(listed)).not.toContain(canary);
+       |                                             ^
+     94|     expect.soft(count).toBe(0);
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected 2 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:94:24
+     92|     expect.soft(listed.map(row => row.id)).not.toContain(child.id);
+     93|     expect.soft(JSON.stringify(listed)).not.toContain(canary);
+     94|     expect.soft(count).toBe(0);
+       |                        ^
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+     96|     expect.soft(search.results).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:95:44
+     93|     expect.soft(JSON.stringify(listed)).not.toContain(canary);
+     94|     expect.soft(count).toBe(0);
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+       |                                            ^
+     96|     expect.soft(search.results).toEqual([]);
+     97|     expect.soft(JSON.stringify(search)).not.toContain(canary);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected [ { …(12) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "href": "/PM028a9f/issues/PM028a9f-1",
++     "id": "741d2c4d-2735-4efd-9097-c22bf68fdf80",
++     "issue": {
++       "assigneeAgentId": null,
++       "assigneeUserId": null,
++       "externalConversationState": null,
++       "id": "741d2c4d-2735-4efd-9097-c22bf68fdf80",
++       "identifier": "PM028a9f-1",
++       "priority": "medium",
++       "projectId": null,
++       "status": "todo",
++       "title": "Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030",
++       "updatedAt": "2026-10-22T23:04:01.192Z",
++     },
++     "matchedFields": [
++       "title",
++       "description",
++     ],
++     "previewImageUrl": null,
++     "score": 5020,
++     "snippet": "Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030",
++     "snippets": [
++       {
++         "field": "title",
++         "highlights": [
++           {
++             "end": 57,
++             "start": 8,
++           },
++         ],
++         "label": "Title",
++         "text": "Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030",
++       },
++       {
++         "field": "description",
++         "highlights": [
++           {
++             "end": 73,
++             "start": 24,
++           },
++         ],
++         "label": "Description",
++         "text": "Copied retained source: privatememorycopycf42701015a4460ebe4d5b6bcdb93030",
++       },
++     ],
++     "sourceLabel": "Title",
++     "title": "PM028a9f-1 Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030",
++     "type": "issue",
++     "updatedAt": "2026-10-22T23:04:01.192Z",
++   },
++ ]
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:96:33
+     94|     expect.soft(count).toBe(0);
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+     96|     expect.soft(search.results).toEqual([]);
+       |                                 ^
+     97|     expect.soft(JSON.stringify(search)).not.toContain(canary);
+     98|     expect.soft(extracted.results).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected '{"query":"privatememorycopycf42701015…' not to contain 'privatememorycopycf42701015a4460ebe4d…'
+
+Expected: "privatememorycopycf42701015a4460ebe4d5b6bcdb93030"
+Received: "{"query":"privatememorycopycf42701015a4460ebe4d5b6bcdb93030","normalizedQuery":"privatememorycopycf42701015a4460ebe4d5b6bcdb93030","scope":"issues","sort":"relevance","limit":20,"offset":0,"results":[{"id":"741d2c4d-2735-4efd-9097-c22bf68fdf80","type":"issue","score":5020,"title":"PM028a9f-1 Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030","href":"/PM028a9f/issues/PM028a9f-1","matchedFields":["title","description"],"sourceLabel":"Title","snippet":"Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030","snippets":[{"field":"title","label":"Title","text":"Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030","highlights":[{"start":8,"end":57}]},{"field":"description","label":"Description","text":"Copied retained source: privatememorycopycf42701015a4460ebe4d5b6bcdb93030","highlights":[{"start":24,"end":73}]}],"issue":{"id":"741d2c4d-2735-4efd-9097-c22bf68fdf80","identifier":"PM028a9f-1","title":"Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030","status":"todo","priority":"medium","assigneeAgentId":null,"assigneeUserId":null,"projectId":null,"updatedAt":"2026-10-22T23:04:01.192Z","externalConversationState":null},"updatedAt":"2026-10-22T23:04:01.192Z","previewImageUrl":null}],"countsByType":{"issue":1,"comment":0,"document":0,"artifact":0,"agent":0,"project":0},"filterOptionCounts":{"status":{"todo":1},"priority":{"medium":1},"assigneeAgentId":{},"assigneeUserId":{},"projectId":{},"labelId":{},"updatedWithin":{"24h":1,"7d":1,"30d":1,"90d":1}},"zeroResults":null,"hasMore":false}"
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:97:45
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+     96|     expect.soft(search.results).toEqual([]);
+     97|     expect.soft(JSON.stringify(search)).not.toContain(canary);
+       |                                             ^
+     98|     expect.soft(extracted.results).toEqual([]);
+     99|     expect.soft(extracted.hasMore).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected [ { …(8) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "assigneeAgentId": null,
++     "identifier": "PM028a9f-1",
++     "issueId": "741d2c4d-2735-4efd-9097-c22bf68fdf80",
++     "matches": [
++       {
++         "excerpt": "Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030",
++         "excerptTruncated": false,
++         "field": "title",
++         "label": "Issue title",
++         "source": {
++           "issueId": "741d2c4d-2735-4efd-9097-c22bf68fdf80",
++           "type": "issue",
++         },
++         "value": "privatememorycopycf42701015a4460ebe4d5b6bcdb93030",
++       },
++     ],
++     "matchesTruncated": false,
++     "status": "todo",
++     "title": "Derived privatememorycopycf42701015a4460ebe4d5b6bcdb93030",
++     "updatedAt": "2026-10-22T23:04:01.192Z",
++   },
++ ]
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:98:36
+     96|     expect.soft(search.results).toEqual([]);
+     97|     expect.soft(JSON.stringify(search)).not.toContain(canary);
+     98|     expect.soft(extracted.results).toEqual([]);
+       |                                    ^
+     99|     expect.soft(extracted.hasMore).toBe(false);
+    100|     const detailAllowed = (await authorizationService(db).decide({ act…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:104:100
+    102|     if (detailAllowed) {
+    103|       // This is the original detail payload owner, not an HTTP status…
+    104|       await expect(assertAnalyticalContextPayloadAccess(db, companyId,…
+       |                                                                                                    ^
+    105|         .rejects.toMatchObject({ status: 403 });
+    106|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  23:02:39
+   Duration  83.10s (transform 36.22s, setup 279ms, import 46.84s, tests 35.47s, environment 0ms)
+

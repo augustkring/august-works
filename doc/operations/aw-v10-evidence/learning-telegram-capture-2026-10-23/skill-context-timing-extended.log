@@ -1,0 +1,16 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[23:31:01] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"d9cd1010-2bd9-400b-8f66-b16797b1d7ea","actorAgentId":"1cc722a6-70f0-4fb8-9c2b-14174c3798fa","responsibleUserId":"647dce6b-e70c-44f6-b624-c24bba9f18b1"}[39m
+[23:31:01] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"d9cd1010-2bd9-400b-8f66-b16797b1d7ea","actorAgentId":"1cc722a6-70f0-4fb8-9c2b-14174c3798fa","responsibleUserId":"647dce6b-e70c-44f6-b624-c24bba9f18b1"}[39m
+[23:31:12] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"82787e1c-aba1-4ba6-96eb-44e88aa9a1b3","actorAgentId":"c0707e28-cbcf-4b4c-bc32-7f367a1a331a","responsibleUserId":"413946a9-b688-4fc1-9ed5-0fc2b247767b"}[39m
+[23:31:12] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"82787e1c-aba1-4ba6-96eb-44e88aa9a1b3","actorAgentId":"c0707e28-cbcf-4b4c-bc32-7f367a1a331a","responsibleUserId":"413946a9-b688-4fc1-9ed5-0fc2b247767b"}[39m
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 38 skipped (42)
+   Start at  23:30:06
+   Duration  140.44s (transform 24.94s, setup 141ms, import 37.90s, tests 102.06s, environment 0ms)
+

@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 import { settleTheme } from "./theme.shared";
 import {expect,test} from "@playwright/test";
 import {createRequire} from "node:module";
@@ -9,13 +11,15 @@ test.setTimeout(120000);
 // historical data, actual Human/pilot trial or customer forecast skill claimed.
 test("a native operator proposes an exact statistical version without publication or canonical changes",async({page,request},info)=>{
  const original=await json(await request.get("/api/instance/settings/experimental"));
+ const session = await json(await request.get("/api/auth/get-session"));
+ const currentUserId = session.user.id as string;
  try {
   await json(await request.patch("/api/instance/settings/experimental",{data:{analytical_lineage_v8:true,business_metrics_v8:true,business_forecasting_v8:true,forecast_provider_statsforecast_v8:true,ai_use_cases_v7:true,governance_evidence_v7:true}}));
   const company=await json(await request.post("/api/companies",{data:{name:"Native statistical forecast software fixture"}}));
   const task=await json(await request.post(`/api/companies/${company.id}/issues`,{data:{title:"Independent native Task",status:"todo"}}));
   const purpose=analyticalPurpose();purpose.analyticalPurpose!.capabilities=["metrics","forecast"];
   const policy=await json(await request.post(`/api/companies/${company.id}/governance-obligations`,{data:purpose}));
-  const definition=metricDefinition(policy.id);definition.valueType="count";definition.unit="objects";definition.calculation={kind:"native_count",population:{entity:"issue",statuses:["done"],projectId:null}};
+  const definition=metricDefinition(policy.id);definition.ownerUserId=currentUserId;definition.valueType="count";definition.unit="objects";definition.calculation={kind:"native_count",population:{entity:"issue",statuses:["done"],projectId:null}};
   const metric=await json(await request.post(`/api/companies/${company.id}/business-metrics`,{data:{key:"native_task_volume",definition}}));
   await json(await request.post(`/api/companies/${company.id}/business-metrics/${metric.metric.id}/publish`,{data:{expectedRevision:1,versionId:metric.version.id}}));
   const endpoint=`/api/companies/${company.id}/business-forecasts`;

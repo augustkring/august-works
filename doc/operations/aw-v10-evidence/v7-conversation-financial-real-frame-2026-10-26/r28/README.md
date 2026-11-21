@@ -1,0 +1,5 @@
+# Actual conversation financial suite R28
+
+The qualified binary, fresh source snapshot, and syntax preflights passed. Vitest executed all six selected real-frame cases: 5 passed, 1 failed, 25 skipped; wrapper exit 1. The live-session/current-generation denial, exact budget boundary, 64th/65th cap, settlement-conflict rollback, and unknown-hold/purge refusal all passed. The known-cost test passed its genuine Native conversation usage settlement, one-event pricing, duplicate-settlement rejection, Stop, canonical company purge, CostEvent deletion, and exact content-free aggregate assertions.
+
+The sole failure is the added positive outbox invariant: after company purge, the `runtime-asset-erasure:v1:<run>` row is `queued` instead of `succeeded`, so the exact current operation-bound erasure receipt was reset during cleanup. R29 adds content-free before/after outbox binding facts to identify which owner dropped the marker. This run is not full financial acceptance until that receipt is preserved.

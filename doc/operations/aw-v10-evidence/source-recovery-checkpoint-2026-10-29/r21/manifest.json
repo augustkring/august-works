@@ -1,0 +1,110 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T18:52:04.257751+00:00",
+  "baseCommit": "a4e7d22e85263c13319dda8c01a47c4926fc5bb9",
+  "patchBytes": 376119,
+  "patchSha256": "be9e3d6a7af3ea32a6bd0672f61efb7621a5edfb87f8ecc8431b1ea6d4b71ae4",
+  "archiveSha256": "45cda57058804e200fc639a3f81fb7048b3ba889528a7919f18105cf8d78a85f",
+  "untrackedSourceFiles": [
+    {
+      "path": "doc/operations/v10-capability-projection.json",
+      "bytes": 272729,
+      "sha256": "30bfa71bea9bcec02a81f4b838d98349bf64c45bc1af9c6edf300fcca6746867"
+    },
+    {
+      "path": "doc/operations/v10-safe-change-graph.json",
+      "bytes": 7240,
+      "sha256": "e887871de3f117863c12f081d1e51d9aa615feda724f23a0662be791378a554d"
+    },
+    {
+      "path": "doc/operations/v10-safe-change-graph.source.json",
+      "bytes": 4698,
+      "sha256": "c40101f0622586710ae6dcbff183a5758ea4b1444e7fdd2814829d7c785ebbc9"
+    },
+    {
+      "path": "doc/operations/v10-security-fast-path.json",
+      "bytes": 9485,
+      "sha256": "e845f234a07acb0184d4b44f6387f192643211f8f3e3ea394b96ffd234f97128"
+    },
+    {
+      "path": "packages/db/src/migration-transaction-budget.test.ts",
+      "bytes": 5444,
+      "sha256": "6874b95df7bf384f1081b198173019b43f3b72557bdc7a326cbb19a0fb0677a1"
+    },
+    {
+      "path": "packages/db/src/migrations/0563_wise_yellow_claw.sql",
+      "bytes": 3167,
+      "sha256": "3a657358183cd499efba154831c969c49dda4d1f7df69a5d0236eb2358a4e57d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0563_snapshot.json",
+      "bytes": 2785918,
+      "sha256": "2cda86e5db45b3f55304bcbfbb9afd3bd6cdb405b138de8ef0d3039c86567e71"
+    },
+    {
+      "path": "packages/db/src/schema/agent_model_migration_monitor_receipts.ts",
+      "bytes": 3030,
+      "sha256": "25b781862fb45a42ef09de0802c0665234c83d8d7373e98652661a0670110d85"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.test.ts",
+      "bytes": 2094,
+      "sha256": "d840e1f3dc02097ae59d5acd5ecf1af41cbccb1b92a9827cf0dde253e81b850e"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.ts",
+      "bytes": 2289,
+      "sha256": "625c3d11b0eb727393bd99943fb4d099d88eced84b8d23949b231badfb8bea83"
+    },
+    {
+      "path": "scripts/check-v10-capability-projection.mjs",
+      "bytes": 700,
+      "sha256": "0b7e774554d869c54d51a2f5002b67136e57f294e4ea5ad9b2ddfc45cbd93037"
+    },
+    {
+      "path": "scripts/check-v10-safe-change-graph.mjs",
+      "bytes": 647,
+      "sha256": "ca386b522c1ba51833678f73158248c82e1954fec2552c224f1bde5d7b3a23e7"
+    },
+    {
+      "path": "scripts/check-v10-security-fast-path.mjs",
+      "bytes": 5851,
+      "sha256": "22943b917afce1ec0d5e9f010d1a8aa2e98c10f021944baf71d7855911b56543"
+    },
+    {
+      "path": "scripts/check-v10-security-fast-path.test.mjs",
+      "bytes": 2149,
+      "sha256": "0feca005a2311e81e52cd038216162f618c074f3c65246508b344f022e40a18b"
+    },
+    {
+      "path": "scripts/generate-v10-capability-projection.ts",
+      "bytes": 6316,
+      "sha256": "948a48f05ef7962a5d5fe93047adcfb7ecfd7ab9680b9792050ae8b113e3f0aa"
+    },
+    {
+      "path": "scripts/generate-v10-safe-change-graph.mjs",
+      "bytes": 2626,
+      "sha256": "c9d29579d1badddcaae7fd3114b0fb41a4c6cf82d05e2d007f6b9bef5237682a"
+    },
+    {
+      "path": "scripts/v10-product-artifacts.test.mjs",
+      "bytes": 2222,
+      "sha256": "8b8a2da621ee2b88c4b9626d465bf2c15e05fd7dc3a093e425649669a09468b0"
+    },
+    {
+      "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
+      "bytes": 14472,
+      "sha256": "4ce09b1318fa05d21df57861849387e71c9c99b310873e817d5c9ee9cdcf8671"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.test.tsx",
+      "bytes": 8260,
+      "sha256": "939295fb9ec1e6fbe190987816c040af3fdca3fac6ce1cc50ef12f00663e0537"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.tsx",
+      "bytes": 8610,
+      "sha256": "32fecc3d7a3e3b38ac383d26a5214a96dcef7b88b48447cd77ad72ea5387b494"
+    }
+  ]
+}

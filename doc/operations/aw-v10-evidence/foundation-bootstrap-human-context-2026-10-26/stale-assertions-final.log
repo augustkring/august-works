@@ -1,0 +1,26 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/agents-service-clear-error.test.ts > agent service clearError > pauses and resumes without manufacturing completion or mutating configuration and pending run history 292ms
+ ✓ src/__tests__/agents-service-clear-error.test.ts > agent service clearError > resets converted agent sessions while preserving identity, configuration and run history 208ms
+ ✓ src/__tests__/agents-service-clear-error.test.ts > agent service clearError > moves an error agent to idle without deleting run history or runtime diagnostics 96ms
+ ✓ src/__tests__/agents-service-clear-error.test.ts > agent service clearError > rejects non-error agents with a 409 conflict 39ms
+ ✓ src/__tests__/agents-service-clear-error.test.ts > agent service clearError > keeps resume-style terminal and pending-approval protections 67ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > attaches the original Error to res.err for 500s 7ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > ends aborted client requests without reporting a crash 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > exposes the trusted import response while sanitizing secret-sensitive crash metadata 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > attaches HttpError instances for 500 responses 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > sanitizes private owner errors before logs and crash reporting: /api/chat-endpoints/endpoint-1/setup 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > sanitizes private owner errors before logs and crash reporting: /api/companies/company-1/workflows/workflow-1/draft 0ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > sanitizes private owner errors before logs and crash reporting: /api/companies//workflows/workflow-1/unknown 0ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > sanitizes private owner errors before logs and crash reporting: /api/companies/company-1/workflow-runs/run-1 0ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > keeps actionable setup validation details while removing submitted credentials 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > returns 400 for Zod validation errors from another module instance 0ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > removes submitted credentials from setup Zod issue prose 0ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > records responsible-user denial codes on the active agent run 0ms
+
+ Test Files  2 passed (2)
+      Tests  17 passed (17)
+   Start at  00:53:43
+   Duration  18.79s (transform 9.29s, setup 136ms, import 13.37s, tests 5.00s, environment 0ms)
+

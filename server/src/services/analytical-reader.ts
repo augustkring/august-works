@@ -6,15 +6,28 @@ import {v8FeatureEnabled} from "@paperclipai/shared";
 import type {AuthorizationActor} from "./authorization.js";
 import {assertV7Authorization,v7HumanActorId} from "./v7-authorization.js";
 import {instanceSettingsService} from "./instance-settings.js";
-import {heartbeatMemoryPayloadRetained} from "./memory/memory-privacy.js";
+import {heartbeatMemoryPayloadRetained,nativeMemoryCaptureSourcePurposeActive,assertNativeMemoryCaptureSourcePrincipal} from "./memory/memory-privacy.js";
 import {forbidden,notFound} from "../errors.js";
 /** Read identity only: an actual running conversation or assigned Task and its current
  * responsible human. Source owners still enforce agent × human authorization;
  * this never creates a board principal or admits human publication/choice. */
 export type NativeReadScope = "conversation" | "task";
-async function assertNativeReaderIdentity(db:Db,companyId:string,actor:AuthorizationActor,scope:NativeReadScope="conversation") {
+async function assertNativeReaderIdentity(db:Db,companyId:string,actor:AuthorizationActor,scope:NativeReadScope="conversation",sourceRevalidation=false) {
  if(actor.type==="board"){v7HumanActorId(actor);return;}
- if(actor.type!=="agent"||actor.source!=="agent_jwt"||actor.companyId!==companyId||!actor.agentId||!actor.runId||!actor.onBehalfOfUserId||actor.keyId||actor.keyScope||!z.string().uuid().safeParse(actor.agentId).success||!z.string().uuid().safeParse(actor.runId).success)throw forbidden("Current native analytical conversation identity is required");
+ if(actor.type!=="agent"||(actor.source!=="agent_jwt"&&!(sourceRevalidation&&actor.source==="none"))||actor.companyId!==companyId||!actor.agentId||!actor.runId||!actor.onBehalfOfUserId||actor.keyId||actor.keyScope||!z.string().uuid().safeParse(actor.agentId).success||!z.string().uuid().safeParse(actor.runId).success)throw forbidden("Current native analytical conversation identity is required");
+ // A completed producer has released execution ownership. Its actual leased
+ // native job can compare sources inside that same transaction, never act as a
+ // running conversation reader. Permissions and all retained payload checks stay.
+ if(nativeMemoryCaptureSourcePurposeActive(companyId,actor)){
+  await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
+  const [producer]=await db.select({issueId:heartbeatRuns.issueId}).from(heartbeatRuns)
+   .where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,actor.runId)));
+  if(!producer?.issueId || !await heartbeatMemoryPayloadRetained(db,companyId,actor.runId))throw forbidden("Native capture source is unavailable");
+  await assertV7Authorization(db,actor,companyId,"company_scope:read");
+  await assertV7Authorization(db,actor,companyId,"issue:read",{type:"issue",companyId,issueId:producer.issueId});
+  await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
+  return;
+ }
  if(scope==="conversation"&&!v8FeatureEnabled(await instanceSettingsService(db).getExperimental(),"management_chat_tools_v8"))throw notFound("Management chat tools are not enabled");
  const [binding]=await db.select({run:heartbeatRuns,agent:agents,issue:issues}).from(heartbeatRuns)
   .innerJoin(agents,and(eq(agents.companyId,heartbeatRuns.companyId),eq(agents.id,heartbeatRuns.agentId)))
@@ -32,22 +45,44 @@ async function assertNativeReaderIdentity(db:Db,companyId:string,actor:Authoriza
  if(!await heartbeatMemoryPayloadRetained(db,companyId,actor.runId))throw forbidden("The conversation source payload was erased");
  await assertV7Authorization(db,actor,companyId,"company_scope:read");await assertV7Authorization(db,actor,companyId,"issue:read",{type:"issue",companyId,issueId:binding.issue.id});
 }
-const nativeReads=new AsyncLocalStorage<{companyId:string;agentId:string;runId:string;userId:string;active:boolean;scope:NativeReadScope}>();
+const nativeReads=new AsyncLocalStorage<{companyId:string;agentId:string;runId:string;userId:string;active:boolean;scope:NativeReadScope;sourceRevalidation:boolean}>();
 /** Server-owned in-process read admission. HTTP arguments and JWT claims alone
  * cannot consume analytical facts without the native retention boundary. */
 export async function withNativeAnalyticalReader<T>(db:Db,companyId:string,actor:AuthorizationActor,read:()=>Promise<T>,readScope?:NativeReadScope) {
  if(actor.type!=="agent")throw forbidden("A native analytical consumer is required");
+ return withNativeReaderPermit(db,companyId,actor,read,readScope,false);
+}
+/** Original source validators use a DB-bound server actor, without claiming a
+ * JWT. All persisted run, current Human, membership, scope and ACL checks apply. */
+export async function withNativeAnalyticalSourceReader<T>(db:Db,companyId:string,actor:AuthorizationActor,read:()=>Promise<T>,readScope:NativeReadScope="task"){
+ if(actor.type!=="agent"||actor.source!=="none")throw forbidden("A server-bound source reader is required");
+ return withNativeReaderPermit(db,companyId,actor,read,readScope,true);
+}
+async function withNativeReaderPermit<T>(db:Db,companyId:string,actor:AuthorizationActor,read:()=>Promise<T>,readScope:NativeReadScope|undefined,sourceRevalidation:boolean){
  const parent=nativeReads.getStore();
+ const sameParent=parent?.active&&parent.companyId===companyId&&parent.agentId===actor.agentId&&parent.runId===actor.runId&&parent.userId===actor.onBehalfOfUserId;
+ sourceRevalidation=sourceRevalidation||Boolean(sameParent&&parent.sourceRevalidation);
  const scope=readScope??(parent?.active&&parent.companyId===companyId&&parent.agentId===actor.agentId&&parent.runId===actor.runId&&parent.userId===actor.onBehalfOfUserId?parent.scope:"conversation");
- await assertNativeReaderIdentity(db,companyId,actor,scope);
- const permit={companyId,agentId:actor.agentId!,runId:actor.runId!,userId:actor.onBehalfOfUserId!,active:true,scope};
+ await assertNativeReaderIdentity(db,companyId,actor,scope,sourceRevalidation);
+ const permit={companyId,agentId:actor.agentId!,runId:actor.runId!,userId:actor.onBehalfOfUserId!,active:true,scope,sourceRevalidation};
  try{return await nativeReads.run(permit,read);}finally{permit.active=false;}
 }
 export async function assertAnalyticalReader(db:Db,companyId:string,actor:AuthorizationActor) {
  if(actor.type==="board"){v7HumanActorId(actor);return;}
  const permit=nativeReads.getStore();
- if(!permit?.active||permit.companyId!==companyId||permit.agentId!==actor.agentId||permit.runId!==actor.runId||permit.userId!==actor.onBehalfOfUserId)throw forbidden("Analytical reads require the native retained tool boundary");
- await assertNativeReaderIdentity(db,companyId,actor,permit.scope);
+ if(!permit?.active||permit.companyId!==companyId||permit.agentId!==actor.agentId||permit.runId!==actor.runId||permit.userId!==actor.onBehalfOfUserId){
+  if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1")console.info("native-analytical-reader-diagnostic",JSON.stringify({stage:"permit_binding",permitPresent:Boolean(permit),permitActive:permit?.active??false,companyMatch:permit?.companyId===companyId,agentMatch:permit?.agentId===actor.agentId,runMatch:permit?.runId===actor.runId,userMatch:permit?.userId===actor.onBehalfOfUserId}));
+  throw forbidden("Analytical reads require the native retained tool boundary");
+ }
+ try{await assertNativeReaderIdentity(db,companyId,actor,permit.scope,permit.sourceRevalidation)}catch(error){
+  if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS==="1"){
+   const candidate=error&&typeof error==="object"?error as {status?:unknown;details?:unknown}:null;
+   const details=candidate?.details&&typeof candidate.details==="object"?candidate.details as Record<string,unknown>:null;
+   const code=typeof details?.code==="string"&&/^[a-z][a-z0-9_]{0,63}$/.test(details.code)?details.code:null;
+   console.info("native-analytical-reader-diagnostic",JSON.stringify({stage:"identity_recheck",scope:permit.scope,sourceRevalidation:permit.sourceRevalidation,status:typeof candidate?.status==="number"?candidate.status:null,code}));
+  }
+  throw error;
+ }
 }
 /** Used only after current read admission, when comparing declared human owners. */
 export function analyticalPrincipalId(actor:AuthorizationActor){return actor.type==="agent"&&actor.onBehalfOfUserId?actor.onBehalfOfUserId:v7HumanActorId(actor);}

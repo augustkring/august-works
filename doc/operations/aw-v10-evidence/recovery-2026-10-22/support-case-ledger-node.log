@@ -1,0 +1,13 @@
+✔ V9 restore requires exact bounded authenticated feedback erasure identities (1379.242628ms)
+✔ support restore requires exact bounded case and event erasure identities (776.326499ms)
+✔ restore rejects forged, stale, cross-environment and invalid-date ledgers (7.421755ms)
+✔ V8 restore requires a bounded, authenticated suppression section with exact company and source identities (582.392161ms)
+✔ analytical restore requires native object guards even when no event was projected (942.185601ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5017.039234

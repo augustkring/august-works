@@ -1,0 +1,11 @@
+✔ brand gate reads customer strings and JSX while preserving technical identifiers and attribution comments (8.195567ms)
+✔ an exception for one compatibility literal cannot authorize new copy (1.042845ms)
+✔ published command aliases share the canonical entrypoint and preserve legacy arguments, output and exit code (46.66209ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 223.19012

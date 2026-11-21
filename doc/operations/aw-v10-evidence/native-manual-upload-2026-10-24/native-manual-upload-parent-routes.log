@@ -1,0 +1,90 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts (33 tests | 4 failed | 29 skipped) 59661ms
+     × accepts zip uploads for issue attachments 30024ms
+     × rejects same-company attachment content reads outside the parent issue boundary 25014ms
+     × canonicalizes paperclip artifact metadata before creating a work product 2539ms
+     × rejects paperclip artifact metadata that references another issue's attachment 2079ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > accepts zip uploads for issue attachments
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/issue-attachment-routes.test.ts:267:3
+    265|   });
+    266|
+    267|   it("accepts zip uploads for issue attachments", async () => {
+       |   ^
+    268|     const storage = createStorageService();
+    269|     mockIssueService.getById.mockResolvedValue({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > rejects same-company attachment content reads outside the parent issue boundary
+AssertionError: expected 404 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 404
+
+ ❯ src/__tests__/issue-attachment-routes.test.ts:744:24
+    742|     const res = await request(app).get("/api/attachments/attachment-1/…
+    743|
+    744|     expect(res.status).toBe(403);
+       |                        ^
+    745|     expect(storage.getObject).not.toHaveBeenCalled();
+    746|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > canonicalizes paperclip artifact metadata before creating a work product
+AssertionError: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-attachment-routes.test.ts:791:24
+    789|       });
+    790|
+    791|     expect(res.status).toBe(201);
+       |                        ^
+    792|     expect(mockWorkProductService.createForIssue).toHaveBeenCalledWith(
+    793|       issue.id,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > rejects paperclip artifact metadata that references another issue's attachment
+AssertionError: expected 500 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 500
+
+ ❯ src/__tests__/issue-attachment-routes.test.ts:838:24
+    836|       });
+    837|
+    838|     expect(res.status).toBe(422);
+       |                        ^
+    839|     expect(res.body.error).toBe("Attachment artifact must reference an…
+    840|     expect(mockWorkProductService.createForIssue).not.toHaveBeenCalled…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 29 skipped (33)
+   Start at  12:47:01
+   Duration  61.42s (transform 48.29s, setup 403ms, import 492ms, tests 59.66s, environment 0ms)
+

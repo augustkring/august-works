@@ -1,0 +1,67 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-runner-file-handoff.test.ts (19 tests | 1 failed | 18 skipped) 7739ms
+     × captures the selected attachment snapshot before later asset changes and never invents delivered bytes 180ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > captures the selected attachment snapshot before later asset changes and never invents delivered bytes
+AssertionError: expected undefined to deeply equal [ { input: { …(8) }, …(1) } ]
+
+- Expected:
+[
+  {
+    "input": {
+      "assetId": "a9cbd7ce-3d3c-4980-ac8c-65f2c60f154d",
+      "attachmentId": "e4e2d577-91d5-42ef-8cc7-e6085e478164",
+      "byteSize": 27,
+      "commentId": "31d9ef8c-451a-4897-9a01-ac12b3bac42b",
+      "disposition": "delivered",
+      "issueId": "00000000-0000-4000-8000-000000009103",
+      "kind": "attachment",
+      "sha256": "14776954df7131e5ddfdb6b94ee38f070d986c9e81897f8587ddb6acabfa498a",
+    },
+    "payloadSourceSnapshot": {
+      "digest": "0121af5cbf23f0a90b0e48674a9d6061f11c65cb1c4db94d0ada6320f8f8fd22",
+      "inputs": [],
+      "owner": {
+        "companyId": "00000000-0000-4000-8000-000000009101",
+        "contentHash": "fbc7919e972996fa5997ffe220f18ff77262258d8961b2f0985956787767dc63",
+        "id": "e4e2d577-91d5-42ef-8cc7-e6085e478164",
+        "kind": "attachment",
+      },
+      "policy": {
+        "foundationRevisionIds": [],
+        "issueIds": [],
+        "memoryIds": [],
+        "projectIds": [],
+        "runIds": [],
+      },
+      "version": 1,
+    },
+  },
+]
+
++ Received:
+undefined
+
+ ❯ src/services/native-runtime/native-runner-file-handoff.test.ts:768:36
+    766|     const stage = await stageNativeRunnerWakeAttachments({ db, binding…
+    767|     try {
+    768|       expect(stage.sourceCaptures).toEqual([{
+       |                                    ^
+    769|         input: { kind: "attachment", issueId, attachmentId: attachment…
+    770|           assetId: asset!.id, sha256: stored.sha256.toLowerCase(), byt…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 skipped (19)
+   Start at  06:46:59
+   Duration  44.82s (transform 26.71s, setup 190ms, import 36.56s, tests 7.74s, environment 0ms)
+

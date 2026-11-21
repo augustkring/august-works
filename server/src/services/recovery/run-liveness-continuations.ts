@@ -7,6 +7,8 @@ import { RECOVERY_REASON_KINDS } from "./origins.js";
 
 export const RUN_LIVENESS_CONTINUATION_REASON = RECOVERY_REASON_KINDS.runLivenessContinuation;
 export const DEFAULT_MAX_LIVENESS_CONTINUATION_ATTEMPTS = 2;
+export const DEFAULT_RUN_LIVENESS_CONTINUATION_INSTRUCTION =
+  "The previous run ended without concrete progress. Take the first concrete action now or mark the issue blocked with a specific unblock request.";
 
 const ACTIONABLE_LIVENESS_STATES = new Set<RunLivenessState>(["plan_only", "empty_response"]);
 const CONTINUATION_ACTIVE_ISSUE_STATUSES = new Set(["todo", "in_progress"]);
@@ -163,9 +165,7 @@ export function decideRunLivenessContinuation(input: {
     livenessReason,
     continuationAttempt: nextAttempt,
     maxContinuationAttempts: maxAttempts,
-    instruction:
-      nextAction ??
-      "The previous run ended without concrete progress. Take the first concrete action now or mark the issue blocked with a specific unblock request.",
+    instruction: nextAction ?? DEFAULT_RUN_LIVENESS_CONTINUATION_INSTRUCTION,
   }, "normal_model");
 
   return {

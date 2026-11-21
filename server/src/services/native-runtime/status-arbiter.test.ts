@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NativeEvidenceAssessment } from "./evidence-classifier.js";
-import { arbitrateNativeStatus } from "./status-arbiter.js";
+import { arbitrateNativeStatus, nativeExecutionStageHandoffClaimed } from "./status-arbiter.js";
 
 function assessment(
   overrides: Partial<NativeEvidenceAssessment> = {},
@@ -616,4 +616,121 @@ describe("native status authority", () => {
     ]);
   });
 
+});
+
+
+it("preserves the already blocked Task only for a verified read-only Human dependency response", () => {
+  const bounded = { priorIssueStatus: "blocked" as const, hasUnresolvedIssueBlockers: true,
+    assessment: assessment({ reportedDisposition: "blocked", objectiveClaimSatisfied: false, objectiveSatisfied: false,
+      allCriteriaSatisfied: false, hasBlockingRemainingWork: true }) };
+  expect(arbitrate({ ...bounded, readonlyDependencyInteraction: true })).toMatchObject({
+    statusAction: "preserve", toStatus: "blocked", reasonCode: "durable_dependency_blocker_bound", unblockDescriptor: null, effects: [] });
+  // Ordinary blocked work still uses its existing durable blocker projection.
+  expect(arbitrate(bounded)).toMatchObject({ statusAction: "blocked", toStatus: "blocked", reasonCode: "durable_dependency_blocker_bound" });
+  expect(arbitrate({ ...bounded, readonlyDependencyInteraction: true, priorIssueStatus: "in_progress" }))
+    .toMatchObject({ statusAction: "blocked", toStatus: "blocked" });
+  expect(arbitrate({ ...bounded, readonlyDependencyInteraction: true,
+    assessment: assessment({ reportedDisposition: "done" }) })).toMatchObject({ statusAction: "blocked", toStatus: "blocked" });
+});
+
+describe("MS1f execution-policy stage handoff", () => {
+  type Criterion = NativeEvidenceAssessment["criterionAssessments"][number];
+  const documentRef = (outputKey: string | undefined, outcome: "accepted" | "unverifiable" = "accepted") => ({
+    ref: `document:00000000-0000-4000-8000-00000000000a:00000000-0000-4000-8000-00000000000b`,
+    kind: "document" as const, outcome, durableRecordId: "00000000-0000-4000-8000-00000000000b",
+    reasonCode: outcome === "accepted" ? "task_document_output_current" : "document_evidence_other_criterion",
+    ...(outputKey ? { outputKey } : {}),
+  });
+  const attachmentRef = (outcome: "accepted" | "missing") => ({ ref: "attachment:00000000-0000-4000-8000-00000000000c",
+    kind: "attachment" as const, outcome, reasonCode: outcome === "accepted" ? "attachment_persisted" : "attachment_missing",
+    durableRecordId: outcome === "accepted" ? "00000000-0000-4000-8000-00000000000c" : null });
+  const output: Criterion = { criterionId: "output_result", claimStatus: "satisfied", outcome: "accepted",
+    evidenceRefs: [documentRef("result")], reasonCode: "criterion_evidence_accepted" };
+  const reviewerDecision: Criterion = { criterionId: "invariant_0", claimStatus: "unknown", outcome: "unverifiable",
+    evidenceRefs: [], reasonCode: "criterion_claim_not_satisfied" };
+  // The planned executor's claim: its document output is evidenced, the
+  // Reviewer's later decision is unknown, nothing is verified yet.
+  const claim = (overrides: Partial<NativeEvidenceAssessment> = {}) => assessment({
+    objectiveSatisfied: false, allCriteriaSatisfied: false, verificationPassed: false, acceptedEvidenceRefs: [],
+    criterionAssessments: [output, reviewerDecision], ...overrides,
+  });
+  const handoff = { policyVersion: "phase6-v6", statusAction: "in_review", toStatus: "in_review",
+    reasonCode: "execution_policy_stage_handoff", unblockDescriptor: null, effects: [{ kind: "release_checkout" }] };
+
+  it("hands a planned executor's evidenced claim to the declared stage", () => {
+    expect(arbitrate({ assessment: claim(), executionStageHandoffAvailable: true })).toEqual(handoff);
+    // The used incomplete continuation does not prevent a later correct claim from handing off.
+    expect(arbitrate({ assessment: claim(), executionStageHandoffAvailable: true, allowIncompleteContinuation: false }))
+      .toEqual(handoff);
+    expect(arbitrate({ assessment: claim({ criterionAssessments: [output] }), executionStageHandoffAvailable: true }))
+      .toEqual(handoff);
+  });
+
+  it("keeps an incomplete claim incomplete when no stage would become pending", () => {
+    for (const executionStageHandoffAvailable of [false, undefined]) {
+      expect(arbitrate({ assessment: claim(), executionStageHandoffAvailable }))
+        .toMatchObject({ statusAction: "in_progress", toStatus: "in_progress", reasonCode: "completion_evidence_incomplete" });
+    }
+  });
+
+  it("refuses the handoff for a not_satisfied criterion or any other unmet condition", () => {
+    const notSatisfied: Criterion = { ...reviewerDecision, claimStatus: "not_satisfied", outcome: "rejected",
+      reasonCode: "criterion_reported_not_satisfied" };
+    const refused: Array<[string, NativeEvidenceAssessment]> = [
+      ["a not_satisfied criterion", claim({ criterionAssessments: [output, notSatisfied] })],
+      ["a satisfied claim with rejected evidence", claim({ criterionAssessments: [output, { ...reviewerDecision,
+        claimStatus: "satisfied", outcome: "rejected", reasonCode: "criterion_evidence_rejected" }] })],
+      ["a missing criterion claim", claim({ criterionAssessments: [output, { ...reviewerDecision, claimStatus: null,
+        outcome: "missing", reasonCode: "criterion_claim_missing" }] })],
+      ["an output without document evidence", claim({ criterionAssessments: [{ ...output, outcome: "unverifiable",
+        evidenceRefs: [documentRef(undefined, "unverifiable")], reasonCode: "criterion_evidence_unverifiable" }, reviewerDecision] })],
+      ["an output accepted from other evidence", claim({ criterionAssessments: [{ ...output, evidenceRefs: [attachmentRef("accepted")] },
+        reviewerDecision] })],
+      ["an output accepted from other evidence beside an unaccepted document", claim({ criterionAssessments: [{ ...output,
+        evidenceRefs: [attachmentRef("accepted"), documentRef("result", "unverifiable")] }, reviewerDecision] })],
+      ["an output document beside missing evidence", claim({ criterionAssessments: [{ ...output, outcome: "missing",
+        evidenceRefs: [documentRef("result"), attachmentRef("missing")], reasonCode: "criterion_evidence_missing" }, reviewerDecision] })],
+      ["an attachment carrying the output key", claim({ criterionAssessments: [{ ...output,
+        evidenceRefs: [{ ...attachmentRef("accepted"), outputKey: "result" }] }, reviewerDecision] })],
+      ["another output's document", claim({ criterionAssessments: [{ ...output, evidenceRefs: [documentRef("notes")] }, reviewerDecision] })],
+      ["an unknown output", claim({ criterionAssessments: [{ ...output, claimStatus: "unknown", outcome: "unverifiable",
+        evidenceRefs: [], reasonCode: "criterion_claim_not_satisfied" }, reviewerDecision] })],
+      ["no output criterion", claim({ criterionAssessments: [reviewerDecision] })],
+      ["an unclaimed objective", claim({ objectiveClaimSatisfied: false })],
+      ["a stale contract revision", claim({ contractRevisionMatches: false })],
+      ["a failed verification", claim({ hasFailedVerification: true })],
+      ["a rejected verification", claim({ verificationAssessments: [{ commandOrCheck: "test", claimStatus: "passed",
+        outcome: "rejected", evidenceRef: null, reasonCode: "work_product_rejected", reportedReasonCode: null, detail: null }] })],
+      ["blocking remaining work", claim({ hasBlockingRemainingWork: true })],
+    ];
+    for (const [name, value] of refused) {
+      const decision = arbitrate({ assessment: value, executionStageHandoffAvailable: true });
+      expect({ name, reasonCode: decision.reasonCode }).toEqual({ name, reasonCode: "completion_evidence_incomplete" });
+    }
+    const attention = claim({ attentionRequests: [{ kind: "review", ownerClass: "human", summary: "Check this",
+      sourceIndex: 0, sourceKind: "attention_request", targetAgentId: null } as never] });
+    expect(nativeExecutionStageHandoffClaimed(claim())).toBe(true);
+    expect(nativeExecutionStageHandoffClaimed(attention)).toBe(false);
+    expect(arbitrate({ assessment: attention, executionStageHandoffAvailable: true }))
+      .toMatchObject({ reasonCode: "actionable_attention_pending" });
+    for (const reportedDisposition of ["needs_review", "yielded", "blocked"] as const) {
+      expect(arbitrate({ assessment: claim({ reportedDisposition }), executionStageHandoffAvailable: true }).reasonCode)
+        .not.toBe("execution_policy_stage_handoff");
+    }
+  });
+
+  it("never completes the Task through the handoff and leaves agent_claim_policy unchanged", () => {
+    const variants = [claim(), claim({ criterionAssessments: [output] }), claim({ verificationPassed: true })];
+    for (const value of variants) {
+      const decision = arbitrate({ assessment: value, executionStageHandoffAvailable: true });
+      expect(decision.statusAction).not.toBe("done");
+      expect(decision.toStatus).not.toBe("done");
+    }
+    // A complete claim keeps the existing done decision; the committer's done
+    // path owns its stage transition and the plan-verification hold.
+    const complete = assessment({ criterionAssessments: [output] });
+    expect(arbitrate({ assessment: complete, executionStageHandoffAvailable: true }).reasonCode).toBe("completion_contract_satisfied");
+    expect(arbitrate({ assessment: claim(), executionStageHandoffAvailable: true, completionClaimPolicyAccepted: true }))
+      .toEqual(arbitrate({ assessment: claim(), completionClaimPolicyAccepted: true }));
+  });
 });

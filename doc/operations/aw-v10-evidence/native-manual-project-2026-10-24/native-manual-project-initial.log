@@ -1,0 +1,58 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/manual-project-payload-source.integration.test.ts (13 tests | 3 failed) 19125ms
+     × keeps 'Board key source' Projects unknown when legacy route access permits the write 101ms
+     × keeps 'session without ID' Projects unknown when legacy route access permits the write 164ms
+     × rechecks the native session after waiting on the Project privacy-tree lock 10154ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/manual-project-payload-source.integration.test.ts > manual Human Project payload source capture > keeps 'Board key source' Projects unknown when legacy route access permits the write
+ FAIL  |@paperclipai/server| src/__tests__/manual-project-payload-source.integration.test.ts > manual Human Project payload source capture > keeps 'session without ID' Projects unknown when legacy route access permits the write
+AssertionError: expected [ { …(12) }, { …(12) } ] to have a length of +0 but got 2
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ src/__tests__/manual-project-payload-source.integration.test.ts:152:8
+    150|     }
+    151|     expect(await db.select().from(activityLog).where(eq(activityLog.ac…
+    152|       .toHaveLength(0);
+       |        ^
+    153|   });
+    154|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/manual-project-payload-source.integration.test.ts > manual Human Project payload source capture > rechecks the native session after waiting on the Project privacy-tree lock
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/manual-project-payload-source.integration.test.ts:260:23
+    258|         await new Promise(resolve => setTimeout(resolve, 25));
+    259|       }
+    260|       expect(blocked).toBe(true);
+       |                       ^
+    261|       await db.execute(sql`select pg_sleep(1.8)`);
+    262|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  3 failed | 23 passed (26)
+   Start at  09:42:06
+   Duration  81.46s (transform 26.25s, setup 297ms, import 48.87s, tests 31.55s, environment 0ms)
+

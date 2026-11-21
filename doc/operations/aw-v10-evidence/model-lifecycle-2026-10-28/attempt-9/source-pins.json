@@ -1,0 +1,36 @@
+{
+  "head": "b8ae40b34fa807f056b625309f0879bc343db69b",
+  "dirtyWorktree": true,
+  "files": [
+    {
+      "path": "packages/shared/src/model-broker.ts",
+      "sha256": "b70407f288a41e4614e0d55093be7a2cb12e1ab8ebc172459f942d6eea29a012",
+      "bytes": 5728
+    },
+    {
+      "path": "packages/shared/src/agent-runtime-candidates.ts",
+      "sha256": "97849f92493b2a493c35c3507fa0ac55ddc67cbdb551076feb2000e6bbc976dd",
+      "bytes": 3701
+    },
+    {
+      "path": "server/src/services/orchestration/read-only-model-profiles.ts",
+      "sha256": "d818b57be2ab91e9a83c190f2ec26b6979d29ab53960eff8a91058ee96bbcdc2",
+      "bytes": 8368
+    },
+    {
+      "path": "server/src/services/orchestration/worker-model-profiles.ts",
+      "sha256": "f5ab82dd2055a21e13c9f5151927846a88ed47fa7c79e1570d752bb678c3289d",
+      "bytes": 4425
+    },
+    {
+      "path": "server/src/services/agents/authoring-runtime-candidates.ts",
+      "sha256": "f7e8c8d4bd3c293393d85bd4e2e6f1ba02235e73122d70a51898b4bb8041335d",
+      "bytes": 24530
+    },
+    {
+      "path": "server/src/__tests__/v9-runtime-candidates.integration.test.ts",
+      "sha256": "aef631e54f89783e14ef3796a21955f7c94fe79f5aaf8b2c3645174d833168bd",
+      "bytes": 13613
+    }
+  ]
+}

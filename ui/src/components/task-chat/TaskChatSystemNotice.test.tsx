@@ -3,10 +3,24 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import experienceEn from "../../i18n/experience/en.json";
+import experienceDa from "../../i18n/experience/da.json";
+import { NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE, TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE } from "../../lib/system-notice-humanizer";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { TaskChatSystemNotice } from "./TaskChatSystemNotice";
 import type { TaskChatMessageItem } from "./task-chat-model";
 
+const noticeLocale = vi.hoisted(() => ({ language: "en" }));
+// Isolate message presentation from application i18n bootstrap; use the real
+// central EN/DA catalogues and test the component's actual translation keys.
+vi.mock("react-i18next", async importOriginal => ({
+  ...await importOriginal<typeof import("react-i18next")>(),
+  useTranslation: () => ({
+    t: (key: string) => key.split(".").reduce<unknown>((value, part) =>
+      value && typeof value === "object" ? (value as Record<string, unknown>)[part] : undefined,
+      noticeLocale.language === "da" ? experienceDa : experienceEn) ?? key,
+  }),
+}));
 describe("TaskChatSystemNotice (PAP-443)", () => {
   let container: HTMLDivElement;
   let root: Root | null = null;
@@ -18,6 +32,7 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
   });
 
   afterEach(() => {
+    noticeLocale.language="en";
     flushSync(() => root?.unmount());
     root = null;
     container.remove();
@@ -56,6 +71,38 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
       '[data-testid="task-chat-system-notice"] button[aria-expanded]',
     )!;
   }
+
+  it.each(["en","da"])("renders the accurate tool action in %s above generic configuration copy", async lang => {
+    noticeLocale.language=lang;
+    renderNotice({text:TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE,presentation:{kind:"system_notice",title:"Configuration incomplete",tone:"warning",detailsDefaultOpen:false}});
+    const copy=(lang==="da"?experienceDa:experienceEn).taskChatSystemNotice;
+    expect(toggleButton().textContent).toContain(copy.toolUnavailableTitle);
+    expect(container.textContent).toContain(copy.toolUnavailableDetail);
+    expect(container.textContent).not.toContain("Runtime settings");
+    expect(container.textContent).not.toContain("secret/config binding");
+  });
+
+  it.each(["en", "da"])("localizes only the known Runtime action label in %s and preserves its destination", lang => {
+    noticeLocale.language = lang;
+    const href = "/agents/12345678-1234-1234-1234-123456789abc/runtime";
+    renderNotice({ text: `${NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE} [Runtime settings](${href}).`,
+      presentation: { kind: "system_notice", title: "Configuration incomplete", tone: "warning", detailsDefaultOpen: false } });
+    const copy = (lang === "da" ? experienceDa : experienceEn).taskChatSystemNotice;
+    expect(toggleButton().textContent).toContain(copy.runtimeUnavailableTitle);
+    flushSync(() => toggleButton().click());
+    const link = container.querySelector<HTMLAnchorElement>(`a[href="${href}"]`);
+    expect(link?.textContent).toBe(copy.runtimeSettingsAction);
+    expect(link?.getAttribute("href")).toBe(href);
+    expect(container.textContent).toContain(copy.runtimeUnavailableDetail);
+    if (lang === "da") expect(container.textContent).not.toContain("Runtime settings");
+  });
+
+  it("keeps unrelated Markdown labels unchanged", () => {
+    noticeLocale.language = "da";
+    renderNotice({ text: "Unrelated [Runtime settings](/agents/12345678-1234-1234-1234-123456789abc/runtime)." });
+    flushSync(() => toggleButton().click());
+    expect(container.querySelector("a")?.textContent).toBe("Runtime settings");
+  });
 
   it("collapses to a humanized one-liner with relative time and hides the raw body", () => {
     renderNotice();

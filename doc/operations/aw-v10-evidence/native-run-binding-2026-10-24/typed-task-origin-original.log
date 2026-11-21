@@ -1,0 +1,131 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts (7 tests | 5 failed) 7643ms
+     × creates and reads a Task from its exact same-company Workflow and WorkflowRun, without heartbeat ownership 60ms
+     × denies a workflow run attached to the wrong Workflow parent 15ms
+     × denies a workflow origin owned by another company 13ms
+     × does not substitute a same-ID heartbeat when the typed WorkflowRun is missing 8ms
+     × creates and reads a routine-origin Task using the run's retained revision 148ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts > typed workflow and routine Task origins > creates and reads a Task from its exact same-company Workflow and WorkflowRun, without heartbeat ownership
+Error: Failed query: insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, $7, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"
+params: 81fbffe0-88a8-452c-9478-006dabcf3a91,3f77144d-982b-4f87-8534-ce23f54f3fa8,18f98d7b-3218-4a33-ac03-716b97ae5a5e,1,published,{"version":1,"nodes":[],"edges":[]},38a38776-035c-470d-b9e6-519afb0768f2
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ seedWorkflow src/__tests__/typed-task-origin.integration.test.ts:39:24
+     37|     const [workflow] = await db.insert(workflows).values({ id: workflo…
+     38|       name: "Manually authored workflow", createdByUserId: userId }).r…
+     39|     const [revision] = await db.insert(workflowRevisions).values({ id:…
+       |                        ^
+     40|       workflowId, revisionNumber: 1, state: "published", graph: { vers…
+     41|       createdByUserId: userId }).returning();
+ ❯ src/__tests__/typed-task-origin.integration.test.ts:72:19
+
+Caused by: PostgresError: published workflow revision is not the workflow published pointer
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_check_workflow_revision_backref() line 28 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, $7, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"', parameters: [ '81fbffe0-88a8-452c-9478-006dabcf3a91', '3f77144d-982b-4f87-8534-ce23f54f3fa8', '18f98d7b-3218-4a33-ac03-716b97ae5a5e', '1', 'published', '{"version":1,"nodes":[],"edges":[]}', '38a38776-035c-470d-b9e6-519afb0768f2' ], args: [ '81fbffe0-88a8-452c-9478-006dabcf3a91', '3f77144d-982b-4f87-8534-ce23f54f3fa8', '18f98d7b-3218-4a33-ac03-716b97ae5a5e', 1, 'published', '{"version":1,"nodes":[],"edges":[]}', '38a38776-035c-470d-b9e6-519afb0768f2' ], types: [ 2950, 2950, 2950, 23, 25, 3802, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts > typed workflow and routine Task origins > denies a workflow run attached to the wrong Workflow parent
+Error: Failed query: insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, $7, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"
+params: 0b01f598-3489-4449-bb5e-a6b009d65f85,d49bbb2b-9f13-4762-80df-956e6019a0c8,c9bfcf86-e17c-4c52-b282-c97fecac4dee,1,published,{"version":1,"nodes":[],"edges":[]},34ab8393-2557-4d78-8eb5-3d2e2b5be652
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ seedWorkflow src/__tests__/typed-task-origin.integration.test.ts:39:24
+     37|     const [workflow] = await db.insert(workflows).values({ id: workflo…
+     38|       name: "Manually authored workflow", createdByUserId: userId }).r…
+     39|     const [revision] = await db.insert(workflowRevisions).values({ id:…
+       |                        ^
+     40|       workflowId, revisionNumber: 1, state: "published", graph: { vers…
+     41|       createdByUserId: userId }).returning();
+ ❯ src/__tests__/typed-task-origin.integration.test.ts:83:19
+
+Caused by: PostgresError: published workflow revision is not the workflow published pointer
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_check_workflow_revision_backref() line 28 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, $7, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"', parameters: [ '0b01f598-3489-4449-bb5e-a6b009d65f85', 'd49bbb2b-9f13-4762-80df-956e6019a0c8', 'c9bfcf86-e17c-4c52-b282-c97fecac4dee', '1', 'published', '{"version":1,"nodes":[],"edges":[]}', '34ab8393-2557-4d78-8eb5-3d2e2b5be652' ], args: [ '0b01f598-3489-4449-bb5e-a6b009d65f85', 'd49bbb2b-9f13-4762-80df-956e6019a0c8', 'c9bfcf86-e17c-4c52-b282-c97fecac4dee', 1, 'published', '{"version":1,"nodes":[],"edges":[]}', '34ab8393-2557-4d78-8eb5-3d2e2b5be652' ], types: [ 2950, 2950, 2950, 23, 25, 3802, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts > typed workflow and routine Task origins > denies a workflow origin owned by another company
+Error: Failed query: insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, $7, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"
+params: 8fcd5644-9ec8-412c-b67f-632bb2faa0ee,5815b5ce-b65b-4696-b1db-ff09cf1441c6,067a9fc7-6cb0-43ea-94a5-ba6f79ad1f04,1,published,{"version":1,"nodes":[],"edges":[]},a2bbbe8a-7caf-46e4-8bd5-cd69085951a0
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ seedWorkflow src/__tests__/typed-task-origin.integration.test.ts:39:24
+     37|     const [workflow] = await db.insert(workflows).values({ id: workflo…
+     38|       name: "Manually authored workflow", createdByUserId: userId }).r…
+     39|     const [revision] = await db.insert(workflowRevisions).values({ id:…
+       |                        ^
+     40|       workflowId, revisionNumber: 1, state: "published", graph: { vers…
+     41|       createdByUserId: userId }).returning();
+ ❯ src/__tests__/typed-task-origin.integration.test.ts:92:26
+
+Caused by: PostgresError: published workflow revision is not the workflow published pointer
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_check_workflow_revision_backref() line 28 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, $7, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"', parameters: [ '8fcd5644-9ec8-412c-b67f-632bb2faa0ee', '5815b5ce-b65b-4696-b1db-ff09cf1441c6', '067a9fc7-6cb0-43ea-94a5-ba6f79ad1f04', '1', 'published', '{"version":1,"nodes":[],"edges":[]}', 'a2bbbe8a-7caf-46e4-8bd5-cd69085951a0' ], args: [ '8fcd5644-9ec8-412c-b67f-632bb2faa0ee', '5815b5ce-b65b-4696-b1db-ff09cf1441c6', '067a9fc7-6cb0-43ea-94a5-ba6f79ad1f04', 1, 'published', '{"version":1,"nodes":[],"edges":[]}', 'a2bbbe8a-7caf-46e4-8bd5-cd69085951a0' ], types: [ 2950, 2950, 2950, 23, 25, 3802, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts > typed workflow and routine Task origins > does not substitute a same-ID heartbeat when the typed WorkflowRun is missing
+Error: Failed query: insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, $7, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"
+params: 5e12a01a-1e1b-4dfb-a970-ef8d3dfa4601,5ca7a8dd-ca94-41f0-be00-6882a616f11d,2860232c-908a-4d79-a40b-254b85fec02e,1,published,{"version":1,"nodes":[],"edges":[]},f6f1427f-93ad-4fa8-a8cb-0b4a2a27e589
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ seedWorkflow src/__tests__/typed-task-origin.integration.test.ts:39:24
+     37|     const [workflow] = await db.insert(workflows).values({ id: workflo…
+     38|       name: "Manually authored workflow", createdByUserId: userId }).r…
+     39|     const [revision] = await db.insert(workflowRevisions).values({ id:…
+       |                        ^
+     40|       workflowId, revisionNumber: 1, state: "published", graph: { vers…
+     41|       createdByUserId: userId }).returning();
+ ❯ src/__tests__/typed-task-origin.integration.test.ts:102:63
+
+Caused by: PostgresError: published workflow revision is not the workflow published pointer
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_check_workflow_revision_backref() line 28 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, $7, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"', parameters: [ '5e12a01a-1e1b-4dfb-a970-ef8d3dfa4601', '5ca7a8dd-ca94-41f0-be00-6882a616f11d', '2860232c-908a-4d79-a40b-254b85fec02e', '1', 'published', '{"version":1,"nodes":[],"edges":[]}', 'f6f1427f-93ad-4fa8-a8cb-0b4a2a27e589' ], args: [ '5e12a01a-1e1b-4dfb-a970-ef8d3dfa4601', '5ca7a8dd-ca94-41f0-be00-6882a616f11d', '2860232c-908a-4d79-a40b-254b85fec02e', 1, 'published', '{"version":1,"nodes":[],"edges":[]}', 'f6f1427f-93ad-4fa8-a8cb-0b4a2a27e589' ], types: [ 2950, 2950, 2950, 23, 25, 3802, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts > typed workflow and routine Task origins > creates and reads a routine-origin Task using the run's retained revision
+Error: Task privacy source is unavailable
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ resolveIssuePrivacy src/services/issues.ts:2057:21
+ ❯ persist src/services/issues.ts:10476:25
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.create src/services/issues.ts:10615:25
+ ❯ src/__tests__/typed-task-origin.integration.test.ts:120:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 2 passed (7)
+   Start at  08:16:30
+   Duration  43.51s (transform 22.90s, setup 209ms, import 35.25s, tests 7.64s, environment 0ms)
+

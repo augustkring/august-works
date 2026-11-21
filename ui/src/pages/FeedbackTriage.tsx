@@ -1,8 +1,9 @@
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
+  useQuery,
 } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -11,6 +12,9 @@ import {
   feedbackInternalStateSchema,
   feedbackTriageSchema,
   customerFeedbackSchema,
+  customerFeedbackQualitySummarySchema,
+  CUSTOMER_PROBLEM_AREAS,
+  CUSTOMER_PROBLEM_IMPACTS,
   type FeedbackRetentionErasureCommand,
 } from "@paperclipai/shared";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
@@ -36,6 +40,15 @@ function Queue({
   const { t } = useTranslation("experience"),
     client = useQueryClient();
   const authority = useV9PrivateReadAuthority(principal);
+  const qualityPeriod = useRef({ to: new Date(), from: new Date(Date.now() - 30 * 86400000) }).current;
+  const quality = useQuery({
+    queryKey: ["feedback-quality-summary", principal, companyId, qualityPeriod.from.toISOString(), qualityPeriod.to.toISOString(), authority.epoch],
+    queryFn: () => authority.read(async () => customerFeedbackQualitySummarySchema.parse(await api.get(
+      `/internal/customer-feedback/${companyId}/quality?expectedUserId=${encodeURIComponent(principal)}&from=${encodeURIComponent(qualityPeriod.from.toISOString())}&to=${encodeURIComponent(qualityPeriod.to.toISOString())}`,
+      { cache: "no-store" },
+    ))),
+    enabled: authority.readReady, staleTime: 0, gcTime: 0, retry: false,
+  });
   const [selected, setSelected] = useState<string | null>(null),
     [state, setState] =
       useState<(typeof feedbackInternalStateSchema.options)[number]>(
@@ -49,6 +62,8 @@ function Queue({
     [internalNote, setInternalNote] = useState(""),
     [linkType, setLinkType] = useState<"issue" | "duplicate">("issue"),
     [linkId, setLinkId] = useState("");
+  const [problemArea, setProblemArea] = useState("");
+  const [problemImpact, setProblemImpact] = useState("unknown");
   const [key, setKey] = useState(() => crypto.randomUUID());
   const attempted = useRef<{
     id: string;
@@ -105,6 +120,11 @@ function Queue({
     !detail.isFetching
       ? detail.data.pages[0]
       : null;
+  useEffect(() => {
+    if (!current) return;
+    setProblemArea(current.context.problemClassification?.area ?? "");
+    setProblemImpact(current.context.problemClassification?.impact ?? "unknown");
+  }, [current?.id]);
   function canTriage() {
     const list = client.getQueryState(listKey), selectedDetail = client.getQueryState(detailKey);
     return authority.canRead() && list?.status === "success" && list.fetchStatus === "idle" && !list.isInvalidated &&
@@ -123,6 +143,7 @@ function Queue({
           internalState: state,
           customerMessage,
           internalNote,
+          problemClassification: problemArea ? { area: problemArea, impact: problemImpact } : null,
           ...(linkId ? { link: { type: linkType, id: linkId } } : {}),
         }),
       };
@@ -205,6 +226,7 @@ function Queue({
               setCustomerMessage("");
               setInternalNote("");
               setLinkId("");
+              setProblemArea(""); setProblemImpact("unknown");
               setKey(crypto.randomUUID());
               save.reset();
             }}
@@ -314,6 +336,21 @@ function Queue({
               )}
             </section>
             <label className="block space-y-2">
+              <span>{t("feedback.problemArea")}</span>
+              <select className="min-h-11 rounded-md border border-input bg-background px-3" disabled={inputsLocked} value={problemArea}
+                onChange={event => edit(() => setProblemArea(event.target.value))}>
+                <option value="">{t("feedback.problemAreaUnclassified")}</option>
+                {CUSTOMER_PROBLEM_AREAS.map(area => <option key={area} value={area}>{t(`feedback.problemAreas.${area}`)}</option>)}
+              </select>
+            </label>
+            {problemArea && <label className="block space-y-2">
+              <span>{t("feedback.problemImpact")}</span>
+              <select className="min-h-11 rounded-md border border-input bg-background px-3" disabled={inputsLocked} value={problemImpact}
+                onChange={event => edit(() => setProblemImpact(event.target.value))}>
+                {CUSTOMER_PROBLEM_IMPACTS.map(impact => <option key={impact} value={impact}>{t(`feedback.problemImpacts.${impact}`)}</option>)}
+              </select>
+            </label>}
+            <label className="block space-y-2">
               <span>{t("feedback.triageState")}</span>
               <select
                 className="min-h-11 rounded-md border border-input bg-background px-3"
@@ -417,6 +454,17 @@ function Queue({
     );
   }
   return <>
+    {authority.readReady && <section className="mb-6 space-y-3 rounded-lg border border-border p-4" aria-label={t("feedback.qualitySummary.title")}>
+      <h2 className="font-semibold">{t("feedback.qualitySummary.title")}</h2>
+      {quality.isError && <p role="status">{t("feedback.qualitySummary.unavailable")}</p>}
+      {quality.data && <>
+        <p>{t("feedback.qualitySummary.period", { from: new Date(quality.data.period.from).toLocaleDateString(), to: new Date(quality.data.period.to).toLocaleDateString() })}</p>
+        <p>{t("feedback.qualitySummary.offered")}: {quality.data.denominator.offeredFeedbackSubmissions} · {t("feedback.qualitySummary.consented")}: {quality.data.denominator.consentedResponses} · {t("feedback.qualitySummary.withdrawn")}: {quality.data.denominator.withdrawnResponses} · {t("feedback.qualitySummary.unconsented")}: {quality.data.denominator.unconsentedSubmissions} · {t("feedback.qualitySummary.unavailableResponses")}: {quality.data.denominator.unavailableResponses}</p>
+        <p>{t("feedback.qualitySummary.satisfaction", { count: quality.data.satisfaction.count })}: {Object.entries(quality.data.satisfaction.distribution).map(([key, count]) => `${t(`feedback.experienceMeasure.satisfactionOptions.${key}`)} ${count}`).join(" · ")}</p>
+        <p>{t("feedback.qualitySummary.effort", { count: quality.data.effort.count })}: {Object.entries(quality.data.effort.distribution).map(([key, count]) => `${t(`feedback.experienceMeasure.effortOptions.${key}`)} ${count}`).join(" · ")}</p>
+        <p className="text-sm text-muted-foreground">{t("feedback.qualitySummary.limit")}</p>
+      </>}
+    </section>}
     {queueContent()}
     <FeedbackErasureHistory companyId={companyId} principal={principal} active={authority.readReady && query.isSuccess && !query.isFetching}
       onOpen={item => { setSelected(item.receipt.feedbackId); setErasureAttempt(item.command);

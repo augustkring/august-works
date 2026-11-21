@@ -1,0 +1,13 @@
+{
+  "securitySelectorAndExecutionNodeTests": {
+    "passed": 12,
+    "failed": 0
+  },
+  "actualVitestDirectoryDiscovery": {
+    "selector": "server/src/services/native-runtime/",
+    "resolvedFileCount": 83,
+    "vitestReturnsAbsolutePaths": true,
+    "normalizedRootOwnedNodeTestSelected": true
+  },
+  "qualification": "planner discovery and existing validator tests; remote GitHub execution of the new condition remains pending"
+}

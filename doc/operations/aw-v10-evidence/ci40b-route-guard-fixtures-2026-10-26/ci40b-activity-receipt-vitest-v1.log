@@ -1,0 +1,21 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+·········[00:24:45] [33mWARN[39m: [36mfailed to destroy reusable sandbox leases for terminal issue[39m [90m{"issueId":"11111111-1111-4111-8111-111111111111","executionWorkspaceId":null}[39m
+    err: {
+      "type": "TypeError",
+      "message": "leaseRows.map is not a function",
+      "stack":
+          TypeError: leaseRows.map is not a function
+              at Object.destroyReusableSandboxLeases (/workspace/blentera-v10/server/src/services/environment-runtime.ts:4084:10)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at destroyReusableSandboxLeasesForTerminalIssue (/workspace/blentera-v10/server/src/routes/issues.ts:7826:7)
+              at /workspace/blentera-v10/server/src/routes/issues.ts:15541:11
+    }
+··
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  00:24:30
+   Duration  15.53s (transform 8.31s, setup 70ms, import 2.09s, tests 13.26s, environment 0ms)
+

@@ -1,0 +1,12 @@
+{
+  "server/src/services/activity-privacy.ts": "de7c0669cdfddbb83b22a66392fd720c21978d8dd442ae449b40ab2f15d09f0e",
+  "server/src/services/activity.ts": "56ae9acc3aa65a099e991c1fa880514c2536bf4f6c6892fc99021693e4e4bb49",
+  "server/src/services/agent-action-audit.ts": "d85abc1394d2b436dd322c9f21a7d305e649b51c90d6d0bce33d811dd939bc47",
+  "server/src/services/authorization.ts": "3e2b0bbf78061ddb5fe97007d3fb756b5f3b92fba225cb78ff5c0ae4fdabb91d",
+  "server/src/routes/activity.ts": "a2254d107ad90d324155a17962c6465240ecffb6bdbbf8404ca30dfa9b996a1d",
+  "server/src/__tests__/activity-native-source-privacy.integration.test.ts": "1f097a40a1b30e275cc088cf001e9889b3dbb9395de51a47505e3e2b81018fea",
+  "server/src/__tests__/activity-routes.test.ts": "d52e797aaa2ffdec837faf1a094c5cef75eb9ac5c961df48e06730f0732b4768",
+  "server/src/__tests__/activity-service.test.ts": "3983e0d28f41bc3672f60632f7c16ca016ca14a72102f4f08eb029b54b990102",
+  "server/src/__tests__/agent-action-audit-routes.test.ts": "4bfa5092386d4fc1e2d5321194feabfefcbf71d47788da8ed8b6ac5263527761",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

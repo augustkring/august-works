@@ -1,0 +1,687 @@
+{
+  "uniquePassingCases": 42,
+  "suites": {
+    "nativeText": 25,
+    "authorityAndFixedRailway": 10,
+    "closedFailureProjection": 7
+  },
+  "invocations": [
+    {
+      "label": "genuine-authority-fixed-connector-full-r2",
+      "passingCases": 10,
+      "tests": [
+        {
+          "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+          "test": "negative triggers veto selection and empty trigger sets do not match every task"
+        },
+        {
+          "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+          "test": "V5 execution authority does not discard required Role Pack Skills when their resolver is disabled"
+        },
+        {
+          "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+          "test": "V5 execution authority allows explicitly authorized guest act forecasts, denies read/contribute mutations and rechecks revoked humans"
+        },
+        {
+          "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+          "test": "V5 execution authority preserves current-Human guest read and contribution within bounded plans while keeping guest act blocked"
+        },
+        {
+          "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+          "test": "V5 execution authority pins immutable provenance, rechecks resumed runs and rejects revoked human membership"
+        },
+        {
+          "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+          "test": "V5 execution authority routes guest connected tools through current local authority and denies writes/revoked result disclosure"
+        },
+        {
+          "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+          "test": "V5 execution authority binds scoped discovery and invocation to the current Task policy context"
+        },
+        {
+          "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+          "test": "V5 execution authority selects only Role Pack catalog UUIDs and rejects task-blocked or drifted tool pins"
+        },
+        {
+          "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
+          "test": "ConnectionIntent fixed non-model Railway fixture uses canonical catalog/credential owners for real fixed GraphQL output and denies a rebranded opaque connection before effects"
+        },
+        {
+          "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
+          "test": "ConnectionIntent fixed non-model Railway fixture composes the already installed gateway without replacing its transaction factory and rejects another instance"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/agent-runtime-fabric-v5.test.ts",
+          "src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/genuine-authority-fixed-connector-full-r2.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.44959950982593e-05,
+        "sourceManifest": "genuine-authority-fixed-connector-full-r2-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 56.39827481500106,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 2557100032,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 132274,
+            "parentPid": 132250,
+            "executable": "node",
+            "rssBytes": 845590528,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 132250,
+            "parentPid": 132202,
+            "executable": "node",
+            "rssBytes": 808968192,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 132382,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 292438016
+          },
+          {
+            "pid": 132383,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 275021824
+          },
+          {
+            "pid": 132384,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 251965440
+          },
+          {
+            "pid": 132368,
+            "parentPid": 132274,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 132369,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 12984320
+          },
+          {
+            "pid": 132375,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 9211904
+          },
+          {
+            "pid": 132376,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 7888896
+          },
+          {
+            "pid": 132377,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 7204864
+          },
+          {
+            "pid": 132373,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 5849088
+          },
+          {
+            "pid": 132370,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 5550080
+          },
+          {
+            "pid": 132372,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 5423104
+          },
+          {
+            "pid": 132371,
+            "parentPid": 132368,
+            "executable": "postgres",
+            "rssBytes": 4415488
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 47,
+        "observedPostgresRelatedPids": [
+          132332,
+          132342,
+          132355,
+          132363,
+          132365,
+          132368,
+          132369,
+          132370,
+          132371,
+          132372,
+          132373,
+          132375,
+          132376,
+          132377,
+          132380,
+          132381,
+          132382,
+          132383,
+          132384,
+          132512,
+          132522,
+          132535,
+          132543,
+          132545,
+          132548,
+          132549,
+          132550,
+          132551,
+          132552,
+          132553,
+          132555,
+          132556,
+          132557,
+          132558,
+          132560,
+          132577,
+          132578,
+          132579
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-lh14rj9l",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 269,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "genuine-native-text-group-a-r2",
+      "passingCases": 22,
+      "tests": [
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller captures first-bootstrap Task, plan, and wake sources without secret redaction before provider dispatch"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller captures first-bootstrap Task, plan, and wake sources with secret redaction before provider dispatch"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller holds a completed Native Text result for canonical Human Plan verification"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller keeps a one-document Task idle while blocked, then completes one scheduler Run for Human review"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller adopts another Human's retained comment queue only through the installed Native startup owner: manual"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller adopts another Human's retained comment queue only through the installed Native startup owner: forged_payload"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller keeps the Task owner as Native Run responsibility for a canonical automated wake requested by another Human"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller contains a queued second Human Run after canonical membership withdrawal (withdraw: false)"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller contains a queued second Human Run after canonical membership withdrawal (withdraw: true)"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment (trigger question: false)"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment (trigger question: true)"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller runs unrelated assigned Native Text tasks concurrently under separate issue claims"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller repairs clean Native Text branch drift before successful workspace finalization"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller adopts a Native Text forward branch with commits without persisting the workspace branch"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller allows Native Text finalization after the branch transition is persisted"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection keeps only closed enums, booleans and counts from persisted model/evidence fields"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection bounds and sanitizes a real nested TypeError and PostgreSQL error"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection closes missing and invalid PostgreSQL owner fields"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection projects only closed cause facts from a persisted finalization failure"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection reduces unknown future values to other and missing fields to missing"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection projects native interruption recovery facts without retaining its free-form message"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "test": "managed native completion failure projection closes unknown interruption enums and marks absent facts as missing"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "-t",
+          "captures first-bootstrap|keeps a one-document|keeps the Task owner|contains a queued second|keeps a paused Native Text|runs unrelated|adopts another Human|holds a completed Native Text|repairs clean Native Text branch|adopts a Native Text forward branch|allows Native Text finalization after|managed native completion failure projection",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/genuine-native-text-group-a-r2.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 5.493299977388233e-05,
+        "sourceManifest": "genuine-native-text-group-a-r2-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 147.76685105499928,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 3281661952,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 134102,
+            "parentPid": 134078,
+            "executable": "node",
+            "rssBytes": 873967616,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 134078,
+            "parentPid": 134030,
+            "executable": "node",
+            "rssBytes": 833028096,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 134257,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 610213888
+          },
+          {
+            "pid": 134313,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 451727360
+          },
+          {
+            "pid": 134281,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 428756992
+          },
+          {
+            "pid": 134220,
+            "parentPid": 134102,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 134221,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 12926976
+          },
+          {
+            "pid": 134227,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 8904704
+          },
+          {
+            "pid": 134228,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 8105984
+          },
+          {
+            "pid": 134229,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 7266304
+          },
+          {
+            "pid": 134225,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 6508544
+          },
+          {
+            "pid": 134222,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 5378048
+          },
+          {
+            "pid": 134224,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 5300224
+          },
+          {
+            "pid": 134223,
+            "parentPid": 134220,
+            "executable": "postgres",
+            "rssBytes": 4988928
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 35,
+        "observedPostgresRelatedPids": [
+          134184,
+          134192,
+          134194,
+          134207,
+          134215,
+          134217,
+          134220,
+          134221,
+          134222,
+          134223,
+          134224,
+          134225,
+          134227,
+          134228,
+          134229,
+          134230,
+          134232,
+          134256,
+          134257,
+          134281,
+          134313,
+          135246
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-80jdz2d7",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 701,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "genuine-native-text-group-b-r1",
+      "passingCases": 10,
+      "tests": [
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller coalesces two durable status-wake domain inputs into one real installed-controller Run"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller cancels a genuinely queued Task after a Human adds its blocker, repairs its stale pointer, and completes ready work"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller persists and consumes the chat-control admission marker on a real Native Text C0 Plan: intact"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller persists and consumes the chat-control admission marker on a real Native Text C0 Plan: lost"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller persists and consumes the chat-control admission marker on a real Native Text C0 Plan: copied"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller pauses an installed Native Text Run through the canonical Human Agent-pause owner before selection"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller cancels a real installed-controller Run at before_selection without dispatching its model"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller cancels a real installed-controller Run at after_selection without dispatching its model"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller cancels a real installed-controller Run at before_selection_row_lock without dispatching its model"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller aborts the dispatched Native text HTTP call on canonical Run cancellation and retains its unknown charge"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "-t",
+          "coalesces two durable|cancels a genuinely queued|persists and consumes|pauses an installed|cancels a real installed|aborts the dispatched",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/genuine-native-text-group-b-r1.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.671100032282993e-05,
+        "sourceManifest": "genuine-native-text-group-b-r1-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 85.07779922500049,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 3185553408,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 135528,
+            "parentPid": 135504,
+            "executable": "node",
+            "rssBytes": 848404480,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 135504,
+            "parentPid": 135456,
+            "executable": "node",
+            "rssBytes": 840544256,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 135653,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 544206848
+          },
+          {
+            "pid": 135642,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 488751104
+          },
+          {
+            "pid": 135641,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 380067840
+          },
+          {
+            "pid": 135623,
+            "parentPid": 135528,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 135624,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 12996608
+          },
+          {
+            "pid": 135630,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 9027584
+          },
+          {
+            "pid": 135631,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 7888896
+          },
+          {
+            "pid": 135632,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 7204864
+          },
+          {
+            "pid": 135628,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 6504448
+          },
+          {
+            "pid": 135625,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 5521408
+          },
+          {
+            "pid": 135627,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 5427200
+          },
+          {
+            "pid": 135626,
+            "parentPid": 135623,
+            "executable": "postgres",
+            "rssBytes": 4419584
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 24,
+        "observedPostgresRelatedPids": [
+          135587,
+          135597,
+          135610,
+          135620,
+          135623,
+          135624,
+          135625,
+          135626,
+          135627,
+          135628,
+          135630,
+          135631,
+          135632,
+          135635,
+          135641,
+          135642,
+          135653
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-n6ixle5c",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 404,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    }
+  ],
+  "serverTypecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 93.04667532599706,
+        "peakGroupRssBytes": 6242942976,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "limits": [
+    "Local software fixtures only; no external provider, physical isolation, price, release or Human acceptance qualification.",
+    "The new shared helper actually invokes the server-owned Native draft conformance service with four controlled HTTP probes. It retains canonical hidden Tasks, paused zero-tool C0 Plans, Run identities, pre-spend reservations, exact wire receipts, three completed outcomes and one unknown cancellation liability.",
+    "Only the primary binding is qualified inside the ephemeral fixture database; the distinct peer credential/profile remains unqualified for ordinary work.",
+    "The stream check denotes dispatch/progress event retention; requests use stream:false. Stateless NONE responses test server request formation under a deterministic stub, not provider-side memory retention.",
+    "The existing other authority cases remain component fixtures; their discovery metadata is not newly claimed as provider qualification. Railway effects use the fixed local GraphQL contract and canonical catalog/credential owners, never a live provider.",
+    "The SDK diagnostic changes and unique per-journey gateway name pass TypeScript; actual managed OpenCode results remain separate and unresolved.",
+    "Earlier failed/resource-stopped attempts remain private diagnostics and are not included in the passing count."
+  ]
+}

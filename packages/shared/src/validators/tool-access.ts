@@ -237,6 +237,24 @@ export const connectionGrantSchema = z.object({
       lastAccessRefreshAt: z.string().datetime().optional(),
       lastWebhookAt: z.string().datetime().optional(),
       webhookHealth: z.enum(["pending", "healthy", "unhealthy"]).optional(),
+      repositoryAccessReconciliation: z.discriminatedUnion("state", [
+        z.object({
+          state: z.literal("reconciled"),
+          mode: z.literal("full"),
+          lastSuccessAt: z.string().datetime(),
+          lastFullReconciledAt: z.string().datetime(),
+          scopeHash: z.string().regex(/^[a-f0-9]{64}$/i),
+          sourceIdentityHash: z.string().regex(/^[a-f0-9]{64}$/i),
+        }).strict(),
+        z.object({
+          state: z.literal("required"),
+          mode: z.literal("full"),
+          lastSuccessAt: z.string().datetime().optional(),
+          lastFullReconciledAt: z.string().datetime().optional(),
+          scopeHash: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
+          sourceIdentityHash: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
+        }).strict(),
+      ]).optional(),
     }).optional(),
   }).nullable(),
   credentialSecretRefs: z.array(toolCredentialSecretRefSchema),
@@ -1044,7 +1062,8 @@ export const toolPolicyTestRequestSchema = z.object({
     idempotencyKey: z.string().trim().min(1).max(512).optional().nullable(),
     sideEffecting: z.boolean().optional(),
   }),
-  consumeRateLimit: z.boolean().optional(),
+  // A policy test is a dry run: the server never consumes rate-limit tokens or
+  // records trust-rule hits for it, so the body has no control over either.
   writeAuditEvent: z.boolean().optional(),
 });
 

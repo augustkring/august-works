@@ -1,0 +1,3 @@
+# Apps and Connections
+
+Identify the desired business operation before choosing an App and minimum Connection scopes. The current Connection owner handles grants, consent, expiry, reconnect and revocation. Use approved opaque credential references only in designated fields; never retrieve, echo or extract reusable credentials into prompts, logs or tools. An installed App or visible tool is not permission to invoke it. Recheck the target account and exact action consequences when approval is needed. An expired or degraded Connection remains unavailable until the canonical repair succeeds; do not silently choose a broader Connection or scope. Discover current tool descriptors and health state, then verify the action receipt.

@@ -1,0 +1,107 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/Auth.test.tsx (16 tests | 10 failed) 566ms
+     × waits for the real API retry hint and recovers approval without a reload or automatic mutation 42ms
+     × does not retry an ordinary approval GET failure with HTTP400 10ms
+     × does not retry an ordinary approval GET failure with HTTP401 13ms
+     × does not retry an ordinary approval GET failure with HTTP403 10ms
+     × does not retry an ordinary approval GET failure with HTTP404 11ms
+     × does not retry an ordinary approval GET failure with HTTP410 10ms
+     × does not retry an ordinary approval GET failure with HTTP500 9ms
+     × does not schedule a hinted retry beyond the actual expiry from an earlier successful read 8ms
+     × does not shorten a hint that falls outside the finite page retry window 10ms
+     × retries only the rate-limited read after one operator approval, without resubmitting it 10ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > waits for the real API retry hint and recovers approval without a reload or automatic mutation
+AssertionError: expected 'Loading CLI auth challenge...' to contain 'Retrying shortly'
+
+Expected: "Retrying shortly"
+Received: "Loading CLI auth challenge..."
+
+ ❯ src/pages/Auth.test.tsx:364:38
+    362|     await mountCli();
+    363|     expect(fetchCli).toHaveBeenCalledTimes(1);
+    364|     expect(cliContainer.textContent).toContain("Retrying shortly");
+       |                                      ^
+    365|     expect(cliContainer.textContent).not.toContain("CLI auth challenge…
+    366|     await advance(1999);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP400
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP401
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP403
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP404
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP410
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP500
+AssertionError: expected 'Loading CLI auth challenge...' to contain 'CLI auth challenge unavailable'
+
+Expected: "CLI auth challenge unavailable"
+Received: "Loading CLI auth challenge..."
+
+ ❯ src/pages/Auth.test.tsx:380:38
+    378|     fetchCli.mockImplementation(async () => response({ error: "Challen…
+    379|     await mountCli();
+    380|     expect(cliContainer.textContent).toContain("CLI auth challenge una…
+       |                                      ^
+    381|     expect(cliClient!.getQueryState(challengeQueryKey)?.error).toBeIns…
+    382|     await advance(10 * 60_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not schedule a hinted retry beyond the actual expiry from an earlier successful read
+AssertionError: expected 'Loading CLI auth challenge...' to contain 'Approve Blentera CLI access'
+
+Expected: "Approve Blentera CLI access"
+Received: "Loading CLI auth challenge..."
+
+ ❯ src/pages/Auth.test.tsx:409:38
+    407|       .mockImplementation(async () => response({ error: "Too many CLI …
+    408|     await mountCli();
+    409|     expect(cliContainer.textContent).toContain("Approve Blentera CLI a…
+       |                                      ^
+    410|     await reactAct(async () => { void cliClient!.invalidateQueries({ q…
+    411|     await advance(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not shorten a hint that falls outside the finite page retry window
+AssertionError: expected 'Loading CLI auth challenge...' to contain 'CLI auth challenge unavailable'
+
+Expected: "CLI auth challenge unavailable"
+Received: "Loading CLI auth challenge..."
+
+ ❯ src/pages/Auth.test.tsx:421:38
+    419|     fetchCli.mockImplementation(async () => response({ error: "Too man…
+    420|     await mountCli();
+    421|     expect(cliContainer.textContent).toContain("CLI auth challenge una…
+       |                                      ^
+    422|     await advance(20 * 60_000);
+    423|     expect(fetchCli).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > retries only the rate-limited read after one operator approval, without resubmitting it
+AssertionError: expected undefined to be defined
+ ❯ src/pages/Auth.test.tsx:436:21
+    434|     await mountCli();
+    435|     const approve = [...cliContainer.querySelectorAll("button")].find(…
+    436|     expect(approve).toBeDefined();
+       |                     ^
+    437|     await reactAct(async () => { approve!.click(); });
+    438|     await advance(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 6 passed (16)
+   Start at  19:18:51
+   Duration  11.67s (transform 5.35s, setup 74ms, import 8.70s, tests 566ms, environment 1.72s)
+

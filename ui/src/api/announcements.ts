@@ -1,4 +1,4 @@
-import { announcementSchema, type Announcement } from "@paperclipai/shared";
+import { announcementSchema, customerChangelogSchema, type Announcement } from "@paperclipai/shared";
 import { ApiError } from "./client";
 
 async function request(path: string, init: RequestInit) {
@@ -10,6 +10,10 @@ async function request(path: string, init: RequestInit) {
 }
 
 export const announcementsApi = {
+  async changelog(locale: "en" | "da", signal: AbortSignal) {
+    const response = await request(`releases?locale=${locale}`, { signal });
+    return customerChangelogSchema.parse(await response.json());
+  },
   // Deliberately not coalesced by URL across account changes.
   async current(signal: AbortSignal): Promise<Announcement | null> {
     const response = await request("current", { signal });

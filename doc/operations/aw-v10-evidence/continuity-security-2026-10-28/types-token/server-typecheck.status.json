@@ -1,0 +1,5 @@
+{
+  "command": "pnpm --filter @paperclipai/server exec tsc --noEmit --singleThreaded",
+  "status": "SIGKILL",
+  "result": "Forced termination with no TypeScript diagnostics; server typecheck remains unverified."
+}

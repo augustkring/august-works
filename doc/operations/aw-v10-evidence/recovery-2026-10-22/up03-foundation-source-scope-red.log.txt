@@ -1,0 +1,56 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts (10 tests | 2 failed | 8 skipped) 9854ms
+     × does not broaden the original request credential while waiting for a Source row 344ms
+     × does not certify a scoped canonical grant as a whole-company Foundation read 188ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > does not broaden the original request credential while waiting for a Source row
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:207:37
+    205|       await db.update(agentApiKeys).set({ scopeConfig: { kind: "standa…
+    206|     } finally { release.resolve(); await holder; }
+    207|     expect((await pending).allowed).toBe(false);
+       |                                     ^
+    208|   });
+    209|   it("does not certify a scoped canonical grant as a whole-company Fou…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > does not certify a scoped canonical grant as a whole-company Foundation read
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:214:145
+    212|     const request = { ...input(s, s.human), scope };
+    213|     expect((await authorizationService(db).decide(request)).allowed).t…
+    214|     expect((await db.transaction(tx => authorizationService(tx).withRe…
+       |                                                                                                                                                 ^
+    215|   });
+    216|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 8 skipped (10)
+   Start at  00:54:12
+   Duration  22.91s (transform 7.95s, setup 205ms, import 12.42s, tests 9.85s, environment 0ms)
+

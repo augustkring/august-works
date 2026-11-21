@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Link } from "@/lib/router";
+import { useSearchParams } from "@/lib/router";
 
 export function ProcessIntelligence() {
   const { selectedCompanyId } = useCompany(); const { userId, settled, failed } = useAccountIdentity(); const { setBreadcrumbs } = useBreadcrumbs();
@@ -25,7 +26,8 @@ export function ProcessIntelligence() {
 }
 export function ProcessIntelligenceWorkspace({ companyId, userId }: { companyId: string; userId: string | null }) {
   const cache = useQueryClient(), key = ["process-definitions", companyId, userId]; const account = userId ?? undefined;
-  const [definitionId, setDefinitionId] = useState(""), [versionId, setVersionId] = useState(""), [runId, setRunId] = useState("");
+  const [searchParams] = useSearchParams();
+  const [definitionId, setDefinitionId] = useState(() => searchParams.get("definitionId") ?? ""), [versionId, setVersionId] = useState(""), [runId, setRunId] = useState(() => searchParams.get("runId") ?? "");
   const [editing, setEditing] = useState(false), [rationale, setRationale] = useState(""), [now, setNow] = useState(Date.now());
   const [from, setFrom] = useState(new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
   const [until, setUntil] = useState(new Date(Date.now() - 86400000).toISOString().slice(0, 10));

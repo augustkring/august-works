@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/authorization-service.test.ts (88 tests | 1 failed | 87 skipped) 10278ms
+     × native graph rejects excess work from duplicate Context edges 891ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > native graph rejects excess work from duplicate Context edges
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/authorization-service.test.ts:3103:78
+    3101|       sourceClass: "task", sourceProvider: "august_works_tasks", sourc…
+    3102|       trustLevel: "high", sensitivity: "internal", rank: index + 1, se…
+    3103|     expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner),…
+       |                                                                              ^
+    3104|   });
+    3105|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 87 skipped (88)
+   Start at  21:16:14
+   Duration  33.20s (transform 12.47s, setup 266ms, import 21.76s, tests 10.28s, environment 0ms)
+

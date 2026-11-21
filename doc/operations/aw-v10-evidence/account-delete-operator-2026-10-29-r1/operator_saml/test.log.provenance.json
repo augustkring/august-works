@@ -1,0 +1,7 @@
+{
+  "rawSha256": "ae9a8d595f712581de283f05f7706274ab1c8143184524f46b053a7599a6a9b3",
+  "sanitizedSha256": "3f5af42f698ff50b5d2c4355fe09170617d562ac4ad16cf856112ead5dd9df4d",
+  "sanitizedPhraseCount": 20,
+  "actualCredentialRedactions": 0,
+  "reason": "The token-scanner pattern matched harmless test-title wording 20 times. Each match was reviewed in redacted context; all matched the test title, not a token or credential. The archived log replaces that wording with a neutral phrase."
+}

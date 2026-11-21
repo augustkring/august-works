@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts > managed OpenCode Project source wait > rejects a retained Task body withdrawn while the actual managed Project constructor waits 16232ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:52:54
+   Duration  34.51s (transform 10.22s, setup 85ms, import 14.20s, tests 20.10s, environment 0ms)
+

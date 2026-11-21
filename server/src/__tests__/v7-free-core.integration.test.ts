@@ -26,6 +26,7 @@ import {
   agentProviderBindings,
   agentPresenceRuntimeBindings,
   memoryBindings,
+  memoryBindingTargets,
   memoryRecords,
 } from "@paperclipai/db";
 import {
@@ -45,6 +46,10 @@ import { isCompanyCapacityWait } from "../services/billing/capacity-admission.js
 import { assertAgentRunWriteAllowed } from "../agent-run-cancellation.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { exportCompanyStateV7 } from "../services/enterprise/portability.js";
+import { issueService } from "../services/issues.js";
+import { memoryService } from "../services/memory/memory-service.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import type { StorageProvider } from "../storage/types.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
@@ -54,7 +59,8 @@ const support = await getEmbeddedPostgresTestSupport();
       db: ReturnType<typeof createDb>,
       companyId: string,
       accountId: string,
-      agentId: string;
+      agentId: string,
+      sourceActor: Awaited<ReturnType<typeof seedCurrentHumanSourceActor>>;
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v7-free-core-");
       db = createDb(database.connectionString);
@@ -68,6 +74,9 @@ const support = await getEmbeddedPostgresTestSupport();
           createdAt: new Date(),
           updatedAt: new Date(),
         });
+      // Keep one current verified Human session for this fixture's lifetime.
+      // Seeding a fresh passkey for the same Human invalidates earlier sessions.
+      sourceActor = await seedCurrentHumanSourceActor(db, [], "free-owner");
       await db
         .insert(runtimeVersionCatalog)
         .values({
@@ -239,6 +248,45 @@ const support = await getEmbeddedPostgresTestSupport();
           ),
       ).toHaveLength(2);
     });
+    it("keeps the company run ceiling isolated when one tenant is saturated", async () => {
+      await db.insert(heartbeatRuns).values([
+        { companyId, agentId, invocationSource: "on_demand", status: "running" },
+        { companyId, agentId, invocationSource: "on_demand", status: "running" },
+      ]);
+      const denied = await Promise.allSettled([
+        db.insert(heartbeatRuns).values({
+          companyId,
+          agentId,
+          invocationSource: "on_demand",
+          status: "running",
+        }),
+      ]);
+      expect(denied[0]?.status).toBe("rejected");
+      expect(denied[0]?.status === "rejected" && isCompanyCapacityWait(denied[0].reason)).toBe(true);
+
+      const peer = await saasOnboardingService(db).create("free-owner", {
+        name: `Independent capacity ${randomUUID()}`,
+        idempotencyKey: randomUUID(),
+      });
+      const [peerAgent] = await db.insert(agents).values({
+        companyId: peer.companyId,
+        name: "Independent capacity fixture",
+        role: "engineer",
+        adapterType: "http",
+      }).returning();
+      await entitlementService(db).resolve(peer.companyId);
+      const [peerRun] = await db.insert(heartbeatRuns).values({
+        companyId: peer.companyId,
+        agentId: peerAgent!.id,
+        invocationSource: "on_demand",
+        status: "running",
+      }).returning();
+      expect(peerRun).toMatchObject({ companyId: peer.companyId, status: "running" });
+      expect(await db.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.status, "running"),
+      ))).toHaveLength(2);
+    });
     it("composes paid capacity over Free and returns to usable Free on cancellation without deleting state", async () => {
       const paid = await subscription(),
         state = await entitlementService(db).resolve(companyId);
@@ -249,10 +297,54 @@ const support = await getEmbeddedPostgresTestSupport();
       ).toBeGreaterThan(
         BigInt(String(FREE_CORE_ENTITLEMENTS["storage.included_bytes"])),
       );
-      const actor = { type: "board" as const, source: "session" as const, userId: "free-owner", companyIds: [companyId] };
+      const actor = { ...sourceActor, companyIds: [companyId] };
       const procedure = await foundationService(db).createDraft(companyId, { foundationKey: "retained_procedure", category: "company", documentType: "procedure", body: "Persistent company operating procedure", sensitivity: "internal" }, { principal: { type: "user", userId: "free-owner" } });
       const [memoryBinding] = await db.insert(memoryBindings).values({ companyId, key: "retained-state", name: "Shared native state fixture", providerKey: "local" }).returning();
-      const [record] = await db.insert(memoryRecords).values({ companyId, bindingId: memoryBinding!.id, providerKey: "local", memoryType: "fact", scopeType: "company", content: "Persistent shared company fact", reviewState: "accepted", verificationState: "human_verified", observedAt: new Date(), createdByActorType: "user", createdByActorId: "free-owner" }).returning();
+      await db.insert(memoryBindingTargets).values({ companyId, bindingId: memoryBinding!.id, targetType: "company", targetId: companyId });
+      const task = await issueService(db).create(companyId, {
+        title: "Current source for retained shared Memory",
+        description: "A current Human task source for the export fixture.",
+        createdByUserId: "free-owner",
+        responsibleUserId: "free-owner",
+      }, db, undefined, { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+      const observedAt = new Date().toISOString();
+      const sourceVersion = task.updatedAt.toISOString();
+      const memoryActor = { principal: { type: "user" as const, userId: "free-owner" }, authorizationActor: actor };
+      const candidate = await memoryService(db).createCandidate(companyId, {
+        bindingId: memoryBinding!.id,
+        memoryType: "fact",
+        scope: { type: "company", id: null },
+        subject: null,
+        ownerAgentId: null,
+        title: "Persistent shared company fact",
+        content: "Persistent shared company fact",
+        summary: "A current Human reviewed company fact.",
+        sensitivity: "internal",
+        importance: 50,
+        confidenceScore: 0.8,
+        validFrom: null,
+        validUntil: null,
+        expiresAt: null,
+        observedAt,
+        retentionPolicy: "standard",
+        createdByOperationId: randomUUID(),
+        metadata: {},
+        evidence: [{
+          sourceClass: "task",
+          sourceProvider: "august_works_tasks",
+          sourceType: "issue",
+          sourceRef: `issue://${task.id}`,
+          sourceVersion,
+          sourceUpdatedAt: sourceVersion,
+          observedAt,
+          excerptHash: nativeSha256({ taskId: task.id, updatedAt: sourceVersion }),
+          citation: { label: "Reviewed fact" },
+          trustLevel: "high",
+          relation: "supports",
+        }],
+      }, memoryActor);
+      await memoryService(db).reviewCandidate(companyId, candidate.record.id,
+        { decision: "accept", reason: "The current Human reviewed this company fact." }, memoryActor);
       const profile = "free-core-" + randomUUID();
       await db
         .insert(runtimeCapacityProfiles)
@@ -307,7 +399,7 @@ const support = await getEmbeddedPostgresTestSupport();
       // The owner exit path spans actual commercial reconciliation, Foundation
       // and native shared Memory, without requiring any V7 rollout flag.
       const exported = await exportCompanyStateV7(db, actor, companyId);
-      expect(JSON.parse(exported.files["memory/records.json"]!).records.some((item: { id: string }) => item.id === record!.id)).toBe(true);
+      expect(JSON.parse(exported.files["memory/records.json"]!).records.some((item: { id: string }) => item.id === candidate.record.id)).toBe(true);
       expect(exported.files["knowledge/revisions.json"]).toContain("Persistent company operating procedure");
       expect(exported.files["foundation/documents.json"]).toContain(procedure.id);
     });

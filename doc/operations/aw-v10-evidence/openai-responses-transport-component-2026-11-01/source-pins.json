@@ -1,0 +1,12 @@
+{
+  "status": "private_source_only_transport_not_gateway_integration",
+  "files": {
+    "packages/shared/src/model-broker.ts": "6a8db48f77c6fa9d25662f13771e994488cc71e5b493381aeede97f6b29e0c2d",
+    "packages/shared/src/index.ts": "e0d1a867c399aa60d8e7d7c9e5d1622a6cdf323a14a2122e8c25f968a2621805",
+    "server/src/services/remote-http-endpoint-guard.ts": "5a7b994420e366cfed6548754466b033ce4b47c6c54dff08e2ab8f0dbcc33be4",
+    "server/src/services/remote-http-fetch.ts": "74aa8f842dd0712dbef595a3287f224491d32c062c157defa9d3ac4912610fec",
+    "server/src/services/native-runtime/canonical.ts": "17b838cba01c11defd3d611661db3d9811ac724c59f0b43aa0bdc7ebcbf46393",
+    "server/src/services/orchestration/openai-responses-model-transport.test.ts": "c7d3424143a83483c590c206cc57bc09d53aaabda07e68d2cf15535df3050ba0",
+    "server/src/services/orchestration/openai-responses-model-transport.ts": "8fa386118b9707e9e82a11a2bc644aab662b6d7384f1fc357592e6b3fed41724"
+  }
+}

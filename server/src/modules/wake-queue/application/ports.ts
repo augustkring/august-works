@@ -24,16 +24,12 @@ export type ReleaseTransactionResult = {
 };
 
 /**
- * The three host callbacks the release use case needs. These members do
- * not run on the module's own transaction, which is why two of them take
- * the transaction-scoped issue snapshot instead of an issue id.
+ * The three host callbacks the release use case needs. The Postgres adapter
+ * binds them to its active transaction; callers pass immutable issue snapshots
+ * instead of re-reading the issue by id.
  */
 export interface WakeQueueHost {
-  /**
-   * Takes the transaction-scoped issue snapshot, not an issue id, so this
-   * port never re-reads the issue on a separate connection while the
-   * module's own transaction is open.
-   */
+  /** Uses the transaction-bound client and supplied issue snapshot. */
   resolveResponsibleUserId(input: {
     companyId: string;
     contextSnapshot: Record<string, unknown>;
@@ -46,11 +42,7 @@ export interface WakeQueueHost {
     triggerDetail: string | null;
     existingRunResponsibleUserId: string | null;
   }): Promise<string | null>;
-  /**
-   * Takes the transaction-scoped issue snapshot, not an issue id, so this
-   * port never re-reads the issue on a separate connection while the
-   * module's own transaction is open.
-   */
+  /** Uses the transaction-bound client and supplied issue snapshot. */
   getRoutineEnv(input: {
     companyId: string;
     issue: IssueSnapshot;
@@ -232,7 +224,7 @@ export interface WakeQueueTransaction {
  */
 export interface IssueLockWriter {
   withIssueExecutionLock(
-    input: { companyId: string; runId: string; now: Date },
+    input: { companyId: string; runId: string; now: Date; resumeStrandedQueue?: boolean },
     fn: (
       locked: LockedIssueExecution,
       ports: { host: WakeQueueHost; transaction: WakeQueueTransaction },

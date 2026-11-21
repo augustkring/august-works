@@ -75,6 +75,7 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
     if (!current()) return;
     for (const prefix of ["agent-authoring-review", "hire-agent-review"])
       void client.invalidateQueries({ queryKey: [prefix, company, principal, draft.id] });
+    void client.invalidateQueries({ queryKey: ["agent-model-migration-monitor-current-review", company, principal, authority.epoch, draft.id] });
   }
   const run = useMutation({ mutationFn: async () => {
     if (attempt.current || unknown) throw new Error(t("agentSafeTest.unknown"));

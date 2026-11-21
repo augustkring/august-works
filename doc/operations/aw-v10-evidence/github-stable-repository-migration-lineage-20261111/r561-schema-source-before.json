@@ -1,0 +1,22 @@
+{
+  "packages/db/src/schema/chat_github.ts": {
+    "sha256": "fad6eae2570436abddff6d58a53c035af2b518570b14df7135fea2a18c127933",
+    "mtimeNs": 1794419662023229964
+  },
+  "packages/db/src/schema/index.ts": {
+    "sha256": "3df027d8cb9cb9704e06911a8ed6c91d1d628842566275b2a319cb4071766c65",
+    "mtimeNs": 1794419662017582723
+  },
+  "server/src/__tests__/chat-channels.integration.test.ts": {
+    "sha256": "4166536109dbeab211ee762f1f9c3eda61e48aa62ad1bac67bbc524bbb2f6355",
+    "mtimeNs": 1794419662018303295
+  },
+  "server/src/services/chat-channels.ts": {
+    "sha256": "cdf774e9f1680e3991c5af5e2a6f700e4052059ae9f9e0ffddd824bc4fed7c8d",
+    "mtimeNs": 1794419662017582723
+  },
+  "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts": {
+    "sha256": "539c9cf85362fcba9427e01c7bbe1e372dff0e43812661ac413f793485a98b2e",
+    "mtimeNs": 1794419662018303295
+  }
+}

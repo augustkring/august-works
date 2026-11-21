@@ -1,0 +1,1223 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-11-01T08:21:53.650378+00:00",
+  "baseCommit": "fc718f90cc258c3d5c36082eacab29bced545dba",
+  "priorRecoveryCommit": "fc718f90c",
+  "patchBytes": 1946760,
+  "patchSha256": "c7ff3a1e7c4811a39a3647c6fc8b9b9402d539a6cf6ad238a95b2f792382fec8",
+  "archiveSha256": "b474d396de77a97d99a4283a109941595ae01a98610b4101bff28059c7d51e15",
+  "untrackedSourceFiles": [],
+  "privateCandidateFiles": [
+    {
+      "path": "preparation/archive-old-provider-pack-20261101.py",
+      "bytes": 3577,
+      "sha256": "612965adfac227182af6635c9e0c6adf739d45cd9174a57b6d5a2cd764fcfec5"
+    },
+    {
+      "path": "preparation/cargo-registry-relocation-20261101.json",
+      "bytes": 4470978,
+      "sha256": "5752cc01954dd2fe54aa9db7bbb946d2ad62a31a383255c451a940beeaaef05c"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/README.md",
+      "bytes": 3236,
+      "sha256": "2d0d46b3312b6499c8586c2996ba5846440b819ed360372f1b8535b37f8053b0"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/packages/shared/src/model-broker.ts",
+      "bytes": 6491,
+      "sha256": "2786c48f6d27c35f7533fd0d6cef397a9dfecd4d0d360f9485091ceaca3bb823"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/security-review.txt",
+      "bytes": 1643,
+      "sha256": "e510eb915e1e01fe5eb1ef29f3aafe5672f0b2768126a136ed2c4c69816bb6e2"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/server/src/__tests__/v7-worker-model-profiles.test.ts",
+      "bytes": 14256,
+      "sha256": "9ad0a9dc0b7ad49c1b8dfdd53062a2478e95c6b7cf9042bc8ce6bc1219e975d9"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/server/src/services/orchestration/model-reservations.ts",
+      "bytes": 68359,
+      "sha256": "613747903b33d5c70f00f79d518cedd46cf37cb4dd55162f5dde0989d0fdbb16"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/server/src/services/orchestration/openai-responses-model-transport.test.ts",
+      "bytes": 13247,
+      "sha256": "fe95291edd812935a52be8236716726bc8748343466639900e38b44a9beec913"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/server/src/services/orchestration/openai-responses-model-transport.ts",
+      "bytes": 25245,
+      "sha256": "d06a0f9f9110549d21c82963af89d565c473f01208044d6a67f56cc75fcaa5e7"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/server/src/services/orchestration/read-only-model-profiles.ts",
+      "bytes": 8403,
+      "sha256": "1929a340bb4eaf6dd871a3ac8286a66f8d58ff8c9b071bdf8fcd52f12a378e24"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/server/src/services/orchestration/worker-model-gateway.ts",
+      "bytes": 174078,
+      "sha256": "b74b0832077e83e903bd2a92256d7b9b0ef2b3280ffd14639ee66514b376eeaf"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/server/src/services/orchestration/worker-model-profiles.ts",
+      "bytes": 5687,
+      "sha256": "e9058694154b03db19c909ef9ff7ccc4aa39e078655473cb54b308c08eb2d301"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/source-20-test.patch",
+      "bytes": 12794,
+      "sha256": "a728c734e3e9013487e7b7ac106312d88dcd09dfbeabff85bfe22f787260b466"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/source-pins-20-test.json",
+      "bytes": 1801,
+      "sha256": "b1abe2f1855e4d3f51bdb6e3da0d7595fbf73f16bc5638f43c1a8d6f1fa7c0ec"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/source-pins.json",
+      "bytes": 2057,
+      "sha256": "85e90276e4c99f6f5f130bc9346dbaea980f5620001a1ddf63b68e74a442edcf"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/source.patch",
+      "bytes": 22958,
+      "sha256": "a36d00d956983e569108643d69e7102c533585f9aabb0999fdf0c96d7effa679"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/syntax-security.log",
+      "bytes": 40,
+      "sha256": "0881eb72458820f4f0e5d9dac5d555ed281be1a9033f5a603a00398a4c23a979"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/syntax.log",
+      "bytes": 40,
+      "sha256": "a1715dd1a97db36df02459f113b3e849beb547c9a10959f277b0256a7bb18ea3"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/test-final.log",
+      "bytes": 242,
+      "sha256": "279e4aceb8d67c941a82b3a0a3ca9f2ed3a141eccb46adcba2dbe794f82073ff"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/test-security-final.log",
+      "bytes": 242,
+      "sha256": "f2bde2d0120b2e659d0916aa0d3f904db2a4c93c02de071e5faccd5fe5dc5f1b"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/test.log",
+      "bytes": 6810,
+      "sha256": "8734f687afdc26d87688bd735bd0e6822c5df07946495ff48422223f981a727f"
+    },
+    {
+      "path": "preparation/codex-responses-gateway-nov01/vitest.config.mjs",
+      "bytes": 1394,
+      "sha256": "a69ee574162b3c9f54f2e81201a30fe69b1c4feb1502944b8acaf720b18a1b1f"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/README.md",
+      "bytes": 1915,
+      "sha256": "3fb803e5f84c0ea04d81fe2afd9e5d0002f4edfa78315376de0bb4249e0b9971"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/files/packages/paperclip-runner/src/cli/acpx-runtime-sidecar.ts",
+      "bytes": 53675,
+      "sha256": "4ecc57cb8900e23a0815797567fc79113bce6891f05e3bc6f21d1834b9f55656"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/files/packages/paperclip-runner/src/drivers/acpx/native-tool-batch-capture.test.ts",
+      "bytes": 9129,
+      "sha256": "1024dbf9f887f15e0f145efea949f35471124d5ddcbccb609406c5fa1ee7e9ac"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/files/packages/paperclip-runner/src/drivers/acpx/native-tool-batch-capture.ts",
+      "bytes": 15120,
+      "sha256": "13ef2e5a3ad7caf2b27bc6ef4fd16cc513b5c941f83c020326d525941b66fd99"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/files/packages/paperclip-runner/src/drivers/acpx/native-workspace-witness.test.ts",
+      "bytes": 2389,
+      "sha256": "f05d2fa4a8a590dfbec0d056c18bcb15dda7f22d42fadf0c29cb84ee94d348ac"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/files/packages/paperclip-runner/src/drivers/acpx/native-workspace-witness.ts",
+      "bytes": 7496,
+      "sha256": "26088fa1fcc7ff58d32c75df8b101332c851ef76ed1c72c3975dd80cfdcdc516"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/files/packages/paperclip-runner/src/drivers/acpx/sidecar-protocol.ts",
+      "bytes": 10375,
+      "sha256": "2e0059168b9b616adf014699f8aa1843e3cf0923b4857f37767ff3ab9cbf2f5c"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/logs/rust-native-capture-tests.log",
+      "bytes": 2507,
+      "sha256": "8f09b437dfb1321b2e79cc800a6d18cf99b13d27a4b90c67867befa29f9077b6"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/logs/source-patch-dry-run.log",
+      "bytes": 1928,
+      "sha256": "1a3a0872b99b86158a33d1dc993efe3ee5f776d618749c5771320925d1b04420"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/logs/typescript-and-focused-vitest.log",
+      "bytes": 15362,
+      "sha256": "9a97bbcee22e9fa0e5a76c76208b163eb04ff2146a87eb3a879cfc66a0948274"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/package-patches/@agentclientprotocol__claude-agent-acp@0.73.0.capture.patch",
+      "bytes": 8194,
+      "sha256": "3b403517c61d483dcb7e72e77392e3b808f7c5e0aaefd05d89c403fa58959768"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/package-patches/acpx@0.13.1.capture.patch",
+      "bytes": 29207,
+      "sha256": "90d9b2bd6d8383cc116b469b860c4e754ea8b3c561d9d898d41384b807558388"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/package-patches/snapshot-source-pins.json",
+      "bytes": 1149,
+      "sha256": "7d51109489b6fb411159e926959c92c5ddd0523c1952536eb1947086f0c5760b"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/sdk-wire-fixture.json",
+      "bytes": 254521,
+      "sha256": "4ea361d7f4695156c8899367aabf420037b4d8f430c4bc320150174ee09ed6f7"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/shared-mirror-cleanup-receipt.json",
+      "bytes": 673,
+      "sha256": "ff8910d1fdac43a509d1a6a721e9993eb316ce65f1400a68a484f5734870a54b"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source-capture.json",
+      "bytes": 4661,
+      "sha256": "1873d8c87d26168afb06323935cde9b191215785e34c998a0ffa745c3749730f"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source-copy-pins.json",
+      "bytes": 4255,
+      "sha256": "5f9a988cde36da219223e77ca1d9d05070aac745ad9ff3504842e00b5c6e55bd"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source-patches/capture-protocol.patch",
+      "bytes": 116802,
+      "sha256": "0024426a4dc86d971e3e2f4c010710365b12ddf2d516bc4dada57d6dd58cf0b2"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/protocol/provider-schemas/acpx-sidecar.schema.json",
+      "bytes": 3434,
+      "sha256": "897034ef37dae2267e02d7b60c76e2d9bd2f3789c7cae28834000795f89c6efe"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/acpx_event_payload.rs",
+      "bytes": 20655,
+      "sha256": "f9031dfeacae17dc0687bdf11b0d5bd7f8ba2d6ae255eafc563e2da644720307"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/acpx_event_scope.rs",
+      "bytes": 7714,
+      "sha256": "088f4b5c67b5663cbce2ef0b8b8cb3e6fe04d2b5c9cfa7a8139f8f0bf91e476e"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/acpx_provider_backend.rs",
+      "bytes": 109626,
+      "sha256": "d88da6b2356f29c54196da76db2262690a71b481bbf195bfc3c9f049910c1ddf"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/acpx_provider_session.rs",
+      "bytes": 68497,
+      "sha256": "48f1a482f613e4017970bd5e5a2a631a3a46781cff8f9af5656478f6431d4393"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/acpx_provider_state.rs",
+      "bytes": 22112,
+      "sha256": "0aaa3a01cb9fb9c3d1b2a5899412129ddab19ba2662d440e68796213db73a382"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/acpx_sidecar_transport.rs",
+      "bytes": 34744,
+      "sha256": "fbc8716d46ce55b958c9eef25ef70f79176b9fe93ef348daa05e2cc60d15976a"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/durable/runner.rs",
+      "bytes": 189716,
+      "sha256": "13689138237c58dac0e07b0db58227868eed825b645039c598895bba6354b3bb"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/durable/transport.rs",
+      "bytes": 101785,
+      "sha256": "b3426eaf3652c8ffd6e126ee10f3946d018ed04efa964420304e44143a45f469"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/generated_acpx_sidecar_contract.rs",
+      "bytes": 3712,
+      "sha256": "b1f1c662e85415221971cfc671f130f8082644963c9d164ad2db0931811c1c3b"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/native_provider_backend.rs",
+      "bytes": 10752,
+      "sha256": "3cf56c6064cb557b4776e48ae82547899a403d32a60e48eab0d0619cb68b33ee"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/runner/crates/runner-core/src/provider_backend.rs",
+      "bytes": 268369,
+      "sha256": "74d38438f043a39eb962de85ecca30e560d53de5a92feed85a248946da479c65"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/scripts/acpx-sidecar-contract.mjs",
+      "bytes": 1102,
+      "sha256": "731a85bf7f3f0f87bd91e39dba1e68e6aeb8f61355f37c5c221c4a98eac4b21a"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/scripts/generate-acpx-sidecar-contract.mjs",
+      "bytes": 6224,
+      "sha256": "d7ad4807fa8308b455df18cf9c701ba4b5141f0e3641df2a6db27f156c8c6d65"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/cli/acpx-runtime-sidecar.ts",
+      "bytes": 53925,
+      "sha256": "11c5e4091343ebe2d434886789f96bc6e04bcd8351262f48a63a68b397fce18e"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/control-plane/durable-prp-control-plane.test.ts",
+      "bytes": 119551,
+      "sha256": "eb804ec1814ef30f9ca6cda92010a455694a864a15e826432127dff229e101fa"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/control-plane/durable-prp-control-plane.ts",
+      "bytes": 131470,
+      "sha256": "1cbd43af8c39931dcf654eefb01f3c17bacc4262354a2f2103a6b6d67e30b4ec"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/drivers/acpx/codex-runtime-adapter.ts",
+      "bytes": 67712,
+      "sha256": "9c322d30b7814d68652cd0aca02bc6c23acd120beeac5f76ec1afec6cd01b61f"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/drivers/acpx/generated-sidecar-contract.ts",
+      "bytes": 2160,
+      "sha256": "29a3f8cdb3506eb038e500bb83712f4b8b907def59d2df5ac4e37f4a338accaa"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/drivers/acpx/native-tool-batch-capture.test.ts",
+      "bytes": 9129,
+      "sha256": "1024dbf9f887f15e0f145efea949f35471124d5ddcbccb609406c5fa1ee7e9ac"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/drivers/acpx/native-tool-batch-capture.ts",
+      "bytes": 15120,
+      "sha256": "13ef2e5a3ad7caf2b27bc6ef4fd16cc513b5c941f83c020326d525941b66fd99"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/drivers/acpx/native-workspace-witness.test.ts",
+      "bytes": 2389,
+      "sha256": "f05d2fa4a8a590dfbec0d056c18bcb15dda7f22d42fadf0c29cb84ee94d348ac"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/drivers/acpx/native-workspace-witness.ts",
+      "bytes": 7496,
+      "sha256": "26088fa1fcc7ff58d32c75df8b101332c851ef76ed1c72c3975dd80cfdcdc516"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/drivers/acpx/runtime-host.ts",
+      "bytes": 40285,
+      "sha256": "d63afa82728cdc82ec746b3c715e3ed78276a2278971479fcfd55da0b7d07052"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/drivers/acpx/sidecar-protocol.ts",
+      "bytes": 10816,
+      "sha256": "e0835f2a7e0fbfdb2aa98254949afcde0d6b4b00bd569318e6533de44ad1e26c"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/source/packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
+      "bytes": 255760,
+      "sha256": "3fb4f4d852bf4a0ca408555e550a0af4652e7d94508d0c38266feadf7df16f07"
+    },
+    {
+      "path": "preparation/native-builtin-capture-protocol-nov01/verification-receipt.json",
+      "bytes": 2409,
+      "sha256": "9dc55c9cee2c9cb8d1107e9fb2ca1586b7a3197d8ce23e10b5c8375366132498"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/files/server/src/services/native-runtime/native-builtin-tool-result-capture.check.ts",
+      "bytes": 11259,
+      "sha256": "5f2ce6c4b6c308987c4ded5e03aedccdec96fb578fd2b9107ade3ecd083c778b"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/files/server/src/services/native-runtime/native-builtin-tool-result-capture.ts",
+      "bytes": 26535,
+      "sha256": "2b09b1086ec6931ae8b37d5915b88f48c43c477d9a92588ff231142853bf2fa7"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/files/server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+      "bytes": 138894,
+      "sha256": "169a69679c39d71acabef3eb984eb0653a8e3bd87d340486fdf88ba83bf66197"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/files/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 744338,
+      "sha256": "8a613a98ba800e88a8c98c4fa849137fe05ed9f41c682703038342efd79c718e"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/parents/server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+      "bytes": 134035,
+      "sha256": "c4ac8a09fbac729c2ad5f95e9ad49b32eb2f011538163b4c424746518b9eedeb"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/parents/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 715788,
+      "sha256": "e231b09adcebe4d5cc3481e611403f24bcd865c9dab18818a199361d0ad5072e"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/source-copy-pins.json",
+      "bytes": 1149,
+      "sha256": "e6342ed02e3509f7bef4f5cc02bcd7affc2de0970d46d6d4e7ecf68587cceda9"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/source-patches/builtin-source-owner.patch",
+      "bytes": 76027,
+      "sha256": "49864db239bbc4218271a7d1b31748dd0e852ac058e3050008e5990e5ad72c96"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/verification-receipt.json",
+      "bytes": 4812,
+      "sha256": "f980acd33a3f71ffcc3d7af52a34f09975497ac90dfab3eb57a9858aa45bc585"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/verification/pg-negative.log",
+      "bytes": 246,
+      "sha256": "a2885e4ab080d997b3e8f0a532c2855d2e6dbc11f0e020ac51f8d6fba6ae3cef"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/verification/source-filesystem.log",
+      "bytes": 46,
+      "sha256": "a6f057d1649689f64a89bd050312bd349b8e56b61c8b3dff831b78290df5bb3a"
+    },
+    {
+      "path": "preparation/native-builtin-source-owner-nov01/verification/typecheck.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/README.md",
+      "bytes": 1981,
+      "sha256": "14fc944eac2dfd4523172fbf4b05a44d4a17edf652f4f39be4f90c0843b852f3"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/base/server/src/services/heartbeat.ts",
+      "bytes": 1216662,
+      "sha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/base/server/src/services/native-runtime/native-session-executor.test.ts",
+      "bytes": 423724,
+      "sha256": "7ce336e3b431c187383f3a38e7f7419ed41bbdbb73fa5b8e742e8fa82c531124"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/base/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 710248,
+      "sha256": "2cbeae0f2fe50734cd5d084a934c5697f7a659feaf0c68f02a42efc8be86dc84"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/base/ui/src/components/task-chat/TaskChatSystemNotice.tsx",
+      "bytes": 6982,
+      "sha256": "bc5f61341ed356ad4a581caec496cdb8195f26cd3a31595bd0dcb600e7e6e22a"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/base/ui/src/i18n/experience/da.json",
+      "bytes": 269328,
+      "sha256": "7355ea71d31b6de8e7dd85cc59cc082cdf88f8f3aa041f800f3b5d947841e364"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/base/ui/src/i18n/experience/en.json",
+      "bytes": 251432,
+      "sha256": "b98a803e5d9d66a9e25e6b9b55368a7ef834572afc4ef04ba467f01777a10199"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/base/ui/src/lib/system-notice-humanizer.test.ts",
+      "bytes": 4620,
+      "sha256": "66046d5a1b332031985af062ecdf8d8109eb2fc4a45f23821761d5d0f9f47122"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/base/ui/src/lib/system-notice-humanizer.ts",
+      "bytes": 3249,
+      "sha256": "c721d7ac56e68692d74e1f47cb90d735c17ea001199e7685e049cfdfc70335bb"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/build-preserved-provider-pack.sh",
+      "bytes": 3220,
+      "sha256": "ab7f11640952cc2e62c2a96dc8e6abb86e27a6677928406273bccd3fd9849205"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/server/src/services/heartbeat.ts",
+      "bytes": 1218159,
+      "sha256": "0f521983da28e76126d61c1509416b479faa4cd45087ae482142547326fedabe"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/server/src/services/native-runtime/native-session-executor-admission.test.ts",
+      "bytes": 3056,
+      "sha256": "fdaa1481830119983ecabfb45958b59dd5ec7701047e74cf585a8a86d500af55"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/server/src/services/native-runtime/native-session-executor.test.ts",
+      "bytes": 423986,
+      "sha256": "4c9021ba2ea233cba1b38bb85ae58871c3de707193d722ff85a3a766aeccf402"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 710833,
+      "sha256": "6867fc077d65238ccfde6366d9e1c31acadd4fd3c3d722259424efd0bc6bfbf0"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/server/src/services/native-runtime/paid-transport-admission.test.ts",
+      "bytes": 3115,
+      "sha256": "60d8c04bae57c939a185dd99304ff662ec06730b395bed8c8366920d402d0f14"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/server/src/services/native-runtime/paid-transport-admission.ts",
+      "bytes": 2936,
+      "sha256": "090d8bbec2c9c95e74a7f3722a0e7932f784bd0bcf41c44e994d83ab3653d086"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/ui/src/components/task-chat/TaskChatSystemNotice.tsx",
+      "bytes": 7508,
+      "sha256": "60db18e2c8059fe7e715a0e1833d14bfe685d5177e74d3c72189766a2c436f76"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/ui/src/i18n/experience/da.json",
+      "bytes": 269595,
+      "sha256": "ce6da3dbe59469602a7817f06cac29a65e96ba2b0e38a17dcb722590a0a9a87f"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/ui/src/i18n/experience/en.json",
+      "bytes": 251673,
+      "sha256": "a7228775f46405171acb5d7b24df009b281236b2695215996aec0316541f97b7"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/ui/src/lib/system-notice-humanizer.test.ts",
+      "bytes": 6730,
+      "sha256": "f18c1d3b1cca6d467c2649ac5e881d68b2ae997644e88b8bb71623c8ff698bed"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/files/ui/src/lib/system-notice-humanizer.ts",
+      "bytes": 4014,
+      "sha256": "2f6130bc63efdb86407baac91309a7d75452966d9e20a6952d8388bba47d82af"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/legacy-managed-adapter-audit-20261101.json",
+      "bytes": 3185,
+      "sha256": "9572d13e5be30654d0a454838fa6a0bfa40d344b1efe6fbfb5def2b54c110a6e"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/legacy-managed-adapter-audit-source-pins.json",
+      "bytes": 1107,
+      "sha256": "e6d088c03b19711a8ab94a660f47da1991c2b303b476f1c2e312443c0dee7f35"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/native-paid-admission-guard.patch",
+      "bytes": 22782,
+      "sha256": "de48bc4cef19fbb3c0a50fc3df08f46ec4b31c68dfeaedb2de0a4f3f383ef919"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/parentSHA.txt",
+      "bytes": 41,
+      "sha256": "b6c44d6ae13e4b35d9f380e85ddd7b61445d6b366c35bf03ea8703ac9088cace"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/provider-pack-build-20261101T070624Z/build.log",
+      "bytes": 1581,
+      "sha256": "4a660952a2f25716025825fadc1802de3bbb8e1a66bf6a38ab395e17104c4060"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/provider-pack-build-20261101T070624Z/disk-after.txt",
+      "bytes": 183,
+      "sha256": "3acd4197ab57420fac80c11f99b7fe0f984772cfdfd12897d8daa592c3983c58"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/provider-pack-build-20261101T070624Z/disk-before.txt",
+      "bytes": 183,
+      "sha256": "4b32ad0e42a6e890afcf8229045156c8ba6a62e31d8d6173ef20d23b61a9e229"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/provider-pack-build-20261101T070624Z/provider-pack-receipt.json",
+      "bytes": 1220,
+      "sha256": "9f1ccedb9c49cd9386a278563bbfe78b65a0163b9fd45c4c5a32bbe461bcee3d"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/provider-pack-build-20261101T070624Z/repository-head.txt",
+      "bytes": 41,
+      "sha256": "b6c44d6ae13e4b35d9f380e85ddd7b61445d6b366c35bf03ea8703ac9088cace"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/provider-pack-build-20261101T070624Z/source-pins.sha256",
+      "bytes": 382,
+      "sha256": "cbaf25e44650ce5eb9229bba96d2e6d8b967a6fc71dd7c7fbfbb5b76c278edda"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/repair-connect-importer.sh",
+      "bytes": 5573,
+      "sha256": "9ef492989b64746d88a809616149205873712b789a4189df56d1170222ec2332"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/run-entry-test-retry.sh",
+      "bytes": 2994,
+      "sha256": "958879bc67b89c1906c23a19b8551527219a93655ce7249dd6360ca336de7dda"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/run-focused-locale-tests.sh",
+      "bytes": 3456,
+      "sha256": "85e45799b30f47dddcd02953043ebf978c2a0edc90f082686c9d2ab0aae95ab2"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/run-focused-tests.sh",
+      "bytes": 2586,
+      "sha256": "7b92bb8193dfaf0745fb4ee66584ece32db0f64b864793a00558f3b23e1d0d82"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/run-r79-sandbox-relay.sh",
+      "bytes": 9973,
+      "sha256": "306721f1250e078e47708f60cbf1d6d3ee3772cd348e93cc3498cc83e1e187a3"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/run-sandbox-positive-build-pack.sh",
+      "bytes": 3970,
+      "sha256": "649854f96ff6d49011323dd53058169f3b776f71cba9548765bb023d65886657"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/run-sandbox-positive.sh",
+      "bytes": 3272,
+      "sha256": "4c378313f9420d21140d26e08011cc3540aa2a06cebae9f64eb2ba35eec3eca6"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/simulated/server/src/services/heartbeat.ts",
+      "bytes": 1216662,
+      "sha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/simulated/server/src/services/native-runtime/native-session-executor.test.ts",
+      "bytes": 423724,
+      "sha256": "7ce336e3b431c187383f3a38e7f7419ed41bbdbb73fa5b8e742e8fa82c531124"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/simulated/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 710248,
+      "sha256": "2cbeae0f2fe50734cd5d084a934c5697f7a659feaf0c68f02a42efc8be86dc84"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-entry-retry-20261101T065221Z/exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-entry-retry-20261101T065221Z/patch-apply.log",
+      "bytes": 590,
+      "sha256": "f69e5c9719038ba9a4fa91203d346db4cd440cc905c9fac643dab0303f115ab1"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-entry-retry-20261101T065221Z/patch-dry-run.log",
+      "bytes": 590,
+      "sha256": "959505dd0acbcb61bb9eee1f8805b7623a9f82b0befb30b28f143191f831d6b9"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-entry-retry-20261101T065221Z/patch.sha256",
+      "bytes": 161,
+      "sha256": "82d98e7bec5e04de76eb08cc4f3984f51b05572cc9d4cd9bb18826dad1ed8c6d"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-entry-retry-20261101T065221Z/restore-manifest.txt",
+      "bytes": 616,
+      "sha256": "ed80f06e85448429f92a367f5ca82207e7af56ff7f490a4f637124ba21707ad2"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-entry-retry-20261101T065221Z/restore/server/src/services/heartbeat.ts",
+      "bytes": 1216662,
+      "sha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-entry-retry-20261101T065221Z/restore/server/src/services/native-runtime/native-session-executor.test.ts",
+      "bytes": 423724,
+      "sha256": "7ce336e3b431c187383f3a38e7f7419ed41bbdbb73fa5b8e742e8fa82c531124"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-entry-retry-20261101T065221Z/restore/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 715788,
+      "sha256": "e231b09adcebe4d5cc3481e611403f24bcd865c9dab18818a199361d0ad5072e"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-entry-retry-20261101T065221Z/vitest.log",
+      "bytes": 2695,
+      "sha256": "66480dc091e5ce305347f58fca56b94e9ac12daf5a21374ae9d6b49cdf43f4f4"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/orig-manifest.txt",
+      "bytes": 12,
+      "sha256": "a7867f38f93bcfdce9f75b367754ad87239d3cfff9ce5384c0145b097a6e2adb"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/patch-apply.log",
+      "bytes": 765,
+      "sha256": "db971ccdc83a491888158dde2e69de63b62c43dc529f3cdd231836fb49cffd73"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/patch-dry-run.log",
+      "bytes": 765,
+      "sha256": "3f49d7a006e05019d17b157734f43547a0b00fa4d5df83b62f7e5776f0c1e293"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/patch.sha256",
+      "bytes": 161,
+      "sha256": "0b18cb7bd03dc3371644fdce88de3496ba3f3e0643cb412968ef8b923a8027ae"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/restore-manifest.txt",
+      "bytes": 1177,
+      "sha256": "f2496ac2b857722e7339aaee804bbc29f5eb3997616bd4b4659cd57747c4f7ca"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/restore/server/src/services/heartbeat.ts",
+      "bytes": 1216662,
+      "sha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/restore/server/src/services/native-runtime/native-session-executor.test.ts",
+      "bytes": 423724,
+      "sha256": "7ce336e3b431c187383f3a38e7f7419ed41bbdbb73fa5b8e742e8fa82c531124"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/restore/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 715788,
+      "sha256": "e231b09adcebe4d5cc3481e611403f24bcd865c9dab18818a199361d0ad5072e"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/restore/ui/src/components/task-chat/TaskChatSystemNotice.tsx",
+      "bytes": 6982,
+      "sha256": "bc5f61341ed356ad4a581caec496cdb8195f26cd3a31595bd0dcb600e7e6e22a"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/restore/ui/src/i18n/experience/da.json",
+      "bytes": 269328,
+      "sha256": "7355ea71d31b6de8e7dd85cc59cc082cdf88f8f3aa041f800f3b5d947841e364"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/restore/ui/src/i18n/experience/en.json",
+      "bytes": 251432,
+      "sha256": "b98a803e5d9d66a9e25e6b9b55368a7ef834572afc4ef04ba467f01777a10199"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/restore/ui/src/lib/system-notice-humanizer.test.ts",
+      "bytes": 4620,
+      "sha256": "66046d5a1b332031985af062ecdf8d8109eb2fc4a45f23821761d5d0f9f47122"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/restore/ui/src/lib/system-notice-humanizer.ts",
+      "bytes": 3249,
+      "sha256": "c721d7ac56e68692d74e1f47cb90d735c17ea001199e7685e049cfdfc70335bb"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/server-vitest.log",
+      "bytes": 2694,
+      "sha256": "57bb7f02e8f680d6e7174f3e633bb87f2da4d240b896f55d8abc3ac1185fe77f"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-focused-locale-20261101T074626Z/ui-vitest.log",
+      "bytes": 2102,
+      "sha256": "7f1f414521a70539cd2645ff77c97ba1cd6e6e30ad961fd051fa128d5a3ff075"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-run-20261101T065027Z/exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-run-20261101T065027Z/patch-apply.log",
+      "bytes": 590,
+      "sha256": "f69e5c9719038ba9a4fa91203d346db4cd440cc905c9fac643dab0303f115ab1"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-run-20261101T065027Z/patch-dry-run.log",
+      "bytes": 590,
+      "sha256": "959505dd0acbcb61bb9eee1f8805b7623a9f82b0befb30b28f143191f831d6b9"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-run-20261101T065027Z/patch.sha256",
+      "bytes": 161,
+      "sha256": "82d98e7bec5e04de76eb08cc4f3984f51b05572cc9d4cd9bb18826dad1ed8c6d"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-run-20261101T065027Z/restore-manifest.txt",
+      "bytes": 616,
+      "sha256": "ed80f06e85448429f92a367f5ca82207e7af56ff7f490a4f637124ba21707ad2"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-run-20261101T065027Z/restore/server/src/services/heartbeat.ts",
+      "bytes": 1216662,
+      "sha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-run-20261101T065027Z/restore/server/src/services/native-runtime/native-session-executor.test.ts",
+      "bytes": 423724,
+      "sha256": "7ce336e3b431c187383f3a38e7f7419ed41bbdbb73fa5b8e742e8fa82c531124"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-run-20261101T065027Z/restore/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 715788,
+      "sha256": "e231b09adcebe4d5cc3481e611403f24bcd865c9dab18818a199361d0ad5072e"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-run-20261101T065027Z/vitest.log",
+      "bytes": 3103,
+      "sha256": "3675853cff68e8e30e439196ee03db51d008b0deab6b67fcf106e4ce8efbd706"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-20261101T065248Z/exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-20261101T065248Z/patch-apply.log",
+      "bytes": 590,
+      "sha256": "f69e5c9719038ba9a4fa91203d346db4cd440cc905c9fac643dab0303f115ab1"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-20261101T065248Z/patch-dry-run.log",
+      "bytes": 590,
+      "sha256": "959505dd0acbcb61bb9eee1f8805b7623a9f82b0befb30b28f143191f831d6b9"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-20261101T065248Z/patch.sha256",
+      "bytes": 161,
+      "sha256": "82d98e7bec5e04de76eb08cc4f3984f51b05572cc9d4cd9bb18826dad1ed8c6d"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-20261101T065248Z/restore-manifest.txt",
+      "bytes": 616,
+      "sha256": "ed80f06e85448429f92a367f5ca82207e7af56ff7f490a4f637124ba21707ad2"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-20261101T065248Z/restore/server/src/services/heartbeat.ts",
+      "bytes": 1216662,
+      "sha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-20261101T065248Z/restore/server/src/services/native-runtime/native-session-executor.test.ts",
+      "bytes": 423724,
+      "sha256": "7ce336e3b431c187383f3a38e7f7419ed41bbdbb73fa5b8e742e8fa82c531124"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-20261101T065248Z/restore/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 715788,
+      "sha256": "e231b09adcebe4d5cc3481e611403f24bcd865c9dab18818a199361d0ad5072e"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-20261101T065248Z/vitest.log",
+      "bytes": 2938,
+      "sha256": "d36c55d88248295553fafe1bc8e1cad397caa59ed1075c00e79fedc3237d4214"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/disk.txt",
+      "bytes": 379,
+      "sha256": "d90758314ee1fb0a3ca92bfab1e256480924c7cbdd7ae6b8898c21e3d2dc2422"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/patch-apply.log",
+      "bytes": 590,
+      "sha256": "f69e5c9719038ba9a4fa91203d346db4cd440cc905c9fac643dab0303f115ab1"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/patch-dry-run.log",
+      "bytes": 590,
+      "sha256": "959505dd0acbcb61bb9eee1f8805b7623a9f82b0befb30b28f143191f831d6b9"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/patch.sha256",
+      "bytes": 161,
+      "sha256": "82d98e7bec5e04de76eb08cc4f3984f51b05572cc9d4cd9bb18826dad1ed8c6d"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/provider-pack-build.log",
+      "bytes": 1577,
+      "sha256": "9010b3b919f19d522747b39178fae420c140e60ca8f1bc2edd2a4e847bd90ea1"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/restore-manifest.txt",
+      "bytes": 616,
+      "sha256": "ed80f06e85448429f92a367f5ca82207e7af56ff7f490a4f637124ba21707ad2"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/restore/server/src/services/heartbeat.ts",
+      "bytes": 1216662,
+      "sha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/restore/server/src/services/native-runtime/native-session-executor.test.ts",
+      "bytes": 423724,
+      "sha256": "7ce336e3b431c187383f3a38e7f7419ed41bbdbb73fa5b8e742e8fa82c531124"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/restore/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 715788,
+      "sha256": "e231b09adcebe4d5cc3481e611403f24bcd865c9dab18818a199361d0ad5072e"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/test-sandbox-positive-build-pack-20261101T065415Z/vitest.log",
+      "bytes": 275598,
+      "sha256": "edadb3c91dbd355d725255658d2ba942ce9511335a670cb1b04dc3d6af18c8df"
+    },
+    {
+      "path": "preparation/native-paid-admission-guard-nov01/vercel-connect-dependency-repair-receipt.json",
+      "bytes": 4644,
+      "sha256": "87534256cd20e55927d15ea5eeced1772a6cd420e246e072dd33df687b044790"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/actual-managed-mcp-config-guard.diff",
+      "bytes": 1061,
+      "sha256": "1edf3a495ed8a05300b0ea85695bc25c76f9f6d6e71d47f558fda8822c9da3ca"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/diagnostic-cleanup-only.diff",
+      "bytes": 72787,
+      "sha256": "5b222db6ca4c6bf7af0bdd2ffee977283b236dac627fe0dcdf563f39cf32ae5c"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/managed-mcp-envelope-only.diff",
+      "bytes": 2290,
+      "sha256": "7724b699d4b0926d0dc170060e74be248e9bad5d0702fcfe625bdd06353f325c"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/manifest.json",
+      "bytes": 2706,
+      "sha256": "913e834e6d6956f1943a1b05eb2468310c1667ef8d981c2b0894bfab86b30e02"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
+      "bytes": 68659,
+      "sha256": "4643900473cfeedf1394f33499d03040266570dcb0a0356e3792eaa9ccdc2b38"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
+      "bytes": 102654,
+      "sha256": "4bcf1613cc0218f7b442e4e4a6c26be966b5c757fd98a31cb382472244062e5a"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/r76-only.diff",
+      "bytes": 1523,
+      "sha256": "652253ae5188ef9a6a9df98cd8c097001af581ae958e7798da14325a74aa1955"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/r77-only.diff",
+      "bytes": 1088,
+      "sha256": "e0ffeb3da901acaf377b4f6cf114ecd79792f1ef36181456d956058d1ffe3d10"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/r78-capacity-only.diff",
+      "bytes": 5516,
+      "sha256": "02c3c19d65ea596dfcd7a1266f0224d590cfe663bfe9d6f95c91d9955665be5a"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/r78-max-work-only.diff",
+      "bytes": 1441,
+      "sha256": "8f85b663ba007462c7d2a84af5f3441e73685f59d9f5ee60ab95aea522ccf140"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/r80-only.diff",
+      "bytes": 1261,
+      "sha256": "574b9ea0da306ee57b9ba2133afde70fc5f926abb80656e7c4e99f8d3ae9c8bc"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/r81-capacity-fixture-only.diff",
+      "bytes": 1616,
+      "sha256": "985fe72dbe3fb70f05d5db0b8e750f59bfe205ce400f0a2c002c4a067a5acaed"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/r81-live-source-version.diff",
+      "bytes": 3068,
+      "sha256": "b4ee0e4b7619b1b77d46320596115a0c239bdfbe9a0714339eee81120aefcb37"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/r81-managed-headroom-only.diff",
+      "bytes": 3189,
+      "sha256": "7b38c0cb11219cc431641100b8d4e5ae289e7772af93ece678628e1ddd22f75f"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/r81-only.diff",
+      "bytes": 1450,
+      "sha256": "c12e0cf19c1c231bc84a9cc6a572296592917ff9a17b89decaf683ecb70b92aa"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "bytes": 208852,
+      "sha256": "f22329fbc720d165274c2466e51eb8ae6dc73d34951fd7e1ff3d60d55bb51ea0"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "bytes": 71839,
+      "sha256": "57ef4fc5b444991ae1e81b6c8fccd1d08185545f1a4819084ec7d2e4e3623cf4"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/server/src/services/authorization.ts",
+      "bytes": 298867,
+      "sha256": "44c2969fcc1dd11e162a9980aad380afdc4611e0a5b1e7a31163defcceb23eca"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/server/src/services/context/context-engine.test.ts",
+      "bytes": 14946,
+      "sha256": "b8c7cc408916009dd3fb5c962d8aaa414c227e502edfd2c87e1c06bb0f66b237"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/server/src/services/context/context-engine.ts",
+      "bytes": 43006,
+      "sha256": "9bdb22f04e57c63120efa4401ef1833216d7ddd841f62d507eb63921c2b73a90"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/server/src/services/context/context-manifest.ts",
+      "bytes": 59396,
+      "sha256": "58344aa478c91414e97e9491cb5c0f63d3fdaffb5421a0aec5dd01a7d1cfd569"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/server/src/services/memory/memory-privacy.ts",
+      "bytes": 106525,
+      "sha256": "aef38e88cbfb991c400a3bb519613f8a39eba6e81ab6886fe9cff2bf2db085f1"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/server/src/services/native-direct-input.ts",
+      "bytes": 386874,
+      "sha256": "0e42067a08cf061179160061819fc293a1a493c731915f09cff27703cfc5f169"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 714360,
+      "sha256": "bdb1910c88301e717d2e8e4dcd222abe824e63cd4e7b1bdbffa9cdb4a9eeee9c"
+    },
+    {
+      "path": "preparation/native-work-envelope-r81-candidate/syntax-pins.json",
+      "bytes": 622,
+      "sha256": "3a749e0256ed9c9dba496aa736e69d531cf10bf966b4e1c0e8691572b9bc3ed6"
+    },
+    {
+      "path": "preparation/old-provider-pack-archive-receipt-20261101.json",
+      "bytes": 801,
+      "sha256": "fe8f4b8489c22b08771c196806e59f440d780f05f56001c696aa8f9e53d09dd5"
+    },
+    {
+      "path": "preparation/pr42-body-current-20261101.md",
+      "bytes": 10902,
+      "sha256": "cd6ee8eb1f61d4e0fd09a80f5533c1f3beabb8b6fcb3f3af68b9433ce09027c1"
+    },
+    {
+      "path": "preparation/preserve-r54.py",
+      "bytes": 4226,
+      "sha256": "7be1508579c7f28344c9cfc8f8decf841b20d91609b8412a802b9fe704bdd8f1"
+    },
+    {
+      "path": "preparation/publish-parsed-source.cjs",
+      "bytes": 1152,
+      "sha256": "08091f29cb7f4137077cc778b4a6cb9deaaea0c34e04fdac7e89f4af8bc48652"
+    },
+    {
+      "path": "preparation/relocate-resource-governance-r14-20261101.py",
+      "bytes": 4004,
+      "sha256": "c73cb167a08cad097fe7d4a41d40cb56dbd19391c30c17e0d110b217a4f4263c"
+    },
+    {
+      "path": "preparation/resource-governance-r14-durable-relocation-20261101.json",
+      "bytes": 924,
+      "sha256": "0df5836492131ec80c087ff73887c189ed2501ee3a0c8c2c7e7c0410913cbad9"
+    },
+    {
+      "path": "preparation/root-continuation-20261101-current.md",
+      "bytes": 12089,
+      "sha256": "951e97c4de746b0f51139d6de9ed348132abb554f807c92d7402f6169386151b"
+    },
+    {
+      "path": "preparation/root-continuation-latest.md",
+      "bytes": 65,
+      "sha256": "c4bf14bc424c1c7bc380b27c76b758015ad23a2ad5808521b5b52b79d8e81900"
+    },
+    {
+      "path": "preparation/run-final-workspace-aggregate-20261101.sh",
+      "bytes": 14563,
+      "sha256": "3998eeea2b2264097d9035215a534bad57ad13202cbb1de2ef9a8f4486ebcd08"
+    },
+    {
+      "path": "preparation/snapshot-current-source-for-dependency-check.py",
+      "bytes": 7027,
+      "sha256": "df80e1647511fef43169a05eac7447309bc41223aadbbd9647e8ab246dec0003"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/candidate-parent.txt",
+      "bytes": 77,
+      "sha256": "d0a5722605cd0f247b11b198a146f7d02a92059b418b82fdc5a1c8295d67668a"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/exact-stage-paths.txt",
+      "bytes": 1248,
+      "sha256": "76442a24bf91d72c66635999791365776f5392f5515374bcb5dcd16fea1a0589"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/deploy/v6/host-agent/openshell.mjs",
+      "bytes": 185874,
+      "sha256": "9463103cc2cf37fd680a99ca1e3285bc11e4c1da721ae4667a3baea7cc3f3b84"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/deploy/v6/host-agent/openshell.test.mjs",
+      "bytes": 132066,
+      "sha256": "a2a92ae13c4323de7e4c6c7e1cca31209bc8dfd60cd6321e7b57e784896d0ba4"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/packages/db/src/migrations/0567_sandbox_qualification_probe_gate.sql",
+      "bytes": 4214,
+      "sha256": "280b3e2eb46c73bcdfc316925489a1172894b3e7a54a1e68236c051693f976a2"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/packages/db/src/migrations/meta/_journal.json",
+      "bytes": 85576,
+      "sha256": "f514b524ad912210e30b74af126d359ceee7e4090e0a142483777ebdefb84bda"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/packages/db/src/schema/execution_sandbox.ts",
+      "bytes": 5754,
+      "sha256": "5c6df7469351be5acbba9c9840af654aca3ecdc30ed387e5318d3da780365669"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/packages/shared/src/execution-sandbox.ts",
+      "bytes": 13602,
+      "sha256": "d50c1a51f12025c602427102fa1b0b49f8fddda0277766a4b0edc1789d5a446c"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 12281,
+      "sha256": "29d7a9543ae2843f3c73adc0d9901ea161834a288b5a101e58fda6d34a79a2dd"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/__tests__/agent-auth-jwt.test.ts",
+      "bytes": 27727,
+      "sha256": "e998a4de156e87fa532af16fcaa66416a0bf9c4dbddafb950a458c58c952621c"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/__tests__/fixtures/openshell-qualification-policy-golden.json",
+      "bytes": 3712,
+      "sha256": "54774d03334447f87072893c4c2fe6c702ef16a339042a1051bb96a0703f7303"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "bytes": 68121,
+      "sha256": "e881addf55c39f165573df0349a869c03a11fbce3a02f853fffa6dc7729dda88"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/__tests__/openshell-qualification-policy.test.ts",
+      "bytes": 13133,
+      "sha256": "6adc9620109b2e3288215d81886085b1a189504d77ee7f9873938ae48aa7e588"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/__tests__/v7-openshell-backend.test.ts",
+      "bytes": 7640,
+      "sha256": "07fb442a1c86f3678070922da568b6d0ba9c8d414b9989c8eccaf6760320affc"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "bytes": 130628,
+      "sha256": "9a144fc1aafc69c3b8c9d8cd16eb77df412b23bb656dcdbdb86e045b71897d5f"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/__tests__/v7-sandbox-policy.test.ts",
+      "bytes": 23909,
+      "sha256": "9b38d9a1516b9af3fc17a36e0a328fa1c0b8127bcf8f28a68e183bd970a5ea03"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+      "bytes": 8289,
+      "sha256": "cc57241b0809b9f973b53c3619e5262fe508ef008a068df61366c1d38dc20a0f"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/agent-auth-jwt.ts",
+      "bytes": 39679,
+      "sha256": "1d375340646d32666a41e2b50fc390311f78183696525b878d0710a76dfe66b8"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/app.ts",
+      "bytes": 70328,
+      "sha256": "bed91376c4323741603ec11577765e6137b165f5e12c5de378c51902e1070ce0"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/routes/tool-gateway.ts",
+      "bytes": 46548,
+      "sha256": "89791df155f3e01546f307f6ec7917a819175893e18470bd1bb5513796bf664a"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/services/execution-sandbox/backend.ts",
+      "bytes": 5470,
+      "sha256": "1dbb5f6293ca55dfe0cdc20e87e1b2db0564188d1e1cb87699e4929483cac80a"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/services/execution-sandbox/native-host-bridge.ts",
+      "bytes": 53120,
+      "sha256": "93abf535a32065a6329aae6386f7d2d1fd764386138b6388d22754babcc305ee"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 20824,
+      "sha256": "48ef18622f6ab921d8ac651f3a4759bf636d24aaaf5d3330de2abaf2a904ea7b"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/services/execution-sandbox/openshell-policy.ts",
+      "bytes": 11064,
+      "sha256": "f9c71227a31cbab5ec3eea2644a54f5e84e4d2584c857b019d96998ff03b3f72"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/services/execution-sandbox/sandbox-service.ts",
+      "bytes": 85886,
+      "sha256": "f1510674f1070411424822cb35b81f53df5c4d93fbb8f5045f7452c3589c446f"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/files/server/src/services/tool-gateway.ts",
+      "bytes": 541323,
+      "sha256": "372ec1900f5de1da5c7bb68b6884f3c47ffccdbc51eaf1f58401163b5afacc50"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/owner-overlay-delta.json",
+      "bytes": 3202,
+      "sha256": "daf01d5fdd73989cce2ad6ec29527180d53f502c2ee03b6f11d6035e8e7e3e64"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/qualify-r14.29.sh",
+      "bytes": 12775,
+      "sha256": "9421c8e5f2d6587289a19565b11f8dab9852b32723239b558b96bd0ef421ac7e"
+    },
+    {
+      "path": "preparation/v10-149-r14.29-private/source-pins.json",
+      "bytes": 3269,
+      "sha256": "d6389480d72276bb2e078c6b90f4ee7956a2f61bc45deb7cf99b0d04e9f15e17"
+    },
+    {
+      "path": "preparation/v10-nov01-claim-amendment/build-amendment.py",
+      "bytes": 12252,
+      "sha256": "3844b3a405143e6d4afa7250d811cfdadd38c9caec3448b8ff8d7ac3ed77dbfa"
+    },
+    {
+      "path": "preparation/v10-nov01-claim-amendment/claim-amendment.json",
+      "bytes": 15226,
+      "sha256": "d905aba667dd8ce1b85b6cac4f71b52ce35538187a2ceeb0fdcf8a7bab1394af"
+    },
+    {
+      "path": "preparation/v10-nov01-claim-amendment/review.txt",
+      "bytes": 1931,
+      "sha256": "c392ff684acfdbe3da6106995c809c8201a8bd87f37439de8aab620cbef0aa6d"
+    }
+  ],
+  "privateCandidateArchiveSha256": "6bce2b928629e9b81dbd0aaf4e79def2bc8aa389b6b0e6ad170d98e2fdfd908e"
+}

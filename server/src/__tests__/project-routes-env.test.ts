@@ -1,7 +1,14 @@
+import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
+import {
+  getEmbeddedPostgresTestSupport,
+  startEmbeddedPostgresTestDatabase,
+} from "./helpers/embedded-postgres.js";
 import { projectBusinessEvent } from "../services/business-events.js";
+import { projectService as nativeProjectService } from "../services/projects.js";
 
 const mockProjectService = vi.hoisted(() => ({
   list: vi.fn(),
@@ -87,7 +94,10 @@ function registerModuleMocks() {
   }));
 }
 
-async function createApp() {
+const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
+const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+
+async function createApp(db: ReturnType<typeof createDb>, companyId: string, userId: string) {
   const [{ projectRoutes }, { errorHandler }] = await Promise.all([
     vi.importActual<typeof import("../routes/projects.js")>("../routes/projects.js"),
     vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
@@ -95,59 +105,71 @@ async function createApp() {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    (req as any).actor = {
+    // This route fixture exercises the native DB mutation boundary with a
+    // stored human and membership; it does not qualify HTTP session auth.
+    req.actor = {
       type: "board",
-      userId: "board-user",
-      companyIds: ["company-1"],
-      source: "local_implicit",
+      userId,
+      companyIds: [companyId],
+      memberships: [{ companyId, membershipRole: "admin", status: "active" }],
+      source: "session",
       isInstanceAdmin: false,
     };
     next();
   });
-  app.use("/api", projectRoutes({ transaction: async (effect: (tx: unknown) => unknown) => effect({}) } as any));
+  app.use("/api", projectRoutes(db));
   app.use(errorHandler);
   return app;
 }
 
-function buildProject(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "project-1",
-    companyId: "company-1",
-    urlKey: "project-1",
-    goalId: null,
-    goalIds: [],
-    goals: [],
-    name: "Project",
-    description: null,
-    status: "backlog",
-    leadAgentId: null,
-    targetDate: null,
-    color: null,
-    env: null,
-    pauseReason: null,
-    pausedAt: null,
-    executionWorkspacePolicy: null,
-    codebase: {
-      workspaceId: null,
-      repoUrl: null,
-      repoRef: null,
-      defaultRef: null,
-      repoName: null,
-      localFolder: null,
-      managedFolder: "/tmp/project",
-      effectiveLocalFolder: "/tmp/project",
-      origin: "managed_checkout",
-    },
-    workspaces: [],
-    primaryWorkspace: null,
-    archivedAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  };
-}
+describeEmbeddedPostgres("project env routes", () => {
+  let db!: ReturnType<typeof createDb>;
+  let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let companyId = "";
+  let userId = "";
 
-describe("project env routes", () => {
+  beforeAll(async () => {
+    tempDb = await startEmbeddedPostgresTestDatabase("paperclip-project-routes-env-");
+    db = createDb(tempDb.connectionString);
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
+  afterAll(async () => {
+    await tempDb?.cleanup();
+  }, 30_000);
+
+  async function seedCompany() {
+    companyId = randomUUID();
+    userId = randomUUID();
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Project Env Test",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Project Owner",
+      email: `${userId}@example.test`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "admin",
+    });
+  }
+
+  function routeApp() {
+    mockProjectService.create.mockImplementation((...args: Parameters<ReturnType<typeof nativeProjectService>["create"]>) => nativeProjectService(db).create(...args));
+    mockProjectService.getById.mockImplementation((...args: Parameters<ReturnType<typeof nativeProjectService>["getById"]>) => nativeProjectService(db).getById(...args));
+    mockProjectService.update.mockImplementation((...args: Parameters<ReturnType<typeof nativeProjectService>["update"]>) => nativeProjectService(db).update(...args));
+    return createApp(db, companyId, userId);
+  }
   beforeEach(() => {
     vi.resetModules();
     vi.doUnmock("../routes/projects.js");
@@ -172,6 +194,7 @@ describe("project env routes", () => {
   });
 
   it("normalizes env bindings on create and logs only env keys", async () => {
+    await seedCompany();
     const normalizedEnv = {
       API_KEY: {
         type: "secret_ref",
@@ -180,11 +203,9 @@ describe("project env routes", () => {
       },
     };
     mockSecretService.normalizeEnvBindingsForPersistence.mockResolvedValue(normalizedEnv);
-    mockProjectService.create.mockResolvedValue(buildProject({ env: normalizedEnv }));
-
-    const app = await createApp();
+    const app = await routeApp();
     const res = await request(app)
-      .post("/api/companies/company-1/projects")
+      .post(`/api/companies/${companyId}/projects`)
       .send({
         name: "Project",
         env: normalizedEnv,
@@ -192,14 +213,16 @@ describe("project env routes", () => {
 
     expect([200, 201], JSON.stringify(res.body)).toContain(res.status);
     expect(mockSecretService.normalizeEnvBindingsForPersistence).toHaveBeenCalledWith(
-      "company-1",
+      companyId,
       normalizedEnv,
       expect.objectContaining({ fieldPath: "env" }),
     );
-    expect(mockProjectService.create).toHaveBeenCalledWith(
-      "company-1",
-      expect.objectContaining({ env: normalizedEnv }),
-    );
+    expect(mockProjectService.create).toHaveBeenCalledTimes(1);
+    const [createdCompany, createdInput, creationTx, creationActor] = mockProjectService.create.mock.calls[0]!;
+    expect(createdCompany).toBe(companyId);
+    expect(createdInput).toMatchObject({ env: normalizedEnv });
+    expect(creationTx).toBeDefined();
+    expect(creationActor).toMatchObject({ type: "board", userId, companyIds: [companyId] });
     expect(mockLogActivity).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -212,16 +235,17 @@ describe("project env routes", () => {
   });
 
   it("normalizes env bindings on update and avoids logging raw values", async () => {
+    await seedCompany();
     const normalizedEnv = {
       PLAIN_KEY: { type: "plain", value: "top-secret" },
     };
     mockSecretService.normalizeEnvBindingsForPersistence.mockResolvedValue(normalizedEnv);
-    mockProjectService.getById.mockResolvedValue(buildProject());
-    mockProjectService.update.mockResolvedValue(buildProject({ env: normalizedEnv }));
-
-    const app = await createApp();
+    const app = await routeApp();
+    const created = await request(app).post(`/api/companies/${companyId}/projects`).send({ name: "Project" });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const projectId = created.body.id as string;
     const res = await request(app)
-      .patch("/api/projects/project-1")
+      .patch(`/api/projects/${projectId}`)
       .send({
         env: normalizedEnv,
       });
@@ -239,11 +263,10 @@ describe("project env routes", () => {
   });
 
   it("records returned project states for lifecycle projection while keeping environment-only changes status-free",async()=>{
-    const projectId="00000000-0000-4000-8000-000000000001";
-    const initial=buildProject({id:projectId,status:"planned"}),completed=buildProject({id:projectId,status:"completed"});
-    mockProjectService.create.mockResolvedValue(initial);mockProjectService.getById.mockResolvedValue(initial);mockProjectService.update.mockResolvedValue(completed);
-    const app=await createApp();
-    await request(app).post("/api/companies/company-1/projects").send({name:"Planned native flow"}).expect(201);
+    await seedCompany();
+    const app=await routeApp();
+    const created = await request(app).post(`/api/companies/${companyId}/projects`).send({name:"Planned native flow",status:"planned"}).expect(201);
+    const projectId = created.body.id as string;
     await request(app).patch(`/api/projects/${projectId}`).send({status:"completed"}).expect(200);
     const sources=mockLogActivity.mock.calls.map(call=>call[1] as {action:string;entityType:string;entityId:string;details:Record<string,unknown>})
       .map((source,index)=>projectBusinessEvent({...source,createdAt:new Date(`2026-01-01T12:0${index}:00Z`)}));

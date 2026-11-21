@@ -1,0 +1,80 @@
+{
+  "checkpoint": "V10 original work preservation while opening support",
+  "recordedAt": "2026-10-23T18:49:04Z",
+  "scope": "UI routing regression evidence for an optional Help overlay. This does not qualify a full task composer, browser E2E journey, authentication API flow, support API, or complete SUP-01/SUP-02 acceptance.",
+  "sourcePins": {
+    "file": "support-work-preservation-language-pins.txt",
+    "result": "All six SHA-256 pins matched the final current source files at archive time."
+  },
+  "finalRuns": [
+    {
+      "name": "Final App route preservation fixture after dialog language-selector correction",
+      "result": "6 tests passed, 1 file passed",
+      "log": "support-work-preservation-language.log",
+      "exit": "support-work-preservation-language.exit",
+      "exitCode": 0,
+      "pins": "support-work-preservation-language-pins.txt"
+    },
+    {
+      "name": "UI typecheck for the final pinned source",
+      "result": "passed",
+      "log": "support-work-preservation-language-ui-types.log",
+      "exit": "support-work-preservation-language-ui-types.exit",
+      "exitCode": 0,
+      "pins": "support-work-preservation-language-pins.txt"
+    },
+    {
+      "name": "Token gates for the final pinned source",
+      "result": "clean",
+      "log": "support-work-preservation-language-token-gates.log",
+      "exit": "support-work-preservation-language-token-gates.exit",
+      "exitCode": 0,
+      "pins": "support-work-preservation-language-pins.txt"
+    }
+  ],
+  "retainedEarlierRuns": [
+    {
+      "name": "Combined UI regression before dialog language-selector correction",
+      "result": "44 tests passed across 4 files; this run used the earlier source pins and is not counted as final-source suite coverage.",
+      "log": "support-work-preservation-final.log",
+      "exit": "support-work-preservation-final.exit",
+      "exitCode": 0,
+      "sourcePins": "support-work-preservation-final-pins.txt"
+    },
+    {
+      "name": "Initial attempted route tests with old account fixtures",
+      "result": "15 failed, 11 passed, 16 uncaught errors; the fixture did not provide the new account query client dependency.",
+      "log": "support-work-preservation-initial.log",
+      "exit": "support-work-preservation-initial.exit",
+      "exitCode": 1,
+      "sourceCaptures": [
+        "support-work-preservation-initial-App.activity-routing.test.tsx.txt.gz",
+        "support-work-preservation-initial-App.cases-routing.test.tsx.txt.gz",
+        "support-work-preservation-initial-App.tsx.txt.gz",
+        "support-work-preservation-initial-CustomerSupportCases.tsx.txt.gz",
+        "support-work-preservation-initial-ExperienceUtilities.tsx.txt.gz",
+        "support-work-preservation-initial-V9RouteEntries.tsx.txt.gz"
+      ]
+    },
+    {
+      "name": "Portal wait assertion attempt",
+      "result": "3 failed, 27 passed; the overlay text was awaited in the route container although the real Dialog renders through a portal.",
+      "log": "support-work-preservation-reviewed.log",
+      "exit": "support-work-preservation-reviewed.exit",
+      "exitCode": 1,
+      "sourceCapture": "support-work-preservation-reviewed-cases-test.txt.gz"
+    }
+  ],
+  "coverage": [
+    "The final focused test uses the actual App route table, ExperienceUtilities Help Link, React Router navigation, and Radix Dialog. It asserts the original textarea DOM node/value and pathname, search, and hash remain mounted while Help is open, then verifies return navigation and focus to the actual Help link.",
+    "The work textarea and support page content are test fixtures; this proves generic mounted-route DOM preservation, not a production task composer draft, its crash recovery, or an authenticated API journey.",
+    "A same-session unsettled recheck keeps the underlying node mounted but hidden. Session or selected-company mismatch drops the background route. A direct support deep link renders standalone without a dialog.",
+    "Support navigation state carries the company/user binding, background key, return path, and existing allowlisted context; the originating location is retained in memory by App. No task body or permission data is copied into support navigation state."
+  ],
+  "openLimits": [
+    "Draft recovery after tab crash or command failure remains untested.",
+    "Support draft behavior when the modal closes remains separate from originating-work preservation.",
+    "Only the final focused App routing test was rerun after adding the existing account language selector inside the dialog; the earlier combined 4-file run is retained with its earlier pins."
+  ],
+  "archivedScratch": "All support-work-preservation-* logs, exit files, source captures, and source pin lists were copied byte-for-byte from /workspace/v10-preparation into this directory."
+}

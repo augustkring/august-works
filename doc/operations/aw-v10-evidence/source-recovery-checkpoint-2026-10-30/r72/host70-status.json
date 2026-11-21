@@ -1,0 +1,7 @@
+{
+  "candidate": "70",
+  "pinsSha256": "1d06cb5385065191f9175412609dafa67ae5845059fec7539487c060bd2f553a",
+  "runnerSha256": "446924a8cacb1993d234ec161842882957cb88ffe8744c75253dc49cdc4b2c92",
+  "status": "Worker reached actual model POST then safely failed with sandbox_session_provider_observation_unavailable; TypeScript passed",
+  "restore": "pinned sources restored to pre-snapshot source bytes and modes; compiled outputs and tsbuildinfo restored byte-for-byte"
+}

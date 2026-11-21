@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-25",
+  "sourceBrief": {
+    "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+    "section": "7.7 UP-05 — accepted messages, queue recovery and truthful completion",
+    "acceptance": "An accepted message remains queued while its recipient is paused; resuming and restarting two recovery workers must promote at most one successor and preserve one real delivery/effect."
+  },
+  "sourceRegister": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md#up-05-accepted-messages-queue-recovery-and-truthful-completion",
+  "sourceRevision": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "test": {
+    "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+    "helperLine": 1492,
+    "caseLine": 9873,
+    "sha256": "8b04a2e8d46ad3d050d01e488d88a1cb271958c9493b140112d81cb9b16e7887"
+  },
+  "success": {
+    "stdout": "final2-success.log",
+    "exit": "final2-success.exit",
+    "result": "1 test passed, 307 skipped, 1 test file passed; exit 0; duration 39.65s; selected case duration 22.32s",
+    "fixtureScope": "temporary/test PostgreSQL database, actual dispatcher/reconciler in fresh tsx child processes, controlled registered adapter. Adapter writes a real issue comment and updates the Task through the original issue service. This is software test evidence, not provider qualification."
+  },
+  "initialFailure": {
+    "stdout": "ownership-harness-failure.log",
+    "exit": "ownership-harness-failure.exit",
+    "result": "1 test failed, 307 skipped; parent test expected a succeeded run but observed running after successor dispatch.",
+    "diagnosis": "The recovery worker process dispatched the successor in its own process, while the original harness expected a parent-process mock adapter to execute/drain it. The test harness had no ownership of the child execution. Replaced that mock-only proof with a child-registered adapter and drainActiveRunExecutions() before child client shutdown. No production dispatch/Stop/lease policy changed.",
+    "boundedFacts": "The retained failure output establishes status=running at assertion time. It does not contain PID/controller/wakeup/effect diagnostics; those were added to the harness after this failure."
+  },
+  "unarchivedInitialParserFailure": "The first marker-parser harness failure (Unexpected token '}' while parsing child output) was not retained as a raw log. It was a harness-only failure before assertions; no claims rely on it.",
+  "matrixScope": {
+    "closed": ["paused accepted recipient preserved", "resume re-evaluates and queues one successor", "two fresh recovery workers race", "one actual child-process effect and successful Task completion", "repeated reconciliation produces no second run/effect"],
+    "stillOpen": ["assembled task Stop-during-recovery", "live native successor", "native accepted result with copy-back pending", "retained warm lease versus unsafe pending cleanup", "stale cleanup attempt across owners", "assembled live legacy controller deadline race", "provider-specific local/SSH release proof and deployment qualification"],
+    "otherExistingOwnerTests": ["separate suites cover several Stop/native/live-controller/cleanup behaviors, but these are not combined with this new accepted-recipient process-restart/effect journey"]
+  },
+  "coverageAudit": {
+    "existingSpecificCases": [
+      "server/src/modules/wake-queue/adapters/postgres.test.ts:565 — acknowledged native Stop leaves a deferred message undrained",
+      "server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts:306 — accepted non-assignee queue is delivered after its legacy/native owner finished; this is not specifically old-assignee reassignment",
+      "server/src/__tests__/heartbeat-process-recovery.test.ts:2358 — current-controller live native run is not reaped",
+      "server/src/__tests__/heartbeat-process-recovery.test.ts:11604 — finished native chat is not recovered while response publication is pending; it does not exercise provider credential/workspace copy-back",
+      "server/src/__tests__/heartbeat-pending-cleanup-sweep.test.ts:527 — stale cleanup completion cannot overwrite a newer cleanup attempt/receipt",
+      "server/src/__tests__/heartbeat-process-recovery.test.ts:1827,1845 — predecessor environment lease and unsafe Stop/deferred comment recovery guards",
+      "server/src/services/native-runtime/native-restart-recovery.test.ts:237,257 — live controller lease fence, below the assembled legacy queue/heartbeat path"
+    ],
+    "nextMinimalOriginalOwnerTest": "Extend the accepted-recipient PostgreSQL worker case with a true Task Stop racing recovery/dispatch, then assert the accepted comment remains preserved, no successor effect is delivered, and the Stop-owned terminal/hold state is unchanged. The wake-queue adapter has the narrower non-drain case already; the missing evidence is the same Stop race composed through heartbeat worker dispatch and its actual effect boundary.",
+    "otherUnprovenCompositions": "No located test combines the accepted native result with provider copy-back still pending, retained warm lease, and unsafe pending cleanup. Add a focused case through original native-finalization/recovery owners if root chooses that next; do not duplicate the separate cleanup-attempt owner test."
+  },
+  "notQualified": ["no managed provider runtime profile", "no real provider or model turn", "no customer delivery qualification"]
+}

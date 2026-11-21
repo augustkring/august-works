@@ -1,0 +1,120 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T19:25:20.948749+00:00",
+  "baseCommit": "0e049391f2eff16670e49085b344840c0f6d8d0e",
+  "patchBytes": 482132,
+  "patchSha256": "bbf1acad5baaee592ae8387672a00294bd881f9f5316e760b05547d8fc67aaa1",
+  "archiveSha256": "30b2b5e5c37e32f3fa2d5e77f73c54d5d6c1141c29db802a3d978b0bb0909333",
+  "untrackedSourceFiles": [
+    {
+      "path": "doc/operations/v10-capability-projection.json",
+      "bytes": 273747,
+      "sha256": "109c4b5011160676099c0f5a01ca826fa37ac8c028f7c2b6bace0f13d48ef40e"
+    },
+    {
+      "path": "doc/operations/v10-safe-change-graph.json",
+      "bytes": 10968,
+      "sha256": "4bd06f6322c20678d46400b23f834c88f72f9a7c48827bccb09d0c6a7d5c8468"
+    },
+    {
+      "path": "doc/operations/v10-safe-change-graph.source.json",
+      "bytes": 6909,
+      "sha256": "d134fc792d81e3f35acdf3fe7fd98811911cb076595f571faece09a05f5e07b3"
+    },
+    {
+      "path": "doc/operations/v10-security-fast-path.json",
+      "bytes": 11533,
+      "sha256": "bfc68197dd5e2e3291584491e030b706c2688104103f4e517179cd2196cd590d"
+    },
+    {
+      "path": "packages/db/src/migration-transaction-budget.test.ts",
+      "bytes": 8458,
+      "sha256": "1fba3bd96c2cb6f52ecb64f4016c471c0ea18bb23ce4c7d921981d51ad77d953"
+    },
+    {
+      "path": "packages/db/src/migrations/0563_wise_yellow_claw.sql",
+      "bytes": 3167,
+      "sha256": "3a657358183cd499efba154831c969c49dda4d1f7df69a5d0236eb2358a4e57d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0563_snapshot.json",
+      "bytes": 2785918,
+      "sha256": "2cda86e5db45b3f55304bcbfbb9afd3bd6cdb405b138de8ef0d3039c86567e71"
+    },
+    {
+      "path": "packages/db/src/schema/agent_model_migration_monitor_receipts.ts",
+      "bytes": 3030,
+      "sha256": "25b781862fb45a42ef09de0802c0665234c83d8d7373e98652661a0670110d85"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.test.ts",
+      "bytes": 2094,
+      "sha256": "d840e1f3dc02097ae59d5acd5ecf1af41cbccb1b92a9827cf0dde253e81b850e"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.ts",
+      "bytes": 2289,
+      "sha256": "625c3d11b0eb727393bd99943fb4d099d88eced84b8d23949b231badfb8bea83"
+    },
+    {
+      "path": "scripts/check-v10-capability-projection.mjs",
+      "bytes": 700,
+      "sha256": "0b7e774554d869c54d51a2f5002b67136e57f294e4ea5ad9b2ddfc45cbd93037"
+    },
+    {
+      "path": "scripts/check-v10-safe-change-graph.mjs",
+      "bytes": 2044,
+      "sha256": "0c93876cf28beb6652bea5e40ac69105361145d6550b911c24585abfdd6eaea9"
+    },
+    {
+      "path": "scripts/check-v10-security-fast-path.mjs",
+      "bytes": 6463,
+      "sha256": "b2157241cdc6850df5e65eb7850e9107b265b956543182da47367efa19742cd6"
+    },
+    {
+      "path": "scripts/check-v10-security-fast-path.test.mjs",
+      "bytes": 2666,
+      "sha256": "b53ca0fc3f375d1f4ae81fe05389415b6c8ac6325632eb7329bcd4a1e3ea84c2"
+    },
+    {
+      "path": "scripts/check-v10-security-regression-execution.mjs",
+      "bytes": 3159,
+      "sha256": "159a2a6302609ceee0890da94713d7477918e77d9ee1070ee12fba9924a0a721"
+    },
+    {
+      "path": "scripts/check-v10-security-regression-execution.test.mjs",
+      "bytes": 2156,
+      "sha256": "5e90801b1ae9f66ee33d3085088c747af6475f2fe6e7cb934d5aac67af7f02e4"
+    },
+    {
+      "path": "scripts/generate-v10-capability-projection.ts",
+      "bytes": 7034,
+      "sha256": "095f65f026af01a1106b191546225b6d5267c2edb4942cd28f0d1950dbf62b34"
+    },
+    {
+      "path": "scripts/generate-v10-safe-change-graph.mjs",
+      "bytes": 4309,
+      "sha256": "7d1bb6d95186752ab987ba0642f6d45eb845227c8eb70d0c54da071aa9629946"
+    },
+    {
+      "path": "scripts/v10-product-artifacts.test.mjs",
+      "bytes": 2770,
+      "sha256": "1ce7e3768820aa4486ba841e423747152608dc58cf99d2a859be965613bbefcf"
+    },
+    {
+      "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
+      "bytes": 19615,
+      "sha256": "96e03d71bde89201770eac7b04dcb3e5e6a3d367dc216743f4228f468037f724"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.test.tsx",
+      "bytes": 11897,
+      "sha256": "92bc4b104b26a017955c41864734f1c89eff4cef0b23d2756b1ecb48a9138f19"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.tsx",
+      "bytes": 8089,
+      "sha256": "1744bbfd25942411c42bf2eba07af387d763a20f7b24e67dadc48acf966c2f32"
+    }
+  ]
+}

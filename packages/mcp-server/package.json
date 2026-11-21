@@ -40,17 +40,18 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run src"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "@paperclipai/shared": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@modelcontextprotocol/server": "^2.4.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@modelcontextprotocol/client": "^2.4.0"
   },
   "engines": {
     "node": ">=24.11.0"

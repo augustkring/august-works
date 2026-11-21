@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { SaasResetPasswordPage } from "./SaasPasswordReset";
 import { i18n } from "../i18n";
+import { EXPERIENCE_LOCALE_KEY } from "../i18n/experience-locale-preference";
 const action = vi.hoisted(() => vi.fn());
 vi.mock("../api/saas", () => ({ saasAuthAction: action }));
 vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompany: null, selectedCompanyId: null }) }));
@@ -29,6 +30,21 @@ async function submit() { await act(async () => host.querySelector("form")!.disp
 afterEach(async () => {
   if (root) await act(async () => root.unmount()); host?.remove(); client?.clear();
   action.mockReset(); await i18n.changeLanguage("en");
+  localStorage.removeItem(EXPERIENCE_LOCALE_KEY);
+});
+it("keeps the recovery token and password when the person switches language", async () => {
+  await mount("/saas/reset-password?token=original");
+  await enter("Private-valid-password");
+  await act(async () => {
+    const select = host.querySelector("select")!;
+    select.value = "da";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(host.querySelector("h1")!.textContent).toBe("Vælg en ny adgangskode");
+  expect(host.querySelector("input")!.value).toBe("Private-valid-password");
+  expect(action).not.toHaveBeenCalled();
+  await submit();
+  await vi.waitFor(() => expect(action).toHaveBeenCalledExactlyOnceWith("reset-password", { token: "original", newPassword: "Private-valid-password" }));
 });
 it.each(["en", "da"])("localizes the public reset request and keeps its receipt non-enumerating in %s", async language => {
   await mount(undefined, language);
@@ -49,6 +65,15 @@ it("keeps a failed password change unconfirmed without exposing the native error
   expect(host.textContent).toContain("could not be confirmed"); expect(host.textContent).not.toContain("PRIVATE-AUTH-TRANSPORT-CANARY");
   expect(host.querySelector("input")!.value).toBe("Private-valid-password");
   expect(document.activeElement).toBe(host.querySelector('[role="alert"]')); expect(action).toHaveBeenCalledOnce();
+});
+it.each(["en", "da"])("shows safe common-password advice and keeps the entered value in %s", async language => {
+  await mount("/saas/reset-password?token=original", language);
+  action.mockRejectedValue(Object.assign(new Error("PRIVATE-COMMON-PASSWORD-DETAIL"), { code: "PASSWORD_TOO_COMMON" }));
+  await enter("Private-valid-password"); await submit();
+  await vi.waitFor(() => expect(host.querySelector('[role="alert"]')).toBeTruthy());
+  expect(host.textContent).toContain(language === "en" ? "Choose a different password" : "Vælg en anden adgangskode");
+  expect(host.textContent).not.toContain("PRIVATE-COMMON-PASSWORD-DETAIL");
+  expect(host.querySelector("input")!.value).toBe("Private-valid-password");
 });
 it("a new recovery token clears the previous password and cannot inherit its late success", async () => {
   await mount("/saas/reset-password?token=first");

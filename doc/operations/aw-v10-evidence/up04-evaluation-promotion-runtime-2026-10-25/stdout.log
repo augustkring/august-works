@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ✓ src/__tests__/skill-evaluation-promotion-runtime.integration.test.ts > UP04 evaluated Skill promotion and immutable runtime consumer > earns both promotions from pinned evaluations and preserves only currently authorized immutable assignments 28810ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  19:23:14
+   Duration  48.95s (transform 11.61s, setup 80ms, import 15.93s, tests 32.82s, environment 0ms)
+

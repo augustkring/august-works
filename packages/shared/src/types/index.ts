@@ -19,6 +19,7 @@ export type {
 } from "./connection-intent.js";
 export type {
   Company,
+  CompanyResponsibilityContacts,
   InteractionResolverGovernance,
   InteractionResolverKindGovernance,
 } from "./company.js";
@@ -351,9 +352,13 @@ export type {
   DocumentTextRange,
   UpdateDocumentAnnotationThreadRequest,
 } from "./document-annotation.js";
-export type { Project, ProjectRepository, ProjectRepositoryOptions, ProjectBudgetSummary, ProjectCodebase, ProjectCodebaseOrigin, ProjectGoalRef, ProjectManagedByPlugin, ProjectWorkspace } from "./project.js";
+export type { Project, ProjectVisibility, ProjectAccessMember, ProjectAccessSubjectType, ProjectRepository, ProjectRepositoryOptions, ProjectBudgetSummary, ProjectCodebase, ProjectCodebaseOrigin, ProjectGoalRef, ProjectManagedByPlugin, ProjectWorkspace } from "./project.js";
 export type {
   CompanySearchCountType,
+  CompanySearchFederatedDomain,
+  CompanySearchFederatedDomainCoverage,
+  CompanySearchFederatedResult,
+  CompanySearchFederation,
   CompanySearchExtractIssueResult,
   CompanySearchExtractKind,
   CompanySearchExtractMatch,
@@ -483,6 +488,7 @@ export type {
   ToolConnectionActivityResponse,
   ToolConnectionLifecycleEvent,
   ToolConnectionLifecycleEventType,
+  ToolConnectionLifecycle,
   ToolConnectionInstall,
   ToolConnectionInstallSnapshot,
   ToolConnectionInstallTargetType,
@@ -646,6 +652,13 @@ export type {
 export type {
   CompactIssue,
   Issue,
+  IssueVisibility,
+  IssuePrivacyConstraints,
+  IssueAccessGrant,
+  IssueAccessGrantAgentVisibility,
+  IssueAccessGrantSubjectType,
+  IssueAccessGrantSource,
+  IssueLockedStub,
   IssueChangeReceiptEntry,
   IssueChanges,
   IssueWorkMode,
@@ -931,7 +944,7 @@ export type {
   UserProfileWindowStats,
 } from "./user-profile.js";
 export type { SidebarBadges } from "./sidebar-badges.js";
-export type { SidebarOrderPreference } from "./sidebar-preferences.js";
+export type { SidebarOrderPreference, PreferredCoworkerPreference } from "./sidebar-preferences.js";
 export type {
   ResourceMembershipResourceType,
   ResourceMembershipState,
@@ -964,7 +977,9 @@ export type {
   AccessUserProfile,
   CompanyMemberRecord,
   CompanyMembersResponse,
+  HumanWorkflowCoverage,
   ArchiveCompanyMemberResponse,
+  SecuritySuspendCompanyMemberResponse,
   CompanyMembership,
   CompanyInviteListResponse,
   CompanyInviteRecord,

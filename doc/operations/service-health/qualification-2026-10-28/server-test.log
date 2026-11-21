@@ -1,0 +1,13 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ✓ src/services/experience/service-health.test.ts > projects only published customer communication and coalesces concurrent reads without tenant credentials 40ms
+ ✓ src/services/experience/service-health.test.ts > does not reuse an old all-clear after the provider becomes unavailable 2ms
+ ✓ src/services/experience/service-health.test.ts > rejects foreign origins, internal topology, unknown references, impossible windows and oversized responses 5ms
+ ✓ src/services/experience/service-health.test.ts > does no provider work when unconfigured and bounds a stalled provider 4ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  17:46:12
+   Duration  4.35s (transform 2.32s, setup 108ms, import 4.01s, tests 52ms, environment 0ms)
+

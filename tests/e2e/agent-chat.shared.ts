@@ -1,8 +1,11 @@
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
 import {
   test,
   expect,
+  request as createRequestContext,
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
@@ -10,24 +13,99 @@ import {
 // Per-file Playwright configuration (test.use, test.setTimeout) must stay in
 // the spec files themselves: calling test.use() from a shared helper makes
 // Playwright fail the whole worker with "inconsistent test.use() options".
+const CHAT_MUTABLE_EXPERIMENTAL_FLAGS = [
+  "analytical_lineage_v8",
+  "business_metrics_v8",
+  "management_reviews_v8",
+  "management_chat_tools_v8",
+  "enableContextEngineV1",
+  "ai_use_cases_v7",
+  "governance_evidence_v7",
+] as const;
+
 export async function json(response: Awaited<ReturnType<APIRequestContext["get"]>>) {
   expect(response.ok(), `${response.status()} ${await response.text()}`).toBe(
     true,
   );
   return response.json();
 }
-export async function setup(request: APIRequestContext) {
+export async function setup(request: APIRequestContext, page?: Page) {
+  let instanceControlRequest = request;
+  let apiKeyId: string | undefined;
+  let ownsApiRequest = false;
+  const pageContext = page?.context();
+  const config = page ? process.env.PAPERCLIP_E2E_SERVER_CONFIG : undefined;
+  const authenticated = !!page && process.env.PAPERCLIP_E2E_AUTH_MODE === "authenticated";
+  const nativeChat = !!page && process.env.PAPERCLIP_E2E_NATIVE_CHAT === "true";
+  const baseURL = process.env.PAPERCLIP_API_URL
+    ?? `http://127.0.0.1:${process.env.PAPERCLIP_E2E_PORT ?? "3199"}`;
+  if (authenticated) {
+    if (!config || !baseURL) throw new Error("An isolated authenticated E2E server is required for agent chat");
+    const serverConfig = JSON.parse(readFileSync(config, "utf8")) as { server?: { deploymentMode?: string } };
+    if (serverConfig.server?.deploymentMode !== "authenticated") {
+      throw new Error("Authenticated agent-chat E2E requires an authenticated server configuration");
+    }
+    request = page!.request;
+    instanceControlRequest = request;
+    const currentSession = await request.get("/api/auth/get-session");
+    const existingHuman = currentSession.ok() && (await currentSession.json())?.user?.id;
+    if (!existingHuman) {
+      // The isolated instance has one bootstrap Human claim. Reuse that account
+      // across this serial browser lane instead of attempting a second claim in
+      // every test; each test still creates an independent company and agents.
+      const email = `agent-chat-owner-${process.env.PAPERCLIP_E2E_PORT ?? "3199"}@test.invalid`;
+      const password = "Agent-chat browser test passphrase 2026!";
+      const login = await request.post("/api/auth/sign-in/email", { data: { email, password } });
+      if (login.status() === 401 || login.status() === 404) {
+        await json(await request.post("/api/auth/sign-up/email", { data: {
+          name: "Authenticated agent-chat reviewer", email, password,
+        } }));
+        const invitation = execFileSync("pnpm", [
+          "--filter", "@paperclipai/db", "exec", "tsx",
+          path.resolve("packages/db/scripts/create-auth-bootstrap-invite.ts"),
+          "--config", config,
+          "--base-url", baseURL,
+        ], { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] }).trim();
+        const invitationToken = new URL(invitation).pathname.split("/").at(-1);
+        if (!invitationToken) throw new Error("Authenticated agent-chat bootstrap invitation was malformed");
+        await json(await request.post(`/api/invites/${invitationToken}/accept`, { data: { requestType: "human" } }));
+      } else if (!login.ok()) {
+        throw new Error(`Authenticated agent-chat login failed: ${login.status()} ${await login.text()}`);
+      }
+    }
+  }
   const company = await json(
     await request.post("/api/companies", {
       data: { name: `Agent Chat ${Date.now()}` },
     }),
   );
+  if (page) {
+    if (!authenticated) {
+      if (!config || !baseURL) throw new Error("An isolated E2E server is required for the local-trusted chat fixture");
+      const key = JSON.parse(execFileSync("pnpm", [
+        "--filter", "@paperclipai/server", "exec", "tsx",
+        path.resolve("tests/e2e/fixtures/create-agent-chat-board-key.ts"),
+        "--config", config,
+        "--company-id", company.id,
+      ], { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] })) as { id: string; token: string };
+      apiKeyId = key.id;
+      request = await createRequestContext.newContext({
+        baseURL,
+        extraHTTPHeaders: { Authorization: `Bearer ${key.token}` },
+      });
+      ownsApiRequest = true;
+      await pageContext!.route("**/api/**", (route) => route.continue({
+        headers: { ...route.request().headers(), authorization: `Bearer ${key.token}` },
+      }));
+    }
+  }
   const original = await json(
-    await request.get("/api/instance/settings/experimental"),
+    await instanceControlRequest.get("/api/instance/settings/experimental"),
   );
   await json(
-    await request.patch("/api/instance/settings/experimental", {
-      data: { enableAgentChat: true, enableClassicTaskInterface: false },
+    await instanceControlRequest.patch("/api/instance/settings/experimental", {
+      data: { enableAgentChat: true, enableClassicTaskInterface: false,
+        ...(nativeChat ? { enableNativeRunner: true } : {}) },
     }),
   );
   const agents = [];
@@ -37,8 +115,8 @@ export async function setup(request: APIRequestContext) {
         await request.post(`/api/companies/${company.id}/agents`, {
           data: {
             name,
-            adapterType: "process",
-            adapterConfig: {
+            adapterType: nativeChat ? "paperclip_runner" : "process",
+            adapterConfig: nativeChat ? { provider: "codex", model: "gpt-5.1-codex-mini" } : {
               command: process.execPath,
               args: [path.resolve("tests/e2e/fixtures/agent-chat.mjs")],
               graceSec: 1,
@@ -59,25 +137,52 @@ export async function setup(request: APIRequestContext) {
     agent,
     chatPath,
     route,
+    initialAgentChatEnabled: original.enableAgentChat,
     restore: async (options?: { collectState?: boolean }) => {
+      const safeCleanup = async (action: () => Promise<unknown>) => {
+        try { await action(); }
+        catch (error) {
+          await test.info().attach("chat-cleanup-warning", {
+            contentType: "application/json",
+            body: Buffer.from(JSON.stringify({ errorName: error instanceof Error ? error.name : "unknown" })),
+          }).catch(() => undefined);
+        }
+      };
       try {
         if (options?.collectState === false) return;
-        const chat = await request.get(chatPath);
+        const chat = await request.get(chatPath, { timeout: 5_000 });
         const history = chat.ok() ? await chat.json() : null;
         const tasks = await json(
-          await request.get(`/api/companies/${company.id}/issues`),
+          await request.get(`/api/companies/${company.id}/issues`, { timeout: 5_000 }),
         );
         const projects = await json(
-          await request.get(`/api/companies/${company.id}/projects`),
+          await request.get(`/api/companies/${company.id}/projects`, { timeout: 5_000 }),
         );
         const ledger = await json(
-          await request.get(`/api/companies/${company.id}/heartbeat-runs`),
+          await request.get(`/api/companies/${company.id}/heartbeat-runs`, { timeout: 5_000 }),
         );
+        const runDetails = await Promise.all(ledger.map(async (run: any) => {
+          const response = await request.get(`/api/heartbeat-runs/${run.id}`, { timeout: 5_000 });
+          if (!response.ok()) return { id: run.id, detailStatus: response.status() };
+          const detail = await response.json();
+          return {
+            id: run.id,
+            status: detail.status,
+            errorCode: detail.errorCode ?? null,
+            exitCode: detail.exitCode ?? null,
+            signal: detail.signal ?? null,
+            nativePhase: detail.nativePhase ?? null,
+            issueMatchesChat: detail.issueId === history?.id,
+            nativeIssueMatchesChat: detail.nativeIssueId === history?.id,
+            humanMatchesChatOwner: detail.responsibleUserId === history?.responsibleUserId,
+            executionRunMatchesChat: history?.executionRunId === detail.id,
+          };
+        }));
         const documents = await Promise.all(
           [...(history ? [history] : []), ...tasks].map(async (task: any) => ({
             taskId: task.id,
             documents: await json(
-              await request.get(`/api/issues/${task.id}/documents`),
+              await request.get(`/api/issues/${task.id}/documents`, { timeout: 5_000 }),
             ),
           })),
         );
@@ -90,9 +195,10 @@ export async function setup(request: APIRequestContext) {
                 tasks,
                 projects,
                 documents,
+                runDetails,
                 comments: history
                   ? await json(
-                      await request.get(`/api/issues/${history.id}/comments`),
+                      await request.get(`/api/issues/${history.id}/comments`, { timeout: 5_000 }),
                     )
                   : [],
                 runs: ledger.map((run: any) => ({
@@ -113,24 +219,38 @@ export async function setup(request: APIRequestContext) {
             ),
           ),
         });
+      } catch (error) {
+        await test.info().attach("chat-state-capture-warning", {
+          contentType: "application/json",
+          body: Buffer.from(JSON.stringify({ errorName: error instanceof Error ? error.name : "unknown" })),
+        }).catch(() => undefined);
       } finally {
-        const runs = await json(
-          await request.get(`/api/companies/${company.id}/live-runs`),
-        );
-        for (const run of runs)
-          await json(
-            await request.post(`/api/heartbeat-runs/${run.id}/cancel`),
-          );
-        await json(
-          await request.patch("/api/instance/settings/experimental", {
+        await safeCleanup(async () => {
+          const response = await request.get(`/api/companies/${company.id}/live-runs`, { timeout: 5_000 });
+          const runs = await json(response);
+          await Promise.all(runs.map((run: any) => safeCleanup(async () => json(
+            await request.post(`/api/heartbeat-runs/${run.id}/cancel`, { timeout: 5_000 }),
+          ))));
+        });
+        await safeCleanup(async () => json(
+          await instanceControlRequest.patch("/api/instance/settings/experimental", {
             data: {
               enableAgentChat: original.enableAgentChat,
               enableClassicTaskInterface: original.enableClassicTaskInterface,
+              ...Object.fromEntries(CHAT_MUTABLE_EXPERIMENTAL_FLAGS.map(
+                (flag) => [flag, original[flag]],
+              )),
+              ...(nativeChat ? { enableNativeRunner: original.enableNativeRunner } : {}),
             },
+            timeout: 5_000,
           }),
-        );
+        ));
+        if (apiKeyId) await safeCleanup(async () => request.delete(`/api/board-api-keys/${apiKeyId}`, { timeout: 5_000 }));
+        if (pageContext) await pageContext.unroute("**/api/**");
+        if (ownsApiRequest) await safeCleanup(() => request.dispose());
       }
     },
+    request,
   };
 }
 export async function send(page: Page, value: unknown) {
@@ -150,19 +270,31 @@ export async function idle(
   request: APIRequestContext,
   chatPath: string,
   minimumReplies = 1,
+  timeout = 60_000,
 ) {
   let issue: any;
-  await expect
-    .poll(
+  let lastDiagnostic = "not polled";
+  try {
+    await expect
+      .poll(
       async () => {
         issue = await json(await request.get(chatPath));
         if (!issue) return false;
-        const replies = await json(
-          await request.get(`/api/issues/${issue.id}/comments`),
-        );
-        const live = await json(
-          await request.get(`/api/issues/${issue.id}/live-runs`),
-        );
+        const [replies, live] = await Promise.all([
+          request
+            .get(`/api/issues/${issue.id}/comments`)
+            .then(json),
+          request
+            .get(`/api/issues/${issue.id}/live-runs`)
+            .then(json),
+        ]);
+        lastDiagnostic = JSON.stringify({
+          issueId: issue.id,
+          status: issue.status,
+          conversationState: issue.conversationState,
+          agentReplyCount: replies.filter((c: any) => c.authorAgentId).length,
+          liveRunStates: live.map((run: any) => run.status),
+        });
         return (
           live.length === 0 &&
           issue.conversationState === "waiting" &&
@@ -170,8 +302,11 @@ export async function idle(
           replies.filter((c: any) => c.authorAgentId).length >= minimumReplies
         );
       },
-      { timeout: 60_000, intervals: [100, 250, 500] },
-    )
-    .toBe(true);
+      { timeout, intervals: [100, 250, 500] },
+      )
+      .toBe(true);
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nLatest chat idle state: ${lastDiagnostic}`);
+  }
   return issue;
 }

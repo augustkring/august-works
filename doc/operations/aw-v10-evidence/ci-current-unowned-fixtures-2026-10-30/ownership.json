@@ -1,0 +1,123 @@
+{
+  "schema": "aw.v10.current-ci-fixture-qualification.v1",
+  "files": [
+    {
+      "path": "server/src/__tests__/issue-attachment-routes.test.ts",
+      "qualificationSha256": "5ed0eb95dde8e6ad202f3b67ef25b0804822035c2ee6fd6df057ce873b376188",
+      "mainSha256": "5ed0eb95dde8e6ad202f3b67ef25b0804822035c2ee6fd6df057ce873b376188",
+      "mirrorSha256": "5ed0eb95dde8e6ad202f3b67ef25b0804822035c2ee6fd6df057ce873b376188",
+      "matchesQualification": true
+    },
+    {
+      "path": "server/src/__tests__/workspace-runtime-routes-authz.test.ts",
+      "qualificationSha256": "d6abae7ba369850d5ec793c476c432b4bb3acb69ec77c429f06350ca6697a7e5",
+      "mainSha256": "d6abae7ba369850d5ec793c476c432b4bb3acb69ec77c429f06350ca6697a7e5",
+      "mirrorSha256": "d6abae7ba369850d5ec793c476c432b4bb3acb69ec77c429f06350ca6697a7e5",
+      "matchesQualification": true
+    },
+    {
+      "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+      "qualificationSha256": "7161f4e170442819b027d830c5c0a35ca918315b409e6857398d01ab564d429c",
+      "mainSha256": "7161f4e170442819b027d830c5c0a35ca918315b409e6857398d01ab564d429c",
+      "mirrorSha256": "7161f4e170442819b027d830c5c0a35ca918315b409e6857398d01ab564d429c",
+      "matchesQualification": true
+    },
+    {
+      "path": "server/src/__tests__/support-case-storage.integration.test.ts",
+      "qualificationSha256": "ba320a93bee1bcf2a5f04cfeead040ba69063f5ea7f386f8314fe35d79e8434d",
+      "mainSha256": "ba320a93bee1bcf2a5f04cfeead040ba69063f5ea7f386f8314fe35d79e8434d",
+      "mirrorSha256": "ba320a93bee1bcf2a5f04cfeead040ba69063f5ea7f386f8314fe35d79e8434d",
+      "matchesQualification": true
+    }
+  ],
+  "reconstructableCapture": {
+    "sourceHead": "fcec9c5a5e2a7eb7a3cdfd50d54de96a49a8e1ff",
+    "capturedChangedFiles": 1134,
+    "sourcePatch": {
+      "file": "source-pins.source.patch.gz",
+      "rawSha256": "d16377b60d6711ae1eabbe35251dd9ec9df69047bb1e61957375cbb02139ee51",
+      "storedSha256": "c8a07c7a1c7b442b173dab52ece390dbc7232be056320ef1d48395a7023e87c3",
+      "rawBytes": 1256323
+    },
+    "addedSourceFiles": {
+      "file": "source-pins.source-files.tar.gz",
+      "storedSha256": "615a5c5063ff965644fd9e547678486f2e94428358ec318a04b0812e8832b602",
+      "count": 15
+    }
+  },
+  "patch": {
+    "file": "fixture-changes.patch.gz",
+    "rawSha256": "58a557c663bf54c3c23265d7de0aa17b9eaead6fdb9ace5096754f07e6277a1a",
+    "storedSha256": "0d9f07e736422989ea848cfb746c763345062c9ca30e45800c14ef122480b87c",
+    "rawBytes": 6761
+  },
+  "qualification": {
+    "sourceHead": "fcec9c5a5e2a7eb7a3cdfd50d54de96a49a8e1ff",
+    "snapshotExit": 0,
+    "oxcExit": 0,
+    "oxcChecked": 968,
+    "vitestExit": 0,
+    "vitestSummary": "4 files; 46 selected passed; 24 unrelated skipped",
+    "evidenceInput": "/workspace/v10-preparation/ci-current-unowned-r2-20261030",
+    "archives": [
+      {
+        "file": "source-pins.json.gz",
+        "rawSha256": "630da35ef8e033a4cb24ad1746188ad5b3d9df9622257ef283f148164e4b0b1c",
+        "storedSha256": "8e036c4c0f4d5a0271d156d3e849ab94f68217c99d98fc809cbb63cbe860bc81",
+        "rawBytes": 189722
+      },
+      {
+        "file": "snapshot.log.gz",
+        "rawSha256": "62dbae7d45556bbe50a2d50efb9dd38d74d6cf013126b115331ea164f262cb9b",
+        "storedSha256": "ae2bd07d414af332bcb4ac862adc448f25f9d59fef1419bf099bf33573f612ae",
+        "rawBytes": 38
+      },
+      {
+        "file": "snapshot.exit",
+        "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "rawBytes": 2
+      },
+      {
+        "file": "oxc.log.gz",
+        "rawSha256": "c79fe6f19f77a06ec05f70fc62e884899501bc2111d0ac9a148ab53cd796e96c",
+        "storedSha256": "7f8d982e76359c00bb178f6caf215cd2df8f00e39ccf1d5b050729f311fac360",
+        "rawBytes": 61
+      },
+      {
+        "file": "oxc.exit",
+        "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "rawBytes": 2
+      },
+      {
+        "file": "test.log.gz",
+        "rawSha256": "bb984bf89ad85a63b5c0d75920b5c0b19d0dca18209359ff3fbcd61a53168570",
+        "storedSha256": "39b3903362039abd99cf571ebcf3cc3b50bcdf8537df8e57073b4a940ec8fc09",
+        "rawBytes": 12257
+      },
+      {
+        "file": "test.exit",
+        "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "rawBytes": 2
+      },
+      {
+        "file": "SHA256SUMS",
+        "rawSha256": "6740ff11e10dd8f6833790861cc65bcdc981f8a81ea2c9e284185aace1cd9e12",
+        "storedSha256": "6740ff11e10dd8f6833790861cc65bcdc981f8a81ea2c9e284185aace1cd9e12",
+        "rawBytes": 543
+      }
+    ],
+    "runner": "runner.json"
+  },
+  "stageList": [
+    "server/src/__tests__/issue-attachment-routes.test.ts",
+    "server/src/__tests__/workspace-runtime-routes-authz.test.ts",
+    "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+    "server/src/__tests__/support-case-storage.integration.test.ts",
+    "doc/operations/aw-v10-evidence/ci-current-unowned-fixtures-2026-10-30/"
+  ],
+  "stageDisposition": "Root reviewed the exact four-file fixture diff; Root to commit only these four test files plus this dated portable evidence directory.",
+  "scope": "Four test-fixture corrections only. No production behavior or security policy was weakened."
+}

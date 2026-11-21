@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import type {
   AdapterSkillContext,
@@ -14,6 +13,7 @@ import {
   resolveLegacyPaperclipDesiredSkillNames,
 } from "@paperclipai/adapter-utils/server-utils";
 import { fileURLToPath } from "node:url";
+import { hermesDataHome, hermesPresenceConfig, ensureHermesDataHome } from "./presence-profile.js";
 
 const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,14 +25,6 @@ function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function resolveHermesHome(config: Record<string, unknown>): string {
-  const env =
-    typeof config.env === "object" && config.env !== null && !Array.isArray(config.env)
-      ? (config.env as Record<string, unknown>)
-      : {};
-  const configuredHome = asString(env.HOME);
-  return configuredHome ? path.resolve(configuredHome) : os.homedir();
-}
 
 interface SkillFrontmatter {
   name?: string;
@@ -130,8 +122,7 @@ async function buildSkillEntry(
 // ---------------------------------------------------------------------------
 
 async function buildHermesSkillSnapshot(config: Record<string, unknown>): Promise<AdapterSkillSnapshot> {
-  const home = resolveHermesHome(config);
-  const hermesSkillsHome = path.join(home, ".hermes", "skills");
+  const hermesSkillsHome = path.join(hermesDataHome(config), "skills");
 
   // 1. Scan Paperclip-managed skills (bundled with the adapter)
   const paperclipEntries = await readPaperclipRuntimeSkillEntries(config, __moduleDir);
@@ -209,7 +200,7 @@ async function buildHermesSkillSnapshot(config: Record<string, unknown>): Promis
 export async function listHermesSkills(
   ctx: AdapterSkillContext,
 ): Promise<AdapterSkillSnapshot> {
-  return buildHermesSkillSnapshot(ctx.config);
+  return buildHermesSkillSnapshot(hermesPresenceConfig(ctx.config, ctx));
 }
 
 export async function reconcileHermesPaperclipSkills(
@@ -224,8 +215,11 @@ export async function reconcileHermesPaperclipSkills(
       ]))
     : resolveLegacyPaperclipDesiredSkillNames(config, availableEntries);
   const desiredSet = new Set(desiredSkills);
-  const skillsHome = path.join(resolveHermesHome(config), ".hermes", "skills");
+  await ensureHermesDataHome(config);
+  const skillsHome = path.join(hermesDataHome(config), "skills");
   await fs.mkdir(skillsHome, { recursive: true });
+  const skillsStat = await fs.lstat(skillsHome);
+  if (!skillsStat.isDirectory() || skillsStat.isSymbolicLink()) throw new Error("hermes_skills_directory_redirected");
   const installed = await readInstalledSkillTargets(skillsHome);
   const availableByRuntimeName = new Map(availableEntries.map((entry) => [entry.runtimeName, entry]));
 
@@ -258,8 +252,9 @@ export async function syncHermesSkills(
   ctx: AdapterSkillContext,
   desiredSkills: string[],
 ): Promise<AdapterSkillSnapshot> {
-  await reconcileHermesPaperclipSkills(ctx.config, desiredSkills);
-  return buildHermesSkillSnapshot(ctx.config);
+  const config = hermesPresenceConfig(ctx.config, ctx);
+  await reconcileHermesPaperclipSkills(config, desiredSkills);
+  return buildHermesSkillSnapshot(config);
 }
 
 export function resolveHermesDesiredSkillNames(

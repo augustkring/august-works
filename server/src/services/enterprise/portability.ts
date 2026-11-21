@@ -394,6 +394,7 @@ export async function exportCompanyStateV7(
         "Private agent Memory, erased payloads, source-ineligible derived content and credential values are excluded.",
         "Package deployment references and license metadata are exported; third-party package redistribution remains subject to its license.",
         "Import never reinstates credentials, approvals, running work, active deployment authority or prior sandbox qualification.",
+        "Human workflow coverage is excluded and is never restored by company import.",
       ],
     };
   });

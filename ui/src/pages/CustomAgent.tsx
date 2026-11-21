@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
 import { AgentDraftPublication } from "@/components/AgentDraftPublication";
+import { AgentModelMigrationMonitor } from "@/components/AgentModelMigrationMonitor";
 import { AgentDraftSafeTest } from "@/components/AgentDraftSafeTest";
 import { AgentDraftReview } from "@/components/AgentDraftReview";
 
@@ -856,7 +857,10 @@ function DraftEditor({
           </>
         )}
         {step === "monitor" && (
-          <p>{t("customAgent.monitorBoundary")}</p>
+          <AgentModelMigrationMonitor company={company} principal={principal} draft={receipt}
+            enabled={viewReady && enabled && !save.isPending && !discard.isPending && JSON.stringify(content) === JSON.stringify(receipt.content)}
+            canUseAuthority={() => alive.current && authority.canRead() && !securityPending.current && !reauthorizing &&
+              client.getQueryState(["agent-authoring", company, principal, id, authority.epoch])?.fetchStatus === "idle"} />
         )}
       </fieldset>
       {options.isError && (

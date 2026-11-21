@@ -1,0 +1,254 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[04:10:31] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+·[04:10:36] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:36] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:36] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","runId":"f4264963-8d33-4b1d-b032-0ff83771814e","agentId":"6b3c97ce-1a00-4bc4-be6f-96cfde50263e","sourceIssueId":"cec95011-693c-47e3-ba72-f2bacd811f84","targetIssueId":"a9f419cf-4683-41ab-b4cb-4adc15ecd7bf","kind":"comment","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[04:10:38] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","agentId":"e7c81d02-60bd-4c20-afb2-b78ba9e052f3","runId":"09c966c9-21cb-45a3-a78e-a3b748525821","adapterType":"process"}[39m
+[04:10:38] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","agentId":"e7c81d02-60bd-4c20-afb2-b78ba9e052f3","runId":"09c966c9-21cb-45a3-a78e-a3b748525821"}[39m
+[04:10:38] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","runId":"f4264963-8d33-4b1d-b032-0ff83771814e","agentId":"6b3c97ce-1a00-4bc4-be6f-96cfde50263e","sourceIssueId":"cec95011-693c-47e3-ba72-f2bacd811f84","targetIssueId":"d13c38c8-d83c-4d20-a618-692445d976e2","kind":"comment","count":2,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[04:10:38] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"09c966c9-21cb-45a3-a78e-a3b748525821"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24649:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22354:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24646:15)
+    }
+[04:10:38] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","runId":"f4264963-8d33-4b1d-b032-0ff83771814e","agentId":"6b3c97ce-1a00-4bc4-be6f-96cfde50263e","sourceIssueId":"cec95011-693c-47e3-ba72-f2bacd811f84","targetIssueId":"ea6e16ba-5991-40a4-a187-75b211197e7c","kind":"comment","count":3,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[04:10:39] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","agentId":"e7c81d02-60bd-4c20-afb2-b78ba9e052f3","runId":"532378b0-6737-4cda-acb7-1b1c965c515b","adapterType":"process"}[39m
+[04:10:39] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","agentId":"e7c81d02-60bd-4c20-afb2-b78ba9e052f3","runId":"532378b0-6737-4cda-acb7-1b1c965c515b"}[39m
+[04:10:39] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"532378b0-6737-4cda-acb7-1b1c965c515b"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24649:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22354:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24646:15)
+    }
+[04:10:39] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","agentId":"e7c81d02-60bd-4c20-afb2-b78ba9e052f3","runId":"4f047066-48f7-4011-8ac1-6d328cd8fb49","adapterType":"process"}[39m
+[04:10:39] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","agentId":"e7c81d02-60bd-4c20-afb2-b78ba9e052f3","runId":"4f047066-48f7-4011-8ac1-6d328cd8fb49"}[39m
+[04:10:39] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"4f047066-48f7-4011-8ac1-6d328cd8fb49"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24649:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22354:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24646:15)
+    }
+[04:10:40] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","runId":"f4264963-8d33-4b1d-b032-0ff83771814e","agentId":"6b3c97ce-1a00-4bc4-be6f-96cfde50263e","sourceIssueId":"cec95011-693c-47e3-ba72-f2bacd811f84","targetIssueId":"a9f419cf-4683-41ab-b4cb-4adc15ecd7bf","kind":"comment","count":4,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[04:10:41] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"68d5e907-a2f9-4dea-9edd-302aedce4c06","runId":"f4264963-8d33-4b1d-b032-0ff83771814e","agentId":"6b3c97ce-1a00-4bc4-be6f-96cfde50263e","sourceIssueId":"cec95011-693c-47e3-ba72-f2bacd811f84","targetIssueId":"a9f419cf-4683-41ab-b4cb-4adc15ecd7bf","kind":"comment","count":5,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+·[04:10:42] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:44] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"816f1a26-5a61-4710-a61a-1427b2d7c499"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:10:45] [32mINFO[39m: [36mclaimQueuedRun: cancelled stale queued run[39m [90m{"runId":"079b52db-8d07-430f-9082-9055e74103a0","issueId":"7f3a6417-e846-41a7-b062-8116fed71e1a","errorCode":"issue_terminal_status"}[39m
+[04:10:45] [32mINFO[39m: [36mclaimQueuedRun: cancelled stale queued run[39m [90m{"runId":"2a538edb-77b4-44b7-a830-b577736d35f0","issueId":"7f3a6417-e846-41a7-b062-8116fed71e1a","errorCode":"issue_terminal_status"}[39m
+[04:10:46] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"7b1e91b1-72df-46f9-bdca-2b5855a58708"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:10:48] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"d6d83dc3-fadb-456f-8a08-1003cdd950e3"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:10:48] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"5a90dbd1-d06e-44f4-905a-ab1485a85195"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:10:49] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"43b23c3e-42c6-485b-b0e6-65a42da8cd3c"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:10:49] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"4f75c5e3-aa51-464c-8c11-07f6448b173e"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+x[04:10:51] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:51] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"f34be01b-7cf2-43bc-add8-435a69aaf515","issueId":"7b2c7d89-2cfe-45b2-a484-81a6c97e46d4","companyId":"857b68fb-d942-4684-9878-7a81c9717008","commentId":"402f0f75-da97-4f80-b3ad-aba95006cbee","grantedAction":"issue:read","grant":"issue_mention_comment"}[39m
+[04:10:52] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"f34be01b-7cf2-43bc-add8-435a69aaf515","issueId":"7b2c7d89-2cfe-45b2-a484-81a6c97e46d4","companyId":"857b68fb-d942-4684-9878-7a81c9717008","commentId":"402f0f75-da97-4f80-b3ad-aba95006cbee","grantedAction":"issue:comment","grant":"issue_mention_comment"}[39m
+[04:10:52] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"857b68fb-d942-4684-9878-7a81c9717008","runId":"5928b2c4-a4ea-498c-9aab-d8f751962623","agentId":"f34be01b-7cf2-43bc-add8-435a69aaf515","sourceIssueId":"b6e90b2c-5e65-4263-b80d-99363f4373da","targetIssueId":"7b2c7d89-2cfe-45b2-a484-81a6c97e46d4","kind":"comment","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[04:10:52] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:52] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"857b68fb-d942-4684-9878-7a81c9717008","agentId":"307a64f6-03ff-483b-b001-63828a70604c","runId":"a4dfe296-a500-4345-8f1a-175696862cee","adapterType":"process"}[39m
+[04:10:52] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"857b68fb-d942-4684-9878-7a81c9717008","agentId":"307a64f6-03ff-483b-b001-63828a70604c","runId":"a4dfe296-a500-4345-8f1a-175696862cee"}[39m
+[04:10:53] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"a4dfe296-a500-4345-8f1a-175696862cee"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24649:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22354:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24646:15)
+    }
+[04:10:54] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+·[04:10:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:10:56] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+·[04:10:58] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+·[04:11:01] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+·[04:11:04] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:11:04] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+··[04:11:06] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:11:06] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:11:07] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:11:09] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"e6f987dd-b991-46cc-85e9-4e584a2c7561"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:11:40] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+x·
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/low-trust-red-team-routes.test.ts > low-trust red-team HTTP route regression suite > relays blocked and cancelled stops once without laundering child prose
+AssertionError: expected [ { …(2) }, { …(2) }, { …(2) }, …(1) ] to have a length of 3 but got 4
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:1237:29
+    1235|           ),
+    1236|         );
+    1237|       expect(relayComments).toHaveLength(3);
+       |                             ^
+    1238|       expect(
+    1239|         relayComments.filter((comment) => comment.body.includes("trans…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/low-trust-red-team-routes.test.ts > low-trust red-team HTTP route regression suite > redacts quarantined low-trust output from higher-trust wake and continuation contexts
+Error: Timed out waiting for condition
+ ❯ waitFor src/__tests__/low-trust-red-team-routes.test.ts:85:9
+     83|     await new Promise((resolve) => setTimeout(resolve, intervalMs));
+     84|   }
+     85|   throw new Error("Timed out waiting for condition");
+       |         ^
+     86| }
+     87|
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:2068:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 9 passed (11)
+   Start at  04:10:13
+   Duration  89.27s (transform 9.04s, setup 71ms, import 12.83s, tests 76.24s, environment 0ms)
+

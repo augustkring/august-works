@@ -1,8 +1,9 @@
 import express from "express";
 import request from "supertest";
 import { type SQL } from "drizzle-orm";
+import { EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockAgentService = vi.hoisted(() => ({
   getById: vi.fn(),
@@ -11,6 +12,7 @@ const mockAgentService = vi.hoisted(() => ({
 
 const mockHeartbeatService = vi.hoisted(() => ({
   cancelActiveForAgent: vi.fn(),
+  cancelRun: vi.fn(),
   buildRunOutputSilence: vi.fn(),
   decorateActiveRunStatus: vi.fn(),
   getRunIssueSummary: vi.fn(),
@@ -32,6 +34,7 @@ const mockExecutionProjection = vi.hoisted(() => ({
 }));
 
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+const mockAnalyticalPayloadAccessBatch = vi.hoisted(() => vi.fn());
 
 const mockInstanceSettingsService = vi.hoisted(() => ({
   get: vi.fn(),
@@ -87,6 +90,7 @@ function registerModuleMocks() {
   // authority boundary is controlled explicitly; denial is checked below.
   vi.doMock("../services/analytical-context-authority.js", () => ({
     assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+    assertAnalyticalContextPayloadAccessBatch: mockAnalyticalPayloadAccessBatch,
   }));
   vi.doMock("../services/execution-projection.js", () => mockExecutionProjection);
   vi.doMock("../routes/authz.js", async () =>
@@ -281,6 +285,13 @@ async function requestApp(
 }
 
 describe("agent live run routes", () => {
+  // Pay the cold dependency transform cost during fixture setup, outside the
+  // unchanged 30-second HTTP case deadline. Each case still resets its mocks.
+  beforeAll(async () => {
+    registerModuleMocks();
+    await vi.importActual("../routes/agents.js");
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
   it.each(["drain", "cancel"] as const)("pauses before applying the explicit %s policy and retains its decision", async pendingWork => {
     mockAgentService.getById.mockResolvedValue({ id: routeAgentId, companyId: "company-1", name: "Builder" });
     mockAgentService.pause.mockResolvedValue({ id: routeAgentId, companyId: "company-1", status: "paused" });
@@ -349,6 +360,7 @@ describe("agent live run routes", () => {
     registerModuleMocks();
     vi.clearAllMocks();
     mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
+    mockAnalyticalPayloadAccessBatch.mockReset().mockResolvedValue(undefined);
     mockChatRunRetries.prepareFailedChatRunRetry.mockReset();
     mockChatRunRetries.processFailedChatRunRetry.mockReset();
     mockAccessService.canUser.mockResolvedValue(true);
@@ -763,6 +775,32 @@ describe("agent live run routes", () => {
     );
   });
 
+  it("keeps readable runs when a batched source review contains one unavailable run", async () => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    const rows = ["readable-before", "unavailable", "readable-after"].map(id => ({
+      id, companyId: "company-1", status: "running", invocationSource: "on_demand", triggerDetail: "manual",
+      startedAt: new Date("2026-04-10T09:30:00.000Z"), finishedAt: null,
+      createdAt: new Date("2026-04-10T09:30:00.000Z"), agentId: "agent-1", agentName: "Builder",
+      adapterType: "codex_local", logBytes: 0, livenessState: "healthy", livenessReason: null,
+      continuationAttempt: 0, lastUsefulActionAt: null, nextAction: null, lastOutputAt: null,
+      lastOutputSeq: null, lastOutputStream: null, lastOutputBytes: 0, processStartedAt: null, issueId: "issue-1",
+    }));
+    const { db } = createLiveRunsDbStub(rows);
+    mockAnalyticalPayloadAccessBatch.mockRejectedValueOnce(new HttpError(403, "One run source unavailable"));
+    mockAnalyticalPayloadAccess.mockImplementation(async (_db: unknown, _companyId: string, _actor: unknown, scope: { runId: string }) => {
+      if (scope.runId === "unavailable") throw new HttpError(403, "Run source unavailable");
+    });
+
+    const res = await requestApp(await createApp(db), baseUrl => request(baseUrl).get("/api/companies/company-1/live-runs"));
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.map((run: { id: string }) => run.id)).toEqual(["readable-before", "readable-after"]);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledTimes(3);
+    expect(mockRunSecretRedactionRegistry.redactForRuns).toHaveBeenCalledWith("company-1",
+      expect.arrayContaining([expect.objectContaining({ id: "readable-before" }), expect.objectContaining({ id: "readable-after" })]));
+    expect(mockRunSecretRedactionRegistry.redactForRuns.mock.calls[0]?.[1]).toHaveLength(2);
+  });
+
   it("treats explicit zero or invalid live run limit as the capped default", async () => {
     const rows = Array.from({ length: 75 }, (_, index) => ({
       id: `run-${index}`,
@@ -1028,6 +1066,23 @@ describe("agent live run routes", () => {
     expect(res.status, JSON.stringify(res.body)).toBe(202);
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "agent:wake" }));
     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(routeAgentId, expect.objectContaining({ manualUserWake: true }));
+  });
+
+  it.each(["wakeup", "heartbeat/invoke", "cancel"])("omits internal Run proofs from %s without changing user result metadata", async endpoint => {
+    const resultJson = { runnerProfileJson: "User result field", nested: { nativeInputSourceProtocolVersion: "User result field" } };
+    const run = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", companyId: "company-1", agentId: routeAgentId,
+      status: "queued", runnerProfileJson: { internalCanary: "Server-only input profile" }, nativeInputSourceProtocolVersion: 1, resultJson };
+    mockHeartbeatService.wakeup.mockResolvedValue(run);
+    mockHeartbeatService.getRun.mockResolvedValue(run);
+    mockHeartbeatService.cancelRun.mockResolvedValue({ ...run, status: "cancelled" });
+    const response = await requestApp(await createApp(), url => request(url).post(endpoint === "cancel"
+      ? `/api/heartbeat-runs/${run.id}/cancel` : `/api/agents/${routeAgentId}/${endpoint}`).send({}));
+    expect(response.status, JSON.stringify(response.body)).toBe(endpoint === "cancel" ? 200 : 202);
+    expect(response.body.id).toBe(run.id);
+    expect(response.body.resultJson).toEqual(resultJson);
+    expect.soft(response.body).not.toHaveProperty("runnerProfileJson");
+    expect.soft(response.body).not.toHaveProperty("nativeInputSourceProtocolVersion");
+    expect(run.runnerProfileJson.internalCanary).toBe("Server-only input profile");
   });
 
   describe("exact failed chat run retry", () => {
@@ -1824,7 +1879,11 @@ describe("agent live run routes", () => {
     const runId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const res = await requestApp(await createApp(), url => request(url)[method](`/api/heartbeat-runs/${runId}/${suffix}`));
     expect(res.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { runId });
+    const sourceArguments = [expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { runId }];
+    // Reading the trace takes a read privacy lock; reprojection keeps the
+    // mutation owner's default write lock.
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(...sourceArguments,
+      ...(method === "get" ? [undefined, { privacyLockMode: "read" }] : []));
     expect(mockProviderTraceStore.inspect).not.toHaveBeenCalled();
     expect(mockProviderTraceStore.getByRun).not.toHaveBeenCalled();
     expect(mockWorkspaceDiffReprojection.persist).not.toHaveBeenCalled();

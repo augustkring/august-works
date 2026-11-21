@@ -11,6 +11,49 @@ import {
 } from "../middleware/http-log-policy.js";
 
 describe("V9 private HTTP purpose", () => {
+  it.each(["/api/invites", "/invites", "/invite"])("redacts %s bearer paths from successful and failed HTTP logs", async (basePath) => {
+    const chunks: string[] = [];
+    const inviteCanary = "pcp_invite_logger-path-canary";
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(String(chunk));
+        callback();
+      },
+    });
+    const app = express();
+    app.use(
+      createHttpLogger(pino({ redact: [...HTTP_LOG_REDACT_PATHS] }, stream)),
+    );
+    app.post(`${basePath}/:token/accept`, (req, res) => {
+      if (req.query.fail === "true") {
+        res.status(404).end();
+        return;
+      }
+      res.status(202).end();
+    });
+
+    await request(app)
+      .post(`${basePath}/${inviteCanary}/accept?source=logger-query-canary`)
+      .expect(202);
+    await request(app)
+      .post(`${basePath}/${inviteCanary}/accept?fail=true`)
+      .expect(404);
+
+    const output = chunks.join("");
+    expect(output).not.toContain(inviteCanary);
+    expect(output).not.toContain("logger-query-canary");
+    const logs = output
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(logs).toHaveLength(2);
+    expect(logs.map((entry) => entry.res.statusCode)).toEqual([202, 404]);
+    for (const entry of logs) {
+      expect(entry.req.url).toBe(`${basePath}/:token/accept`);
+      expect(entry.msg).toContain(`POST ${basePath}/:token/accept`);
+    }
+  });
+
   it.each([
     ["GET", "/api/approvals/private-approval?expectedUserId=private-principal"],
     ["POST", "/api/approvals/private-approval/approve?expectedUserId=private-principal"],
@@ -109,6 +152,21 @@ describe("V9 private HTTP purpose", () => {
       "/api/companies/private-company/support-sessions/private-record?expectedUserId=private-principal",
     ],
     ["PATCH", "/api/companies//support-sessions/private-record"],
+    ["GET", "/api/companies/private-company/support/policy?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/support/cases?expectedUserId=private-principal&beforeId=private-case"],
+    ["GET", "/api/companies/private-company/support/cases/private-case?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/support/cases/requests/private-request?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/support/cases?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/support/cases/private-case/replies?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/support/cases/private-case/close?expectedUserId=private-principal"],
+    ["PATCH", "/api/companies//support/cases/private-case/unknown"],
+    ["POST", "/api/companies/private-company/export?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/exports/preview?expectedUserId=private-principal"],
+    ["DELETE", "/api/companies//exports/private-operation"],
+    ["POST", "/api/companies/private-company/imports/apply?expectedUserId=private-principal"],
+    ["POST", "/api/companies/import?expectedUserId=private-principal"],
+    ["POST", "/api/companies/import/preview?expectedUserId=private-principal"],
+    ["GET", "/api/companies/import/jobs/private-job?expectedUserId=private-principal"],
     [
       "GET",
       "/api/companies/private-company/experience/support-access?expectedUserId=private-principal",
@@ -221,8 +279,11 @@ describe("V9 private HTTP purpose", () => {
     await call.send({ body: canary, internalNote: canary }).expect(405);
     const output = chunks.join("");
     expect(output).not.toContain(canary);
+    expect(output).not.toContain("private-company");
     expect(output).not.toContain("private-principal");
     expect(output).not.toContain("private-record");
+    expect(output).not.toContain("private-case");
+    expect(output).not.toContain("private-request");
     expect(output).not.toContain("private-command");
     expect(output).not.toContain("PRIVATE-SOURCE-CANARY");
     const log = JSON.parse(output.trim());
@@ -247,6 +308,13 @@ describe("V9 private HTTP purpose", () => {
       "/api/projects-extra/id",
       "/api/companies/id/customer-feedback-extra",
       "/api/companies/id/support-sessions-other",
+      "/api/companies/id/support-extra/cases",
+      "/api/companies/id/support-cases",
+      "/api/companies/id/exports-extra",
+      "/api/companies/id/exported",
+      "/api/companies/id/imports-extra",
+      "/api/companies/id/import-data",
+      "/api/companies/imports-extra",
       "/api/internal/customer-feedback-extra",
       "/api/companies/id/experience/profile",
       "/api/companies/id/activation-extra",

@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { GOOGLE_WORKSPACE_CONNECTOR_PROFILES, activationConnectionReviewSchema } from "@paperclipai/shared";
 import { activationPermissionStatements } from "./activation-permission-statements";
+import { i18n } from "../../i18n";
 import en from "../../i18n/experience/en.json";
 import da from "../../i18n/experience/da.json";
 
@@ -15,11 +16,9 @@ const review = activationConnectionReviewSchema.parse({ companyId: id, onboardin
     canRead: ["Original explanation"], canChange: ["Original explanation"], notRequested: ["Original explanation"],
     automatic: ["Original explanation"], asksFirst: ["Original explanation"] } });
 function translate(locale: typeof en) {
-  return (key: string, values?: Record<string, string>) => {
-    const message = key.split(".").reduce<unknown>((value, part) => (value as Record<string, unknown>)[part], locale);
-    if (typeof message !== "string") throw new Error(`Missing permission statement: ${key}`);
-    return message.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => values?.[name] ?? "");
-  };
+  const lng = locale === da ? "da" : "en";
+  return (key: string, values?: Record<string, string>) =>
+    i18n.t(key, { ns: "experience", lng, ...values });
 }
 
 it("discloses every Original profile scope and write tool in English and Danish without losing exact identifiers", () => {
@@ -39,14 +38,14 @@ it("discloses every Original profile scope and write tool in English and Danish 
   }
 });
 
-it("keeps unknown provider scopes explicit and distinguishes broad provider send rights from AW authorization", () => {
+it("keeps unknown provider scopes explicit and distinguishes broad provider send rights from Blentera authorization", () => {
   const preview = activationPermissionStatements({ ...review, providerScopes: [
     "https://www.googleapis.com/auth/gmail.compose", "https://example.test/unassessed-scope"],
     explanation: { ...review.explanation, providerWriteTools: ["create_draft", "unassessed_tool"] } }, translate(da));
   expect(preview.canRead.join(" ")).toContain("Administrer kladder og send e-mails");
   expect(preview.canRead.join(" ")).toContain("kræver sin egen detaljerede gennemgang: https://example.test/unassessed-scope");
   expect(preview.canChange.join(" ")).toContain("Opret e-mailkladder (create_draft), unassessed_tool");
-  expect(preview.notRequested.join(" ")).toContain("Ingen August Works-tilladelse til at sende beskeder");
+  expect(preview.notRequested.join(" ")).toContain("Ingen Blentera-tilladelse til at sende beskeder");
 });
 
 it("explains retained metadata without claiming validated setup in both supported languages", () => {

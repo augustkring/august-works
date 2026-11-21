@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { json } from "./agent-chat.shared";
 import { writeFile } from "node:fs/promises";
+import { deleteCompany } from "./company-cleanup";
 
 test.use({ trace: "retain-on-failure" });
 
@@ -118,7 +119,7 @@ test(`${mode} long-thread navigation preserves its history in one browser docume
   finally {
     let cleanupFailure: unknown;
     try { await client.detach(); } catch (error) { cleanupFailure = error; }
-    try { await json(await request.patch("/api/instance/settings/experimental", { data: { enableClassicTaskInterface: flags.enableClassicTaskInterface } })); await json(await request.delete(`/api/companies/${company.id}`)); }
+    try { await json(await request.patch("/api/instance/settings/experimental", { data: { enableClassicTaskInterface: flags.enableClassicTaskInterface } })); await json(await deleteCompany(request, company.id)); }
     catch (error) { cleanupFailure ??= error; }
     if (cleanupFailure && !primaryFailed) throw cleanupFailure;
     if (cleanupFailure) console.info("V9 soak cleanup failed after the primary failure");

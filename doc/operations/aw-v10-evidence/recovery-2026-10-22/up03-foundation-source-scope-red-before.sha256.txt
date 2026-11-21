@@ -1,0 +1,4 @@
+fa717cf679bdb9c7eec653622cd3066d85b9561592d0199e24a5013504460f64  server/src/services/authorization.ts
+036c8ffa57a71c132e6f5982f3bd7e916aa523c54f76d4aa8c1e2a09198ad96d  server/src/__tests__/foundation-read-source-authority.integration.test.ts
+3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470  server/src/services/memory/memory-privacy.ts
+2a87b79bd1ee5d520921563e33beb3c31e1929d9e6d9384cea52951b1356a985  packages/shared/src/validators/agent.ts

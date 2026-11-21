@@ -242,6 +242,7 @@ export function optimizerEvaluationService(db: Db) {
     },
 
     evaluate: async (companyId: string, evaluationId: string, actor?:AutomationArtifactMutationActor) => {
+      if (!actor?.principal) throw forbidden("A current Workflow source reader is required", { code: "analytical_source_access_lost" });
       const sourceActor=actor?learningActorFromPrincipal(companyId,actor.principal,actor.runId):undefined;
       const bound = await assertOptimizerEvaluationBinding(db, companyId, evaluationId, false,sourceActor);
       const { evaluation, artifact, version } = bound;
@@ -354,6 +355,7 @@ export function optimizerEvaluationService(db: Db) {
         const [current] = await tx.select().from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId))).for("update");
         if (current?.status !== "canary") throw conflict("Optimizer lifecycle changed");
         const result = await optimizerPromotionService(tx as unknown as Db).activate({ companyId,
+          canaryEvaluationId: evaluationId,
           suggestionId: current.suggestionId, artifactId: current.artifactId, expectedArtifactVersionId: current.artifactVersionId,
           policy: { allowLowRiskAutoPromotion: false, fallbackKind: "published_workflow" }, evidence: bound.evidence,
           actor: SYSTEM, sourceActor:actor?learningActorFromPrincipal(companyId,actor.principal,actor.runId):undefined, approvalId: current.approvalId, approvedByUserId: bound.approval?.decidedByUserId });

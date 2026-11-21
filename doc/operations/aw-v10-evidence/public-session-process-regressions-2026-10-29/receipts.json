@@ -1,0 +1,77 @@
+{
+  "record": "independent-public-session-process-fixture-regressions-v1",
+  "runs": [
+    {
+      "id": "public-response",
+      "attempt": "lifecycle-native-payload-public-response-20261029-r3",
+      "sourceHead": "5421ee5fafc9d67f01d3cfdab936851aaa646805",
+      "testFile": "server/src/__tests__/native-payload-public-response.integration.test.ts",
+      "testFileSha256": "62cf66d9cabfecfd459ba3a4334f66b0b21777db8860090f374d123f0187f406",
+      "passed": 6,
+      "skipped": 0,
+      "rawPatchSha256": "74574a206ea74e647d4617d8fb9223a2698dde051aff9083fe981e55d42a06e2",
+      "rawLogSha256": "585583674cb5d8c0f8fee47fc9671c2191f68f920f03fab84d7492e41c721cf5",
+      "sanitizedLogSha256": "585583674cb5d8c0f8fee47fc9671c2191f68f920f03fab84d7492e41c721cf5",
+      "redactions": {
+        "jwt": 0,
+        "bearer": 0,
+        "invite": 0,
+        "credential": 0
+      },
+      "testExit": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  6 passed (6)",
+        "Duration  26.94s (transform 12.31s, setup 78ms, import 17.21s, tests 9.54s, environment 0ms)"
+      ]
+    },
+    {
+      "id": "sentry-session",
+      "attempt": "root-sentry-session-contract-20261029-r1",
+      "sourceHead": "378b6b2a6d9d922bb35102261d809069fe4ae0ae",
+      "testFile": "server/src/__tests__/sentry.test.ts",
+      "testFileSha256": "4a78fc072ab282276fba769d238b337bebe36101ad194d62f8f278b3b472f967",
+      "passed": 29,
+      "skipped": 5,
+      "rawPatchSha256": "b4ae6f053fb280ff2b68ccb737d7d54791174d8f881cc5b27bfcc7c0cbadf4d3",
+      "rawLogSha256": "c6f277704d36efafba5a8053ddf7b345ee4de260b5503af7ff87286052be119b",
+      "sanitizedLogSha256": "c6f277704d36efafba5a8053ddf7b345ee4de260b5503af7ff87286052be119b",
+      "redactions": {
+        "jwt": 0,
+        "bearer": 0,
+        "invite": 0,
+        "credential": 0
+      },
+      "testExit": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  29 passed | 5 skipped (34)",
+        "Duration  14.75s (transform 10.26s, setup 88ms, import 14.40s, tests 121ms, environment 0ms)"
+      ]
+    },
+    {
+      "id": "process-owner",
+      "attempt": "root-native-harness-state-owner-20261029-r2",
+      "sourceHead": "5421ee5fafc9d67f01d3cfdab936851aaa646805",
+      "testFile": "server/src/services/runtime/native-harness-state-owner.test.ts",
+      "testFileSha256": "8570c71dbb6c3f3d52947aaf94ada0b278dc1a602b344033050c720cdbc1ad97",
+      "passed": 4,
+      "skipped": 0,
+      "rawPatchSha256": "6dde19a63374516e480b67953031827e73f5160067a3a52d7ff877c6ac565bca",
+      "rawLogSha256": "2df966cc8d92b66da12df79cd726c49ffc11261fb2647c62ed63d37cfd00a37e",
+      "sanitizedLogSha256": "2df966cc8d92b66da12df79cd726c49ffc11261fb2647c62ed63d37cfd00a37e",
+      "redactions": {
+        "jwt": 0,
+        "bearer": 0,
+        "invite": 0,
+        "credential": 0
+      },
+      "testExit": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  4 passed (4)",
+        "Duration  19.69s (transform 10.04s, setup 87ms, import 14.24s, tests 5.24s, environment 0ms)"
+      ]
+    }
+  ]
+}

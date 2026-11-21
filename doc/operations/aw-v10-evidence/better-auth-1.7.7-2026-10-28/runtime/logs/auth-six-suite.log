@@ -1,0 +1,18 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+[08:13:23] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:13:49] [31mERROR[39m: [36mNative authentication request failed[39m [90m{"component":"native-authentication"}[39m
+[08:13:59] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:14:00] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:14:00] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:14:03] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:14:13] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:14:23] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:14:23] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+
+ Test Files  6 passed (6)
+      Tests  71 passed (71)
+   Start at  08:12:59
+   Duration  89.16s (transform 11.77s, setup 385ms, import 35.51s, tests 52.51s, environment 0ms)
+

@@ -1,0 +1,67 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts (16 tests | 4 failed | 12 skipped) 14877ms
+     × delivers for the same current cloud membership set despite native row ordering 271ms
+     × ends a key revoked while its final credential write waits 747ms
+     × ends a key deleted while its final credential write waits 773ms
+     × ends a key accountable Human changed while its final credential write waits 547ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > delivers for the same current cloud membership set despite native row ordering
+AssertionError: expected { kind: 'closed', code: 1008 } to deeply equal { kind: 'message', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "kind": "message",
+-   "marker": "same authorized cloud scope",
++   "code": 1008,
++   "kind": "closed",
+  }
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:190:29
+    188|       ]);
+    189|       publishLiveEvent({ companyId, type: "agent.status", payload: { m…
+    190|       expect(await outcome).toEqual({ kind: "message", marker: "same a…
+       |                             ^
+    191|       expect(reads).toBeGreaterThanOrEqual(3);
+    192|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends a key revoked while its final credential write waits
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends a key deleted while its final credential write waits
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends a key accountable Human changed while its final credential write waits
+AssertionError: expected { kind: 'message' } to deeply equal { kind: 'closed', code: 1008 }
+
+- Expected
++ Received
+
+  {
+-   "code": 1008,
+-   "kind": "closed",
++   "kind": "message",
+  }
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:243:29
+    241|         await blockedBy(keyIdentity!.pid);
+    242|       });
+    243|       expect(await outcome).toEqual({ kind: "closed", code: 1008 });
+       |                             ^
+    244|     } finally {
+    245|       if (socket.readyState !== WebSocket.CLOSED) { const closed = onc…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 12 skipped (16)
+   Start at  00:18:49
+   Duration  64.32s (transform 34.02s, setup 201ms, import 48.76s, tests 14.88s, environment 0ms)
+

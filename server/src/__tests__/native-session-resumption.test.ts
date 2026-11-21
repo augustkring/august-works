@@ -4,7 +4,10 @@ import { once } from "node:events";
 import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, admitMockedNativeDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { eq, inArray } from "drizzle-orm";
 import {
   activityLog,
@@ -76,8 +79,43 @@ vi.mock("../sentry.js", async () => {
   return { ...actual, captureRunFailure: mockCaptureRunFailure };
 });
 
-import { heartbeatService } from "../services/heartbeat.js";
+import { heartbeatService, persistHeartbeatRunProcessMetadata } from "../services/heartbeat.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { initializeRunIdentity } from "../services/run-identity.js";
+import { projectRoutes } from "../routes/projects.js";
+import { errorHandler } from "../middleware/index.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
+
+async function seedNativeRecoveryHuman(db: ReturnType<typeof createDb>, companyId: string, userId: string) {
+  await seedCurrentHumanMembership(db, companyId, userId, "owner");
+  return seedNativePasskeySession(db, userId);
+}
+
+async function createNativeRecoveryProject(db: ReturnType<typeof createDb>, companyId: string,
+  userId: string, sessionId: string, name: string, workspace?: { name: string; cwd: string }) {
+  const app = express();
+  app.use(express.json());
+  app.use(((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
+    companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] }; next(); }) as RequestHandler);
+  app.use("/api", projectRoutes(db));
+  app.use(errorHandler);
+  // A workspace inserted after creation is not in the sealed Project source
+  // snapshot, so Native admission correctly rejects it as a changed source.
+  const created = await request(app).post(`/api/companies/${companyId}/projects`)
+    .send({ name, ...(workspace ? { workspace: { ...workspace, isPrimary: true } } : {}) });
+  if (created.status !== 201) throw new Error(`Canonical Human Project creation failed: ${created.status}`);
+  return created.body.id as string;
+}
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch());
+afterEach(() => resetMockedLegacyDispatch());
 
 describe("P6-25 pre-result native session recovery", () => {
   let temporary: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
@@ -104,8 +142,10 @@ describe("P6-25 pre-result native session recovery", () => {
       activeTurnId: "active-turn",
     },
   };
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     temporary = await startEmbeddedPostgresTestDatabase("paperclip-native-resume-");
     db = createDb(temporary.connectionString);
     await db.insert(companies).values({ id: companyId, name: "Native resume", issuePrefix: "NRR" });
@@ -264,7 +304,10 @@ describe("P6-25 pre-result native session recovery", () => {
     ]);
   }, 30_000);
 
-  afterAll(async () => temporary?.cleanup());
+  afterAll(async () => {
+    await temporary?.cleanup();
+    restoreApiUrl?.();
+  });
 
   it("filters durable ownership holds before the bounded resume candidate limit", async () => {
     const heldRunIds = Array.from(
@@ -618,13 +661,15 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
     > | null = null;
     let db: ReturnType<typeof createDb>;
     let staleProviderProcess: ReturnType<typeof spawn> | null = null;
+    let restoreApiUrl: (() => void) | null = null;
     const companyId = randomUUID();
     const agentId = randomUUID();
-    const projectId = randomUUID();
-    const projectWorkspaceId = randomUUID();
+    let projectId: string;
+    let projectWorkspaceId: string;
     const executionWorkspaceId = randomUUID();
     const newerExecutionWorkspaceId = randomUUID();
     const issueId = randomUUID();
+    const responsibleUserId = randomUUID();
     const freshIssueId = randomUUID();
     const runId = randomUUID();
     const contractId = randomUUID();
@@ -733,6 +778,22 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         staleProviderProcess!.exitCode !== null ||
           staleProviderProcess!.signalCode !== null,
       ).toBe(true);
+      // A recovered provider is a real local process. Record its identity as
+      // the runner does at spawn, and let it exit before the turn result. The
+      // run's local Stop receipt is then the physical cleanup proof that lets
+      // the finished owner release a deferred successor (native-owner-release.ts).
+      const recoveredProviderProcess = spawn(
+        process.execPath,
+        ["-e", "setTimeout(() => process.exit(0), 50)"],
+        { detached: true, stdio: "ignore" },
+      );
+      const recoveredProviderExited = once(recoveredProviderProcess, "exit");
+      await once(recoveredProviderProcess, "spawn");
+      await persistHeartbeatRunProcessMetadata(db, runId, {
+        pid: recoveredProviderProcess.pid!,
+        processGroupId: recoveredProviderProcess.pid!,
+        startedAt: new Date().toISOString(),
+      });
       // Model the real launch/checkpoint gap: the durable DB snapshot may still
       // look idle, while the recovered provider has already started the old turn.
       const recoveredSnapshot: PersistedNativeSession = {
@@ -752,6 +813,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
           };
         },
         async *events() {
+          await recoveredProviderExited;
           yield providerTerminalEvent;
         },
         startTurn,
@@ -785,6 +847,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
     };
 
     beforeAll(async () => {
+      restoreApiUrl = installHeartbeatApiUrlFixture();
       await mkdir(repoRoot, { mode: 0o700 });
       // The unchanged legacy adapter preflight requires a real Git workspace.
       // Initialize only this owned disposable fixture, without host Git config.
@@ -802,24 +865,14 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         name: "Native same-run recovery",
         issuePrefix: "NRR",
         status: "active",
-        defaultResponsibleUserId: "responsible-user",
+        defaultResponsibleUserId: responsibleUserId,
       });
-      await db
-        .insert(projects)
-        .values({
-          id: projectId,
-          companyId,
-          name: "Recovery project",
-          status: "active",
-        });
-      await db.insert(projectWorkspaces).values({
-        id: projectWorkspaceId,
-        companyId,
-        projectId,
-        name: "Recovery workspace",
-        cwd: repoRoot,
-        isPrimary: true,
-      });
+      const humanSessionId = await seedNativeRecoveryHuman(db, companyId, responsibleUserId);
+      projectId = await createNativeRecoveryProject(db, companyId, responsibleUserId, humanSessionId, "Recovery project",
+        { name: "Recovery workspace", cwd: repoRoot });
+      const [primaryWorkspace] = await db.select({ id: projectWorkspaces.id }).from(projectWorkspaces)
+        .where(eq(projectWorkspaces.projectId, projectId));
+      projectWorkspaceId = primaryWorkspace!.id;
       await db.insert(agents).values({
         id: agentId,
         companyId,
@@ -849,6 +902,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         title: "Recover one native heartbeat",
         status: "in_progress",
         assigneeAgentId: agentId,
+        responsibleUserId,
         workMode: "standard",
       });
       await db.insert(executionWorkspaces).values({
@@ -917,6 +971,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         companyId,
         agentId,
         nativeIssueId: issueId,
+        responsibleUserId,
         status: "running",
         runtimeMode: "native",
         runtimeModeResolverVersion: "phase6-v1",
@@ -944,6 +999,9 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         .update(issues)
         .set({ executionRunId: runId })
         .where(eq(issues.id, issueId));
+      await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+        responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
+      await initializeRunIdentity(db, { companyId, runId, issueId, responsibleUserId, cause: "restart" });
       await db.insert(nativeRunFinalizations).values({
         runId,
         companyId,
@@ -958,7 +1016,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
           id: newerCommentId,
           companyId,
           issueId,
-          authorUserId: "responsible-user",
+          authorUserId: responsibleUserId,
           body: "Verify the newest user instruction before completing this task.",
         });
     }, 30_000);
@@ -982,9 +1040,13 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         await temporary.cleanup();
       }
       await rm(repoRoot, { recursive: true, force: true });
+      restoreApiUrl?.();
     });
 
     it("preserves the old provider contract and admits newer direction only in a separate turn", async () => {
+      // The subject is same-run recovery after launch. The session backend is a
+      // test factory, so admit its Native launch check for codex only.
+      admitMockedNativeDispatch(["codex"]);
       legacyAdapterExecute.mockClear();
       staleProviderProcess = spawn(
         process.execPath,
@@ -1118,7 +1180,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
           reason: "issue_commented",
           idempotencyKey: newerWakeKey,
           requestedByActorType: "user",
-          requestedByActorId: "responsible-user",
+          requestedByActorId: responsibleUserId,
           payload: {
             issueId,
             commentId: newerCommentId,
@@ -1405,6 +1467,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         title: "Start only after the native kill switch is off",
         status: "in_progress",
         assigneeAgentId: agentId,
+        responsibleUserId,
         workMode: "standard",
       });
       const directExecute = legacyAdapterExecute.getMockImplementation()!;

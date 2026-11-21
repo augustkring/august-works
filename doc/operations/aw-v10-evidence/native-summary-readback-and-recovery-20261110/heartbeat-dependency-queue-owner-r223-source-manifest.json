@@ -1,0 +1,93 @@
+{
+  "root": "/workspace/blentera-v10",
+  "head": "d8f26fed22d4768ac04fb32c08c8b0a39c68ae7d",
+  "statusPorcelain": "M server/src/__tests__/heartbeat-dependency-scheduling.test.ts\n M server/src/services/execution-continuation.ts\n M server/src/services/heartbeat.ts\n M server/src/services/native-runtime/native-execution-input.ts",
+  "files": {
+    ".nvmrc": {
+      "sha256": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+      "bytes": 8
+    },
+    "package.json": {
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "bytes": 14972
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "bytes": 634978
+    },
+    "server/package.json": {
+      "sha256": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "bytes": 6179
+    },
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": {
+      "sha256": "92886f6eda16b2a905674cc7a71a2e60994d443a2883177d64a910808efc5896",
+      "bytes": 200012
+    },
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": {
+      "sha256": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+      "bytes": 27192
+    },
+    "server/src/services/execution-continuation.ts": {
+      "sha256": "c06816aa8022a66e378160761739194d277254b92dcccfac1050bf9045da3a19",
+      "bytes": 69336
+    },
+    "server/src/services/heartbeat.ts": {
+      "sha256": "44c95c539969e65b3fd3e0d9738931a8ef518ae8995e42377f8bac7673eafbf8",
+      "bytes": 1271431
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "860654da71dd4451cb4a90ca8861eb68357694b7727231219156dc3784b422f4",
+      "bytes": 527535
+    },
+    "server/src/services/native-runtime/native-execution-input.test.ts": {
+      "sha256": "54f4c839418b60e573491373ee4b7e93779a80f128ef8f1c9135399983532dec",
+      "bytes": 130006
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "sha256": "7f42d7f0ef3c98593fdd7fbba5c74cdeb8547d84d79eb66e320eda32ba79658e",
+      "bytes": 128636
+    },
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": {
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+      "bytes": 14778
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "bytes": 9673
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": {
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "bytes": 8437
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "bytes": 12734
+    },
+    "server/vitest.config.ts": {
+      "sha256": "1c32f3f46cb9206de3cdbb1745d43abf17bd2b5c385183675835ba928c2d31b3",
+      "bytes": 1883
+    }
+  },
+  "qualificationInputPaths": [
+    "server/src/services/heartbeat.ts",
+    "server/src/services/native-direct-input.ts",
+    "server/src/services/native-runtime/native-execution-input.ts",
+    "server/src/services/native-runtime/native-project-repository-source.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
+    "server/src/services/native-runtime/native-execution-input.test.ts",
+    "server/src/services/native-runtime/native-project-repository-source.test.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+    "server/vitest.config.ts",
+    "server/package.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    ".nvmrc",
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts"
+  ],
+  "scope": "exact involved production/tests and tool configuration plus dirty server/package files; HEAD identifies unchanged repository bytes, not a loaded-module trace",
+  "fixturePoolMax": null,
+  "fixturePoolScope": "Read actual fixture createDb options; not inferred by this harness",
+  "sourceWritesByThisHarness": false
+}

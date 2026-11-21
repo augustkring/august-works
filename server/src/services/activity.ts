@@ -1,5 +1,5 @@
 import { executionProjectionsForRuns } from "./execution-projection.js";
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   activityLog,
@@ -20,9 +20,13 @@ import { hasWorkspaceRestoreFailure, safeWorkspaceRestorePath, ISSUE_CONTINUATIO
 import { logger } from "../middleware/logger.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import { classifyRunLiveness } from "./run-liveness.js";
+import { readRunLivenessActivityStats, readRunLivenessToolActionStats } from "./run-liveness-evidence.js";
+import { activitySourceReadSqlCondition } from "./activity-privacy.js";
+import type { AuthorizationActor } from "./authorization.js";
 
 export interface ActivityFilters {
   companyId: string;
+  reader?: AuthorizationActor;
   agentId?: string;
   entityType?: string;
   entityId?: string;
@@ -160,6 +164,7 @@ export function activityService(db: Db) {
       .select({
         id: heartbeatRuns.id,
         companyId: heartbeatRuns.companyId,
+        agentId: heartbeatRuns.agentId,
         status: heartbeatRuns.status,
         contextSnapshot: heartbeatRuns.contextSnapshot,
         resultJson: heartbeatRuns.resultJson,
@@ -265,21 +270,9 @@ export function activityService(db: Db) {
         .from(workspaceOperations)
         .where(and(eq(workspaceOperations.companyId, companyId), eq(workspaceOperations.heartbeatRunId, run.id)));
 
-      const [activityStats] = await db
-        .select({
-          count: sql<number>`count(*)::int`,
-          latestAt: sql<Date | null>`max(${activityLog.createdAt})`,
-        })
-        .from(activityLog)
-        .where(and(eq(activityLog.companyId, companyId), eq(activityLog.runId, run.id)));
+      const activityStats = await readRunLivenessActivityStats(db, companyId, run.id);
 
-      const [eventStats] = await db
-        .select({
-          count: sql<number>`count(*) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error'))::int`,
-          latestAt: sql<Date | null>`max(${heartbeatRunEvents.createdAt}) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error'))`,
-        })
-        .from(heartbeatRunEvents)
-        .where(and(eq(heartbeatRunEvents.companyId, companyId), eq(heartbeatRunEvents.runId, run.id)));
+      const toolActionStats = await readRunLivenessToolActionStats(db, { companyId, issueId, runId: run.id, agentId: run.agentId });
 
       const classification = classifyRunLiveness({
         runStatus: run.status,
@@ -297,14 +290,14 @@ export function activityService(db: Db) {
           workProductsCreated: countValue(workProductStats?.count),
           workspaceOperationsCreated: countValue(workspaceOperationStats?.count),
           activityEventsCreated: countValue(activityStats?.count),
-          toolOrActionEventsCreated: countValue(eventStats?.count),
+          toolOrActionEventsCreated: toolActionStats.count,
           latestEvidenceAt: latestDate(
             commentStats?.latestAt,
             documentStats?.latestAt,
             workProductStats?.latestAt,
             workspaceOperationStats?.latestAt,
             activityStats?.latestAt,
-            eventStats?.latestAt,
+            toolActionStats.latestAt,
           ),
         },
       });
@@ -337,8 +330,9 @@ export function activityService(db: Db) {
   }
 
   return {
-    list: (filters: ActivityFilters) => {
-      const conditions = [eq(activityLog.companyId, filters.companyId)];
+    list: async (filters: ActivityFilters) => {
+      const conditions = [eq(activityLog.companyId, filters.companyId),
+        await activitySourceReadSqlCondition(db, filters.reader ?? { type: "none" })];
       const limit = normalizeActivityLimit(filters.limit);
 
       if (filters.agentId) {

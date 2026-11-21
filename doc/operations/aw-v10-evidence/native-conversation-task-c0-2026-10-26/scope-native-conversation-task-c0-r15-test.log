@@ -1,0 +1,53 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > continues the real conversation after a metric tool result with its original immutable source receipt
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates one private Project from a current conversation dispatch and carries its exact result into the next request
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed_create_task_callback_test_facts {"turnIdPresent":true,"nativeToolCallCallbackPresent":true,"managedResultCallbackPresent":true}
+
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed_create_task_result_callback_invoked {"turnIdPresent":true}
+
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed_create_task_run_receipt_test_facts {"runPresent":true,"sourceAuthorityVersion":1,"receiptValid":true,"callCount":1,"resultDigestPresent":true,"invocationPresent":false,"invocationResultMatches":false,"invocationIssueMatches":false,"receiptCompanyMatches":true,"receiptRunMatches":true,"receiptAgentMatches":true,"receiptHumanMatches":true}
+
+[21:53:01] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"b3f89e2b-e8f5-4162-8a7d-9980ca132d62","failureCode":"setup_failed"}[39m
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed-native-conversation-task-result-checks ["taskRefAndSource"]
+
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed-native-conversation-task-result-checks ["taskRefAndSource"]
+
+ × src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request 34422ms
+   → {"status":"failed","errorCode":"adapter_failed","calls":2,"providerStubFailure":null,"broker":[{"requestHash":"283b6cfb28a5476d6e60ae8eea1b9ccbcaa5d0cc7cfb1adf453a67cbb26fde5e","status":200},{"requestHash":"1c3b2749c9f3cf35b8554bd88549b93251ca01474e9bf3226610bfdcfc46761a","status":409,"code":"conversation_model_result_withheld","stage":"response_history_revalidation"},{"requestHash":"1c3b2749c9f3cf35b8554bd88549b93251ca01474e9bf3226610bfdcfc46761a","status":403}],"sourceProtocol":1,"taskResultFacts":{"found":true,"isError":false,"contentPresent":true,"jsonParsed":true,"disposition":"applied","taskPresent":true,"taskIdPresent":true,"taskIsRoot":true,"taskIsTodo":true},"stdout":"t before executing.\",\"completionContract\":{\"revision\":\"1\",\"criteria\":[{\"id\":\"objective\",\"requirement\":\"Please respond briefly and complete this conversation turn.\"}]},\"constraints\":[\"Work only inside the supplied working directory.\",\"Use only the assigned skills and provider-native tools.\",\"Use Paperclip semantic tools for coordination and finalization.\",\"Save requested plans and Paperclip documents directly with write_document. A saved Paperclip document is already a durable deliverable. Do not create a local file, compute file hashes, or call register_deliverable for it unless the user also requests a downloadable file. Cite the saved document in your completion evidence and final response.\",\"When the requested result is a file, use register_deliverable before paperclip_finish. Compute i","stderr":"[paperclip-runner] transport mode=local_loopback state=connecting\n[paperclip-runner] runnerd diagnostic: runnerd authenticated to the durable PRP control plane\n[paperclip-runner] runnerd diagnostic: runner transport close requested: native session execution complete\n[paperclip-runner] warm native session quarantined: execution_finally_close:keep=false:succeeded=true:quarantined=false\n"}: expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+AssertionError: {"status":"failed","errorCode":"adapter_failed","calls":2,"providerStubFailure":null,"broker":[{"requestHash":"283b6cfb28a5476d6e60ae8eea1b9ccbcaa5d0cc7cfb1adf453a67cbb26fde5e","status":200},{"requestHash":"1c3b2749c9f3cf35b8554bd88549b93251ca01474e9bf3226610bfdcfc46761a","status":409,"code":"conversation_model_result_withheld","stage":"response_history_revalidation"},{"requestHash":"1c3b2749c9f3cf35b8554bd88549b93251ca01474e9bf3226610bfdcfc46761a","status":403}],"sourceProtocol":1,"taskResultFacts":{"found":true,"isError":false,"contentPresent":true,"jsonParsed":true,"disposition":"applied","taskPresent":true,"taskIdPresent":true,"taskIsRoot":true,"taskIsTodo":true},"stdout":"t before executing.\",\"completionContract\":{\"revision\":\"1\",\"criteria\":[{\"id\":\"objective\",\"requirement\":\"Please respond briefly and complete this conversation turn.\"}]},\"constraints\":[\"Work only inside the supplied working directory.\",\"Use only the assigned skills and provider-native tools.\",\"Use Paperclip semantic tools for coordination and finalization.\",\"Save requested plans and Paperclip documents directly with write_document. A saved Paperclip document is already a durable deliverable. Do not create a local file, compute file hashes, or call register_deliverable for it unless the user also requests a downloadable file. Cite the saved document in your completion evidence and final response.\",\"When the requested result is a file, use register_deliverable before paperclip_finish. Compute i","stderr":"[paperclip-runner] transport mode=local_loopback state=connecting\n[paperclip-runner] runnerd diagnostic: runnerd authenticated to the durable PRP control plane\n[paperclip-runner] runnerd diagnostic: runner transport close requested: native session execution complete\n[paperclip-runner] warm native session quarantined: execution_finally_close:keep=false:succeeded=true:quarantined=false\n"}: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:498:58
+    496|       calls:result.providerCallCount,providerStubFailure:result.provid…
+    497|       sourceProtocol:result.run?.nativeInputSourceProtocolVersion,task…
+    498|       stderr:result.run?.stderrExcerpt?.slice(0,1000)})).toBe(true);
+       |                                                          ^
+    499|     expect(result.providerCallCount).toBe(2);
+    500|     expect(result.workerPlan).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  21:52:14
+   Duration  53.43s (transform 10.81s, setup 90ms, import 14.78s, tests 38.43s, environment 0ms)
+

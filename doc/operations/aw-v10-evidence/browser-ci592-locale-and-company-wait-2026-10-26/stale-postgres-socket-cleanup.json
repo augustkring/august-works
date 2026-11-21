@@ -1,0 +1,10 @@
+{
+  "socket": "/tmp/.s.PGSQL.54329",
+  "lockFile": "/tmp/.s.PGSQL.54329.lock",
+  "recordedPid": 1086748,
+  "pidStateBeforeRemoval": "Z",
+  "tcp54329ListenerBeforeRemoval": false,
+  "lockFileDataDirectory": "/tmp/paperclip-e2e-home-XSGJiZ/instances/playwright-e2e/db",
+  "removed": ["/tmp/.s.PGSQL.54329", "/tmp/.s.PGSQL.54329.lock"],
+  "preserved": "The embedded PostgreSQL data directory, logs, all prior stale-socket receipts, source files, and dependencies were left untouched."
+}

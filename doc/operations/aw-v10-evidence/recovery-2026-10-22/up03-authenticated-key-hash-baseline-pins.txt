@@ -1,0 +1,4 @@
+ee7a4e4055e0bed062c8bbc35f60cd27a4175b77437c8b2c4d52e3d709b2c442  server/src/services/authorization.ts
+303e2622414fd03e10b708caa392cdc547c994f09ba912e489668bd2c6495946  server/src/middleware/auth.ts
+6d65ea657a63fd7b9f19e354aa7e864d161cd2497343691c4f8f1480585dbbfb  server/src/types/express.d.ts
+be454c66b8dd6f02a264c660530558a142cc11d025930fb281a09dec02991593  server/src/__tests__/foundation-read-source-authority.integration.test.ts

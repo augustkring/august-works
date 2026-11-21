@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agentWakeupRequests, agents, companies, createDb, heartbeatRuns, heartbeatRunEvents, issueComments, issueThreadInteractions, issues } from "@paperclipai/db";
+import { agentWakeupRequests, agents, companies, createDb, heartbeatRuns, heartbeatRunEvents, issueComments, issueThreadInteractions, issues, type Db } from "@paperclipai/db";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { acceptSteeredIdentity, captureRunIdentity, initializeRunIdentity, listRunIdentityContexts, rejectSteeredIdentity, reserveSteeredIdentity } from "../services/run-identity.js";
 
@@ -240,6 +242,141 @@ const support = await getEmbeddedPostgresTestSupport();
     });
     await expect(initialization).resolves.toMatchObject({ responsibleUserId: "A" });
   });
+
+  /** True once some backend waits on `pid`; false if `settled` first or after about 3 s. */
+  async function blockedBy(pid: number, settled: () => boolean = () => false) {
+    for (let attempt = 0; attempt < 300; attempt++) {
+      if (settled()) return false;
+      const [state] = await db.execute(sql`select exists (
+        select 1 from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))
+      ) as waiting`) as unknown as Array<{ waiting: boolean }>;
+      if (state.waiting) return true;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    return false;
+  }
+
+  async function backendPid(tx: Db) {
+    const [backend] = await tx.execute(sql`select pg_backend_pid() as pid`) as unknown as Array<{ pid: number }>;
+    return backend.pid;
+  }
+
+  async function storeSteeringAcknowledgement(input: { companyId: string; runId: string; agentId: string }, messageId: string) {
+    await db.insert(heartbeatRunEvents).values({ companyId: input.companyId, runId: input.runId,
+      agentId: input.agentId, seq: 1, eventType: "item.completed", sourceEventId: randomUUID(),
+      payload: { prpEvent: { turnId: "turn-1", itemId: `turn-1:steer:${messageId}`, payload: { kind: "steering_acknowledgement" } } },
+    });
+  }
+
+  it("does not deadlock agent identity capture against a Native source transaction that holds the run", async () => {
+    // Native source transactions (dispatch intent, acknowledgement, tool-result
+    // capture) take the company privacy boundaries, lock the run, then read the
+    // Task FOR SHARE. The auth middleware captures identity on every agent
+    // request. It used to lock the Task and then wait on the run, and
+    // PostgreSQL aborted one side as a deadlock. It now locks only the run.
+    const input = await seed();
+    await initializeRunIdentity(db, { ...input, messageIds: [input.messageIds[0]], responsibleUserId: "A", cause: "instruction" });
+    let capture!: ReturnType<typeof captureRunIdentity>;
+    await db.transaction(async (rawTx) => {
+      const tx = rawTx as unknown as Db;
+      await lockAnalyticalCompany(tx, input.companyId);
+      await lockMemoryPrivacy(tx, input.companyId);
+      await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId)).for("update");
+      const [backend] = await tx.execute(sql`select pg_backend_pid() as pid`) as unknown as Array<{ pid: number }>;
+      capture = captureRunIdentity(db, input);
+      capture.catch(() => undefined); // Asserted after this transaction settles.
+      // Wait until the capture is blocked by this transaction before reading the Task.
+      let waiting = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const [state] = await db.execute(sql`select exists (
+          select 1 from pg_stat_activity where ${backend.pid} = any(pg_blocking_pids(pid))
+        ) as waiting`) as unknown as Array<{ waiting: boolean }>;
+        if (state.waiting) { waiting = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, input.issueId)).for("share");
+    });
+    await expect(capture).resolves.toMatchObject({ context: { responsibleUserId: "A" } });
+  });
+
+  it("does not wait on the company privacy locks of a Native source transaction for another run", async () => {
+    const input = await seed();
+    await initializeRunIdentity(db, { ...input, messageIds: [input.messageIds[0]], responsibleUserId: "A", cause: "instruction" });
+    const otherIssueId = randomUUID(), otherRunId = randomUUID();
+    await db.insert(issues).values({ id: otherIssueId, companyId: input.companyId, title: "Other task" });
+    await db.insert(heartbeatRuns).values({ id: otherRunId, companyId: input.companyId, agentId: input.agentId,
+      status: "running", contextSnapshot: { issueId: otherIssueId } });
+    await db.transaction(async (rawTx) => {
+      const tx = rawTx as unknown as Db;
+      // Another run's source transaction holds both company locks exclusively.
+      await lockAnalyticalCompany(tx, input.companyId);
+      await lockMemoryPrivacy(tx, input.companyId);
+      await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, otherRunId)).for("update");
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, otherIssueId)).for("share");
+      const pid = await backendPid(tx);
+      let settled = false;
+      const capture = captureRunIdentity(db, input);
+      capture.then(() => { settled = true; }, () => { settled = true; });
+      expect(await blockedBy(pid, () => settled)).toBe(false);
+      // Completes while the exclusive company locks are still held.
+      await expect(capture).resolves.toMatchObject({ context: { responsibleUserId: "A" } });
+    });
+  });
+
+  it("serializes agent identity capture with steering delivery and its durable acknowledgement", async () => {
+    const input = await seed();
+    await initializeRunIdentity(db, { ...input, messageIds: [input.messageIds[0]], responsibleUserId: "A", cause: "instruction" });
+    const steering = await reserveSteeredIdentity(db, { ...input, messageId: input.messageIds[1] });
+    let capture!: ReturnType<typeof captureRunIdentity>;
+    await db.transaction(async (rawTx) => {
+      const tx = rawTx as unknown as Db;
+      // The steering route locks the Task and then the target run, delivers the
+      // message, and accepts the reserved identity on acknowledgement before it
+      // commits. A capture in between must wait rather than see the pending
+      // reservation (a 409) or the superseded identity.
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, input.issueId)).for("update");
+      await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId)).for("update");
+      const pid = await backendPid(tx);
+      capture = captureRunIdentity(db, input);
+      capture.catch(() => undefined); // Asserted after this transaction settles.
+      expect(await blockedBy(pid)).toBe(true);
+      await acceptSteeredIdentity(tx, steering!);
+    });
+    await expect(capture).resolves.toMatchObject({ context: { id: steering!.id, responsibleUserId: "B" } });
+  });
+
+  it.each(["top-level", "nested"])(
+    "releases the run and waits for exclusive company holders before accepting an acknowledged steering identity (%s)",
+    async (mode) => {
+      const input = await seed();
+      await initializeRunIdentity(db, { ...input, messageIds: [input.messageIds[0]], responsibleUserId: "A", cause: "instruction" });
+      // The runtime stored the acknowledgement, but the steering request lost its
+      // transaction, so the reservation is still pending.
+      const steering = await reserveSteeredIdentity(db, { ...input, messageId: input.messageIds[1] });
+      await storeSteeringAcknowledgement(input, input.messageIds[1]);
+      let capture!: Promise<Awaited<ReturnType<typeof captureRunIdentity>>>;
+      await db.transaction(async (rawTx) => {
+        const tx = rawTx as unknown as Db;
+        await lockAnalyticalCompany(tx, input.companyId);
+        await lockMemoryPrivacy(tx, input.companyId);
+        const pid = await backendPid(tx);
+        capture = mode === "nested"
+          ? db.transaction(outer => captureRunIdentity(outer as unknown as Db, input))
+          : captureRunIdentity(db, input);
+        capture.catch(() => undefined); // Asserted after this transaction settles.
+        // Acceptance writes the Task, so it waits here before locking the Task,
+        // and it no longer holds the run row it inspected first.
+        expect(await blockedBy(pid)).toBe(true);
+        await tx.execute(sql`set local lock_timeout = '2s'`);
+        await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId)).for("update");
+        await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, input.issueId)).for("share");
+      });
+      await expect(capture).resolves.toMatchObject({ context: { id: steering!.id, responsibleUserId: "B" } });
+      const [task] = await db.select().from(issues).where(eq(issues.id, input.issueId));
+      expect(task.continuationIdentityContextId).toBe(steering!.id);
+    },
+  );
 
   it("does not turn a company-default fallback into personal consent on continuation", async () => {
     const input = await seed();

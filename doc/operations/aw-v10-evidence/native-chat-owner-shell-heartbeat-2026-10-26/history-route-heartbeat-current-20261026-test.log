@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/agent-conversations.test.ts (38 tests | 1 failed | 37 skipped) 4562ms
+     × routes the first authenticated Human comment through the configured heartbeat owner 627ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/agent-conversations.test.ts > persistent agent conversations > routes the first authenticated Human comment through the configured heartbeat owner
+AssertionError: {"error":"Issue not found"}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ src/__tests__/agent-conversations.test.ts:220:70
+    218|         body: "Create the first authenticated Native conversation inpu…
+    219|       });
+    220|       expect(firstComment.status, JSON.stringify(firstComment.body)).t…
+       |                                                                      ^
+    221|       expect(heartbeat.wakeup).toHaveBeenCalledTimes(1);
+    222|       expect(heartbeat.wakeup).toHaveBeenCalledWith(agentId, expect.ob…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 37 skipped (38)
+   Start at  11:19:04
+   Duration  19.51s (transform 10.45s, setup 87ms, import 14.73s, tests 4.56s, environment 0ms)
+

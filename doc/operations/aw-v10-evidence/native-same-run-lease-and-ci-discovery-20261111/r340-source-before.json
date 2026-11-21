@@ -1,0 +1,17 @@
+{
+  "head": "b214013cbe36b7a0765106ac3160d7d350a521b7",
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/durable-chat-wakeup.test.ts": "f3c1fba6e6e266d3032270e39afc31ee1128c4c57034eb20918484d943222c69",
+    "server/src/__tests__/environment-runtime.test.ts": "1ca77c82e801621f6d49b84b55443858f02b30fe23e44de0a30499d85e822da4",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "2d2c181fe6d1eafd0270374f5fb32ae10733d9de83482389e01424303eec9400",
+    "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts": "c616083a802e86c10d17d0f796621a2bc9df83f5f838fc767f20ce6712111feb",
+    "server/src/__tests__/v6-database-quarantine.integration.test.ts": "b7a5a70d8514c73a408d8a5726166ef08473fd1ed8da8bc57d760dd7afbdbcac",
+    "server/src/services/environment-run-orchestrator.ts": "9d85e81f1a03bfd5593fe561ef930e58dd7df0847dca635a893f70cbe26906ca",
+    "server/src/services/environment-runtime.ts": "04afa58f3babe2f6ca9e93caf189534b21b41d562b8bfa7067a65a75f9ace4dc",
+    "server/src/services/heartbeat.ts": "32584d9a38a052eee445b7c2a4fe82dbb930120c21080153915cba10748af3ca",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  }
+}

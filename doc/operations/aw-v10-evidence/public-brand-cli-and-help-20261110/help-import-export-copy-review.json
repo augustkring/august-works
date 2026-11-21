@@ -1,0 +1,308 @@
+{
+  "sourceHead": "23b48164baab4e6fb742f530289c9f62f8808a24",
+  "discoveredBy": "committed Help checker across canonical Help tabs, including guide paths outside docs/help",
+  "pairedCopyReviewed": [
+    {
+      "articleId": "company-import-export",
+      "path": "docs/guides/board-operator/importing-and-exporting.md",
+      "sha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "rationale": "Reviewed the exact product-name change, retained technical sidecar identifier and unchanged import/recovery guidance in this locale; Danish also removes the additional specification link."
+    },
+    {
+      "articleId": "company-import-export-da",
+      "path": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "sha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "rationale": "Reviewed the exact product-name change, retained technical sidecar identifier and unchanged import/recovery guidance in this locale; Danish also removes the additional specification link."
+    }
+  ],
+  "existingRowsRefreshed": [
+    {
+      "source": "cli/src/commands/client/company.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": true,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/db/src/schema/customer_operations.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/shared/src/company-import-transfer.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/shared/src/customer-operations.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/shared/src/types/company-portability.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/shared/src/validators/company-portability.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/errors.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/routes/companies.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/routes/openapi.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/company-export-readme.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/company-import-jobs.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/company-import-transfers.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/company-portability.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/github-fetch.ts",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "ui/src/App.tsx",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "ui/src/pages/CompanyImport.tsx",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "ui/src/pages/CompanyImportHistory.tsx",
+      "articleId": "company-import-export",
+      "oldArticleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "newArticleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "cli/src/commands/client/company.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": true,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/db/src/schema/customer_operations.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/shared/src/company-import-transfer.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/shared/src/customer-operations.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/shared/src/types/company-portability.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "packages/shared/src/validators/company-portability.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/errors.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/routes/companies.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/routes/openapi.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/company-export-readme.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/company-import-jobs.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/company-import-transfers.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/company-portability.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "server/src/services/github-fetch.ts",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "ui/src/App.tsx",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "ui/src/pages/CompanyImport.tsx",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    },
+    {
+      "source": "ui/src/pages/CompanyImportHistory.tsx",
+      "articleId": "company-import-export-da",
+      "oldArticleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "newArticleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+      "sourceHashChanged": false,
+      "decisionChanged": false
+    }
+  ],
+  "sourcePairDecisions": [
+    {
+      "source": "cli/src/commands/client/company.ts",
+      "articleId": "company-import-export",
+      "decision": "updated",
+      "rationale": "Reviewed the branded import-selection prompt and English company guide together. The .paperclip.yaml identifier, selection groups, preview/confirmation, paused defaults, source authorization and recovery contract stay unchanged; the guide now uses Blentera for the product."
+    },
+    {
+      "source": "cli/src/commands/client/company.ts",
+      "articleId": "company-import-export-da",
+      "decision": "updated",
+      "rationale": "Gennemgået den omdøbte importvælger og den danske virksomhedsvejledning sammen. .paperclip.yaml, valgmuligheder, forhåndsvisning, bekræftelse, pausestandard, kildeadgang og genopretning er uændrede; vejledningen bruger nu Blentera og undlader en ekstra specifikationshenvisning."
+    }
+  ],
+  "newReviewRowsAdded": 0,
+  "historicalRequirementStatusesPromoted": 0
+}

@@ -7,6 +7,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
 import type { StorageService } from "../storage/types.js";
@@ -25,6 +26,7 @@ describeEmbeddedPostgres("multilingual issue routes", () => {
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   let app!: ReturnType<typeof createApp>;
   let companyId!: string;
+  let humanSessionId!: string;
 
   const title = "验证中文任务";
   const description = [
@@ -54,7 +56,6 @@ describeEmbeddedPostgres("multilingual issue routes", () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-multilingual-issues-");
     db = createDb(tempDb.connectionString);
     companyId = randomUUID();
-    app = createApp(companyId);
 
     await db.insert(companies).values({
       id: companyId,
@@ -70,6 +71,10 @@ describeEmbeddedPostgres("multilingual issue routes", () => {
       membershipRole: "owner",
       updatedAt: new Date(),
     });
+    const human = await seedCurrentHumanSourceActor(db, [companyId], "cloud-user-1");
+    if (!human.sessionId) throw new Error("Multilingual route fixture requires a current Human session");
+    humanSessionId = human.sessionId;
+    app = createApp(companyId);
   }, 20_000);
 
   afterAll(async () => {
@@ -99,9 +104,9 @@ describeEmbeddedPostgres("multilingual issue routes", () => {
         userId: "cloud-user-1",
         companyIds: [companyId],
         memberships: [{ companyId, membershipRole: "owner", status: "active" }],
-        source: "cloud_tenant",
-        // cloud_tenant actors are never instance admins — reads flow through
-        // the active company membership seeded in beforeAll.
+        source: "session",
+        sessionId: humanSessionId,
+        // Unicode round trips use the same current Human as ordinary writes.
         isInstanceAdmin: false,
       };
       next();

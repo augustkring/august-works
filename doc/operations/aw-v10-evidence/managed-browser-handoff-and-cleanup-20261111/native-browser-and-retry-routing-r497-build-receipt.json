@@ -1,0 +1,57 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 4.145722956978716,
+      "filesAdvised": 622552,
+      "memoryAfter": 6142676992,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "/workspace/v10-preparation/combined-source-20261109/parse-browser-handoff-r491.mjs"
+      ],
+      "exit": 0,
+      "seconds": 0.442926288000308,
+      "peakGroupRssBytes": 70782976,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+        "scripts/__tests__/e2e-shard.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 27.870940699998755,
+      "peakGroupRssBytes": 151633920,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "scripts/check-token-gates.mjs"
+      ],
+      "exit": 0,
+      "seconds": 0.6556684989773203,
+      "peakGroupRssBytes": 40669184,
+      "stopped": null
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.23246387299150229,
+      "peakGroupRssBytes": 9252864,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

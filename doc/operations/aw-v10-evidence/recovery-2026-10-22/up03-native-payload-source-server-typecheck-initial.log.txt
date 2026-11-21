@@ -1,0 +1,6 @@
+src/services/issues.ts(8286,52): error TS2345: Argument of type '{ visibility: string; privacyRootIssueId: string | null; privacyParentIssueId: string | null; externalConversationState: "active" | "waiting" | null; conversationAgentId: string | null; ... 69 more ...; description: string | null; }[]' is not assignable to parameter of type 'IssueRow[]'.
+  Type '{ visibility: string; privacyRootIssueId: string | null; privacyParentIssueId: string | null; externalConversationState: "active" | "waiting" | null; conversationAgentId: string | null; ... 69 more ...; description: string | null; }' is not assignable to type 'IssueRow'.
+    Type '{ visibility: string; privacyRootIssueId: string | null; privacyParentIssueId: string | null; externalConversationState: "active" | "waiting" | null; conversationAgentId: string | null; ... 69 more ...; description: string | null; }' is missing the following properties from type '{ assigneeAdapterOverrides: Record<string, unknown> | null; assigneeAgentId: string | null; assigneeUserId: string | null; billingCode: string | null; blockedOwnerNotifiedAt: Date | null; ... 69 more ...; workMode: string; }': payloadSourceProtocolVersion, payloadSourceSnapshot
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --singleThreaded

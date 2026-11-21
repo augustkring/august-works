@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { KvStore } from "./store.js";
 import { createToolDefinitions } from "./tools.js";
 
@@ -23,7 +23,7 @@ export function createKvDemoMcpServer(store: KvStore = new KvStore()): CreateKvD
       tool.name,
       {
         description: tool.description,
-        inputSchema: tool.schema.shape,
+        inputSchema: tool.schema,
         annotations: tool.annotations,
       },
       tool.execute,

@@ -1,0 +1,41 @@
+{
+  "schema_version": "help-semantic-review.v1",
+  "source": "server/src/services/heartbeat.ts",
+  "source_sha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
+  "source_scope": "current interaction wake idempotency and recovery changes only; no other WIP rows reviewed",
+  "article_reviews": [
+    {
+      "article_id": "recovering-work",
+      "article_path": "docs/help/recovering-work.md",
+      "article_sha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "Reviewed the current heartbeat source: continuation receipts bind to the exact company, agent, issue, interaction, and status; rejected responses wake only under the wake_assignee policy or for a rejected plan-change confirmation. The article still directs people to inspect the original task and its current run before retrying; no user-facing recovery instruction changes."
+    },
+    {
+      "article_id": "recovering-work-da",
+      "article_path": "docs/da/help/recovering-work.md",
+      "article_sha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Gennemgået den aktuelle heartbeat-kilde: fortsættelseskvitteringer bindes til den præcise virksomhed, agent, opgave, interaktion og status; afviste svar vækker kun agenten med politikken wake_assignee eller ved en afvist planændring. Artiklen vejleder fortsat om at kontrollere den oprindelige opgave og dens aktuelle kørsel før et nyt forsøg; brugerens genopretningsvejledning ændres ikke."
+    },
+    {
+      "article_id": "export-and-delete",
+      "article_path": "docs/help/export-and-delete.md",
+      "article_sha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Reviewed the current heartbeat source: interaction wake idempotency changes task continuation only, including exact-source replay for eligible rejected responses. Native cleanup still carries current run/lease provenance and waits for confirmed process stop and storage removal, so the article’s export, deletion, retention, and managed-cleanup guidance remains accurate."
+    },
+    {
+      "article_id": "export-and-delete-da",
+      "article_path": "docs/da/help/export-and-delete.md",
+      "article_sha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Gennemgået den aktuelle heartbeat-kilde: idempotens for interaktionsvækninger ændrer kun opgavefortsættelse, herunder genbrug af præcis kilde for tilladte afviste svar. Native-oprydning viderefører fortsat aktuel kørsels- og lease-proveniens og afventer bekræftet processtop og fjernelse fra lageret, så artiklens vejledning om eksport, sletning, opbevaring og administreret oprydning fortsat er korrekt."
+    }
+  ],
+  "article_text_changed": false,
+  "help_checker_unit_tests": {
+    "command": "node --test scripts/check-help-change-review.test.mjs",
+    "result": "7 passed"
+  }
+}

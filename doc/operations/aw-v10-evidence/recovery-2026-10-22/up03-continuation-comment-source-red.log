@@ -1,0 +1,148 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[09:27:34] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"dc68ab0f-7a10-48d4-aed8-2800e1b7d467"}[39m
+    err: {
+      "type": "Error",
+      "message": "native_finalization_missing",
+      "stack":
+          Error: native_finalization_missing
+              at /workspace/blentera-v10/server/src/services/native-runtime/native-run-finalizer.ts:204:39
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at claimCoordinator (/workspace/blentera-v10/server/src/services/native-runtime/native-run-finalizer.ts:196:19)
+              at finalizeNativeRun (/workspace/blentera-v10/server/src/services/native-runtime/native-run-finalizer.ts:1000:17)
+              at executeRun (/workspace/blentera-v10/server/src/services/heartbeat.ts:24831:15)
+    }
+[09:27:34] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"dc68ab0f-7a10-48d4-aed8-2800e1b7d467"}[39m
+    err: {
+      "type": "AssertionError",
+      "message": "expected undefined to deeply equal [ { input: { …(5) }, …(1) } ]",
+      "stack":
+          AssertionError: expected undefined to deeply equal [ { input: { …(5) }, …(1) } ]
+              at Object.beforeChatControlRecoveryCheck (/workspace/blentera-v10/server/src/__tests__/heartbeat-process-recovery.test.ts:2753:69)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at withChatControlRecoveryGate (/workspace/blentera-v10/server/src/services/heartbeat.ts:16981:5)
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/blentera-v10/server/src/services/heartbeat.ts:22438:13)
+              at executeRun (/workspace/blentera-v10/server/src/services/heartbeat.ts:24367:15)
+      "expected": [
+        {
+          "input": {
+            "kind": "comment",
+            "issueId": "2b9b3ddc-2c81-4771-8857-17239df95720",
+            "commentId": "51dc8b4e-b851-4467-915a-d07aeaa14bab",
+            "sourceVersion": "1792747651.721065",
+            "contentHash": "0242c03cf1efc2e44c9cea932112a50dc545ad903515c617716788921179f960"
+          },
+          "payloadSourceSnapshot": null
+        }
+      ],
+      "showDiff": true,
+      "operator": "deepStrictEqual"
+    }
+[09:27:38] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"7e76852a-8ad8-45ee-a200-2ddd464aa253"}[39m
+    err: {
+      "type": "Error",
+      "message": "native_finalization_missing",
+      "stack":
+          Error: native_finalization_missing
+              at /workspace/blentera-v10/server/src/services/native-runtime/native-run-finalizer.ts:204:39
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at claimCoordinator (/workspace/blentera-v10/server/src/services/native-runtime/native-run-finalizer.ts:196:19)
+              at finalizeNativeRun (/workspace/blentera-v10/server/src/services/native-runtime/native-run-finalizer.ts:1000:17)
+              at executeRun (/workspace/blentera-v10/server/src/services/heartbeat.ts:24831:15)
+    }
+[09:27:38] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"7e76852a-8ad8-45ee-a200-2ddd464aa253"}[39m
+    err: {
+      "type": "AssertionError",
+      "message": "expected undefined to deeply equal [ { input: { …(5) }, …(1) } ]",
+      "stack":
+          AssertionError: expected undefined to deeply equal [ { input: { …(5) }, …(1) } ]
+              at Object.beforeChatControlRecoveryCheck (/workspace/blentera-v10/server/src/__tests__/heartbeat-process-recovery.test.ts:2753:69)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at withChatControlRecoveryGate (/workspace/blentera-v10/server/src/services/heartbeat.ts:16981:5)
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/blentera-v10/server/src/services/heartbeat.ts:22438:13)
+              at executeRun (/workspace/blentera-v10/server/src/services/heartbeat.ts:24367:15)
+      "expected": [
+        {
+          "input": {
+            "kind": "comment",
+            "issueId": "af7c653d-a2f4-4ff5-a452-c02316b64688",
+            "commentId": "02f8a6c3-5826-41d8-94a8-bc52654d5f7e",
+            "sourceVersion": "1792747656.422372",
+            "contentHash": "c8858f5ae94c919fa7ff0f49a4ca78cb4da7ae92b9965c37816fb5760ef0cff3"
+          },
+          "payloadSourceSnapshot": null
+        }
+      ],
+      "showDiff": true,
+      "operator": "deepStrictEqual"
+    }
+ ❯ |@paperclipai/server| src/__tests__/heartbeat-process-recovery.test.ts (307 tests | 2 failed | 305 skipped) 21425ms
+     × persists the selected Task, plan and inline comment sources with the first native bootstrap before dispatch (redact=false) 4866ms
+     × persists the selected Task, plan and inline comment sources with the first native bootstrap before dispatch (redact=true) 3083ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > persists the selected Task, plan and inline comment sources with the first native bootstrap before dispatch (redact=false)
+AssertionError: expected { …(75) } to match object { status: 'cancelled', …(1) }
+(115 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "runtimeMode": "native",
+-   "status": "cancelled",
++   "status": "failed",
+  }
+
+ ❯ src/__tests__/heartbeat-process-recovery.test.ts:2780:45
+    2778|       expect(reachedDispatch).toBe(true);
+    2779|       expect(factory).not.toHaveBeenCalled();
+    2780|       expect(await heartbeat.getRun(runId)).toMatchObject({ status: "c…
+       |                                             ^
+    2781|     });
+    2782|   });
+ ❯ withTempPaperclipHome src/__tests__/heartbeat-process-recovery.test.ts:2618:14
+ ❯ src/__tests__/heartbeat-process-recovery.test.ts:2706:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > persists the selected Task, plan and inline comment sources with the first native bootstrap before dispatch (redact=true)
+AssertionError: expected { …(75) } to match object { status: 'cancelled', …(1) }
+(116 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "runtimeMode": "native",
+-   "status": "cancelled",
++   "status": "failed",
+  }
+
+ ❯ src/__tests__/heartbeat-process-recovery.test.ts:2780:45
+    2778|       expect(reachedDispatch).toBe(true);
+    2779|       expect(factory).not.toHaveBeenCalled();
+    2780|       expect(await heartbeat.getRun(runId)).toMatchObject({ status: "c…
+       |                                             ^
+    2781|     });
+    2782|   });
+ ❯ withTempPaperclipHome src/__tests__/heartbeat-process-recovery.test.ts:2618:14
+ ❯ src/__tests__/heartbeat-process-recovery.test.ts:2706:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 305 skipped (307)
+   Start at  09:26:28
+   Duration  71.18s (transform 32.18s, setup 419ms, import 48.11s, tests 21.43s, environment 0ms)
+

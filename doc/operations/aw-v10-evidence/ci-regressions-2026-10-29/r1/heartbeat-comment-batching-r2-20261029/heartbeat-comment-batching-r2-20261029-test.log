@@ -1,0 +1,89 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > defers approval-approved wakes for a running issue so the assignee resumes after the run 195ms
+[07:00:43] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"7d739270-4bd2-408d-8de9-455d227a324c","agentId":"986c4d85-24a7-452b-aa5f-f15468eac307","runId":"a0d99d6a-0e21-4538-a9ca-133a45e62058"}[39m
+[07:00:46] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"7d739270-4bd2-408d-8de9-455d227a324c","agentId":"986c4d85-24a7-452b-aa5f-f15468eac307","runId":"3a679f65-2986-425b-8bd5-b73b57e8310b"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > defers recovery hand-back wakes until the resolving run exits 82ms
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > batches deferred comment wakes and forwards the ordered batch to the next run 4856ms
+[07:00:48] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"0c3f3b55-4816-4c6c-a1c4-e7276d9684f0","agentId":"562d92c2-f40f-4db2-a648-1b761e71b5d2","runId":"8bbc6fa1-ef6c-4c3d-9196-2e4f72ebe278"}[39m
+[07:00:48] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"7d739270-4bd2-408d-8de9-455d227a324c","agentId":"986c4d85-24a7-452b-aa5f-f15468eac307","runId":"b3ab6ad9-ca37-4a5c-97d3-81c2a8312e75"}[39m
+[07:00:56] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"0d66480b-09d4-409d-b443-7d73a98fb11a","agentId":"e795c17b-0a5a-4ae1-be76-76b3b2d00708","runId":"b0615940-6d02-4e55-9d32-61568e041bbb"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels an empty deferred comment wake instead of promoting deleted input 8460ms
+[07:01:03] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"9481279f-c4df-4518-b9fd-78d78809fc09","agentId":"b27c2793-1c79-424d-9dd5-7d5ede162385","runId":"725d1963-68a4-4417-9342-8d77b1369f2c"}[39m
+[07:01:05] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"9481279f-c4df-4518-b9fd-78d78809fc09","agentId":"b27c2793-1c79-424d-9dd5-7d5ede162385","runId":"849ccbe2-308f-4a27-9549-d77e06c9d5c2"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > retains deferred comments for reconciliation after cancelling an unknown provider outcome 6994ms
+[07:01:06] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"0f270b7d-88d6-45f0-a94d-dc57c50e434b","agentId":"93d87f43-73c8-4168-b9f9-29de5b66215b","runId":"b5bf7f00-5537-4e76-8f05-82334989988c"}[39m
+[07:01:06] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"9481279f-c4df-4518-b9fd-78d78809fc09","agentId":"b27c2793-1c79-424d-9dd5-7d5ede162385","runId":"fcde2ea0-1af4-476b-b8f9-aefb2aa78929"}[39m
+[07:01:07] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"0f270b7d-88d6-45f0-a94d-dc57c50e434b","agentId":"01d27327-e787-4849-ba8f-d4411dcc1b2f","runId":"9000b672-0f85-4998-a4cd-a6197c109e82"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > promotes deferred comment wakes after the active run closes the issue 2805ms
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > 'allows a non-assignee mention on comp…' 2599ms
+[07:01:08] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"6db86097-0825-443a-bbc8-cbd23b26abf9","agentId":"4f0dcfdb-1cfd-4997-8452-a2b52507bb9d","runId":"b9f56f4b-2838-4af6-8911-07d4bfb7a300"}[39m
+[07:01:10] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"6db86097-0825-443a-bbc8-cbd23b26abf9","agentId":"4f0dcfdb-1cfd-4997-8452-a2b52507bb9d","runId":"4f47a282-720c-4f69-ae49-ca59d7189493"}[39m
+[07:01:11] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"9fca78f2-93c4-46d2-b69f-4620a25dce3f","agentId":"4978770f-15ba-4ea3-b3fc-fcedebeb8405","runId":"6a7b6fb3-4fa0-452e-b485-22449f624252"}[39m
+[07:01:11] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"6db86097-0825-443a-bbc8-cbd23b26abf9","agentId":"4f0dcfdb-1cfd-4997-8452-a2b52507bb9d","runId":"53351e82-7332-46ae-b408-f7113aa6a6a9"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > 'delivers explicit agent feedback afte…' 2478ms
+[07:01:13] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"9e89ab15-dec4-4902-ad1c-d28268cc0e5b","agentId":"47e802d1-72bf-43db-ac36-530d6af6cde1","runId":"56a3c29a-d405-4c04-b54b-91d88ab818e3"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > 'cancels an assignee continuation with…' 1612ms
+[07:01:14] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"d5819940-5931-446b-a8fb-0fc54841ef69","agentId":"60214981-05d3-4111-a88e-afe500238eb0","runId":"3f425b37-445e-4b1f-8665-d0ec72ba628e"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > 'cancels an assignee continuation on c…' 1467ms
+[07:01:15] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"c3d7127e-d210-4994-83b1-545737a7cbc3","agentId":"504a5d94-995d-452c-92f7-56609b16b5a6","runId":"bbf2da47-bcaf-45d5-9509-01464b3b0290"}[39m
+[07:01:16] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"c3d7127e-d210-4994-83b1-545737a7cbc3","agentId":"504a5d94-995d-452c-92f7-56609b16b5a6","runId":"d711ba3b-1092-482b-8d1e-74538244aa16"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels a deferred wake containing only a comment authored by the closing run 1157ms
+[07:01:17] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"4ed20317-f6c2-44ce-9f4b-f6b4bd16a53d","agentId":"4377635a-c526-4ab1-8f72-0c072bfab585","runId":"b6c37989-51cc-4747-b8eb-d1d1e82181f7"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > promotes an interaction continuation with its full authoritative source comment after removing a coalesced self-comment 2194ms
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels a parked native chat source and authorizes its dedicated answer continuation (linked) 1508ms
+[07:01:18] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"64db76bb-b5ef-46eb-9e66-21037848e512","failureCode":"setup_failed"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels a parked native chat source and authorizes its dedicated answer continuation (revoked) 441ms
+[07:01:18] [33mWARN[39m: [36mexternal-chat answer continuation will retry after source run cancellation failure[39m [90m{"deliveryId":"e9b6f207-33a6-4373-8efd-51314b6dde09","interactionId":"65f0e6f0-2bf9-4bb3-b3ba-2b138865ddd3","sourceRunId":"b43e2e1b-aeb7-4380-a49c-1a16ffef806d","attemptCount":1,"errorCount":1,"exhausted":false}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 2269,
+        "column": 23
+      }
+    }
+[07:01:20] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"17754a1d-acf8-4f8f-a146-ee1cb86e256b","agentId":"3312d3d8-d304-407e-b39d-fe3b816f55f9","runId":"4872e19c-9c49-4230-8817-63118839a41d"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels a parked native chat source and authorizes its dedicated answer continuation (restart) 1543ms
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels a parked native chat source and authorizes its dedicated answer continuation (unbound_marker) 141ms
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels a parked native chat source and authorizes its dedicated answer continuation (ordinary_cancellation) 133ms
+[07:01:21] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ba786603-ef3f-4a42-93b5-076fffee48cb","agentId":"c74099d3-5f3b-41a6-a78e-fe97cce75531","runId":"15986cd6-9e8b-4cb9-9c30-e3ff573bd9da"}[39m
+[07:01:22] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ba786603-ef3f-4a42-93b5-076fffee48cb","agentId":"c74099d3-5f3b-41a6-a78e-fe97cce75531","runId":"8d6b74ed-824e-494a-9176-03e19d2c5866"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > still reopens a finished issue when a deferred batch mixes self-authored and human comments 2228ms
+[07:01:23] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"861c0e46-803e-4e12-8c91-724e0b5fc03a","agentId":"186044fb-7397-4fae-8abb-baa9fd04389f","runId":"c5ce62c4-acfa-47b8-971f-ab71819195b9"}[39m
+[07:01:23] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ba786603-ef3f-4a42-93b5-076fffee48cb","agentId":"c74099d3-5f3b-41a6-a78e-fe97cce75531","runId":"bc846fe7-131a-4cdf-b830-7257619e0b8c"}[39m
+[07:01:25] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"4265cc17-4ec1-4499-bf83-2ffd3582f3d3","agentId":"b42a51ae-02c3-4e49-8f46-0bce7fe7323f","runId":"c92fb7d7-0c57-4071-b223-8d697f110bca"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels a deferred comment wake when its only queued comment is deleted before promotion 1530ms
+[07:01:26] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"201d1f51-a8c1-4d88-a9bd-3b287073df61","agentId":"dba65d4c-e7d2-486d-9ac7-be1b3efa8635","runId":"d30dcf1b-ec75-488c-bedd-0d219d33dcfd"}[39m
+[07:01:27] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"201d1f51-a8c1-4d88-a9bd-3b287073df61","agentId":"dba65d4c-e7d2-486d-9ac7-be1b3efa8635","runId":"fe796ffc-1f98-4047-9c39-5cc0d01f5cea"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels a deferred comment wake when its only queued comment was authored by the finishing run 1136ms
+[07:01:28] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"6bea06fd-4fe2-4dbe-b30d-ff6f934abcbe","agentId":"c8060640-89fb-4337-ad9e-760d1150c53c","runId":"98a536a3-b8b1-4e89-a0ff-563b7ee50a78"}[39m
+[07:01:29] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"6bea06fd-4fe2-4dbe-b30d-ff6f934abcbe","agentId":"c8060640-89fb-4337-ad9e-760d1150c53c","runId":"63e0f380-b7fb-4615-b927-b6d84a21d86b"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > promotes an interaction continuation after removing a coalesced self-authored comment 2176ms
+[07:01:30] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ae4aff2f-5794-4ffc-8ab0-12ddbf851c49","agentId":"a2c0010c-5b08-4815-85fa-0a64e68f83e7","runId":"d237f07e-1d17-4819-84ba-199c5da9b360"}[39m
+[07:01:32] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ae4aff2f-5794-4ffc-8ab0-12ddbf851c49","agentId":"a2c0010c-5b08-4815-85fa-0a64e68f83e7","runId":"3158fe71-166a-4987-9170-e7659efee950"}[39m
+[07:01:32] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ae4aff2f-5794-4ffc-8ab0-12ddbf851c49","agentId":"6a08fd59-e09c-4c2c-a2ad-e9fa6e8dd259","runId":"df9a6a97-885c-4a73-a122-a4463ebb8353"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > queues exactly one follow-up run when an issue-bound run exits without a comment 2299ms
+[07:01:33] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"168d3222-bbbe-418a-89ff-388f3155e3fd","agentId":"9871f9ad-c901-48f8-bb66-f34d586ce560","runId":"4494d749-d70f-4921-bb4e-2e16df964663"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > defers mentioned-agent wakes while another agent is actively executing the same issue 3179ms
+[07:01:34] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"517163d5-6016-46ac-a06d-dc74b5e2e56a","agentId":"bcf7f4d9-6f7a-45f2-adc8-7a33720d2fec","runId":"a20e2e26-ad1a-468a-82ae-9f228ce5e1ae"}[39m
+[07:01:36] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"517163d5-6016-46ac-a06d-dc74b5e2e56a","agentId":"bcf7f4d9-6f7a-45f2-adc8-7a33720d2fec","runId":"2f5a839c-171a-46f2-9784-ffc3489a4d64"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > does not mark a direct mentioned-agent run as the issue execution owner 852ms
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > treats the automatic run summary as fallback-only when the run already posted a comment 2386ms
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > fails a deferred wake whose agent no longer exists, then still promotes the next queued wake 106ms
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > fails a deferred wake with the same status and error text when its agent belongs to another company 200ms
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > cancels a deferred wake under an active pause hold, but promotes a verified hold interaction with the hold context 145ms
+[07:01:37] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"7fe094c2-fb55-40cd-95c6-fd7d7bc3428f","failureCode":"setup_failed"}[39m
+[07:01:37] [33mWARN[39m: [36mrun failure report has no task id, skipping Sentry report[39m [90m{"runId":"7fe094c2-fb55-40cd-95c6-fd7d7bc3428f"}[39m
+ ✓ src/__tests__/heartbeat-comment-wake-batching.test.ts > heartbeat comment wake batching > rolls back the wake row, the run row, and the issue lock together when the responsible user cannot resolve 107ms
+[07:01:37] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"ca8079d7-a5f5-441f-97ed-5fd4a1ea54e2","failureCode":"setup_failed"}[39m
+[07:01:37] [33mWARN[39m: [36mrun failure report has no task id, skipping Sentry report[39m [90m{"runId":"ca8079d7-a5f5-441f-97ed-5fd4a1ea54e2"}[39m
+[07:01:37] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"d3550097-0c8e-42ec-960e-5884c4b33fbb","agentId":"eb2e5e32-c435-4117-879e-fbdc87fa1908","runId":"7065902e-0039-48a1-bc12-9621ceb55fe9","adapterType":"process"}[39m
+[07:01:37] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"d3550097-0c8e-42ec-960e-5884c4b33fbb","agentId":"eb2e5e32-c435-4117-879e-fbdc87fa1908","runId":"7065902e-0039-48a1-bc12-9621ceb55fe9"}[39m
+[07:01:37] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"7065902e-0039-48a1-bc12-9621ceb55fe9","failureCode":"adapter_failed"}[39m
+
+ Test Files  1 passed (1)
+      Tests  29 passed (29)
+   Start at  07:00:24
+   Duration  73.72s (transform 9.50s, setup 86ms, import 13.80s, tests 59.71s, environment 0ms)
+

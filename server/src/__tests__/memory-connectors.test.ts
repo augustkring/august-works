@@ -23,42 +23,16 @@ describe("memory tool governance", () => {
     expect(() => cogneeCloudUrl(url)).toThrow();
   });
   it("accepts the tenant API origin", () => expect(cogneeCloudUrl("https://tenant.aws.cognee.ai").origin).toBe("https://tenant.aws.cognee.ai"));
-  it("writes text as a file to the tenant-only Cloud endpoint", async () => {
-    const request = vi.fn().mockResolvedValue({ status: "completed" });
-    const result = await callCogneeCloud({ baseUrl: "https://fixture.aws.cognee.ai", apiKey: "fixture-key",
-      tool: "remember", parameters: { data: "synthetic memory", dataset_name: "fixture" }, request,
-      signal: AbortSignal.timeout(1000) });
-    const [url, init] = request.mock.calls[0]!;
-    expect(url.href).toBe("https://fixture.aws.cognee.ai/api/v1/remember");
-    expect(init).toMatchObject({ method: "POST", redirect: "manual", headers: expect.objectContaining({ "x-api-key": "fixture-key" }) });
-    expect(Buffer.isBuffer(init.body)).toBe(true);
-    const form = await new Response(init.body, { headers: init.headers }).formData();
-    expect(form.get("datasetName")).toBe("fixture");
-    expect(await (form.get("data") as File).text()).toBe("synthetic memory");
-    expect(result).toMatchObject({ isError: false, structuredContent: { result: { status: "completed" } } });
-  });
-  it("keeps session writes on the Cloud session endpoint", async () => {
-    const request = vi.fn().mockResolvedValue({ status: "completed" });
-    await callCogneeCloud({ baseUrl: "https://fixture.aws.cognee.ai", apiKey: "key", tool: "remember",
-      parameters: { data: "text", session_id: "session", dataset_name: "fixture" }, request, signal: AbortSignal.timeout(1000) });
-    expect(request.mock.calls[0]![0].pathname).toBe("/api/v1/remember/entry");
-    expect(JSON.parse(request.mock.calls[0]![1].body)).toMatchObject({
-      entry: { type: "qa", answer: "text" }, session_id: "session", dataset_name: "fixture" });
-  });
-  it("preserves scoped recall arguments and does not fetch other datasets", async () => {
-    const request = vi.fn().mockResolvedValue(["memory"]);
-    await callCogneeCloud({ baseUrl: "https://fixture.aws.cognee.ai", apiKey: "key", tool: "recall",
-      parameters: { query: "find", datasets: "one, two", search_type: "chunks", top_k: 3 }, request, signal: AbortSignal.timeout(1000) });
-    expect(request).toHaveBeenCalledTimes(1);
-    expect(request.mock.calls[0]![0].pathname).toBe("/api/v1/recall");
-    expect(JSON.parse(request.mock.calls[0]![1].body)).toEqual({ query: "find", datasets: ["one", "two"], search_type: "CHUNKS", top_k: 3 });
-  });
-  it("matches the official client's unscoped dataset discovery", async () => {
-    const request = vi.fn().mockResolvedValueOnce([{ name: "one" }]).mockResolvedValueOnce(["memory"]);
-    await callCogneeCloud({ baseUrl: "https://fixture.aws.cognee.ai", apiKey: "key", tool: "recall",
-      parameters: { query: "find" }, request, signal: AbortSignal.timeout(1000) });
-    expect(request.mock.calls[0]![0].pathname).toBe("/api/v1/datasets/");
-    expect(JSON.parse(request.mock.calls[1]![1].body).datasets).toEqual(["one"]);
+  it.each([
+    ["remember", { data: "synthetic", dataset_name: "fixture" }],
+    ["remember", { data: "synthetic", session_id: "session" }],
+    ["recall", { query: "find", datasets: "one,two", search_type: "chunks" }],
+    ["recall", { query: "find" }],
+  ])("refuses unqualified model-capable %s before provider HTTP", async (tool, parameters) => {
+    const request = vi.fn();
+    await expect(callCogneeCloud({ baseUrl: "https://fixture.aws.cognee.ai", apiKey: "fixture", tool,
+      parameters, request, signal: AbortSignal.timeout(1000) })).rejects.toMatchObject({ code: "configuration_incomplete" });
+    expect(request).not.toHaveBeenCalled();
   });
   it("requires an explicit delete target and never falls back after a provider failure", async () => {
     const request = vi.fn().mockRejectedValue(new Error("Cloud unavailable"));

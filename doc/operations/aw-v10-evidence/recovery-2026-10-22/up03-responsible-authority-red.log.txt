@@ -1,0 +1,78 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/authorization-service.test.ts (83 tests | 3 failed | 80 skipped) 11918ms
+     × responsible authority freshness rejects same-actor skill effects after membership withdrawal 479ms
+     × responsible authority freshness rejects membership DTO proof for a missing account 447ms
+     × responsible authority freshness rejects an erased account with retained membership on the same actor 164ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > responsible authority freshness rejects same-actor skill effects after membership withdrawal
+AssertionError: expected { action: 'skill_config:update', …(4) } to match object { allowed: false, …(1) }
+(8 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": false,
+-   "code": "RESPONSIBLE_USER_UNAVAILABLE",
++   "allowed": true,
+  }
+
+ ❯ src/__tests__/authorization-service.test.ts:800:125
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > responsible authority freshness rejects membership DTO proof for a missing account
+AssertionError: expected { action: 'skill_config:update', …(4) } to match object { allowed: false, …(1) }
+(8 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": false,
+-   "code": "RESPONSIBLE_USER_UNAVAILABLE",
++   "allowed": true,
+  }
+
+ ❯ src/__tests__/authorization-service.test.ts:812:188
+    810|     const actor: AuthorizationActor = { type: "agent", source: "agent_…
+    811|       onBehalfOfMemberships: [{ companyId: company.id, status: "active…
+    812|     await expect(authorizationService(db).decide({ actor, action: "ski…
+       |                                                                                                                                                                                            ^
+    813|       .resolves.toMatchObject({ allowed: false, code: "RESPONSIBLE_USE…
+    814|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > responsible authority freshness rejects an erased account with retained membership on the same actor
+AssertionError: expected { action: 'company_scope:read', …(3) } to match object { allowed: false, …(1) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": false,
+-   "code": "RESPONSIBLE_USER_UNAVAILABLE",
++   "allowed": true,
+  }
+
+ ❯ src/__tests__/authorization-service.test.ts:827:40
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 80 skipped (83)
+   Start at  20:55:22
+   Duration  28.08s (transform 7.72s, setup 227ms, import 15.30s, tests 11.92s, environment 0ms)
+

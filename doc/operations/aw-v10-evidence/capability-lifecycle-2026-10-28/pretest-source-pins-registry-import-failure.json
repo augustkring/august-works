@@ -1,0 +1,135 @@
+{
+  "kind": "feature-lifecycle-pretest-source-pins",
+  "recordedAt": "2026-10-28T08:32:16Z",
+  "gitHead": "e8dcdf53e6d72ddf1859daf80aee7f23386cefa5",
+  "worktreeStatusAtCapture": [
+    " M doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+    " M doc/plans/2026-10-28-v10-current-reconciliation.md",
+    " M docs/da/guides/board-operator/importing-and-exporting.md",
+    " M docs/guides/board-operator/importing-and-exporting.md",
+    " M docs/help/change-review.json",
+    " M packages/adapter-utils/src/command-managed-runtime.ts",
+    " M packages/shared/src/feature-catalog.test.ts",
+    " M packages/shared/src/feature-catalog.ts",
+    " M packages/shared/src/index.ts",
+    " M scripts/generate-feature-catalog.ts",
+    " M server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+    " M server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+    " M server/src/app.ts",
+    " M server/src/routes/v9-api-paths.ts",
+    " M server/src/services/analytical-context-authority.ts",
+    " M server/src/services/authorization.ts",
+    " M server/src/services/context/context-engine.ts",
+    " M server/src/services/environment-runtime.ts",
+    " M server/src/services/memory/memory-privacy.ts",
+    " M server/src/services/native-direct-input.ts",
+    " M server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+    " M server/src/services/native-runtime/native-session-executor.test.ts",
+    " M server/src/services/native-runtime/native-session-executor.ts",
+    " M server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+    " M server/src/services/runtime/control.ts",
+    " M ui/src/i18n/experience/da.json",
+    " M ui/src/i18n/experience/en.json",
+    " M ui/src/pages/InstanceExperimentalSettings.test.tsx",
+    " M ui/src/pages/InstanceExperimentalSettings.tsx",
+    "?? doc/operations/UPSTREAM-INTAKE.md",
+    "?? doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/",
+    "?? doc/operations/aw-v10-evidence/native-retained-run-resume-2026-10-26/attempt-139/",
+    "?? doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r20/",
+    "?? doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r21/",
+    "?? doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r22/",
+    "?? doc/operations/aw-v10-evidence/trust-document-registry-2026-10-28/",
+    "?? doc/operations/aw-v10-evidence/trust-document-registry-r2-2026-10-28/",
+    "?? doc/operations/aw-v10-evidence/trust-document-routes-2026-10-28/",
+    "?? doc/operations/aw-v10-evidence/trust-document-routes-r2-2026-10-28/",
+    "?? doc/operations/aw-v10-evidence/upstream-intake-2026-10-28/",
+    "?? doc/operations/upstream-intake.json",
+    "?? doc/operations/v10-trust-document-registry.md",
+    "?? packages/shared/src/trust-documents.ts",
+    "?? scripts/upstream-intake.mjs",
+    "?? scripts/upstream-intake.test.mjs",
+    "?? server/src/__tests__/trust-document-registry-postgres.test.ts",
+    "?? server/src/__tests__/trust-document-routes.integration.test.ts",
+    "?? server/src/__tests__/trust-documents.test.ts",
+    "?? server/src/routes/trust-documents.ts",
+    "?? server/src/services/trust-documents.ts"
+  ],
+  "files": {
+    "packages/shared/src/feature-catalog.ts": {
+      "sha256": "f9351a5111538cdd4492d4fd3a2b042a28e5ed8075d9e01a670dcf593d689171",
+      "bytes": 30949
+    },
+    "packages/shared/src/feature-catalog.test.ts": {
+      "sha256": "cf2b6978e5178eb3927b553fa17452ea9fd3801eaff1076691b591b8a4508d9f",
+      "bytes": 9435
+    },
+    "packages/shared/src/index.ts": {
+      "sha256": "dc21feec7d6896c5ef3ba84c3e3e3b0f825914d838d177676128298078f04ff6",
+      "bytes": 106109
+    },
+    "packages/shared/src/v5-feature-flags.ts": {
+      "sha256": "a0f83182641a04c6217897f1dbd9548c4995324a2fa15342041bcdf7596c6e95",
+      "bytes": 4830
+    },
+    "packages/shared/src/v6-feature-flags.ts": {
+      "sha256": "c06de6f25986215a2b7161577718291098b0c7ab57dbf7ca63aabe4da6d66adc",
+      "bytes": 4485
+    },
+    "packages/shared/src/v7-feature-flags.ts": {
+      "sha256": "e4bff3c369f255ea07c2bd7b55cd306d1de47dc642bcddfef3831ddd0fb098f9",
+      "bytes": 8205
+    },
+    "packages/shared/src/v8-feature-flags.ts": {
+      "sha256": "5ff6d381a4b9e52d13e820bc113254a76ad82d8c8665256a9e7ad0259a0fc136",
+      "bytes": 6393
+    },
+    "packages/shared/src/v9-feature-flags.ts": {
+      "sha256": "10d70828a4f7bff8763ac73a49eefab90150b8756ecbcc263eeb39968acbac15",
+      "bytes": 5636
+    },
+    "docs/help/workflows-preview.md": {
+      "sha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "bytes": 2368
+    },
+    "docs/help/apps-and-connections.md": {
+      "sha256": "ce2b7703039362ccc1a7747cfb7b11bb189be5d72007cd6297e5ac49d200fe82",
+      "bytes": 4378
+    },
+    "docs/help/index.md": {
+      "sha256": "4ae0d3cc48a3a58481f26ba75f0f82d55826c634fda008f620d7747445888456",
+      "bytes": 7018
+    },
+    "ui/src/pages/InstanceExperimentalSettings.tsx": {
+      "sha256": "14b8a795ec76c3a578af14b2b5e4dfc46585120c8a667fdc62de7b2ccdc40337",
+      "bytes": 43413
+    },
+    "ui/src/pages/InstanceExperimentalSettings.test.tsx": {
+      "sha256": "809348d29c30c6016c4a0d41e100c8fc43021e8055cf5364cb7877cac122105c",
+      "bytes": 43591
+    },
+    "ui/src/i18n/experience/en.json": {
+      "sha256": "2307c5e27b06155c8befc66ce1c187faf667ba3d6938e33876c7033cdc3d4d61",
+      "bytes": 234609
+    },
+    "ui/src/i18n/experience/da.json": {
+      "sha256": "a6a7d685bb529f4fcb7a6fd01e21036a8de7abc585aa553ca247db5c709c83ea",
+      "bytes": 251305
+    },
+    "scripts/generate-feature-catalog.ts": {
+      "sha256": "0e03be3ec22ad1c468a3d98e1d5e49ed389dab73f78d3c228b4ee45ddc740f77",
+      "bytes": 2120
+    },
+    "packages/shared/package.json": {
+      "sha256": "c3c184db3e2167dd15d576aab52f42b0775db566aa4f4627a1271cb0f5c1f77a",
+      "bytes": 1406
+    },
+    "ui/package.json": {
+      "sha256": "ff5eb87bad11faa76534de01391e7ac1feca55af1ac2abd4e4239ff31b3ce505",
+      "bytes": 3475
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "195c849aa982fc56080e0aba8694ba6562e37fb23a103d7f41d5a825cb4736be",
+      "bytes": 634560
+    }
+  }
+}

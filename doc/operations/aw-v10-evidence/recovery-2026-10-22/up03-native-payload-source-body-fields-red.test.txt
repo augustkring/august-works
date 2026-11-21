@@ -1,0 +1,64 @@
+import { randomUUID } from "node:crypto";
+import { eq, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { companies, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issues } from "@paperclipai/db";
+import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
+import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+
+describe("Native payload source snapshot binds its original payload owner", () => {
+  let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, companyId: string;
+  beforeAll(async () => {
+    database = await startEmbeddedPostgresTestDatabase("v10-payload-source-binding-");
+    db = createDb(database.connectionString);
+    companyId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Native payload owner", issuePrefix: randomUUID() });
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  afterAll(async () => { await database?.cleanup(); }, 30000);
+
+  async function insert(protocol = 1) {
+    const [row] = await db.insert(issues).values({ companyId, title: "Original captured body", description: "Actual content", payloadSourceProtocolVersion: protocol }).returning();
+    return row!;
+  }
+  async function snapshot(row: typeof issues.$inferSelect, owner: Record<string, unknown> = {}) {
+    // PostgreSQL canonical JSON is also the persistence contract. This fixture
+    // constructs a source-free structural snapshot; it proves no permissions.
+    const [hash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash
+      from issues i where i.company_id=${companyId}::uuid and i.id=${row.id}::uuid`);
+    const content = { version: 1, owner: { kind: "issue", companyId, id: row.id, contentHash: hash!.hash, ...owner },
+      policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] };
+    const [result] = await db.execute<{ snapshot: NativePayloadSourceSnapshot }>(sql`select ${JSON.stringify(content)}::jsonb || jsonb_build_object(
+      'digest',encode(sha256(convert_to((${JSON.stringify(content)}::jsonb)::text,'UTF8')),'hex')) as snapshot`);
+    return result!.snapshot;
+  }
+
+  it("keeps pre-protocol payloads unknown and refuses an in-place upgrade", async () => {
+    const row = await insert(0);
+    expect(row.payloadSourceSnapshot).toBeNull();
+    await expect(db.update(issues).set({ payloadSourceProtocolVersion: 1 }).where(eq(issues.id, row.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+  it("rejects a validly hashed snapshot copied across owners, companies or body bytes", async () => {
+    const row = await insert();
+    for (const owner of [{ id: randomUUID() }, { companyId: randomUUID() }, { kind: "project" }, { contentHash: "a".repeat(64) }]) {
+      await expect(db.update(issues).set({ payloadSourceSnapshot: await snapshot(row, owner) }).where(eq(issues.id, row.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+    }
+    const valid = await snapshot(row);
+    await expect(db.update(issues).set({ payloadSourceSnapshot: { ...valid, digest: "b".repeat(64) } }).where(eq(issues.id, row.id)))
+      .rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+  it("retains a bound snapshot across operational updates but rejects silently replacing its body", async () => {
+    const row = await insert();
+    const captured = await snapshot(row);
+    await db.update(issues).set({ payloadSourceSnapshot: captured }).where(eq(issues.id, row.id));
+    const [operational] = await db.update(issues).set({ priority: "high" }).where(eq(issues.id, row.id)).returning();
+    expect(operational!.payloadSourceSnapshot).toEqual(captured);
+    for (const edit of [{ description: "Later unrelated private body" }, { monitorNotes: "Later private monitoring notes" },
+      { forecastReason: "Later private planning explanation" }, { billingCode: "Private copied billing code" },
+      { executionPolicy: { copied: "private policy content" } }]) {
+      await expect(db.update(issues).set(edit).where(eq(issues.id, row.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+    }
+    const [invalidated] = await db.update(issues).set({ description: "Explicitly unknown new body", payloadSourceSnapshot: null }).where(eq(issues.id, row.id)).returning();
+    expect(invalidated!.payloadSourceSnapshot).toBeNull();
+  });
+});

@@ -1,0 +1,37 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:31:38] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-baebf359-8185-4747-8f95-866c6eae8ec2"}[39m
+[20:31:38] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-5c38ca13-a5bf-44f9-8de9-1a1645ecb462"}[39m
+[20:31:38] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"import-8525a94a-20ab-4a9c-af37-1f15601188d7"}[39m
+[20:32:12] [33mWARN[39m: [36mfailed to delete import transfer spool after a successful apply[39m [90m{"transferId":"d555363c-d1d8-4d37-b90b-e8ddc24a91f6"}[39m
+    err: {
+      "type": "Error",
+      "message": "EACCES: spool dir is busy",
+      "stack":
+          Error: EACCES: spool dir is busy
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:847:33
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:32:12] [33mWARN[39m: [36mfailed to attach the imported company to its transfer run[39m [90m{"transferId":"2cdca06d-d54b-4020-84a2-514dea7dfbbf"}[39m
+    err: {
+      "type": "Error",
+      "message": "registry write timed out",
+      "stack":
+          Error: registry write timed out
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:898:30
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:32:12] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"0466ee54-e3c3-484a-be0e-254a85463fcc"}[39m
+[20:32:12] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"0466ee54-e3c3-484a-be0e-254a85463fcc"}[39m
+
+ Test Files  10 passed (10)
+      Tests  183 passed (183)
+   Start at  20:31:10
+   Duration  93.04s (transform 17.12s, setup 518ms, import 30.60s, tests 60.10s, environment 628ms)
+

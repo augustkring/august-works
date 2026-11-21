@@ -10,19 +10,37 @@ import { readFirstAgentCapabilityPin } from "./activation-first-agent.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 
+export function isActivationSnapshotBusy(error: unknown): boolean {
+  let cause = error;
+  for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {
+    const candidate = cause as { code?: unknown; cause?: unknown };
+    if (candidate.code === "55P03" || candidate.code === "40P01") return true;
+    cause = candidate.cause;
+  }
+  return false;
+}
+
 /** Shared original onboarding locks and human authority. No cached session,
  * instance-admin flag, consent receipt or provider credential grants access. */
-export async function lockActivationSnapshot(tx: Db, companyId: string) {
+export async function lockActivationSnapshot(tx: Db, companyId: string, mode: "read" | "write" = "write") {
   await tx.execute(
     sql`select set_config('statement_timeout', '5000', true), set_config('lock_timeout', '1000', true)`,
   );
-  await lockAnalyticalCompany(tx, companyId);
-  await lockMemoryPrivacy(tx, companyId);
-  await tx
-    .select({ key: instanceSettings.singletonKey })
-    .from(instanceSettings)
-    .where(eq(instanceSettings.singletonKey, "default"))
-    .for("share");
+  try {
+    await lockAnalyticalCompany(tx, companyId, mode);
+    await lockMemoryPrivacy(tx, companyId, mode);
+    await tx
+      .select({ key: instanceSettings.singletonKey })
+      .from(instanceSettings)
+      .where(eq(instanceSettings.singletonKey, "default"))
+      .for("share");
+  } catch (error) {
+    if (isActivationSnapshotBusy(error))
+      throw conflict("Activation is being updated; retry the same request.", {
+        code: "activation_state_busy", retryable: true,
+      });
+    throw error;
+  }
 }
 export async function assertActivationAccess(
   tx: Db,

@@ -1,0 +1,13 @@
+✔ rewrites only the Azure Ubuntu mirror hostname in the mirror list (13.980964ms)
+✔ leaves canonical-only and absent mirror lists unchanged (6.138462ms)
+✔ ready native tools skip apt and run the isolation probe (9.529016ms)
+✔ a failed sandbox probe command remains a failure without apt fallback (5.381725ms)
+✔ a missing bwrap uses bounded apt fallback before the sandbox probe command (19.584123ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 110.91478

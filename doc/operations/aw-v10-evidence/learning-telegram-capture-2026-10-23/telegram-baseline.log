@@ -1,0 +1,33 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[23:00:19] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"72e86bb5-d80c-47d2-b45d-4fa509590c7c","issueId":"6a1e9065-d035-4a4f-9c75-04021b23106a","attachmentName":"request.txt"}[39m
+    error: "injected Telegram attachment outage"
+ ❯ |@paperclipai/server| src/__tests__/chat-channels.integration.test.ts (1049 tests | 2 failed | 1047 skipped) 10754ms
+     × surfaces an attachment-only Telegram ingestion failure without waking the agent (bound snapshot: false) 1274ms
+     × surfaces an attachment-only Telegram ingestion failure without waking the agent (bound snapshot: true) 396ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/chat-channels.integration.test.ts > chat channel control-plane integration > surfaces an attachment-only Telegram ingestion failure without waking the agent (bound snapshot: false)
+ FAIL  |@paperclipai/server| src/__tests__/chat-channels.integration.test.ts > chat channel control-plane integration > surfaces an attachment-only Telegram ingestion failure without waking the agent (bound snapshot: true)
+ReferenceError: captureTrigger is not defined
+ ❯ src/__tests__/chat-channels.integration.test.ts:63645:70
+    63643|     } finally {
+    63644|       try {
+    63645|         await db.execute(sql`drop trigger if exists ${sql.identifier(c…
+       |                                                                      ^
+    63646|         await db.execute(sql`drop function if exists ${sql.identifier(…
+    63647|       } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1047 skipped (1049)
+   Start at  22:59:05
+   Duration  75.75s (transform 46.80s, setup 281ms, import 64.12s, tests 10.75s, environment 0ms)
+

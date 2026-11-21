@@ -1,0 +1,54 @@
+{
+  "capturePlan": "Incremental R62 small delta; compare frozen Host33 pins against Host31 pins carried in R61. Include only changed/new Host33 source files, full Host33 pins and runner scripts; do not recopy Host31/Host33 unchanged source or R61/storage bundles.",
+  "baseR61ArchiveSha256": "ef416e2a57b35b999545fb5adce88575b98be5f183822d0a1b3fa4e52c59cca8",
+  "baseHost31PinsSha256": "eb1e8ae187ecc53d1790c96fa5acb378a442564cfaa10eff1582c0b6d42d421e",
+  "candidateHost33PinsSha256": "44a599d932b2fa3ab23ef00c6b169ed64001f5a85c9f7fb9d06eb6105b83e1a2",
+  "changedPaths": [
+    "deploy/v6/host-agent/openshell.mjs",
+    "deploy/v6/host-agent/openshell.test.mjs",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts"
+  ],
+  "addedPaths": [],
+  "deletedPaths": [],
+  "inputs": {
+    "delta/host33-delta.json": "/workspace/v10-preparation/r62-recovery-prepared-nov01/host33-delta.json",
+    "host32-closed/controller-issuer-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/controller-issuer-vitest.exit",
+    "host32-closed/conversation-sandbox-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/conversation-sandbox-vitest.exit",
+    "host32-closed/db-build.exit": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/db-build.exit",
+    "host32-closed/host-session-node.exit": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/host-session-node.exit",
+    "host32-closed/r103-native-source-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/r103-native-source-vitest.exit",
+    "host32-closed/restore.log": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/restore.log",
+    "host32-closed/result-before-restore.json": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/result-before-restore.json",
+    "host32-closed/server-tsc.exit": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/server-tsc.exit",
+    "host32-closed/shared-build.exit": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/shared-build.exit",
+    "host32-closed/source-oxc.exit": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/source-oxc.exit",
+    "host32-closed/worker-sandbox-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.32-preflight-kernelowner-private/qualification-r14.38.4.32/worker-sandbox-vitest.exit",
+    "host33-delta/files/deploy/v6/host-agent/openshell.mjs": "/workspace/v10-preparation/v10-149-r14.38.4.33-posttarget-probe-private/files/deploy/v6/host-agent/openshell.mjs",
+    "host33-delta/files/deploy/v6/host-agent/openshell.test.mjs": "/workspace/v10-preparation/v10-149-r14.38.4.33-posttarget-probe-private/files/deploy/v6/host-agent/openshell.test.mjs",
+    "host33-delta/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "/workspace/v10-preparation/v10-149-r14.38.4.33-posttarget-probe-private/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+    "host33/qualify-r14.38.4.33-targeted.sh": "/workspace/v10-preparation/v10-149-r14.38.4.33-posttarget-probe-private/qualify-r14.38.4.33-targeted.sh",
+    "host33/qualify-r14.38.4.33.sh": "/workspace/v10-preparation/v10-149-r14.38.4.33-posttarget-probe-private/qualify-r14.38.4.33.sh",
+    "host33/source-pins.json": "/workspace/v10-preparation/v10-149-r14.38.4.33-posttarget-probe-private/source-pins.json",
+    "host33/source-pins.predecessor-r14.38.4.32.json": "/workspace/v10-preparation/v10-149-r14.38.4.33-posttarget-probe-private/source-pins.predecessor-r14.38.4.32.json",
+    "r4-refresh/README.md": "/workspace/v10-preparation/r4-final-refresh-procedure-nov01/README.md",
+    "r4-refresh/SHA256SUMS": "/workspace/v10-preparation/r4-final-refresh-procedure-nov01/SHA256SUMS",
+    "r4-refresh/baseline-pins.template.json": "/workspace/v10-preparation/r4-final-refresh-procedure-nov01/baseline-pins.template.json",
+    "r4-refresh/final-owner-receipt-map.template.json": "/workspace/v10-preparation/r4-final-refresh-procedure-nov01/final-owner-receipt-map.template.json",
+    "r4-refresh/refresh-r4-final.py": "/workspace/v10-preparation/r4-final-refresh-procedure-nov01/refresh-r4-final.py",
+    "root/root-continuation-20261101-current.md": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+    "root/run-final-workspace-aggregate-20261101.sh": "/workspace/v10-preparation/run-final-workspace-aggregate-20261101.sh"
+  },
+  "excluded": [
+    "active Host33 qualification output",
+    "all full source snapshots except changed Host33 source files",
+    "R61 and storage archive payloads (hash-referenced)",
+    "MAIN/MIRROR/Git mutations",
+    "dependency, PG, provider/build artifacts",
+    "raw logs/secrets"
+  ],
+  "generatedDelta": {
+    "capturePath": "/workspace/v10-preparation/r62-recovery-prepared-nov01.building/host33-delta.json",
+    "durablePath": "/workspace/v10-preparation/r62-recovery-prepared-nov01/host33-delta.json",
+    "note": "generated during capture and atomically published; before/after stats identify the same inode"
+  }
+}

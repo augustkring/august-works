@@ -394,16 +394,20 @@ export function issueTreeControlRoutes(
         return;
       }
 
+      let resumeIssueIds: string[] = [];
       // Releasing a pause does not authorize replay of uncertain provider actions.
       // Check before release so a rejected wake leaves the subtree paused.
       if (req.body.metadata?.wakeAgents === true) {
         const activeHold = await treeControlSvc.getHold(root.companyId, holdId);
-        const issueIds =
-          activeHold?.mode === "pause" && activeHold.rootIssueId === root.id
-            ? (activeHold.members ?? [])
-                .filter((member) => !member.skipped)
-                .map((member) => member.issueId)
-            : [];
+        if (activeHold?.mode === "pause" && activeHold.rootIssueId === root.id) {
+          const preview = await treeControlSvc.preview(root.companyId, root.id, { mode: "resume" });
+          // Another independent hold must remain in force; its work is not
+          // authorized to resume by release of this particular hold.
+          resumeIssueIds = preview.issues.filter(candidate => !candidate.skipped &&
+            candidate.activeHoldIds.includes(holdId) &&
+            candidate.activeHoldIds.every(id => id === holdId)).map(candidate => candidate.id);
+        }
+        const issueIds = resumeIssueIds;
         if (issueIds.length > 0) {
           const candidates = await db.select({ id: issueRows.id, identifier: issueRows.identifier })
             .from(issueRows).where(and(
@@ -452,10 +456,9 @@ export function issueTreeControlRoutes(
 
       const wakeFailures: Array<{ issueId: string; message: string }> = [];
       if (hold.mode === "pause" && req.body.metadata?.wakeAgents === true) {
-        for (const member of hold.members ?? []) {
-          if (member.skipped) continue;
+        for (const issueId of resumeIssueIds) {
           try {
-            const issue = await issuesSvc.getById(member.issueId);
+            const issue = await issuesSvc.getById(issueId);
             if (
               !issue ||
               issue.companyId !== root.companyId ||
@@ -463,6 +466,7 @@ export function issueTreeControlRoutes(
               !RESUME_EXECUTABLE_STATUSES.includes(issue.status)
             )
               continue;
+            if (await treeControlSvc.getActivePauseHoldGate(root.companyId, issue.id)) continue;
             await heartbeat.wakeup(issue.assigneeAgentId, {
               source: "assignment",
               triggerDetail: "system",
@@ -485,7 +489,7 @@ export function issueTreeControlRoutes(
             });
           } catch (error) {
             const message = errorToMessage(error);
-            wakeFailures.push({ issueId: member.issueId, message });
+            wakeFailures.push({ issueId, message });
             await Promise.resolve(
               logActivity(db, {
                 companyId: root.companyId,
@@ -499,7 +503,7 @@ export function issueTreeControlRoutes(
                 entityId: root.id,
                 details: {
                   holdId: hold.id,
-                  issueId: member.issueId,
+                  issueId,
                   error: message,
                 },
               }),

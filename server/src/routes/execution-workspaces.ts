@@ -1057,6 +1057,7 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
     const result = await svc.reconcileExecutionWorkspaceBranch(id, {
       mode: req.body.mode,
       reason: req.body.reason ?? null,
+      privacyActor: req.actor,
       actor: {
         actorType: actor.actorType,
         actorId: actor.actorId,
@@ -1197,6 +1198,7 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
       // destruction fence below never deletes a worktree that a reopen rebuilt.
       const archiveResult = await svc.archiveWorkspaceUnderLifecycleLock({
         id,
+        expectedCompanyId: existing.companyId,
         patch,
         closedAt,
       });
@@ -1284,6 +1286,17 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
               executionWorkspaceId: existing.id,
               workspaceCwd: existing.cwd,
             });
+            // Quiesce runtime owners even when current Git source authorization
+            // has been withdrawn. A missing proof keeps files, while stop
+            // failures still surface and abort the lifecycle transition.
+            let gitRestorationProof: Awaited<ReturnType<NonNullable<typeof svc.prepareGitWorkspaceCleanupProof>>> | null = null;
+            if (existing.providerType === "git_worktree") {
+              try {
+                gitRestorationProof = await svc.prepareGitWorkspaceCleanupProof?.({ workspaceId: id, actor: req.actor }) ?? null;
+              } catch {
+                gitRestorationProof = null;
+              }
+            }
             return cleanupExecutionWorkspaceArtifacts({
               workspace: existing,
               projectWorkspace,
@@ -1293,6 +1306,8 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
                 companyId: existing.companyId,
                 executionWorkspaceId: existing.id,
               }),
+              runCleanupCommands: existing.providerType !== "git_worktree",
+              ...(gitRestorationProof ? { gitRestorationProof } : {}),
             });
           },
         });
@@ -1345,7 +1360,7 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
         return;
       }
     } else {
-      const updatedWorkspace = await svc.update(id, patch);
+      const updatedWorkspace = await svc.updateFromApi(id, existing.companyId, patch);
       if (!updatedWorkspace) {
         res.status(404).json({ error: "Execution workspace not found" });
         return;

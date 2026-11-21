@@ -1,0 +1,68 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/project-routes-env.test.ts (3 tests | 3 failed) 12648ms
+     × normalizes env bindings on create and logs only env keys 7579ms
+     × normalizes env bindings on update and avoids logging raw values 2225ms
+     × records returned project states for lifecycle projection while keeping environment-only changes status-free 2838ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/project-routes-env.test.ts > project env routes > normalizes env bindings on create and logs only env keys
+AssertionError: {"error":"Internal server error"}: expected [ 200, 201 ] to include 500
+ ❯ src/__tests__/project-routes-env.test.ts:193:50
+    191|       });
+    192|
+    193|     expect([200, 201], JSON.stringify(res.body)).toContain(res.status);
+       |                                                  ^
+    194|     expect(mockSecretService.normalizeEnvBindingsForPersistence).toHav…
+    195|       "company-1",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/project-routes-env.test.ts > project env routes > normalizes env bindings on update and avoids logging raw values
+AssertionError: {"error":"Internal server error"}: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/project-routes-env.test.ts:229:50
+    227|       });
+    228|
+    229|     expect(res.status, JSON.stringify(res.body)).toBe(200);
+       |                                                  ^
+    230|     expect(mockLogActivity).toHaveBeenCalledWith(
+    231|       expect.anything(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/project-routes-env.test.ts > project env routes > records returned project states for lifecycle projection while keeping environment-only changes status-free
+Error: expected 201 "Created", got 500 "Internal Server Error"
+ ❯ src/__tests__/project-routes-env.test.ts:246:101
+    244|     mockProjectService.create.mockResolvedValue(initial);mockProjectSe…
+    245|     const app=await createApp();
+    246|     await request(app).post("/api/companies/company-1/projects").send(…
+       |                                                                                                     ^
+    247|     await request(app).patch(`/api/projects/${projectId}`).send({statu…
+    248|     const sources=mockLogActivity.mock.calls.map(call=>call[1] as {act…
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  3 failed | 57 passed (60)
+   Start at  22:15:46
+   Duration  101.60s (transform 27.99s, setup 609ms, import 52.17s, tests 47.34s, environment 0ms)
+

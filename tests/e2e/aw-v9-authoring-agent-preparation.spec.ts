@@ -1,5 +1,6 @@
 import { expect, test, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS, agentAuthoringContentSchema, agentAuthoringDraftViewSchema } from "../../packages/shared/src/index.ts";
+import { deleteCompany } from "./company-cleanup";
 
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
@@ -92,7 +93,7 @@ for (const kind of ["custom", "hire"] as const) {
       expect(await json(await request.get(`/api/companies/${company.id}/agents`))).toEqual([]);
       expect(await json(await request.get(`/api/companies/${company.id}/issues`))).toEqual([]);
     } finally {
-      await json(await request.delete(`/api/companies/${company.id}`));
+      await json(await deleteCompany(request, company.id));
     }
   });
 }

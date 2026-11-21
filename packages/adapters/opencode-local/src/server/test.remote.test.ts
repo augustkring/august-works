@@ -89,7 +89,7 @@ describe("opencode remote environment diagnostics", () => {
     await Promise.all(configHomes.splice(0).map(dir => rm(dir, { recursive: true, force: true })));
   });
 
-  it.each([false, true])("stages remote runtime config assets for sandbox hello probes (managed=%s)", async (managed) => {
+  it.each([false, true])("stages remote runtime config while refusing an unqualified paid hello (managed=%s)", async (managed) => {
     const configHome = await mkdtemp(path.join(os.tmpdir(), "opencode-remote-test-config-"));
     configHomes.push(configHome);
     const remoteTarget: AdapterExecutionTarget = {
@@ -128,7 +128,9 @@ describe("opencode remote environment diagnostics", () => {
       environmentName: "QA Cloudflare",
     });
 
-    expect(result.status).toBe("pass");
+    expect(result.status).toBe("fail");
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified", level: "error" }));
+    expect(runAdapterExecutionTargetProcess).not.toHaveBeenCalled();
     expect(prepareAdapterExecutionTargetRuntime).toHaveBeenCalledTimes(1);
     const runtimeCalls = prepareAdapterExecutionTargetRuntime.mock.calls as unknown as Array<
       [{ adapterKey: string; assets?: Array<{ key: string; localDir: string }> }]
@@ -141,17 +143,6 @@ describe("opencode remote environment diagnostics", () => {
       }),
     ]);
 
-    const probeCall = runAdapterExecutionTargetProcess.mock.calls[0] as unknown as
-      | [string, AdapterExecutionTarget, string, string[], { cwd: string; env: Record<string, string> }]
-      | undefined;
-    expect(probeCall?.[4].cwd).toBe("/remote/workspace/.paperclip-runtime/runs/test/workspace");
-    if (managed) {
-      expect(probeCall?.[4].env.HOME).toContain("/remote/workspace/.paperclip-runtime/runs/test/workspace/.paperclip-runtime/opencode/managed-auth/");
-      expect(probeCall?.[4].env.XDG_DATA_HOME).toBe(`${probeCall?.[4].env.HOME}/data`);
-      expect(probeCall?.[4].env.XDG_CACHE_HOME).toBe(`${probeCall?.[4].env.HOME}/cache`);
-    }
-    expect(probeCall?.[4].env.XDG_CONFIG_HOME).toBe(
-      "/remote/workspace/.paperclip-runtime/runs/test/workspace/.paperclip-runtime/opencode/xdgConfig",
-    );
+    expect(result.checks.some((check) => check.code === "opencode_hello_probe_passed")).toBe(false);
   });
 });

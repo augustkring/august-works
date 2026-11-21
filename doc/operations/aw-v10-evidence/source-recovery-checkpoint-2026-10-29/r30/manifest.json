@@ -1,0 +1,160 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T22:58:21.866720+00:00",
+  "baseCommit": "ecdea1f2e8b50147c95b06513a3cb34cbb911888",
+  "patchBytes": 1773754,
+  "patchSha256": "6509d0c9bc19fe9e64f6636bf775b35e35de0d834325affc02c984cadce97b29",
+  "archiveSha256": "ea5dcff3ca82f8c732cd9658de4fe7d040b712e105dff4bc1e8130508519816f",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39843,
+      "sha256": "936b08a1554a67437fff31c9373eeb147f48325e631691fbe4ba51600362599d"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    }
+  ],
+  "privateRecoveryFiles": [
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-governance-current.sql",
+      "archive": "private-recovery-0-b-resource-governance-current.sql.gz",
+      "bytes": 18639,
+      "sha256": "06a09db9ee76d79f02d8c32a696ddda7a0da23bc49b5314b062b06e1ae2af9d7",
+      "archiveSha256": "2774a94b04a94c91fce8e6af0887e32107a4d459d06e02b977fa3f23cc4eafca",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/manifest.json",
+      "archive": "private-recovery-1-manifest.json.gz",
+      "bytes": 1737,
+      "sha256": "ca82eb8e684c3b39dab9bdbe450b198e5838736c073b5e089a2a9b68f46c0652",
+      "archiveSha256": "045255d8a92731497a2ec001ea557a92464653f81b1807103c65b2bd7eae9a2a",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/environment_leases.ts",
+      "archive": "private-recovery-2-environment_leases.ts.gz",
+      "bytes": 3901,
+      "sha256": "88222db0df8a135ccfca439ea8cbe624df8bd8df1209a8de48f775254a278b96",
+      "archiveSha256": "bb13edaf33582d439b929ab23fd77029d6b856323bf0d9a622725bd529bd94d7",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/heartbeat_run_events.ts",
+      "archive": "private-recovery-3-heartbeat_run_events.ts.gz",
+      "bytes": 2059,
+      "sha256": "f887d01bfb4173faa88f62f9df680b7710b57336221af70fc988e35968998388",
+      "archiveSha256": "d55c1e393163059db6010d17cc1a46596b122e2705672a853294014e41bde970",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/heartbeat_runs.ts",
+      "archive": "private-recovery-4-heartbeat_runs.ts.gz",
+      "bytes": 10566,
+      "sha256": "98463a00ffaedd8da1bf9e35a944fd1411e338f76f01e9a49ee28a472ec1cac3",
+      "archiveSha256": "e6d413c18f557752a9270218630611e207eaea280fcc98056b4f83580de3a924",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/memory_jobs.ts",
+      "archive": "private-recovery-5-memory_jobs.ts.gz",
+      "bytes": 5735,
+      "sha256": "d6767af727ccabb5109141fa9ff2ce0f03fd41c119232bdcd9a3b9467df3258b",
+      "archiveSha256": "cd28ee7e9f803c4bd9c097b030522410639c47c85b1e54ad7a5e9221968d0f9c",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/native_run_finalizations.ts",
+      "archive": "private-recovery-6-native_run_finalizations.ts.gz",
+      "bytes": 4394,
+      "sha256": "4dffb87a6701eba9882ca168b69530c9c37dbd8a20e762382c1784f4df1fb288",
+      "archiveSha256": "3a8a8c15ee8793bdad037e07d71f8215e76cfdba6aedc377ea92f4293fb30b96",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/workflows.ts",
+      "archive": "private-recovery-7-workflows.ts.gz",
+      "bytes": 19713,
+      "sha256": "09affeab6594e5d161381ae2f5a44e861f55e2338aa3ff134d8256f5bd807db4",
+      "archiveSha256": "f991e74488813c6819d5231a222210cbc06871f85cc5faae60aa812d8d74067c",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/server/src/services/execution-blocker.ts",
+      "archive": "private-recovery-8-execution-blocker.ts.gz",
+      "bytes": 4238,
+      "sha256": "4e93263aae7d464206ac401ba4bf3dc9f4d8a72fd90c40f3e042351b556b1777",
+      "archiveSha256": "7206e5e429e655d3c19413a25673768ec200f3e3b13177d4ac37e8a243716625",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-resource-governance-qualified-r10-20261029.sh",
+      "archive": "private-recovery-9-run-resource-governance-qualified-r10-20261029.sh.gz",
+      "bytes": 14390,
+      "sha256": "19dbbacd84f9ba08bd1f0d570afdb53d4acce087813938b0d5dbf27b13609da8",
+      "archiveSha256": "bcae716b9dd98a87dd27256c14dd0b7aea0901fccba2716884de2cb6c31de898",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-resource-governance-qualified-r11-20261029.sh",
+      "archive": "private-recovery-10-run-resource-governance-qualified-r11-20261029.sh.gz",
+      "bytes": 14390,
+      "sha256": "3fe90a9d703cd1613d83db4916c2a16879831b2d08e2d3f1a8e12b9fbb395d04",
+      "archiveSha256": "e14896e79cf31be881971ccd3b52edf04aebb87e92bfce3a4c9216e87e7df08e",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-pinned-managed-browser-test.sh",
+      "archive": "private-recovery-11-run-pinned-managed-browser-test.sh.gz",
+      "bytes": 5165,
+      "sha256": "1546ab644c412d2503af791899c8b68a669ae63447649f4e751cdc2c4906a6a2",
+      "archiveSha256": "9038376de7f1e6b49fef889a603367c248018f3377aa3efc289b563c29268e98",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/root-continuation-20261029-2246.md",
+      "archive": "private-recovery-12-root-continuation-20261029-2246.md.gz",
+      "bytes": 5233,
+      "sha256": "1e916e0defa1572a194b8a0b3e323d272b499b4faf2c4aaef6d35751e3f94809",
+      "archiveSha256": "d5a73e143d86eb93e5552a6beaf8a0f44ccffc4385e176ad43e6d0661b252acf",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/preparation-deduplication-20261029-2258.json",
+      "archive": "private-recovery-13-preparation-deduplication-20261029-2258.json.gz",
+      "bytes": 332174,
+      "sha256": "f5140f0152eaa04f221c63e7205a388aebe7a13b5c4cebb5b1bebe4a1308f2b2",
+      "archiveSha256": "14a1ebc6cc0af73507c858cb97573e3961aabf2e8b0b1cea980113cd7ee23a89",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/preserved-preparation-deduplication-20261029-2248.json",
+      "archive": "private-recovery-14-preserved-preparation-deduplication-20261029-2248.json.gz",
+      "bytes": 111098,
+      "sha256": "3e21e6998e7a91f3a6eea9e50f092714f0195aed3a3cc23855b316eb71dba28f",
+      "archiveSha256": "4dd0f52d3b45384a392b177caae2be293290c56d8ceb57b7452af75d92599fdb",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/preserved-preparation-restored-to-disk-20261029-2258.json",
+      "archive": "private-recovery-15-preserved-preparation-restored-to-disk-20261029-2258.json.gz",
+      "bytes": 17451,
+      "sha256": "928ce815d5e07acb7946525b1fa69040d06203cf7d11e0b9c098f33954bbe171",
+      "archiveSha256": "cc6344343ce517cf3b684a25134d10f621cecea2c45bc24893bc27cb2e50a2b2",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    }
+  ]
+}

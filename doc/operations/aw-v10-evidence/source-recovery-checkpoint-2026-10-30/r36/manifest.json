@@ -1,0 +1,144 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T01:34:08.542469+00:00",
+  "baseCommit": "43a98b81e42f8753e245c2a1547a8e433a6a6576",
+  "patchBytes": 2443104,
+  "patchSha256": "3b5f49ed9beb3b57d472155c763be208db01ae8dcbdcc87cf08856d327aa791d",
+  "archiveSha256": "7dcc8ee2258ae9326ca31905f733f095195b13d2fa38fe6b43568c0466d901eb",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0564_broken_guardian.sql",
+      "bytes": 22486,
+      "sha256": "f6a864d30917b526d97e4ad62bcca58b238dc88a41832a2e04e3bcfe966a7dab"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0564_snapshot.json",
+      "bytes": 2795166,
+      "sha256": "4fe9e81c7ad48a5b9ab4729b7327215774f42f2ffe27b0205427fe48eef02224"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 42040,
+      "sha256": "2790e0d8cdaf77d136ab91fda1cba161c238f5a17dba5a9d2de1cd4d7f0fb227"
+    },
+    {
+      "path": "server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15810,
+      "sha256": "4b1d17720e88948c60ed5d00c47998c412e55e4bb119c210607d1220ef2fc074"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    }
+  ],
+  "privateRecoveryFiles": [
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/0565_responsibility_scan.sql",
+      "bytes": 3132,
+      "sha256": "b21416d3d4e36d2ddfd64ec8b70416a03ae85f77fcca8eeb275fe66e22130f55"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/README.md",
+      "bytes": 15394,
+      "sha256": "f4bd600ee61a791037f2d61f39fb956911db6b62cf4b8416d2f158684e475463"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "bytes": 15512,
+      "sha256": "f7796f34710e0eb48d4cfa16fa48d64548ef7cb734cb92e500fd2c8a36b233ce"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/README.md",
+      "bytes": 750,
+      "sha256": "6a6efc54d849f92261c4451fb0cd49df656affbd46289289b2fa2aa4f6b2aaad"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/authorized-subset-reader.ts",
+      "bytes": 5660,
+      "sha256": "c5eae865fbba8e16c1dda75dc0df30dcddd53f7eef0fce21eb9ae47418ad2185"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/maintenance-runner.ts",
+      "bytes": 1531,
+      "sha256": "37471163cfd763eae1ae1d22252c122c660f10c458fa3c308cc72ec3ac93f8ca"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-metadata-sources.ts",
+      "bytes": 8654,
+      "sha256": "5c99ee69a8f8eb1a772e0de85bc8253c9c3b2fa900ec885d54d228c62fcb956a"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-owner-coverage.ts",
+      "bytes": 1109,
+      "sha256": "e8472e5adaeb8283ce9d667a3dbd89e70c467e1b35ea275b43143215befd8517"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-reader-adapters.ts",
+      "bytes": 33436,
+      "sha256": "88b7077a10fac566efb4097f5b554111fdec62be5c260ab67c81a7789c7c7d2f"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-reader-ports.ts",
+      "bytes": 4921,
+      "sha256": "b11cd22588649d23f0ed7f99bc6ac4c4588738d28e72c193e94f3242df1d59b1"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-subject-policy.ts",
+      "bytes": 1985,
+      "sha256": "b1882db744915df33101a2182cec770b6cc89d77211dad2b5b33cf13e66282a5"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan-store.ts",
+      "bytes": 12144,
+      "sha256": "a14123e9e5fded5d2b3b945ca65f03322d32fcd7044299b86687bdebe156c316"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan.ts",
+      "bytes": 7317,
+      "sha256": "b0b733b76196442953828235ec19bf6b3ce9f65f9a90f9b45e172c6c2892e52f"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/schema-responsibility-scan.ts",
+      "bytes": 3908,
+      "sha256": "2539c3405894ba81a943dafa7d18af77d8b1f4c8414a9242c70bb7a5de701ad0"
+    },
+    {
+      "path": "native-graph-ledger-handoff-20261030.md",
+      "bytes": 18375,
+      "sha256": "d3e49e61da7733c595ee0496aeed1adba7a97081aa4a1b268ae2a1cee63d4a5a"
+    },
+    {
+      "path": "preserved-preparation-relocation-20261030-0132.json",
+      "bytes": 1445,
+      "sha256": "f992bec40deb19544b2e000c4b496f336ed5a87fab5e0f4368860a17b05f339c"
+    },
+    {
+      "path": "run-learning42-final-r2-20261030.sh",
+      "bytes": 2432,
+      "sha256": "7f78fa0de51f561fb6016a48c766026c5abf253cdab03718d3401c2de9233a6e"
+    },
+    {
+      "path": "run-managed-project-full2-final-r2-20261030.sh",
+      "bytes": 579,
+      "sha256": "53a4199d5327567092445a32c2cc5457f5f63d161fe5b8966796241f65b86286"
+    }
+  ],
+  "privateArchiveSha256": "8752d85b5a6befa50ffe122be8ecb436f2d9d0f0ebea35465fead5636b1b0975",
+  "note": "Recovery only. Includes current Native diagnostics/algorithm WIP, unfinished private responsibility scan/contact work and final browser/Learning runners. All software acceptance gates remain separately qualified."
+}

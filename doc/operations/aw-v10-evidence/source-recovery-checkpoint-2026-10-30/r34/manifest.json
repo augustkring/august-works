@@ -1,0 +1,488 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T01:06:13.013788+00:00",
+  "baseCommit": "c080bfffb84350db24cd8a354fa5f5c58b4be11d",
+  "patchBytes": 1882654,
+  "patchSha256": "84750613b4596a2779b3a35571f1f14820da7cc61360f42498d7bb475125d450",
+  "archiveSha256": "44a454e8ae548bfa0ed39a072b46d4fd46751f84354066b9a0cfbdc10c989ca5",
+  "untrackedSourceFiles": [
+    {
+      "originalPath": "/workspace/blentera-v10/evals/platform-skill/README.md",
+      "archivePath": "evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/evals/platform-skill/cases.json",
+      "archivePath": "evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/evals/platform-skill/operating-knowledge.json",
+      "archivePath": "evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/packages/shared/src/resource-governance.test.ts",
+      "archivePath": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/packages/shared/src/resource-governance.ts",
+      "archivePath": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/scripts/check-platform-skill-operating-knowledge.mjs",
+      "archivePath": "scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/scripts/platform-skill-operating-knowledge.mjs",
+      "archivePath": "scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/scripts/platform-skill-operating-knowledge.test.mjs",
+      "archivePath": "scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/scripts/run-platform-skill-evals.mjs",
+      "archivePath": "scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "archivePath": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/server/src/__tests__/resource-governance.integration.test.ts",
+      "archivePath": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/server/src/services/experience/company-responsibility-attention.ts",
+      "archivePath": "server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15809,
+      "sha256": "cec8ea59bdf966cb42ebe5afe77abbd6f80a6d655c8b79c1e233ee2ab8256890"
+    },
+    {
+      "originalPath": "/workspace/blentera-v10/server/src/services/resource-governance.ts",
+      "archivePath": "server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    }
+  ],
+  "privateRecoveryFiles": [
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/0565_responsibility_scan.sql",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/0565_responsibility_scan.sql",
+      "bytes": 3132,
+      "sha256": "b21416d3d4e36d2ddfd64ec8b70416a03ae85f77fcca8eeb275fe66e22130f55"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/README.md",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/README.md",
+      "bytes": 14001,
+      "sha256": "efb323b3474588e492e4c2a3b1ce70841d09e6a17383abdcbb41e67db80b5791"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "bytes": 12058,
+      "sha256": "4bae015e2d0ea08e7de945c4a27b3bb8164b6d0259766f834124381ff4a9c0ee"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/README.md",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/README.md",
+      "bytes": 750,
+      "sha256": "6a6efc54d849f92261c4451fb0cd49df656affbd46289289b2fa2aa4f6b2aaad"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/authorized-subset-reader.ts",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/authorized-subset-reader.ts",
+      "bytes": 5435,
+      "sha256": "4e68494e4d478a56f10786e90f78ccbcaf69573e39496bf5cb7cf79a0013ccea"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/maintenance-runner.ts",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/maintenance-runner.ts",
+      "bytes": 1531,
+      "sha256": "37471163cfd763eae1ae1d22252c122c660f10c458fa3c308cc72ec3ac93f8ca"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-metadata-sources.ts",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-metadata-sources.ts",
+      "bytes": 8488,
+      "sha256": "9e4e68facbc7756ea4668e7aa7dbb5f93576ef1e99839d9bb4c77b49e5cfb456"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-reader-ports.ts",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-reader-ports.ts",
+      "bytes": 2255,
+      "sha256": "04a89f577e2e5eb1fdc70f5e6fad593954a6e55a7f8f37502edd186811c92b54"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan-store.ts",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan-store.ts",
+      "bytes": 12144,
+      "sha256": "a14123e9e5fded5d2b3b945ca65f03322d32fcd7044299b86687bdebe156c316"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan.ts",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan.ts",
+      "bytes": 7317,
+      "sha256": "b0b733b76196442953828235ec19bf6b3ce9f65f9a90f9b45e172c6c2892e52f"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/schema-responsibility-scan.ts",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/schema-responsibility-scan.ts",
+      "bytes": 3908,
+      "sha256": "2539c3405894ba81a943dafa7d18af77d8b1f4c8414a9242c70bb7a5de701ad0"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/native-enclosing-consumer-cover-edit.py",
+      "archivePath": "native-enclosing-consumer-cover-edit.py",
+      "bytes": 2243,
+      "sha256": "d99109d194586ad2cc80e04f0a28b097b5c346f5751658ecd01bb585a54c1765"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/native-graph-ledger-handoff-20261030.md",
+      "archivePath": "native-graph-ledger-handoff-20261030.md",
+      "bytes": 14330,
+      "sha256": "56e62d32b3300b52799f5c3de8b9adea84f816d4a2891f499d5664d13400317a"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/publish-parsed-source.cjs",
+      "archivePath": "publish-parsed-source.cjs",
+      "bytes": 1152,
+      "sha256": "08091f29cb7f4137077cc778b4a6cb9deaaea0c34e04fdac7e89f4af8bc48652"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/record-static-ui-build-inputs.py",
+      "archivePath": "record-static-ui-build-inputs.py",
+      "bytes": 1315,
+      "sha256": "6a15c4e06816af2c98a8e4208dd494d0f4476c2387a0acab0c7dcd5a7f5585f4"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/resource-governance-r14-manual-rebase-preconditions-20261030.json",
+      "archivePath": "resource-governance-r14-manual-rebase-preconditions-20261030.json",
+      "bytes": 2898,
+      "sha256": "77d3352d2a1e649f8a51cb81c261da521c8a4bc8a7665fa87c555c0e35ea61e1"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/root-continuation-20261030-0102.md",
+      "archivePath": "root-continuation-20261030-0102.md",
+      "bytes": 21852,
+      "sha256": "0cc46d6f0e57b95ca6bbfc0df2f1a48eff9bd293e3b0449d4e3b1cecc485d07a"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-resource-governance-current-typecheck-r5-20261030.sh",
+      "archivePath": "run-resource-governance-current-typecheck-r5-20261030.sh",
+      "bytes": 22045,
+      "sha256": "5b1b0437ce21470e07bc1bdd15f02c710e497c1df9d525b7dfeb99a4b5450f02"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-root-ui-heartbeat-fixtures-r2-20261030.sh",
+      "archivePath": "run-root-ui-heartbeat-fixtures-r2-20261030.sh",
+      "bytes": 1288,
+      "sha256": "8c83591275163784db078154b8cca93332b98e5223a6203674fe5408f6709418"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-binary.path",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-binary.path",
+      "bytes": 124,
+      "sha256": "f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-binary.sha256",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-binary.sha256",
+      "bytes": 65,
+      "sha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-runner.txt",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-runner.txt",
+      "bytes": 115,
+      "sha256": "e11dbb09e113c8fc1169178f79c7e5cc342a1658654b5208bedca738cafde8f8"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-snapshot.exit",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-snapshot.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-snapshot.log",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-snapshot.log",
+      "bytes": 38,
+      "sha256": "e544706f580e1d09872e93b388bf19db185ed45351b4c82adbde478b6a1f3b3d"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.json",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.json",
+      "bytes": 188261,
+      "sha256": "6d673f484f418a7674d9db72166772b5c1ee3299e6de652bebf45c2be2ca4436"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/evals/platform-skill/README.md",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/evals/platform-skill/cases.json",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/scripts/run-platform-skill-evals.mjs",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15809,
+      "sha256": "cec8ea59bdf966cb42ebe5afe77abbd6f80a6d655c8b79c1e233ee2ab8256890"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source-files/server/src/services/resource-governance.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source-files/server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-source-pins.source.patch",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-source-pins.source.patch",
+      "bytes": 700583,
+      "sha256": "ac9d60462c553f39d808ff630cda7265d6139b686bedffc9b077d183d7ffb8a0"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-syntax.exit",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-syntax.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-syntax.log",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-syntax.log",
+      "bytes": 61,
+      "sha256": "f20e344807c386f8bf1cec3ceaf22722dab527589b9daab028acdf1466b37203"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-test.exit",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-test.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-test.log",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-test.log",
+      "bytes": 54440,
+      "sha256": "0aa7d279e30d52259699fa5d8e131bd272cca57d9f9ed4cb4f8f62ba63fb6a86"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-inputs-verified.log",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-inputs-verified.log",
+      "bytes": 50,
+      "sha256": "d2aa5c1257f4af3b8db67099c8de79cdaff17a66547bec8498837d297674c3b8"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-inputs.json",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-inputs.json",
+      "bytes": 978145,
+      "sha256": "f14d610bba71e18b21ae7e52754b0ba4da60c6b711425da48162bf4bd785be6e"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-snapshot.log",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-snapshot.log",
+      "bytes": 38,
+      "sha256": "e544706f580e1d09872e93b388bf19db185ed45351b4c82adbde478b6a1f3b3d"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.json",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.json",
+      "bytes": 188387,
+      "sha256": "e59793afea2b9863dd3a23725c886a7c9086d1e750fd45b06397a7bd978013cc"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/evals/platform-skill/README.md",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/evals/platform-skill/cases.json",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/scripts/run-platform-skill-evals.mjs",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15809,
+      "sha256": "cec8ea59bdf966cb42ebe5afe77abbd6f80a6d655c8b79c1e233ee2ab8256890"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/server/src/services/resource-governance.ts",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source-files/server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source.patch",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source.patch",
+      "bytes": 700583,
+      "sha256": "ac9d60462c553f39d808ff630cda7265d6139b686bedffc9b077d183d7ffb8a0"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build.exit",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-build.log",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-build.log",
+      "bytes": 31840,
+      "sha256": "392c46d6948695806d1c5ed8e9e8d34b7c7ed22b8fd0f5c4fdbb3e590c3b4b34"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030-ui-dist.sha256",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030-ui-dist.sha256",
+      "bytes": 67398,
+      "sha256": "9af88dbffb91f99a57280378f81cf3520d32548c8138d1fc3d6f927676ea478b"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-agent-packages-full-r33-20261030.exit",
+      "archivePath": "v10-118-agent-packages-full-r33-20261030.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-118-composite-handoff-20261030.md",
+      "archivePath": "v10-118-composite-handoff-20261030.md",
+      "bytes": 1843,
+      "sha256": "e2a22a0b36630c1290e846ad8825e4bdc7b7e8022d1519c56f8e046ee55ba2ed"
+    }
+  ],
+  "privateArchiveSha256": "2c42354efcd22ba68d67ba9fad562c92653e68b06cf6c9e95a22b6facfd9364c",
+  "note": "After command environment recovery. Preserves typed Native candidate and later local work; not software acceptance. Resource0564 staging remains in r31, private0565 still not published. Full119 local receipt is preserved with its own historical source pin, not claimed for all current WIP."
+}

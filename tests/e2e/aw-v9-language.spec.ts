@@ -1,6 +1,9 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
   return response.json();
@@ -58,7 +61,7 @@ test("a person can select Danish, resume it after reload and return to English w
     const runs = await json(await request.get(`${base}/heartbeat-runs`));
     expect(Array.isArray(runs) ? runs : runs.items).toEqual([]);
   } finally {
-    await request.delete(`/api/companies/${company.id}`);
+    await deleteCompany(request, company.id);
     await request.patch("/api/instance/settings/experimental", { data: flags });
   }
 });

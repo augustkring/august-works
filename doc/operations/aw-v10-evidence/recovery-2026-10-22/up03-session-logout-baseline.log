@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts (15 tests | 1 failed | 14 skipped) 11343ms
+     × denies a Foundation Source read whose cookie session is signed out while a Source row is locked 1253ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > denies a Foundation Source read whose cookie session is signed out while a Source row is locked
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:478:36
+    476|     release.resolve();
+    477|     await holder;
+    478|     expect((await pending).status).toBe(403);
+       |                                    ^
+    479|     const secondSignin = await signIn();
+    480|     expect(secondSignin.status).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 skipped (15)
+   Start at  11:59:20
+   Duration  76.41s (transform 44.50s, setup 294ms, import 64.09s, tests 11.34s, environment 1ms)
+

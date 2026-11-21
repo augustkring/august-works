@@ -1,0 +1,141 @@
+{
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/services/native-runtime/native-execution-input.test.ts",
+    "src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+    "--testNamePattern=continues once after a Human withdraws|closes distinct governed"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 4.36650007031858e-05,
+  "sourceManifest": "native-review-summary-owner-order-r232-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 1,
+  "seconds": 46.58364494200214,
+  "stopReason": null,
+  "nodeHeapMiB": 768,
+  "ownedDescendantRssLimitBytes": 4294967296,
+  "observedPeakOwnedDescendantRssBytes": 3035721728,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 328969,
+      "parentPid": 328899,
+      "executable": "node",
+      "rssBytes": 873119744,
+      "nodeOptions": "--max-old-space-size=768"
+    },
+    {
+      "pid": 328993,
+      "parentPid": 328969,
+      "executable": "node",
+      "rssBytes": 833982464,
+      "nodeOptions": "--max-old-space-size=768"
+    },
+    {
+      "pid": 329061,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 524328960
+    },
+    {
+      "pid": 329066,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 443072512
+    },
+    {
+      "pid": 329062,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 277958656
+    },
+    {
+      "pid": 329047,
+      "parentPid": 328993,
+      "executable": "postgres",
+      "rssBytes": 24588288
+    },
+    {
+      "pid": 329048,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 12992512
+    },
+    {
+      "pid": 329054,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 9175040
+    },
+    {
+      "pid": 329055,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 7892992
+    },
+    {
+      "pid": 329056,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 7208960
+    },
+    {
+      "pid": 329052,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 6512640
+    },
+    {
+      "pid": 329051,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 5300224
+    },
+    {
+      "pid": 329049,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 5296128
+    },
+    {
+      "pid": 329050,
+      "parentPid": 329047,
+      "executable": "postgres",
+      "rssBytes": 4292608
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 23,
+  "observedPostgresRelatedPids": [
+    329011,
+    329021,
+    329034,
+    329044,
+    329047,
+    329048,
+    329049,
+    329050,
+    329051,
+    329052,
+    329054,
+    329055,
+    329056,
+    329059,
+    329061,
+    329062,
+    329066
+  ],
+  "uniqueTempRoot": "/var/tmp/mpg-a6zppyzf",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 209,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+}

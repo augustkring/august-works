@@ -1,0 +1,32 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[21:44:07] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"402aa0fc-8e66-4cf2-b365-3fbfcc432618","actorAgentId":"52211420-7836-4998-b66f-61a6f57d77d2","responsibleUserId":"447e7455-ea9c-475c-ba03-15b932d3f012"}[39m
+[21:44:07] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"36538de4-f31e-4a1e-b2ee-1cc408064b5f","actorAgentId":"a40249a6-bb80-461f-9bc3-7a8e35a80c83","responsibleUserId":"4a844dcb-f714-4460-a902-73f234fd79a6"}[39m
+[21:44:09] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"3ff05699-6f44-4e01-a7ab-98a60ae234ef","actorAgentId":"8d7fe931-33e6-4e66-bd41-f36b03441dd4","responsibleUserId":"b92bde10-879c-4e87-8d19-fc80f2faff21"}[39m
+ ❯ |@paperclipai/server| src/services/memory/memory-maintenance.test.ts (14 tests | 14 skipped) 30190ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/memory/memory-maintenance.test.ts > Governed native Memory maintenance
+Error: Hook timed out in 30000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+ ❯ src/services/memory/memory-maintenance.test.ts:17:3
+     15|   let temp: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabas…
+     16|   const fixtureCompanies = new Set<string>();
+     17|   beforeAll(async () => { temp = await startEmbeddedPostgresTestDataba…
+       |   ^
+     18|     await enableHistory(); }, 30_000);
+     19|   afterAll(async () => temp?.cleanup());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  36 passed | 14 skipped (50)
+   Start at  21:43:12
+   Duration  132.30s (transform 29.59s, setup 1.52s, import 64.32s, tests 64.48s, environment 1ms)
+

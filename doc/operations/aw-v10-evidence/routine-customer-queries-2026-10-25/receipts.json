@@ -1,0 +1,250 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "9f5634588007bc48bdc93451c1748261ca8763d7",
+  "meaning": "Original Task/Project current Routine SQL scope beforelimits/counts/metrics/cache revalidation. Final root4files22PASS; earlier native15+lowtrustcurrentrunpositive and exact failedmock/probe corrections retained. Servercompiler0; broad Source/temporalclosure and fullworkspace remain open.",
+  "logs": [
+    {
+      "name": "routine-customer-queries-root-reviewed-final",
+      "exitCode": 0,
+      "rawSha256": "d9dabc655f66bcd012114eaf232c3ec1ba171a9508ef1867e0b1859f3a878038",
+      "sanitizedSha256": "4b45d077cb0ac8a488332a7cb5fd8e2be00f90e01455e29479dbd8a00d6d5e27",
+      "archiveSha256": "c9431021403b41501c71071f74f507637e5e6ddbc0f091c7201b5f99d97be69a",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  4 passed (4)",
+        "Tests  22 passed (22)",
+        "Duration  80.54s (transform 14.16s, setup 297ms, import 16.94s, tests 62.72s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-task-source-route-complete",
+      "exitCode": 0,
+      "rawSha256": "12bfd0a456eb6cca07c21d521ead381204d737f3a04e45f24eae9a0afc5926d8",
+      "sanitizedSha256": "f6035971968a5fa5eeae9a815b84cd2bc029150a90d38cc57d8e056c04c67a8f",
+      "archiveSha256": "4c77eb369ed3b216a68564e4de133701df1b8a77399cf4a6527f3f1f04947b77",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  15 passed (15)",
+        "Duration  42.67s (transform 12.91s, setup 78ms, import 17.18s, tests 25.30s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-task-narrow-agent-project",
+      "exitCode": 0,
+      "rawSha256": "c53667d92d062bc91a9c53b9336aa1edcb35671c0ae04705be624c127955480b",
+      "sanitizedSha256": "5e025368a21ac758910946da6203e0f098454e43281964c8d084122ca61dd178",
+      "archiveSha256": "451edb455c8252fce83a66bfb960ba053ad684e8f1a17177163f81f0990a8d0a",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 14 skipped (15)",
+        "Duration  23.75s (transform 13.68s, setup 102ms, import 18.22s, tests 5.27s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-project-reference-route-tests",
+      "exitCode": 1,
+      "rawSha256": "b40f98f104753204c6a0fcd3842431420feaa9b7ba2103ef5a2675a228d11bd7",
+      "sanitizedSha256": "b40f98f104753204c6a0fcd3842431420feaa9b7ba2103ef5a2675a228d11bd7",
+      "archiveSha256": "c83c34bfe2d28f5e504593de6d23851fdc1854c06f27de55988657dda9e3d558",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 3 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  2 failed | 2 passed (4)",
+        "Tests  3 failed | 17 passed (20)",
+        "Duration  49.13s (transform 12.82s, setup 310ms, import 25.53s, tests 22.72s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-project-reference-route-final",
+      "exitCode": 1,
+      "rawSha256": "a413f610f94dd49a9beb29f05f46ceaad3bd77b49e1826aee0b7c21d397dfcbd",
+      "sanitizedSha256": "a413f610f94dd49a9beb29f05f46ceaad3bd77b49e1826aee0b7c21d397dfcbd",
+      "archiveSha256": "976c5520434c92f67b429a6453d36dafec6401f84cbe729eb7d7bda2bedf2f73",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 2 passed (3)",
+        "Tests  2 failed | 16 passed (18)",
+        "Duration  44.89s (transform 13.23s, setup 294ms, import 25.66s, tests 18.55s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-project-list-auth-fixture",
+      "exitCode": 1,
+      "rawSha256": "0154a2bd64e923654cb6fd99b1901ac3a4b061e287fc46af12ee20e602ebf5c1",
+      "sanitizedSha256": "0154a2bd64e923654cb6fd99b1901ac3a4b061e287fc46af12ee20e602ebf5c1",
+      "archiveSha256": "9b250d1b3967d3f117ca3b21c0e6ba0f4fc0869abfb587119c0d064b3c0a7236",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed (2)",
+        "Duration  28.28s (transform 16.43s, setup 125ms, import 22.47s, tests 5.51s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-project-list-local-actor",
+      "exitCode": 1,
+      "rawSha256": "b29916a3216202ef8f03cf85b7afe1c9a879de30d6720653841ef93c6a26c945",
+      "sanitizedSha256": "b29916a3216202ef8f03cf85b7afe1c9a879de30d6720653841ef93c6a26c945",
+      "archiveSha256": "b8bb2d33f85b2324ccc7ef21367c0ffc928c0bcdac643b1255e5360c4f5ef4e7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed (2)",
+        "Duration  23.71s (transform 13.54s, setup 84ms, import 18.54s, tests 4.96s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-project-telemetry-native-tx-fixture",
+      "exitCode": 0,
+      "rawSha256": "5fbc690bef22130669ce03b2237b453f2f3e826550118e28fdc3ca2828f93d13",
+      "sanitizedSha256": "5fbc690bef22130669ce03b2237b453f2f3e826550118e28fdc3ca2828f93d13",
+      "archiveSha256": "67bfdb1e1995cf25042a67af178eb31ee38875dd3152fe3b111d741878c604fb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 1 skipped (2)",
+        "Duration  18.96s (transform 13.94s, setup 95ms, import 101ms, tests 18.60s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-project-list-decision-stub",
+      "exitCode": 1,
+      "rawSha256": "9cef10cdb3e2b9ebc7e906f9a25fbc44c719ad31116a5a201a508256d13c288e",
+      "sanitizedSha256": "9cef10cdb3e2b9ebc7e906f9a25fbc44c719ad31116a5a201a508256d13c288e",
+      "archiveSha256": "694162d5a2f096e4fb23d81ca9f1044cd392de383f78afea21eab30de697221b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Duration  19.24s (transform 13.80s, setup 86ms, import 0ms, tests 0ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-project-list-decision-stub-final",
+      "exitCode": 1,
+      "rawSha256": "4adb5036172b7b762827dfacb58dcc89e8c561525579b21eeea280faff690a99",
+      "sanitizedSha256": "4adb5036172b7b762827dfacb58dcc89e8c561525579b21eeea280faff690a99",
+      "archiveSha256": "21a74c62b01147e32853078d0771985b6c009b48ea26eb51ac9ffc015641feea",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed (2)",
+        "Duration  20.91s (transform 11.86s, setup 114ms, import 16.26s, tests 4.36s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "routine-project-list-canonical-owner-final",
+      "exitCode": 0,
+      "rawSha256": "55ca576bfdf2aa2c17657ef1219dc6a47e4325e55da1c8763a8294b2775d79d8",
+      "sanitizedSha256": "55ca576bfdf2aa2c17657ef1219dc6a47e4325e55da1c8763a8294b2775d79d8",
+      "archiveSha256": "b74c7f9367efd3dfef0aae2cf98925088162151c37ab4d48b56a69651140751a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed (2)",
+        "Duration  17.47s (transform 9.41s, setup 67ms, import 13.35s, tests 3.94s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "v10-source-routes-scheduler-check",
+      "exitCode": 1,
+      "rawSha256": "0d3a44bbc4cd5e18b3a36945a479544e25c868e7bc871fa132b0abab58b83fe8",
+      "sanitizedSha256": "0d3a44bbc4cd5e18b3a36945a479544e25c868e7bc871fa132b0abab58b83fe8",
+      "archiveSha256": "946f5c5663ab275e248dd4fbb8c0cb8c03b8641833e85d5cd24a87d036a6dafa",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "v10-routes-deadlines-reviewed-check",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

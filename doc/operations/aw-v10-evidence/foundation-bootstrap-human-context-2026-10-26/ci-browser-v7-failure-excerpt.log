@@ -1,0 +1,6 @@
+GitHub job 121336686564 — Product browser (V7, Chromium), PR merge commit e27f79539a8d22b531a7a53781839470c4790d19
+
+2026-10-26T00:28:25Z [chromium] › tests/e2e/aw-v7-authenticated.spec.ts:30:1 › V7 discovery answers, readiness and governance remain human reviewed and company scoped
+Error: 403: {"error":"Context requires its actual accountable run"}
+
+Root cause: foundationBootstrapService.collect invoked contextEngineService.assemble without the actual heartbeat Run. Its generated foundation bootstrap id is not a runtime Run, and Context correctly rejects it. The fix uses Human read-only Context inspection for pre-run discovery and passes the active publication transaction into current-source reads; agent writes use their actual live Run and bootstrap Task.

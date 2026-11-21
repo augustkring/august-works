@@ -1,0 +1,11 @@
+{
+  "scope": "Existing product identity for standalone share-title fallback and optimizer copy",
+  "sources": {
+    "ui/src/components/StandaloneBrowserControls.tsx": "d667845a4ad6d41179005a1360b6c0c8730a937bc60854c3b00e5076fa71e757",
+    "ui/src/components/workflows/WorkflowOptimizerSuggestions.tsx": "c5acd9bc89586e23c21c42f0732b4b2f6e005e3098ec70f31524142c3de8a195"
+  },
+  "bothModifiedSourcesMatchBeforeAndFinalPins": true,
+  "uiTypecheckExit": 0,
+  "uiTokenGatesExit": 0,
+  "qualification": "UI compiler durable0/full command log and process closure observed; agent attempted interruption at completion, no separate tool-closure result invented. The unused upstream Paperclip wordmark was restored unchanged; its truthful provenance aria title is not relabeled Blentera. No new tests for these reversible scalar copy changes. Full customer brand/visual/V10 gate remains open."
+}

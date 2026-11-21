@@ -1,0 +1,37 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-model-input-dispatch.integration.test.ts (9 tests | 1 failed | 8 skipped) 8144ms
+     × returns a private stable error when the dispatch profile write is rejected 275ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > returns a private stable error when the dispatch profile write is rejected
+AssertionError: expected 'Failed query: update "heartbeat_runs"…' to be 'native_model_input_dispatch_persisten…' // Object.is equality
+
+- Expected
++ Received
+
+- native_model_input_dispatch_persistence_failed
++ Failed query: update "heartbeat_runs" set "runner_profile_json" = $1, "updated_at" = $2 where "heartbeat_runs"."id" = $3
++ params: {"retainedProfileField":"synthetic-profile-canary-not-for-errors","nativeModelInputDispatchIntents":[{"eventSeq":7,"attempt":3,"responsibleUserId":"a61e543c-9bd4-4f09-b3fc-8932efe4bd2b","turnInputDigest":"bfef10deef22ebef4769a04286bce2570fdc30ca4bb28d88484786940b6d1e0f","byteSize":61,"continuation":false}]},2026-10-24T07:04:37.038Z,b6f039b3-7a86-438c-9eff-b88862bcb3a8
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:194:29
+    192|       expect(failure).toBeInstanceOf(Error);
+    193|       const error = failure as Error & { cause?: unknown };
+    194|       expect(error.message).toBe("native_model_input_dispatch_persiste…
+       |                             ^
+    195|       const serializedCause = JSON.stringify({ cause: error.cause }, (…
+    196|         value instanceof Error
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 skipped (9)
+   Start at  07:03:58
+   Duration  38.28s (transform 20.10s, setup 203ms, import 28.73s, tests 8.14s, environment 0ms)
+

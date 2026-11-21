@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "./Sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ToastProvider } from "@/context/ToastContext";
 
 const mockHeartbeatsApi = vi.hoisted(() => ({
   liveRunsForCompany: vi.fn(),
@@ -20,7 +21,17 @@ const mockInstanceSettingsApi = vi.hoisted(() => ({
   getExperimental: vi.fn(),
 }));
 
+const mockAgentsApi = vi.hoisted(() => ({ list: vi.fn() }));
+const mockAuthApi = vi.hoisted(() => ({ getSession: vi.fn() }));
+const mockSidebarPreferencesApi = vi.hoisted(() => ({ getPreferredCoworker: vi.fn(), updatePreferredCoworker: vi.fn() }));
+
+vi.mock("@/api/agents", () => ({ agentsApi: mockAgentsApi }));
+vi.mock("@/api/auth", () => ({ authApi: mockAuthApi }));
+vi.mock("@/api/sidebarPreferences", () => ({ sidebarPreferencesApi: mockSidebarPreferencesApi }));
+
 vi.mock("@/lib/router", () => ({
+  useLocation: () => ({ pathname: "/" }),
+  useNavigate: () => vi.fn(),
   NavLink: ({ to, children, className, ...props }: {
     to: string;
     children: ReactNode;
@@ -138,9 +149,11 @@ describe("Sidebar", () => {
     flushSync(() => {
       root.render(
         <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <Sidebar />
-          </TooltipProvider>
+          <ToastProvider>
+            <TooltipProvider>
+              <Sidebar />
+            </TooltipProvider>
+          </ToastProvider>
         </QueryClientProvider>,
       );
     });
@@ -154,6 +167,10 @@ describe("Sidebar", () => {
     document.body.appendChild(container);
     mockHeartbeatsApi.liveRunsForCompany.mockResolvedValue([]);
     mockAttentionApi.list.mockResolvedValue({ items: [] });
+    mockAgentsApi.list.mockResolvedValue([]);
+    mockAuthApi.getSession.mockResolvedValue({ user: null });
+    mockSidebarPreferencesApi.getPreferredCoworker.mockResolvedValue({ agentId: null, updatedAt: null });
+    mockSidebarPreferencesApi.updatePreferredCoworker.mockResolvedValue({ agentId: null, updatedAt: null });
     mockSidebar.isMobile = false;
     mockSidebar.collapsed = false;
     mockSidebar.collapseLocked = false;

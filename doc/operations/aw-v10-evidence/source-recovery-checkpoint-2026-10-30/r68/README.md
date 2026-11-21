@@ -1,0 +1,3 @@
+# R68 recovery delta
+
+Recovery only. This delta extends R67 Host53 with the changed/new frozen Host60 source paths, exact pins and runner, R1072 claim patch and its scoped actual-PostgreSQL 11-test receipt, compact closed Host54–60 status/restore evidence, the small storage recovery receipt, and current root note/aggregate helper. Active Host60 qualification output and unchanged source bundles and bulky Host60 outputs are excluded. Host54–59 evidence preserves diagnostic failures; Host60 first claim passed 11/11 while its targeted Worker route remains failed. This checkpoint does not claim final qualification.

@@ -1,0 +1,16 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[14:16:53] [33mWARN[39m: [36mNative replacement remains pending; another sweep will retry its durable decision[39m [90m{"runId":"740932d0-8521-4879-a893-970e08a917a3"}[39m
+[14:16:53] [33mWARN[39m: [36mNative replacement remains pending; another sweep will retry its durable decision[39m [90m{"runId":"740932d0-8521-4879-a893-970e08a917a3"}[39m
+[14:17:47] [33mWARN[39m: [36mExecution status delivery remains pending[39m [90m{"runId":"ce6d3864-a292-4097-9807-63f864800f3c"}[39m
+[14:18:37] [33mWARN[39m: [36mReconciled execution continuation remains pending for retry[39m [90m{"recoveryActionId":"0571e0f4-1554-4c1a-a269-0d79b24c4cfb"}[39m
+
+ Test Files  2 passed (2)
+      Tests  74 passed (74)
+   Start at  14:14:36
+   Duration  245.83s (transform 39.84s, setup 506ms, import 75.86s, tests 168.05s, environment 1ms)
+

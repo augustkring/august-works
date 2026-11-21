@@ -109,6 +109,18 @@ export function AgentRuntimeCandidates({ company, principal, draft, enabled, sel
       {catalog.isFetching ? <p role="status">{t("runtimeCandidates.checking")}</p> : catalog.isError ? <div className="space-y-2">
         <p role="status">{t("runtimeCandidates.unavailable")}</p><Button variant="outline" className="min-h-11" onClick={() => { if (current(true)) void catalog.refetch(); }}>{t("tryAgain")}</Button>
       </div> : <>
+        {catalog.data?.agentId && <div className="space-y-1 rounded-md border p-3" aria-label={t("runtimeCandidates.lifecycleInventory")}>
+          <p className="font-medium">{t("runtimeCandidates.currentLifecycle", { status: catalog.data.lifecycleInventory.status })}</p>
+          {catalog.data.lifecycleInventory.model && <p>{t("runtimeCandidates.currentModel", { model: catalog.data.lifecycleInventory.model })}</p>}
+          {catalog.data.lifecycleInventory.retirementAt && <p role="alert">{t("runtimeCandidates.retirementAt", { at: catalog.data.lifecycleInventory.retirementAt })}</p>}
+          {catalog.data.lifecycleInventory.regionOrRoutingProfile && <p>{t("runtimeCandidates.region", { value: catalog.data.lifecycleInventory.regionOrRoutingProfile })}</p>}
+          {catalog.data.lifecycleInventory.dataUseProfile && <p>{t("runtimeCandidates.dataUse", { value: catalog.data.lifecycleInventory.dataUseProfile })}</p>}
+          {catalog.data.lifecycleInventory.unresolvedProfileReference && <p role="alert">{t("runtimeCandidates.unresolvedProfile")}</p>}
+          {catalog.data.lifecycleInventory.publishedWorkflows.length > 0 && <div>
+            <p>{t("runtimeCandidates.affectedWorkflows")}</p><ul className="list-disc pl-5">{catalog.data.lifecycleInventory.publishedWorkflows.map(workflow =>
+              <li key={`${workflow.workflowId}:${workflow.revisionId}`}>{workflow.name}</li>)}</ul>
+          </div>}
+        </div>}
         <label className="block space-y-2">{t("runtimeCandidates.profile")}<select className="min-h-11 w-full rounded-md border bg-background p-2"
           value={profileId} disabled={!!createAttempt.current || operation.isPending || !authority.writeReady} onChange={event => setProfileId(event.target.value)}>
           <option value="">{t("runtimeCandidates.choose")}</option>{catalog.data?.choices.map(choice => <option key={choice.modelProfileId} value={choice.modelProfileId}>{choice.model}</option>)}

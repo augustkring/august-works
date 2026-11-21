@@ -1,0 +1,39 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/packages/adapters/openclaw-gateway
+
+ ❯ openclaw-extension/bridge-boundary.unit.test.ts (4 tests | 1 failed) 45ms
+     × rejects stale contract, assignment, capability, or Skill pins before tool discovery 10ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  openclaw-extension/bridge-boundary.unit.test.ts > Blentera OpenClaw governed bridge protocol v1 > rejects stale contract, assignment, capability, or Skill pins before tool discovery
+AssertionError: promise resolved "{ protocolVersion: 1, …(3) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "pluginVersion": "1.0.0",
++   "protocolVersion": 1,
++   "toolCount": 1,
++   "toolsHash": "f7ec6b85f341f0746e307b5efa36f9c325613c4fc6a1a070b9308f3c63a72517",
+  }
+
+ ❯ openclaw-extension/bridge-boundary.unit.test.ts:124:93
+    122|       const fetchImpl = bindingFetch({ mutateAttestation });
+    123|       const api = harness(fetchImpl);
+    124|       await expect(invokeHandler(api.methods.get("blentera.platform.bi…
+       |                                                                                             ^
+    125|       expect(fetchImpl).toHaveBeenCalledTimes(1);
+    126|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  07:28:12
+   Duration  1.10s (transform 712ms, setup 0ms, import 941ms, tests 45ms, environment 0ms)
+

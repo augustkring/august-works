@@ -341,8 +341,8 @@ describe("worker configChanged cross-tenant guard", () => {
       pending.delete(String(message.id));
     });
 
-    async function initialize() {
-      await callWorker("initialize", {
+    async function initialize(manifestPatch: Record<string, unknown> = {}) {
+      return callWorker("initialize", {
         manifest: {
           id: "paperclip.config-guard-test",
           apiVersion: 1,
@@ -353,6 +353,7 @@ describe("worker configChanged cross-tenant guard", () => {
           categories: ["automation"],
           capabilities: [],
           entrypoints: {},
+          ...manifestPatch,
         },
         config: {},
         databaseNamespace: null,
@@ -481,6 +482,56 @@ describe("worker configChanged cross-tenant guard", () => {
         { companyId: "company-a", token: "xoxb-A" },
         { companyId: "company-b", token: "xoxb-B" },
       ]);
+    } finally {
+      stop();
+    }
+  });
+
+  it("dispatches durable resource lifecycle events without rounding decimal revisions", async () => {
+    const received: unknown[] = [];
+    const plugin = definePlugin({
+      async setup() {},
+      async onResourceLifecycle(event) {
+        received.push(event);
+        return { eventId: event.id, status: "acknowledged" };
+      },
+    });
+    const { callWorker, initialize, stop } = makeWorker(plugin);
+    const manifest = {
+      capabilities: ["events.subscribe", "agents.lifecycle.manage"],
+      agentLifecycle: true,
+      resourceLifecycle: ["agent_runtime"],
+    };
+    const event = {
+      id: "9007199254740993123456789",
+      companyId: "company-a",
+      resourceType: "agent_runtime",
+      resourceId: "agent-a",
+      action: "update",
+      createdAt: new Date(0).toISOString(),
+    };
+
+    try {
+      await initialize(manifest);
+      await expect(callWorker("resourceLifecycle", event)).resolves.toEqual({
+        eventId: event.id,
+        status: "acknowledged",
+      });
+      expect(received).toEqual([event]);
+    } finally {
+      stop();
+    }
+  });
+
+  it("fails initialization if a lifecycle consumer does not implement its declared callback", async () => {
+    const plugin = definePlugin({ async setup() {} });
+    const { initialize, stop } = makeWorker(plugin);
+    try {
+      await expect(initialize({
+        capabilities: ["events.subscribe", "agents.lifecycle.manage"],
+        agentLifecycle: true,
+        resourceLifecycle: ["agent_runtime"],
+      })).rejects.toThrow("does not implement onResourceLifecycle");
     } finally {
       stop();
     }

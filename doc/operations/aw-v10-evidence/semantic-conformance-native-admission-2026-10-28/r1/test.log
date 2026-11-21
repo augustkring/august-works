@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+[13:12:19] [33mWARN[39m: [36mresponsible-user company access intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","action":"company_access","companyId":"10000000-0000-4000-8000-000000000001","actorAgentId":"10000000-0000-4000-8000-000000000002","responsibleUserId":"semantic-conformance-human","method":"PATCH"}[39m
+ × src/__tests__/paperclip-semantic-conformance.test.ts > Paperclip semantic mock/production conformance > matches authorization, state, audit, retry, document, continuation, and terminal semantics 632ms
+   → Semantic conformance mismatch for cross-company-dependency-denial (set_dependencies) at $.authorization.code; expected "company_scope_violation", actual "operation_not_authorized"; suspected source: production_binding; paperclip-production-services differs from capability-mock
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/paperclip-semantic-conformance.test.ts > Paperclip semantic mock/production conformance > matches authorization, state, audit, retry, document, continuation, and terminal semantics
+SemanticConformanceMismatchError: Semantic conformance mismatch for cross-company-dependency-denial (set_dependencies) at $.authorization.code; expected "company_scope_violation", actual "operation_not_authorized"; suspected source: production_binding; paperclip-production-services differs from capability-mock
+ ❯ mismatchError ../packages/paperclip-runner/src/conformance/semantic-conformance.ts:227:10
+    225|     }
+    226|   }
+    227|   return new SemanticConformanceMismatchError(
+       |          ^
+    228|     vector.id,
+    229|     vector.operationId,
+ ❯ Module.runSemanticConformanceKit ../packages/paperclip-runner/src/conformance/semantic-conformance.ts:172:15
+ ❯ src/__tests__/paperclip-semantic-conformance.test.ts:84:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'semantic_conformance_mismatch', vectorId: 'cross-company-dependency-denial', operationId: 'set_dependencies', baselineAdapterId: 'capability-mock', mismatchedAdapterId: 'paperclip-production-services', suspectedSource: 'production_binding', diffs: [ { path: '$.authorization.code', expected: 'company_scope_violation', actual: 'operation_not_authorized' }, { path: '$.receipt.authorizationBoundary', expected: 'company', actual: 'active_task' }, { path: '$.receipt.code', expected: 'company_scope_violation', actual: 'operation_not_authorized' } ], observations: { 'capability-mock': { authorization: { outcome: 'denied', code: 'company_scope_violation' }, state: { task: { status: 'in_progress' }, comments: [], documents: [], dependencies: [], interactions: [], wakes: [] }, effects: [], audit: [], receipt: { schema: 'paperclip.prp.semantic_tool.v1', schemaVersion: 1, phase: 'result', operationId: 'set_dependencies', callId: 'cross-company-dependency-denial', idempotencyKeyPresent: true, outcome: 'denied', code: 'company_scope_violation', retryable: false, authorizationBoundary: 'company', operationReceiptPresent: true, inputDigestPresent: true, outputDigestPresent: true, currentRevisionPresent: true } }, 'paperclip-production-services': { authorization: { outcome: 'denied', code: 'operation_not_authorized' }, state: { task: { status: 'in_progress' }, comments: [], documents: [], dependencies: [], interactions: [], wakes: [] }, effects: [], audit: [], receipt: { schema: 'paperclip.prp.semantic_tool.v1', schemaVersion: 1, phase: 'result', operationId: 'set_dependencies', callId: 'cross-company-dependency-denial', idempotencyKeyPresent: true, outcome: 'denied', code: 'operation_not_authorized', retryable: false, authorizationBoundary: 'active_task', operationReceiptPresent: true, inputDigestPresent: true, outputDigestPresent: true, currentRevisionPresent: true } } } }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  13:11:53
+   Duration  25.53s (transform 13.28s, setup 69ms, import 18.72s, tests 6.63s, environment 0ms)
+

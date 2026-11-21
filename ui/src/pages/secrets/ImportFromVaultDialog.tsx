@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -284,10 +285,10 @@ function validateDraftRow(
 
   for (const existingSecret of existing) {
     if (existingSecret.name.trim().toLowerCase() === lowerName) {
-      return "A Paperclip secret already uses this name.";
+      return `A ${PRODUCT_IDENTITY.productName} secret already uses this name.`;
     }
     if (existingSecret.key.trim().toLowerCase() === lowerKey) {
-      return "A Paperclip secret already uses this key.";
+      return `A ${PRODUCT_IDENTITY.productName} secret already uses this key.`;
     }
   }
 
@@ -658,7 +659,7 @@ export function ImportFromVaultDialog({
               Import from AWS Secrets Manager
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Bring AWS-managed secrets into Paperclip as external references.
+              Bring AWS-managed secrets into {PRODUCT_IDENTITY.productName} as external references.
             </DialogDescription>
             <Stepper step={step} />
           </div>
@@ -1245,7 +1246,7 @@ function ReviewStep({ drafts, reviewErrors, updateDraft, removeDraft, importing 
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <label className="flex flex-col gap-1 text-xs">
-                      <span className="text-muted-foreground">Paperclip name</span>
+                      <span className="text-muted-foreground">{PRODUCT_IDENTITY.productName} name</span>
                       <Input
                         value={draft.name}
                         onChange={(e) =>

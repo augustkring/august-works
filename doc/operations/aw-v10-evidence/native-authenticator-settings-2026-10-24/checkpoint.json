@@ -1,0 +1,51 @@
+{
+  "parentCommit": "be098d8ff7c5b33e318892e82db1171de9acdb1f",
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "nativeHttpPostgres": {
+      "exit": 0,
+      "passed": 50,
+      "suites": 4
+    },
+    "sessionRoutesAndMiddleware": {
+      "exit": 0,
+      "passed": 38,
+      "suites": 2
+    },
+    "ui": {
+      "exit": 0,
+      "passed": 81,
+      "suites": 5
+    },
+    "serverCompiler": {
+      "exit": 0
+    },
+    "uiCompilerIncludingTests": {
+      "exit": 0
+    },
+    "tokenGates": {
+      "exit": 0
+    },
+    "builtApplicationChromium151": {
+      "exit": 0,
+      "passed": 1,
+      "testSeconds": 16.7,
+      "totalSeconds": 55.7
+    }
+  },
+  "observations": [
+    "Native expected-user and optional expected-session headers narrow actual cookie/challenge authority; enrollment/recovery/verification responses identify the actual replacement session. Wrong-principal native requests are refused before their intended mutation.",
+    "Pending cancellation is current-proof guarded and cannot disable a verified factor. An absent factor permits a safe repeated no-op; an old source-session retry cannot delete a newer enrollment. Browser retry retains only the original session ID after clearing private setup material.",
+    "The first built-browser failure exposes the original synthetic per-user /get-session ID. Native actors now return the actual native session identity; missing native identity is unauthorized. Separate local/cloud provenance remains explicit.",
+    "A real-session browser stage reaches setup but loses its native cookie during overlapping status reads. Background native status reads are held/cancelled during rotation. A subsequent stage completes code replacement and disable, then fails only because its test incorrectly expected null instead of the custom route's actual 401 after logout; that test expectation is corrected.",
+    "A later browser run fails while replacing recovery codes after true recovery verification, exposing a refresh tied to an observer query rather than its concrete response. Refresh now reads a new canonical response; subsequent native writes use the actual verified response session ID. Private presentation still requires an idle current-principal cache with the exact response session.",
+    "Final built-browser lifecycle passes real setup, maintained TOTP activation and recent confirmation, session rotation, one-use recovery verification, recovery replacement, disabling and forced sign-out, new password sign-in, and pending cancellation. It also checks focus and absence of setup/recovery secrets from browser storage/history. No route mocks or crypto/clock mocks qualify this browser run.",
+    "Final complete native suites pass50, route/middleware suites38, UI suites81, and both targeted compilers/token gates return0. UI production build is exercised by the browser; this is not a full workspace build/test claim."
+  ],
+  "limits": [
+    "Passkey UV ceremonies, configured-operator admission/bootstrap, enterprise recovery/restrictions and other powerful-action guards remain open. Passwordless enrollment is explicitly unavailable in the current UI; no local password is invented.",
+    "This disposable private deployment does not qualify SaaS email/provider delivery, external IdP, physical authenticators, deployed replicas/restarts/clock alignment, restore or production hosts.",
+    "The browser uses no screenshots/traces for private ceremonies. Automated focus checks are not complete manual accessibility/password-manager or representative Human qualification.",
+    "Original payload-source privacy, typed workflow/routine origins, portability and other V10 work remain open; latest full pnpm -r typecheck, pnpm test:run and pnpm build remain required before PR-ready hand-off. No PR/release readiness is claimed."
+  ]
+}

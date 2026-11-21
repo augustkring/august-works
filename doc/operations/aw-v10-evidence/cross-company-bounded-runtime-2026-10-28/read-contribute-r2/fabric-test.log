@@ -1,0 +1,38 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > negative triggers veto selection and empty trigger sets do not match every task
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > does not discard required Role Pack Skills when their resolver is disabled
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > allows explicitly authorized guest act forecasts, denies read/contribute mutations and rechecks revoked humans
+ × src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > preserves current-Human guest read and contribution within bounded plans while keeping guest act blocked 3612ms
+   → expected false to be true // Object.is equality
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > pins immutable provenance, rechecks resumed runs and rejects revoked human membership
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > routes guest connected tools through current local authority and denies writes/revoked result disclosure
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > preserves current-Human guest read and contribution within bounded plans while keeping guest act blocked
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/agent-runtime-fabric-v5.test.ts:216:143
+    214|       const readGuestRef = readPrepared!.inputContextManifests.find(re…
+    215|       const readItems = await db.select().from(contextManifestItems).w…
+    216|       expect(readItems.some(item => item.sourceProvider === "august_wo…
+       |                                                                                                                                               ^
+    217|       expect(readItems.every(item => item.sourceClass !== "private_mem…
+    218|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  15:01:57
+   Duration  23.42s (transform 10.57s, setup 79ms, import 15.40s, tests 7.78s, environment 0ms)
+

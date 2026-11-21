@@ -1,0 +1,94 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "62bb10422c538e3a2391ab5efdae4886d4684897",
+  "meaning": "Exact native input-attempt UUID and backend returned turn identity; not model delivery or complete source/output provenance. Full runtime142, native PG27, focused executor2.",
+  "logs": [
+    {
+      "name": "native-turn-ack-runtime-full",
+      "exitCode": 1,
+      "rawSha256": "a020297a8d439384dbf56f6697ad51f71bd67f11ed8bd76afcd184b9f0b3fcad",
+      "sanitizedSha256": "a020297a8d439384dbf56f6697ad51f71bd67f11ed8bd76afcd184b9f0b3fcad",
+      "archiveSha256": "21953d8a2d768ef989ee2fee3aa4389d976f1bf651cf69e2933d1b35e40c15ab",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "native-turn-ack-runtime-full-final",
+      "exitCode": 0,
+      "rawSha256": "55f4967ade2ca7e3337371d8053cdc2ced8e654b059a549ef139a558588db643",
+      "sanitizedSha256": "55f4967ade2ca7e3337371d8053cdc2ced8e654b059a549ef139a558588db643",
+      "archiveSha256": "908f3efa2903517b9e62330f438d7a71239dc403ba643eab1064aaf4e618b006",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  142 passed (142)",
+        "Duration  3.97s (transform 1.17s, setup 0ms, import 1.35s, tests 2.49s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-turn-ack-pg-final",
+      "exitCode": 0,
+      "rawSha256": "362649150b31c47ff2c3e1039580aa11849f4120b5f83928c877de658fbfff3c",
+      "sanitizedSha256": "362649150b31c47ff2c3e1039580aa11849f4120b5f83928c877de658fbfff3c",
+      "archiveSha256": "84791b933bbaeef3be76e8feb902fed00cc507b8dba434d2bbd8047c12c9d9da",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  27 passed (27)",
+        "Duration  23.34s (transform 11.31s, setup 81ms, import 15.29s, tests 7.85s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-turn-ack-executor-final",
+      "exitCode": 0,
+      "rawSha256": "6b8cdf5bfc58c2bc4844d6947f3242af90d34d41bd406e3b50cffea0db2a19ac",
+      "sanitizedSha256": "6b8cdf5bfc58c2bc4844d6947f3242af90d34d41bd406e3b50cffea0db2a19ac",
+      "archiveSha256": "4367558f2d6ee65356eb229b550d09078181ecdd1129abae9de635c7e7d22789",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 471 skipped (473)",
+        "Duration  16.87s (transform 12.57s, setup 83ms, import 16.55s, tests 110ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-turn-ack-runner-build",
+      "exitCode": 0,
+      "rawSha256": "943eaf99e874d6f4c41bf952d7c9ab9a87466c54185d5c02ceda4d37ac3e5f5b",
+      "sanitizedSha256": "943eaf99e874d6f4c41bf952d7c9ab9a87466c54185d5c02ceda4d37ac3e5f5b",
+      "archiveSha256": "3c6109a6f99ce7db38d647ae3783cc7a5560f9098af2ac19f8632b4ba31c71b1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

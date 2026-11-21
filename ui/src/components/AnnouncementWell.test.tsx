@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { HealthStatus } from "@/api/health";
 import { AnnouncementWell } from "./AnnouncementWell";
 import { announcementPreview } from "@/lib/announcement-preview";
@@ -18,22 +19,30 @@ vi.mock("@/hooks/useAnnouncement", () => ({ useAnnouncement: (options: { enabled
   state.hook(options);
   return { announcement: options.enabled ? announcementPreview : null, dismiss: state.dismiss };
 } }));
+vi.mock("@/api/product-notices", () => ({ productNoticesApi: { capabilityLifecycle: vi.fn().mockResolvedValue({ notices: [] }) } }));
 vi.mock("./AnnouncementCard", () => ({ AnnouncementCard: ({ onDismiss }: { onDismiss: () => void }) => <button onClick={onDismiss}>Dismiss fixture</button> }));
+vi.mock("./MandatoryProductNotices", () => ({ MandatoryProductNotices: ({ companyId, userId }: { companyId: string | null; userId: string | null }) =>
+  companyId && userId ? <section data-testid="mandatory-notices">Required notice</section> : null }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("announcement placement gates", () => {
   let container: HTMLDivElement;
   let root: Root;
+  let queryClient: QueryClient;
   let health: HealthStatus;
-  const render = async () => { await act(async () => root.render(<AnnouncementWell health={health} />)); };
-  const visible = () => Boolean(container.querySelector('[aria-label="Paperclip announcements"]'));
+  const render = async () => { await act(async () => root.render(
+    <QueryClientProvider client={queryClient}><AnnouncementWell health={health} /></QueryClientProvider>,
+  )); };
+  const visible = () => Boolean(container.querySelector('[aria-label="Blentera announcements"]'));
+  const mandatoryVisible = () => Boolean(container.querySelector('[data-testid="mandatory-notices"]'));
   beforeEach(() => {
     Object.assign(state, { userId: "alice", settled: true, companyId: "company", loading: false, onboardingOpen: false, toasts: [] });
     vi.clearAllMocks();
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
     health = { deploymentMode: "authenticated" } as HealthStatus;
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   });
-  afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+  afterEach(async () => { await act(async () => root.unmount()); queryClient.clear(); container.remove(); });
   it("waits for identity, company and onboarding, and uses local-board in no-login mode", async () => {
     state.settled = false; await render(); expect(visible()).toBe(false);
     state.settled = true; state.loading = true; await render(); expect(visible()).toBe(false);
@@ -41,15 +50,18 @@ describe("announcement placement gates", () => {
     state.onboardingOpen = false; await render(); expect(visible()).toBe(true);
     state.userId = null; await render(); expect(visible()).toBe(false);
     health = { deploymentMode: "local_trusted" } as HealthStatus; await render(); expect(visible()).toBe(true);
+    expect(mandatoryVisible()).toBe(false);
     expect(state.hook).toHaveBeenLastCalledWith(expect.objectContaining({ userId: "local-board", enabled: true }));
   });
   it("yields to toasts and modal/command dialogs without dismissing", async () => {
     await render(); expect(visible()).toBe(true);
+    expect(mandatoryVisible()).toBe(true);
     state.toasts = [{}]; await render(); expect(visible()).toBe(false);
+    expect(mandatoryVisible()).toBe(true);
     state.toasts = []; await render(); expect(visible()).toBe(true);
     const dialog = document.createElement("div"); dialog.setAttribute("role", "dialog"); dialog.setAttribute("data-state", "open");
-    await act(async () => { document.body.append(dialog); }); expect(visible()).toBe(false);
-    await act(async () => { dialog.remove(); }); expect(visible()).toBe(true);
+    await act(async () => { document.body.append(dialog); }); expect(visible()).toBe(false); expect(mandatoryVisible()).toBe(true);
+    await act(async () => { dialog.remove(); }); expect(visible()).toBe(true); expect(mandatoryVisible()).toBe(true);
     expect(state.dismiss).not.toHaveBeenCalled();
   });
   it("waits for an explicit disclosure action and preserves the existing dismissal owner", async () => {

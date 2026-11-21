@@ -1,0 +1,57 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/issue-queued-comment-queue.test.ts (9 tests | 1 failed) 42ms
+     × projects a known queued Comment without transporting its internal payload proof 18ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/issue-queued-comment-queue.test.ts > buildQueuedCommentQueueSnapshot entry permissions > projects a known queued Comment without transporting its internal payload proof
+AssertionError: expected { id: 'comment-1', …(6) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ src/services/issue-queued-comment-queue.test.ts:123:48
+    121|     const queue = buildQueuedCommentQueueSnapshot({ ...baseFacts, acto…
+    122|     expect(queue.entries[0]!.comment.body).toBe("Visible body");
+    123|     expect.soft(queue.entries[0]!.comment).not.toHaveProperty("payload…
+       |                                                ^
+    124|     expect.soft(queue.entries[0]!.comment).not.toHaveProperty("payload…
+    125|     expect(queue.entries[0]!.comment.metadata).toEqual(metadata);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/services/issue-queued-comment-queue.test.ts > buildQueuedCommentQueueSnapshot entry permissions > projects a known queued Comment without transporting its internal payload proof
+AssertionError: expected { id: 'comment-1', …(6) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "internal": "Native-only source closure",
+}
+
+ ❯ src/services/issue-queued-comment-queue.test.ts:124:48
+    122|     expect(queue.entries[0]!.comment.body).toBe("Visible body");
+    123|     expect.soft(queue.entries[0]!.comment).not.toHaveProperty("payload…
+    124|     expect.soft(queue.entries[0]!.comment).not.toHaveProperty("payload…
+       |                                                ^
+    125|     expect(queue.entries[0]!.comment.metadata).toEqual(metadata);
+    126|     expect(comment.payloadSourceSnapshot).toEqual({ internal: "Native-…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  05:55:54
+   Duration  1.00s (transform 75ms, setup 257ms, import 87ms, tests 42ms, environment 0ms)
+

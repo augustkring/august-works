@@ -14,7 +14,7 @@
  * @see PLUGIN_SPEC.md §27.2 — Local Development Workflow
  */
 import chokidar, { type FSWatcher } from "chokidar";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { logger } from "../middleware/logger.js";
 import type { PluginLifecycleManager } from "./plugin-lifecycle.js";
@@ -160,25 +160,75 @@ export function createPluginDevWatcher(
   lifecycle: PluginLifecycleManager,
   resolvePluginPackagePath?: ResolvePluginPackagePath,
   fsDeps?: PluginDevWatcherFsDeps,
+  options: { unwatchedRoots?: readonly string[] } = {},
 ): PluginDevWatcher {
-  const watchers = new Map<string, FSWatcher>();
+  const watchers = new Map<string, { watcher: FSWatcher; packagePath: string }>();
   const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const registrations = new Map<string, number>();
+  let registrationGeneration = 0;
+  let closed = false;
   const fileExists = fsDeps?.existsSync ?? existsSync;
+  const pathForms = (target: string): string[] => {
+    const resolved = path.resolve(target);
+    try {
+      return [resolved, realpathSync(resolved)];
+    } catch {
+      return [resolved];
+    }
+  };
+  const unwatchedRoots = (options.unwatchedRoots ?? []).flatMap(pathForms);
+  const isUnwatched = (target: string): boolean => pathForms(target).some((candidate) => unwatchedRoots.some((root) => {
+    const relative = path.relative(root, candidate);
+    return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+  }));
+  function beginRegistration(pluginId: string): number {
+    const registration = ++registrationGeneration;
+    registrations.set(pluginId, registration);
+    return registration;
+  }
+  function finishRegistration(pluginId: string, registration: number): void {
+    if (registrations.get(pluginId) === registration) registrations.delete(pluginId);
+  }
   log.info(
     { resolvesInstalledPlugins: Boolean(resolvePluginPackagePath) },
     "plugin-dev-watcher: initialized",
   );
 
-  function watchPlugin(pluginId: string, packagePath: string): void {
-    // Don't double-watch
-    if (watchers.has(pluginId)) return;
+  function closeActiveWatcher(pluginId: string): void {
+    const active = watchers.get(pluginId);
+    if (active) {
+      void active.watcher.close();
+      watchers.delete(pluginId);
+    }
+    const timer = debounceTimers.get(pluginId);
+    if (timer) {
+      clearTimeout(timer);
+      debounceTimers.delete(pluginId);
+    }
+  }
 
+  function watchPlugin(pluginId: string, packagePath: string, registration = beginRegistration(pluginId)): void {
+    if (closed || registrations.get(pluginId) !== registration) return;
     const absPath = path.resolve(packagePath);
+    const currentWatcher = watchers.get(pluginId);
+    if (currentWatcher?.packagePath === absPath) {
+      // A newer successful lookup resolved to the same path; keep the active
+      // watcher and its pending debounce intact.
+      finishRegistration(pluginId, registration);
+      return;
+    }
+    closeActiveWatcher(pluginId);
+    if (isUnwatched(absPath)) {
+      log.debug({ pluginId }, "plugin-dev-watcher: package path is under an immutable root, skipping watch");
+      finishRegistration(pluginId, registration);
+      return;
+    }
     if (!fileExists(absPath)) {
       log.warn(
         { pluginId, packagePath: absPath },
         "plugin-dev-watcher: package path does not exist, skipping watch",
       );
+      finishRegistration(pluginId, registration);
       return;
     }
 
@@ -189,6 +239,7 @@ export function createPluginDevWatcher(
           { pluginId, packagePath: absPath },
           "plugin-dev-watcher: no valid watch targets found, skipping watch",
         );
+        finishRegistration(pluginId, registration);
         return;
       }
 
@@ -208,35 +259,39 @@ export function createPluginDevWatcher(
       );
 
       watcher.on("all", (_eventName, changedPath) => {
+        const active = watchers.get(pluginId);
+        if (closed || !active || active.watcher !== watcher) return;
         const relativePath = path.relative(absPath, changedPath);
         if (shouldIgnorePath(relativePath)) return;
 
         const existing = debounceTimers.get(pluginId);
         if (existing) clearTimeout(existing);
 
-        debounceTimers.set(
-          pluginId,
-          setTimeout(() => {
-            debounceTimers.delete(pluginId);
-            log.info(
-              { pluginId, changedFile: relativePath || path.basename(changedPath) },
-              "plugin-dev-watcher: file change detected, restarting worker",
-            );
+        const timer = setTimeout(() => {
+          if (debounceTimers.get(pluginId) === timer) debounceTimers.delete(pluginId);
+          const current = watchers.get(pluginId);
+          if (closed || !current || current.watcher !== watcher) return;
+          log.info(
+            { pluginId, changedFile: relativePath || path.basename(changedPath) },
+            "plugin-dev-watcher: file change detected, restarting worker",
+          );
 
-            lifecycle.restartWorker(pluginId).catch((err) => {
-              log.warn(
-                {
-                  pluginId,
-                  err: err instanceof Error ? err.message : String(err),
-                },
-                "plugin-dev-watcher: failed to restart worker after file change",
-              );
-            });
-          }, DEBOUNCE_MS),
-        );
+          lifecycle.restartWorker(pluginId).catch((err) => {
+            log.warn(
+              {
+                pluginId,
+                err: err instanceof Error ? err.message : String(err),
+              },
+              "plugin-dev-watcher: failed to restart worker after file change",
+            );
+          });
+        }, DEBOUNCE_MS);
+        debounceTimers.set(pluginId, timer);
       });
 
       watcher.on("error", (err) => {
+        const active = watchers.get(pluginId);
+        if (!active || active.watcher !== watcher) return;
         log.warn(
           {
             pluginId,
@@ -248,7 +303,8 @@ export function createPluginDevWatcher(
         unwatchPlugin(pluginId);
       });
 
-      watchers.set(pluginId, watcher);
+      watchers.set(pluginId, { watcher, packagePath: absPath });
+      finishRegistration(pluginId, registration);
       log.info(
         {
           pluginId,
@@ -261,6 +317,7 @@ export function createPluginDevWatcher(
         "plugin-dev-watcher: watching local plugin for changes",
       );
     } catch (err) {
+      finishRegistration(pluginId, registration);
       log.warn(
         {
           pluginId,
@@ -273,27 +330,20 @@ export function createPluginDevWatcher(
   }
 
   function unwatchPlugin(pluginId: string): void {
-    const pluginWatcher = watchers.get(pluginId);
-    if (pluginWatcher) {
-      void pluginWatcher.close();
-      watchers.delete(pluginId);
-    }
-    const timer = debounceTimers.get(pluginId);
-    if (timer) {
-      clearTimeout(timer);
-      debounceTimers.delete(pluginId);
-    }
+    registrations.delete(pluginId);
+    closeActiveWatcher(pluginId);
   }
 
   function close(): void {
+    if (closed) return;
+    closed = true;
     lifecycle.off("plugin.loaded", handlePluginLoaded);
     lifecycle.off("plugin.enabled", handlePluginEnabled);
     lifecycle.off("plugin.disabled", handlePluginDisabled);
     lifecycle.off("plugin.unloaded", handlePluginUnloaded);
 
-    for (const [pluginId] of watchers) {
-      unwatchPlugin(pluginId);
-    }
+    for (const [pluginId] of watchers) closeActiveWatcher(pluginId);
+    registrations.clear();
   }
 
   async function watchLocalPluginById(pluginId: string): Promise<void> {
@@ -305,17 +355,22 @@ export function createPluginDevWatcher(
       return;
     }
 
+    const registration = beginRegistration(pluginId);
     try {
       const packagePath = await resolvePluginPackagePath(pluginId);
+      if (closed || registrations.get(pluginId) !== registration) return;
       if (!packagePath) {
+        finishRegistration(pluginId, registration);
+        closeActiveWatcher(pluginId);
         log.debug(
           { pluginId },
           "plugin-dev-watcher: plugin is not a local-path install, skipping watch",
         );
         return;
       }
-      watchPlugin(pluginId, packagePath);
+      watchPlugin(pluginId, packagePath, registration);
     } catch (err) {
+      finishRegistration(pluginId, registration);
       log.warn(
         {
           pluginId,
@@ -348,7 +403,9 @@ export function createPluginDevWatcher(
   lifecycle.on("plugin.unloaded", handlePluginUnloaded);
 
   return {
-    watch: watchPlugin,
+    watch: (pluginId, packagePath) => {
+      if (!closed) watchPlugin(pluginId, packagePath);
+    },
     unwatch: unwatchPlugin,
     close,
   };

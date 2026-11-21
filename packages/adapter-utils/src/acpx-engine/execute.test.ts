@@ -32,6 +32,7 @@ import {
   geminiVersionSupportsNativeAcpFlag,
   parseGeminiVersionParts,
   referencedSourceContentSignature,
+  resolveStalledToolTimeoutMs,
   rewriteGeminiAcpFlagForVersion,
   summarizeAcpxTurnUsage,
   type AcpxEngineExecutorOptions,
@@ -380,6 +381,183 @@ const ALLOWED_TURN_SPAN_ATTRIBUTE_KEYS = new Set<string>([
 ]);
 
 describe("shared ACPX engine runtime behavior", () => {
+  it("keeps the Claude watchdog above tool bounds, disabled for other agents, and within the approved ceiling", () => {
+    expect(resolveStalledToolTimeoutMs({}, {}, "claude")).toBe(30 * 60 * 1000);
+    expect(resolveStalledToolTimeoutMs({}, { MCP_TOOL_TIMEOUT: "1800000" }, "claude")).toBe(45 * 60 * 1000);
+    expect(resolveStalledToolTimeoutMs({}, { BASH_MAX_TIMEOUT_MS: "999999999999999999999" }, "claude")).toBe(0);
+    expect(resolveStalledToolTimeoutMs({}, { MCP_TOOL_TIMEOUT: "Infinity" }, "claude")).toBe(0);
+    expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: 0 }, {}, "claude")).toBe(0);
+    expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: 0.0001 }, {}, "claude")).toBe(1);
+    expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: Number.MAX_VALUE }, {}, "claude")).toBe(4 * 60 * 60 * 1000);
+    expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: Number.POSITIVE_INFINITY }, {}, "claude")).toBe(30 * 60 * 1000);
+    expect(resolveStalledToolTimeoutMs({}, {}, "codex")).toBe(0);
+    expect(resolveStalledToolTimeoutMs({ stalledToolTimeoutSec: 60 }, {}, "codex")).toBe(60_000);
+  });
+
+  it("fails a silent pending Claude tool after bounded cancel/drain and records only safe permission-arrival facts", async () => {
+    const root = await makeTempRoot();
+    let runtimeOptions!: AcpRuntimeOptions & { onPermissionRequest?: (request: unknown) => Promise<unknown> };
+    let markRuntimeCreated!: () => void;
+    const runtimeCreated = new Promise<void>((resolve) => { markRuntimeCreated = resolve; });
+    let announcePending!: () => void;
+    const pendingAnnounced = new Promise<void>((resolve) => { announcePending = resolve; });
+    let releaseStream!: () => void;
+    const streamGate = new Promise<void>((resolve) => { releaseStream = resolve; });
+    const cancelled: string[] = [];
+    let closed = false;
+    const execute = createAcpxEngineExecutor({
+      stalledToolTimeoutMs: 30,
+      stalledToolCheckIntervalMs: 5,
+      duplexLossCancelDeadlineMs: 15,
+      createRuntime: (options) => {
+        runtimeOptions = options as typeof runtimeOptions;
+        markRuntimeCreated();
+        return {
+          ensureSession: async () => ({ backendSessionId: "backend-session", agentSessionId: "agent-session", runtimeSessionName: "runtime-session" }),
+          startTurn: () => ({
+            events: (async function* () {
+              yield { type: "tool_call", toolCallId: "private-tool-id", kind: "execute", status: "pending", title: "SECRET TITLE", rawInput: { token: "SECRET INPUT" } };
+              announcePending();
+              await streamGate;
+            })(),
+            result: new Promise(() => {}),
+            cancel: async ({ reason }: { reason?: string } = {}) => { cancelled.push(reason ?? ""); },
+            closeStream: async () => { closed = true; releaseStream(); },
+          }),
+          close: async () => {},
+        } as never;
+      },
+    });
+    const runPromise = execute({
+      runId: "watchdog-test",
+      agent: { id: "agent-1", companyId: "company-1" },
+      runtime: {},
+      config: { agent: "claude", cwd: root, stateDir: path.join(root, "state") },
+      context: {},
+      onLog: async () => {},
+      onMeta: async () => {},
+    } as never);
+    await runtimeCreated;
+    // The real runtime hook is receipt-only and may arrive before the first
+    // pending tool_call notification.
+    await runtimeOptions.onPermissionRequest?.({ raw: { toolCall: { toolCallId: "private-tool-id" } } });
+    await pendingAnnounced;
+    const result = await runPromise;
+
+    expect(result.exitCode).toBe(1);
+    expect(result.errorCode).toBe("acpx_tool_stalled");
+    expect(result.resultJson).toMatchObject({
+      acpStalledToolKind: "execute",
+      acpStalledToolPermissionRequestArrived: true,
+      acpPendingToolPermissionRequestArrivedCount: 1,
+    });
+    expect(result.resultJson?.acpStalledToolSilentMs).toEqual(expect.any(Number));
+    expect(closed).toBe(true);
+    expect(cancelled).toContain("paperclip stalled tool watchdog");
+    expect(JSON.stringify(result.resultJson)).not.toContain("private-tool-id");
+    expect(JSON.stringify(result.resultJson)).not.toContain("SECRET TITLE");
+    expect(JSON.stringify(result.resultJson)).not.toContain("SECRET INPUT");
+  }, 10_000);
+
+  it("does not fail a queued call while earlier calls settle, and preserves completion racing watchdog cancellation", async () => {
+    const root = await makeTempRoot();
+    const cancelReasons: string[] = [];
+    let streamRelease!: () => void;
+    const streamGate = new Promise<void>((resolve) => { streamRelease = resolve; });
+    let resultResolve!: (value: { status: "completed"; stopReason: string }) => void;
+    const completed = new Promise<{ status: "completed"; stopReason: string }>((resolve) => { resultResolve = resolve; });
+    let closeReason: string | undefined;
+    const execute = createAcpxEngineExecutor({
+      stalledToolTimeoutMs: 35,
+      stalledToolCheckIntervalMs: 2,
+      duplexLossCancelDeadlineMs: 12,
+      createRuntime: () => ({
+        ensureSession: async () => ({ backendSessionId: "backend-session", agentSessionId: "agent-session", runtimeSessionName: "runtime-session" }),
+        startTurn: () => ({
+          events: (async function* () {
+            yield { type: "tool_call", toolCallId: "queued-id", kind: "edit", status: "pending" };
+            for (let i = 0; i < 3; i += 1) {
+              yield { type: "tool_call", toolCallId: `active-${i}`, kind: "execute", status: "in_progress" };
+              await new Promise((resolve) => setTimeout(resolve, 10));
+              yield { type: "tool_call", tag: "tool_call_update", toolCallId: `active-${i}`, status: "completed" };
+            }
+            yield { type: "tool_call", tag: "tool_call_update", toolCallId: "queued-id", status: "completed" };
+            // Queue one final pending call and then let the watchdog request a
+            // cancel. The runtime reports completion during that race while
+            // its event stream remains open until closeStream drains it.
+            yield { type: "tool_call", toolCallId: "stalled-id", kind: "execute", status: "pending" };
+            await streamGate;
+          })(),
+          result: completed,
+          cancel: async ({ reason }: { reason?: string } = {}) => {
+            cancelReasons.push(reason ?? "");
+            resultResolve({ status: "completed", stopReason: "end_turn" });
+          },
+          closeStream: async ({ reason }: { reason?: string } = {}) => {
+            closeReason = reason;
+            streamRelease();
+          },
+        }),
+        close: async () => {},
+      }) as never,
+    });
+    const result = await execute({
+      runId: "watchdog-completion-race",
+      agent: { id: "agent-1", companyId: "company-1" }, runtime: {},
+      config: { agent: "claude", cwd: root, stateDir: path.join(root, "state") },
+      context: {}, onMeta: async () => {}, onLog: async () => {},
+    } as never);
+
+    expect(cancelReasons).toEqual(["paperclip stalled tool watchdog"]);
+    expect(closeReason).toBe("paperclip stalled tool cancel deadline");
+    expect(result.exitCode).toBe(0);
+    expect(result.errorCode).toBeNull();
+    expect(result.resultJson).not.toHaveProperty("acpStalledToolKind");
+  }, 10_000);
+
+  it("lets an operator Stop own a pending-tool race", async () => {
+    const root = await makeTempRoot();
+    const controller = new AbortController();
+    let announcePending!: () => void;
+    const pendingAnnounced = new Promise<void>((resolve) => { announcePending = resolve; });
+    let releaseEvents!: () => void;
+    const eventsGate = new Promise<void>((resolve) => { releaseEvents = resolve; });
+    const cancelReasons: string[] = [];
+    const execute = createAcpxEngineExecutor({
+      stalledToolTimeoutMs: 100,
+      stalledToolCheckIntervalMs: 2,
+      createRuntime: () => ({
+        ensureSession: async () => ({ backendSessionId: "backend-session", agentSessionId: "agent-session", runtimeSessionName: "runtime-session" }),
+        startTurn: () => ({
+          events: (async function* () {
+            yield { type: "tool_call", toolCallId: "pending", kind: "execute", status: "pending" };
+            announcePending();
+            await eventsGate;
+          })(),
+          result: new Promise<{ status: "cancelled"; stopReason: string }>((resolve) => {
+            void eventsGate.then(() => resolve({ status: "cancelled", stopReason: "operator_stop" }));
+          }),
+          cancel: async ({ reason }: { reason?: string } = {}) => {
+            cancelReasons.push(reason ?? "");
+            releaseEvents();
+          },
+        }),
+        close: async () => {},
+      }) as never,
+    });
+    const runPromise = execute({
+      runId: "watchdog-stop-race",
+      agent: { id: "agent-1", companyId: "company-1" }, runtime: {},
+      config: { agent: "claude", cwd: root, stateDir: path.join(root, "state") },
+      context: {}, signal: controller.signal, onMeta: async () => {}, onLog: async () => {},
+    } as never);
+    await pendingAnnounced;
+    controller.abort();
+    const result = await runPromise;
+    expect(cancelReasons).not.toContain("paperclip stalled tool watchdog");
+    expect(result.errorCode).not.toBe("acpx_tool_stalled");
+    expect(result.resultJson).not.toHaveProperty("acpStalledToolKind");
+  }, 10_000);
   it.each(["claude", "codex", "gemini", "kimi", "custom"])("defaults the legacy %s engine to full auto on fresh and resumed runs", async (agent) => {
     const root = await makeTempRoot();
     const config = {

@@ -1,0 +1,9 @@
+{
+  "sourceParentHead": "91b83f4697523dc38ac51dd3f9f8a6e60fd1eac0",
+  "files": {
+    ".github/workflows/aw-v4-verification.yml": "77e8d8734970e424ebacbd749b039a4b8caacc0c55c373f970435103f4940bb4",
+    "server/src/__tests__/analytical-context-privacy.integration.test.ts": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "14a9bbc8db13edc64269681349fe51f7a2780debb6e410a3fb42d763bbb2dbcd",
+    "server/src/__tests__/heartbeat-responsible-user-invariant.test.ts": "f68d5fa4880202ec8b978a8be5189e65baba4a039ba5332c0613e8e187e8592c"
+  }
+}

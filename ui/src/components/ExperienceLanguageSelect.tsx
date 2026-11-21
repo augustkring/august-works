@@ -5,10 +5,11 @@ import {
   persistExperienceLocale,
 } from "../i18n/experience-locale-preference";
 
-export function ExperienceLanguageSelect() {
+export function ExperienceLanguageSelect({ onSaveLocale }: { onSaveLocale?: (locale: "en" | "da") => Promise<void> }) {
   const { t, i18n } = useTranslation("experience");
   const [saveFailed, setSaveFailed] = useState(false);
   const [changeFailed, setChangeFailed] = useState(false);
+  const [accountSaveFailed, setAccountSaveFailed] = useState(false);
   const [pending, setPending] = useState(false);
   const select = useRef<HTMLSelectElement>(null);
   const restoreFocus = useRef(false);
@@ -27,7 +28,7 @@ export function ExperienceLanguageSelect() {
         <span>{t("language.label")}</span>
         <select
           ref={select}
-          className="min-h-11 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           value={current}
           disabled={pending}
           onChange={async (event) => {
@@ -36,9 +37,17 @@ export function ExperienceLanguageSelect() {
             restoreFocus.current = document.activeElement === event.currentTarget;
             setPending(true);
             setChangeFailed(false);
+            setAccountSaveFailed(false);
             try {
               await i18n.changeLanguage(locale);
               setSaveFailed(!persistExperienceLocale(locale));
+              if (onSaveLocale) {
+                try {
+                  await onSaveLocale(locale);
+                } catch {
+                  setAccountSaveFailed(true);
+                }
+              }
             } catch {
               setChangeFailed(true);
             } finally {
@@ -50,9 +59,9 @@ export function ExperienceLanguageSelect() {
           <option value="da" lang="da">Dansk</option>
         </select>
       </label>
-      {(saveFailed || changeFailed) && (
+      {(saveFailed || changeFailed || accountSaveFailed) && (
         <p role={changeFailed ? "alert" : "status"} className="text-sm text-muted-foreground">
-          {t(changeFailed ? "language.failed" : "language.notSaved")}
+          {t(changeFailed ? "language.failed" : accountSaveFailed ? "language.accountNotSaved" : "language.notSaved")}
         </p>
       )}
     </div>

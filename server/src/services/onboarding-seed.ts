@@ -8,7 +8,10 @@ import { agentService } from "./agents.js";
 import { PAPERCLIP_CORE_SKILL_KEYS } from "./company-skills.js";
 import { goalService } from "./goals.js";
 import { projectService } from "./projects.js";
-import { issueService } from "./issues.js";
+import { issueService, pinIssueMutationHuman } from "./issues.js";
+import { canActorReadProjectPrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
+import { assertDirectInputSessionCurrent } from "./native-direct-input.js";
+import { forbidden } from "../errors.js";
 import { readBuiltInAgentMarker } from "./built-in-agent-metadata.js";
 import { logActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 
@@ -159,6 +162,7 @@ export function onboardingSeedService(db: Db) {
     projectSvc: ReturnType<typeof projectService>,
     companyId: string,
     goalId: string | null,
+    actor: AuthorizationActor,
   ) {
     const existing = await dbx
       .select({ id: projects.id, name: projects.name, status: projects.status })
@@ -169,13 +173,20 @@ export function onboardingSeedService(db: Db) {
         project.status !== "cancelled"
         && project.name.trim().toLowerCase() === ONBOARDING_SEED_PROJECT_NAME.toLowerCase(),
     );
-    if (reusable) return reusable.id;
+    if (reusable) {
+      if (!await canActorReadProjectPrivacy(dbx, actor, { id: reusable.id, companyId }))
+        throw forbidden("Onboarding project is unavailable");
+      return reusable.id;
+    }
 
     const created = await projectSvc.create(companyId, {
       name: ONBOARDING_SEED_PROJECT_NAME,
+      privacyOwnerUserId: actor.userId,
+      sourceIssueIds: [],
+      sourceProvenanceQualified: true,
       status: "in_progress",
       ...(goalId ? { goalIds: [goalId] } : {}),
-    });
+    }, undefined, actor);
     return created.id;
   }
 
@@ -189,6 +200,8 @@ export function onboardingSeedService(db: Db) {
     dbx: Db,
     companyId: string,
     seed: ApplyOnboardingSeed,
+    publications: ActivityPublication[],
+    actor?: AuthorizationActor,
   ): Promise<OnboardingSeedApplication> {
     const agentSvc = agentService(dbx);
     const goalSvc = goalService(dbx);
@@ -280,12 +293,15 @@ export function onboardingSeedService(db: Db) {
     //    mission-only seed is what keeps it inert on the cloud path.
     let issueId = existing?.issueId ?? null;
     if (firstTaskTitle) {
+      if (!actor?.userId) throw forbidden("Onboarding tasks require their current Human creator");
       if (await issueStillExists(dbx, companyId, issueId)) {
         await issueSvc.update(
           issueId as string,
           {
             title: firstTaskTitle,
             description: firstTaskDetails,
+            actorUserId: actor.userId,
+            privacyActor: actor,
             // Keep the task's relationships in step with a later revision that
             // supplied the agent or goal after the task already existed —
             // otherwise the record would report an assignee/goal the issue row
@@ -295,9 +311,10 @@ export function onboardingSeedService(db: Db) {
             ...(goalId ? { goalId } : {}),
           },
           dbx,
+          publications,
         );
       } else {
-        const projectId = await resolveOnboardingProjectId(dbx, projectSvc, companyId, goalId);
+        const projectId = await resolveOnboardingProjectId(dbx, projectSvc, companyId, goalId, actor);
         // The idempotency key is what protects two pushes that arrive at once
         // — Cloud's reconcile runs off portfolio fetches, which can overlap.
         // It is deliberately not revision-scoped: if the recorded issue is
@@ -305,13 +322,15 @@ export function onboardingSeedService(db: Db) {
         // first push created.
         const created = await issueSvc.create(companyId, {
           title: firstTaskTitle,
+          createdByUserId: actor.userId,
+          responsibleUserId: actor.userId,
           ...(firstTaskDetails ? { description: firstTaskDetails } : {}),
           ...(agentId ? { assigneeAgentId: agentId } : {}),
           projectId,
           ...(goalId ? { goalId } : {}),
           status: "todo",
           idempotencyKey: `onboarding-seed:${companyId}`,
-        });
+        }, dbx, publications, { privacyActor: actor, sourceAccessActor: actor });
         issueId = created.id;
       }
     }
@@ -392,6 +411,7 @@ export function onboardingSeedService(db: Db) {
     companyId: string,
     seed: ApplyOnboardingSeed,
     audit?: OnboardingSeedAuditActor,
+    authorizationActor?: AuthorizationActor,
   ): Promise<OnboardingSeedApplication> {
     // Collected inside the transaction, published only after it commits: the
     // activity row is transactional but its realtime/plugin fan-out is not, and
@@ -400,11 +420,25 @@ export function onboardingSeedService(db: Db) {
     const publications: ActivityPublication[] = [];
 
     const result = await db.transaction(async (tx) => {
+      let actor: AuthorizationActor | undefined;
+      let expiresAt: number | null = null;
+      if (seed.firstTask?.title.trim()) {
+        if (authorizationActor?.type !== "board" || authorizationActor.source !== "session" ||
+          !authorizationActor.userId || !authorizationActor.sessionId || authorizationActor.runId)
+          throw forbidden("Onboarding tasks require a current Human session");
+        const pinned = await pinCurrentBoardActor(tx, authorizationActor);
+        if (!pinned || pinned.credentialExpiresAt === null)
+          throw forbidden("Onboarding creator session is unavailable");
+        actor = pinned.actor;
+        expiresAt = pinned.credentialExpiresAt;
+        await pinIssueMutationHuman(tx, actor, companyId, true);
+        await assertDirectInputSessionCurrent(tx, actor, expiresAt);
+      }
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`paperclip:onboarding-seed:${companyId}`}, 0))`,
       );
       const dbx = tx as unknown as Db;
-      const applied = await applyWithin(dbx, companyId, seed);
+      const applied = await applyWithin(dbx, companyId, seed, publications, actor);
 
       if (applied.changed && audit) {
         await logActivity(
@@ -430,6 +464,7 @@ export function onboardingSeedService(db: Db) {
         );
       }
 
+      if (actor) await assertDirectInputSessionCurrent(tx, actor, expiresAt);
       return applied;
     });
 

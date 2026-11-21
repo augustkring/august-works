@@ -1,0 +1,37 @@
+{
+  "baseCheckpoint": "R62",
+  "baseHost33SourcePinsSha256": "44a599d932b2fa3ab23ef00c6b169ed64001f5a85c9f7fb9d06eb6105b83e1a2",
+  "candidateHost37SourcePinsSha256": "6a77db9fccf5063c0ab8062ed483a160d6ca4015cd15093b6392da10e35a539c",
+  "pathCounts": {
+    "base": 100,
+    "candidate": 102,
+    "added": 2,
+    "deleted": 0,
+    "changed": 2
+  },
+  "added": [
+    {
+      "path": "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+      "candidateSha256": "ee838e05f4f34714a63f1dba583efb5c6fb16e02a6093f20fec1330cee789fb0"
+    },
+    {
+      "path": "server/src/services/execution-sandbox/qualification.ts",
+      "candidateSha256": "7c39a6e7f0de97c97e31d1a39362d2438e6fc4d53278b32ef21dcf8fb51eab5c"
+    }
+  ],
+  "deleted": [],
+  "changed": [
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "baseSha256": "03baf7e2fe1a312d050aa2fe92fa6be533a4e1299060057b3c20f35d3111f035",
+      "candidateSha256": "1fa40e6f995018ad653de5bc81908f691b707182508bacd66576a54d048b31c7",
+      "bytes": 147151
+    },
+    {
+      "path": "server/src/services/execution-sandbox/sandbox-service.ts",
+      "baseSha256": "92c3f09a09895486daa7da9ecb6c0a63afe5c825aeee2e4dab16e36eddccbd08",
+      "candidateSha256": "f6008e027d2f31b394a3fa2a2c4418cf40405397f60fa70181d14d452af70765",
+      "bytes": 89132
+    }
+  ]
+}

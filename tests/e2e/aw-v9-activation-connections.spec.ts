@@ -1,6 +1,10 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { activationViewSchema, initialActivationState } from "../../packages/shared/src/activation.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
+
+registerEnglishAccountLocaleIsolation(test);
 
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
@@ -64,5 +68,5 @@ test("connection setup review stays distinct from agent access and survives a lo
     expect(commands).toHaveLength(1);
     expect(await json(await request.get(`/api/companies/${company.id}/agents`))).toEqual([]);
     expect(await json(await request.get(`/api/companies/${company.id}/issues`))).toEqual([]);
-  } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+  } finally { await json(await deleteCompany(request, company.id)); }
 });

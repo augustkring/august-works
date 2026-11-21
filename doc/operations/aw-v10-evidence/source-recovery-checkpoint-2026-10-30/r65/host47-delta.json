@@ -1,0 +1,52 @@
+{
+  "baseCheckpoint": "R64",
+  "baseHost41SourcePinsSha256": "1718a8e49af416d9431653008ef12bfe3629091aed8493ba062aac409258b04e",
+  "candidateHost47SourcePinsSha256": "484150475d92d3e611b87bd46b5f1f89c5b97cfc57c226c4e09d7bb96b57bedd",
+  "pathCounts": {
+    "base": 102,
+    "candidate": 102,
+    "added": 0,
+    "deleted": 0,
+    "changed": 6
+  },
+  "added": [],
+  "deleted": [],
+  "changed": [
+    {
+      "path": "deploy/v6/host-agent/openshell.mjs",
+      "baseSha256": "d214458f0f454116ebb47f42bbe6fe9430a4db8da84638650d72d7206336ad99",
+      "candidateSha256": "189881a59e03cb8a56c0c4ad06bb00810b380e76c61179d9975552d67efe1349",
+      "bytes": 218957
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "baseSha256": "76c37832c22fc236545a8105704c89eadb7ce43ddc74ccba8461c597a5e579fd",
+      "candidateSha256": "022fa9e48b6fa27f1ba7cc17ee8637f77a2315bfb02d591085a6433c3f7f6bbd",
+      "bytes": 144264
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "baseSha256": "3298da33852ba6ff2e300d18a1cda680291ac8dadaa7e9171d1f01c23ef12770",
+      "candidateSha256": "9bf01d02ea240925036677aa7196aefa095b593023c9279711d80f6fb070687f",
+      "bytes": 220868
+    },
+    {
+      "path": "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
+      "baseSha256": "2941fce98863b8a57afa338162a9b3ef7d0ab26a364c869ff37f01d5ffa475ff",
+      "candidateSha256": "6d8313079b6eec2829b34de1b179ad858aa6b3527d7084a058387326d5c2cd8f",
+      "bytes": 5773
+    },
+    {
+      "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "baseSha256": "9137ed3b683d0fdea911facb84862fad52935c05bd3ce75028f5386a3f360103",
+      "candidateSha256": "c951c2cfaeac101bc899cab955a8cc8fd55ad11099e9c36aebc8b5c01d7bd840",
+      "bytes": 77550
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "baseSha256": "3d2eff77fa1a94db08b0b853a8bd98b6d0a1f6ad5f64fade181fb849d0f1411d",
+      "candidateSha256": "ac261b726f02420a9628715c19441847bbd3332829df724ff496fb47dfac31a5",
+      "bytes": 30902
+    }
+  ]
+}

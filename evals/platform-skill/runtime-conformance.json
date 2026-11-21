@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "contract": "v10-platform-skill-cross-runtime-conformance",
+  "brief": [
+    "\u00a721B.27",
+    "\u00a721B.29",
+    "\u00a721B.30",
+    "\u00a721B.31",
+    "\u00a721B.38",
+    "V10-140",
+    "V10-143",
+    "V10-GATE-50"
+  ],
+  "releaseSource": "skills-releases/blentera-platform/releases.json",
+  "qualificationPolicy": "Passing source tests is necessary evidence only. A runtime remains unqualified until the exact installed version/profile, all required common cases, external delivery observations, and Human platform-owner review are recorded.",
+  "releaseComparisonPolicy": "This harness records the immutable current candidate and its superseded release, but does not perform champion/challenger evaluation or promotion. Paired behavior, adversarial/recovery, runtime, and Human review evidence remain required.",
+  "scenarios": [
+    {
+      "id": "pinned-positive-delivery",
+      "intent": "deliver and bind the exact immutable Platform Skill before useful provider work",
+      "required": true
+    },
+    {
+      "id": "missing-or-stale-pin",
+      "intent": "reject a missing or stale release, operation, tool, profile, or assignment pin at the governed-admission boundary without silent re-pinning",
+      "required": true
+    },
+    {
+      "id": "reserved-name-collision",
+      "intent": "reject same-name foreign or changed Skill content without installing it or dispatching",
+      "required": true
+    },
+    {
+      "id": "isolated-profile-boundary",
+      "intent": "keep Skill files, session identity, and governed tool authority within the admitted presence; identical immutable public procedure bytes may share storage",
+      "required": true
+    },
+    {
+      "id": "safe-recovery-boundary",
+      "intent": "on restart, reconnect, or update, revalidate current pins and never silently re-pin an old run or duplicate an already-dispatched effect",
+      "required": true
+    }
+  ],
+  "profiles": [
+    {
+      "id": "blentera-managed-native",
+      "runtime": "paperclip_runner",
+      "implementation": "source-present",
+      "qualification": "source-conformance-only-unqualified",
+      "exactInstalledVersion": null,
+      "implementationSources": [
+        "server/src/services/platform-skill-admission.ts",
+        "server/src/services/company-skills.ts",
+        "packages/adapter-utils/src/platform-skill.ts",
+        "server/src/services/native-runtime/native-session-executor.ts"
+      ],
+      "suites": [
+        {
+          "path": "server/src/__tests__/platform-skill-admission.integration.test.ts",
+          "config": "vitest.config.ts",
+          "selection": "pins the real immutable package without Fabric, reads its root and a focused reference, and validates material admission|refuses missing legacy pins and changed contracts instead of silently readmitting a material effect|keeps lifecycle revalidation and revoked Human membership authoritative|refreshes identical procedure bytes only for a fresh admission and never repins the old Run|keeps two company admissions isolated while delivering the same immutable release",
+          "scenarios": [
+            "pinned-positive-delivery",
+            "missing-or-stale-pin",
+            "isolated-profile-boundary",
+            "safe-recovery-boundary"
+          ]
+        },
+        {
+          "path": "server/src/__tests__/company-skills-service.test.ts",
+          "config": "vitest.config.ts",
+          "selection": "reserves the platform operating Skill and preserves its shipped immutable release|rejects customer Skill documents that claim the reserved platform identity before writing files or versions",
+          "scenarios": [
+            "reserved-name-collision"
+          ]
+        },
+        {
+          "path": "server/src/services/native-runtime/native-session-executor.test.ts",
+          "config": "vitest.config.ts",
+          "selection": "fails before dispatch when a preinstalled runner uses the stale contract",
+          "scenarios": [
+            "missing-or-stale-pin"
+          ]
+        }
+      ],
+      "externalEvidenceRequired": [
+        "exact runner and profile versions",
+        "observed delivered Skill digest",
+        "same-case routing/process/security/recovery results",
+        "owner-reviewed release evidence"
+      ]
+    },
+    {
+      "id": "openclaw",
+      "runtime": "openclaw_gateway",
+      "implementation": "delivery-source-present",
+      "qualification": "source-conformance-only-unqualified",
+      "exactInstalledVersion": null,
+      "implementationSources": [
+        "packages/adapters/openclaw-gateway/src/server/execute.ts",
+        "packages/adapters/openclaw-gateway/openclaw-extension/index.ts"
+      ],
+      "suites": [
+        {
+          "path": "packages/adapters/openclaw-gateway/src/server/execute-dispatch.test.ts",
+          "config": "packages/adapters/openclaw-gateway/vitest.config.ts",
+          "selection": "delivers the exact immutable platform Skill over advertised upload/install methods before agent dispatch|delivers and dispatches the required Skill independently for two admitted company presences|refuses a pinned task before dispatch when the Gateway does not advertise real Skill delivery methods|fails closed on a same-name different-source or changed-digest Skill collision|does not retry after the remote-work boundary has been crossed|retains the continuation gate through transient connection backoff",
+          "scenarios": [
+            "pinned-positive-delivery",
+            "missing-or-stale-pin",
+            "reserved-name-collision",
+            "isolated-profile-boundary",
+            "safe-recovery-boundary"
+          ],
+          "requiredTitles": [
+            "delivers the exact immutable platform Skill over advertised upload/install methods before agent dispatch",
+            "delivers and dispatches the required Skill independently for two admitted company presences",
+            "refuses a pinned task before dispatch when the Gateway does not advertise real Skill delivery methods",
+            "fails closed on a same-name different-source or changed-digest Skill collision ('/remote/workspace/skills/blentera-pla\u2026')",
+            "fails closed on a same-name different-source or changed-digest Skill collision ('/remote/agent/skills/blentera-platfor\u2026')",
+            "does not retry after the remote-work boundary has been crossed",
+            "retains the continuation gate through transient connection backoff"
+          ]
+        },
+        {
+          "path": "packages/adapters/openclaw-gateway/openclaw-extension/bridge-boundary.unit.test.ts",
+          "config": "packages/adapters/openclaw-gateway/vitest.config.ts",
+          "selection": "rejects stale contract, assignment, capability, or Skill pins before tool discovery",
+          "scenarios": [
+            "missing-or-stale-pin"
+          ]
+        }
+      ],
+      "externalEvidenceRequired": [
+        "exact installed OpenClaw and extension versions",
+        "observed immutable Skill delivery and shadow disposition",
+        "effective run-scoped bridge scope",
+        "owner-reviewed release evidence"
+      ]
+    },
+    {
+      "id": "hermes-local",
+      "runtime": "hermes_local",
+      "implementation": "isolated-delivery-source-present",
+      "qualification": "source-conformance-only-unqualified",
+      "exactInstalledVersion": null,
+      "implementationSources": [
+        "packages/adapters/hermes/src/server/execute.ts",
+        "packages/adapters/hermes/src/server/governed-profile.ts",
+        "packages/adapters/hermes/src/server/skills.ts",
+        "packages/adapters/hermes/src/server/presence-profile.ts",
+        "packages/adapter-utils/src/platform-skill.ts"
+      ],
+      "suites": [
+        {
+          "path": "packages/adapters/hermes/src/server/platform-skill-execute.test.ts",
+          "config": "packages/adapters/hermes/vitest.config.ts",
+          "selection": "delivers and verifies the exact immutable Platform Skill at Hermes adapter dispatch|rejects a missing Platform Skill before Hermes starts|rejects a stale immutable Skill digest before Hermes starts|rejects a reserved-name profile collision before Hermes starts|keeps two admitted companies on distinct Hermes profiles and Skill deliveries|resumes only with the current admitted Hermes profile hash",
+          "scenarios": [
+            "pinned-positive-delivery",
+            "missing-or-stale-pin",
+            "reserved-name-collision",
+            "isolated-profile-boundary",
+            "safe-recovery-boundary"
+          ]
+        },
+        {
+          "path": "packages/adapters/hermes/src/server/governed-profile.test.ts",
+          "config": "packages/adapters/hermes/vitest.config.ts",
+          "selection": "refuses foreign MCP config and redirected config files without changing them|refuses to claim delivery without the actual canonical run gateway",
+          "scenarios": [
+            "reserved-name-collision"
+          ]
+        }
+      ],
+      "externalEvidenceRequired": [
+        "exact installed Hermes CLI and profile versions",
+        "observed isolated per-presence profile and effective Skill digest",
+        "same-case routing/process/security/recovery results",
+        "owner-reviewed release evidence"
+      ]
+    },
+    {
+      "id": "a2a-or-custom",
+      "runtime": "provider-specific",
+      "implementation": "no-common-skill-delivery-driver",
+      "qualification": "unqualified-conditional-not-GA",
+      "exactInstalledVersion": null,
+      "implementationSources": [
+        "server/src/services/agent-runtime-fabric.ts"
+      ],
+      "suites": [],
+      "requiredBeforeQualification": [
+        "provider-specific exact Skill delivery adapter",
+        "reserved-name and stale-pin enforcement",
+        "run-scoped Tool Gateway authority",
+        "all required scenarios executed through actual dispatch",
+        "external versioned evidence and Human platform-owner review"
+      ]
+    }
+  ],
+  "evidence": {
+    "retention": "doc/operations/aw-v10-evidence/platform-skill-runtime-conformance-YYYY-MM-DD/",
+    "mustInclude": [
+      "release pins",
+      "runner and dependency versions",
+      "source/test hashes",
+      "commands and per-suite exit codes",
+      "full logs",
+      "known limitations",
+      "external qualification state"
+    ],
+    "interpretation": "A source test report cannot by itself mark a runtime GA or complete V10-145 behavior evaluation."
+  }
+}

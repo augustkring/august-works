@@ -1,0 +1,15 @@
+Memory revocation/source-binding focused validation r3
+UTC date: 2026-10-26
+
+Current qualification snapshot: /workspace/v10-dep-qualification/server
+Snapshot: 290 files copied and verified; snapshot exit 0.
+Source pins: memory-revocation-source-binding-20261026-r3-source-pins.json
+  SHA256 ff58d21336ac975ac3189821c120e549b48f96f8c17a98d7c38035052aeb9bfb
+Command: vitest run src/__tests__/memory-revocation-source-binding.integration.test.ts src/__tests__/memory-native-capture-purpose.integration.test.ts --maxWorkers=1
+Result: 2 files passed; 12 tests passed; exit 0.
+Test log: memory-revocation-source-binding-20261026-r3-test.log
+  SHA256 412e965f1be29be68ddeba9b2062e6a73d35fd38bfd53d41fb862f83756c8ead
+
+The native-capture tests use a structural Human-created record fixture only; it is not an Agent producer qualification. Evidence is inserted before the snapshot is sealed. The positive case uses the persisted current Native capture job receipt and a current selected source; it verifies duplicate resolution, source attachment, snapshot invalidation, and no record-body response. The negative case builds an actual Context-to-Memory cycle and verifies 409 with the target row unchanged and its snapshot still current. Ordinary duplicate expansion verifies atomic 409 rollback of the full target row, evidence, and activity log.
+
+The company-purge missing-operation-field SQL-NULL control is not exercised by these two tests. The reviewed implementation uses `(...exact succeeded receipt predicate...) IS NOT TRUE`, so a missing JSON field (SQL NULL) permits reset, while only an exact validated operation/run receipt suppresses reset. Existing artifacts do not establish that branch's regression coverage.

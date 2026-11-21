@@ -1,0 +1,24 @@
+{
+  "generatorCommand": "pnpm db:generate",
+  "generatorResult": "success",
+  "migration": {
+    "index": 562,
+    "tag": "0562_curious_scarecrow",
+    "sqlPath": "packages/db/src/migrations/0562_curious_scarecrow.sql",
+    "snapshotPath": "packages/db/src/migrations/meta/0562_snapshot.json",
+    "journalPath": "packages/db/src/migrations/meta/_journal.json",
+    "journalLastEntry": { "idx": 562, "version": "7", "tag": "0562_curious_scarecrow", "breakpoints": true }
+  },
+  "sha256": {
+    "sql": "4eec24f610288b51719594aaca7378058ab83d491556dac0e6714e2c17d4febd",
+    "snapshot": "f872252c7cf2da4e556055cb9497f1370e7a7c3a0f50d5d251b891078c241b21",
+    "journal": "e2d3833916ac2061671eddba93c19e6d269278aa680cd158e2c2bfaa804f88bb"
+  },
+  "historicalSnapshotPolicy": {
+    "repositoryRule": "packages/db/package.json prune:snapshots uses sort -r | tail -n +6, retaining the five newest snapshot files; doc/operations/aw-v6-runtime.md documents the same five-snapshot policy.",
+    "newestRetained": ["0562_snapshot.json", "0561_snapshot.json", "0560_snapshot.json", "0559_snapshot.json", "0558_snapshot.json"],
+    "prunedTracked": ["0531_snapshot.json", "0532_snapshot.json", "0534_snapshot.json through 0557_snapshot.json"],
+    "notTracked": ["0533_snapshot.json"],
+    "disposition": "Expected official generator pruning; retain deletions for root qualification/commit."
+  }
+}

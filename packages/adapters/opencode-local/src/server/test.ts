@@ -1,3 +1,4 @@
+import { admitPaidModelProbe } from "@paperclipai/adapter-utils/paid-model-probe";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -329,7 +330,7 @@ export async function testEnvironment(
       }
     }
 
-    if (canRunProbe && modelValidationPassed) {
+    if (canRunProbe && modelValidationPassed && admitPaidModelProbe(checks)) {
       const extraArgs = (() => {
         const fromExtraArgs = asStringArray(config.extraArgs);
         if (fromExtraArgs.length > 0) return fromExtraArgs;

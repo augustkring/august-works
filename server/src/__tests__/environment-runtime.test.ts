@@ -21,6 +21,7 @@ import {
   environments,
   executionWorkspaces,
   heartbeatRuns,
+  nativeRunFinalizations,
   issues,
   plugins,
   projects,
@@ -218,6 +219,7 @@ describeEmbeddedPostgres("environmentRuntimeService", () => {
       await rm(root, { recursive: true, force: true }).catch(() => undefined);
     }
     await db.delete(environmentLeases);
+    await db.delete(nativeRunFinalizations);
     await db.delete(issues);
     await db.delete(heartbeatRuns);
     await db.delete(agents);
@@ -466,6 +468,105 @@ describeEmbeddedPostgres("environmentRuntimeService", () => {
 
     return { pluginId, companyId, agentId, environment, runId, executionWorkspaceId, reusableLease };
   }
+
+  it("reattaches only the exact active Native per-turn lease under its current coordinator owner", async () => {
+    const seeded = await seedReusablePluginSandboxLease("paperclip_runner");
+    await db.delete(environmentLeases).where(eq(environmentLeases.id, seeded.reusableLease.id));
+    const environment = { ...seeded.environment, config: { ...seeded.environment.config, reuseLease: false } };
+    await environmentService(db).update(environment.id, { config: environment.config });
+    const issueId = randomUUID();
+    const leaseOwner = "native-lease-owner-current";
+    const expiresAt = new Date(Date.now() + 60_000);
+    await db.insert(issues).values({ id: issueId, companyId: seeded.companyId, title: "Native lease retry", status: "in_progress", assigneeAgentId: seeded.agentId });
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: issueId, status: "running" })
+      .where(eq(heartbeatRuns.id, seeded.runId));
+    await db.insert(nativeRunFinalizations).values({
+      companyId: seeded.companyId,
+      issueId,
+      runId: seeded.runId,
+      phase: "observed",
+      attempt: 1,
+      leaseOwner,
+      leaseExpiresAt: new Date(Date.now() + 60_000),
+    });
+    const original = await environmentService(db).acquireLease({
+      companyId: seeded.companyId,
+      environmentId: environment.id,
+      executionWorkspaceId: seeded.executionWorkspaceId,
+      issueId,
+      heartbeatRunId: seeded.runId,
+      leasePolicy: "ephemeral",
+      provider: "fake-plugin",
+      providerLeaseId: "native-per-turn-provider-lease",
+      expiresAt,
+      metadata: {
+        agentId: seeded.agentId,
+        driver: "sandbox",
+        pluginId: seeded.pluginId,
+        pluginKey: "acme.reusable-sandbox-provider",
+        sandboxProviderPlugin: true,
+        provider: "fake-plugin",
+        image: "fake:test",
+        timeoutMs: 1234,
+        reuseLease: false,
+      },
+    });
+    const runtime = environmentRuntimeService(db);
+    const input = {
+      companyId: seeded.companyId,
+      environment,
+      issueId,
+      agentId: seeded.agentId,
+      heartbeatRunId: seeded.runId,
+      persistedExecutionWorkspace: { id: seeded.executionWorkspaceId, mode: "shared_workspace" as const },
+      adapterType: "paperclip_runner",
+      nativeLeaseOwner: leaseOwner,
+    };
+    const reattached = await runtime.acquireRunLease(input);
+    expect(reattached.lease.id).toBe(original.id);
+    expect(reattached.lease.providerLeaseId).toBe(original.providerLeaseId);
+    expect(reattached.lease.expiresAt?.getTime()).toBe(original.expiresAt?.getTime());
+    expect(await db.select().from(environmentLeases).where(eq(environmentLeases.heartbeatRunId, seeded.runId)))
+      .toHaveLength(1);
+
+    await db.update(nativeRunFinalizations).set({ leaseOwner: "native-lease-owner-stale" })
+      .where(eq(nativeRunFinalizations.runId, seeded.runId));
+    await expect(runtime.acquireRunLease(input)).rejects.toThrow("coordinator owner");
+    await db.update(nativeRunFinalizations).set({ leaseOwner })
+      .where(eq(nativeRunFinalizations.runId, seeded.runId));
+
+    const successorEnvironmentId = randomUUID();
+    const timestamp = new Date();
+    await db.insert(environments).values({
+      id: successorEnvironmentId,
+      name: "Second environment for same run",
+      driver: "sandbox",
+      status: "active",
+      config: environment.config,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    await environmentService(db).acquireLease({
+      companyId: seeded.companyId,
+      environmentId: successorEnvironmentId,
+      executionWorkspaceId: seeded.executionWorkspaceId,
+      issueId,
+      heartbeatRunId: seeded.runId,
+      leasePolicy: "ephemeral",
+      provider: "fake-plugin",
+      providerLeaseId: "second-active-run-lease",
+      expiresAt,
+      metadata: {
+        agentId: seeded.agentId,
+        driver: "sandbox",
+        provider: "fake-plugin",
+        image: "fake:test",
+        timeoutMs: 1234,
+        reuseLease: false,
+      },
+    });
+    await expect(runtime.acquireRunLease(input)).rejects.toThrow("missing or ambiguous");
+  });
 
   it("acquires and resumes a reusable lease after a task changes from per-turn to warm", async () => {
     const seeded = await seedReusablePluginSandboxLease("paperclip_runner");
@@ -7259,7 +7360,7 @@ describeEmbeddedPostgres("environmentRuntimeService", () => {
         }),
       }),
     });
-    expect(released[0]?.lease.status).toBe("released");
+    expect(released[0]?.lease).toMatchObject({ status: "released", cleanupStatus: "success" });
   });
 
   async function seedPluginDriverEnvironment(pluginId: string) {
@@ -7508,7 +7609,7 @@ describeEmbeddedPostgres("environmentRuntimeService", () => {
       timedOut: false,
       stdout: "ok\n",
     });
-    expect(destroyed?.status).toBe("failed");
+    expect(destroyed).toMatchObject({ status: "failed", cleanupStatus: "success" });
     expect(workerManager.call).toHaveBeenCalledWith(pluginId, "environmentResumeLease", {
       driverKey: "fake-plugin",
       companyId,

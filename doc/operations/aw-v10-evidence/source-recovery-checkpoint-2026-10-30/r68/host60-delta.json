@@ -1,0 +1,39 @@
+{
+  "baseCheckpoint": "R67 / Host53",
+  "baseHost53SourcePinsSha256": "94b075fdda7788ed9d907d9678d7ca9d83c82ac6a4cba87c18957d7f994184e1",
+  "candidateHost60SourcePinsSha256": "5c3aa8eb95c8eb351bb2cb00aa9f16b9b568fcd0f92f9c9b3384ade1518134c4",
+  "sourcePathCounts": {
+    "base": 104,
+    "candidate": 105,
+    "added": 1,
+    "deleted": 0,
+    "changed": 3
+  },
+  "added": [
+    {
+      "path": "server/src/__tests__/native-fixture-agent-claim.integration.test.ts",
+      "candidateSha256": "03d14ee857bd26752f3788f6d3b320c8e4cdd8dacf23b20ee8504438e82957ed"
+    }
+  ],
+  "deleted": [],
+  "changed": [
+    {
+      "path": "deploy/v6/host-agent/openshell.test.mjs",
+      "baseSha256": "ef9953341bcfdfedce18ea478949e40295f17902a9a1fd50d3b2630cb31ee0ba",
+      "candidateSha256": "528e71e475a8f45a020856c527c0d100981e9191ae60d049ca681a01c0455c8b",
+      "bytes": 188999
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "baseSha256": "8156f7d9ce87015e21cbf21716cd3297fa764102494470c2324b4d418aa6c339",
+      "candidateSha256": "76e961f44b1bb7e0e06d69ab1d6232d137a33e3f6111ec6a6aaa22f4e372e761",
+      "bytes": 149667
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "baseSha256": "ab60327090de9330886606778e2baeb530ef3bd0bcff23c1d5b03feaf3e1bd56",
+      "candidateSha256": "6b46bf4b78a81d4ee05dda192e6ad522de40617487c26ab597231653895621fa",
+      "bytes": 223090
+    }
+  ]
+}

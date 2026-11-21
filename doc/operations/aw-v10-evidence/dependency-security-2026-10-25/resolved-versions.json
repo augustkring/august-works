@@ -1,0 +1,15 @@
+{
+  "status": "observed_pass",
+  "working_directory": "/workspace/blentera-v10/server",
+  "command_description": "Node resolution check (no secrets): resolve express, resolve body-parser from the Express package directory, resolve dompurify and zod from server, and read the installed follow-redirects package metadata from the pnpm virtual store.",
+  "exact_command_source": "/workspace/v10-preparation/security-overrides-version-verification-20261025.command.sh",
+  "observed_output": {
+    "dompurify": "3.4.17",
+    "zod": "4.6.6",
+    "body-parser": "2.4.0",
+    "follow-redirects": "1.16.1",
+    "packageManager": "pnpm@9.15.4",
+    "storeDir": "/workspace/.cloud-setup/pnpm-store/v3"
+  },
+  "exit_code": 0
+}

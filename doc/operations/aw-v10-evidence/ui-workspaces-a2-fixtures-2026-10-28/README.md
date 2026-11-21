@@ -1,0 +1,1 @@
+Four complete UI suites passed: 63/63 tests. Customer title/host/vault assertions now use Blentera; Process Intelligence supplies the router search-parameter API used by the actual page. The output/source digest was captured immediately before the run. Token gates pass. This is scoped evidence.

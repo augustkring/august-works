@@ -1,0 +1,327 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Pinned runtime bundle adaptation: initial subreaper assertion failures retained, final42 controls pass, watcher8 pass. Preflight built older compiled output; successful readiness/shutdown does not replace final freshly built worker and architecture qualification.",
+  "logs": [
+    {
+      "name": "up10-bundle-controls",
+      "exitCode": 1,
+      "exitSidecar": "up10-bundle-controls.exit",
+      "rawSha256": "1c8faefe37405baf0078c7d93585fd8f1fc2448978ac030c51266ea19f29e516",
+      "sanitizedSha256": "1c8faefe37405baf0078c7d93585fd8f1fc2448978ac030c51266ea19f29e516",
+      "archiveSha256": "c67dce3015999da9970dc8fd2a8fd34a816aed6f35e621b799ba5effa3e0673c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 2 passed (3)",
+        "Tests  1 failed | 24 passed (25)",
+        "Duration  728ms (transform 55ms, setup 176ms, import 72ms, tests 151ms, environment 0ms)"
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "up10-bundle-controls-final",
+      "exitCode": 1,
+      "exitSidecar": "up10-bundle-controls-final.exit",
+      "rawSha256": "8a3801fa71e92ee8d3d5d7186773166fc7877b339ee757f515ebe8f46c1252cd",
+      "sanitizedSha256": "cebdd848abc710327679099566285fccf3ff6a73d9e730f7b9e2fc3b5bb2a86a",
+      "archiveSha256": "ebdc995ec2d57f9556f4ba8750abdc4fdb79adde39a4b5a628aa61a38e6eb1d6",
+      "redactions": {
+        "ansi": 4,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 3 passed (4)",
+        "Tests  1 failed | 32 passed (33)",
+        "Duration  3.69s (transform 1.33s, setup 222ms, import 2.29s, tests 739ms, environment 0ms)"
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "up10-bundle-controls-final2",
+      "exitCode": 1,
+      "exitSidecar": "up10-bundle-controls-final2.exit",
+      "rawSha256": "932ca950245fc6701167be0241b30754b74d2f69f03ff5201442e8c73ca96657",
+      "sanitizedSha256": "4194ed06179252fe68f396ede4b0f58a47b994f41a90183e04564662df00ccb8",
+      "archiveSha256": "66f28682b73a748ec4e9fb196d6f7543f4070197f0dc0242e648df3b3541f4eb",
+      "redactions": {
+        "ansi": 4,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 4 passed (5)",
+        "Tests  1 failed | 41 passed (42)",
+        "Duration  7.06s (transform 1.48s, setup 275ms, import 2.48s, tests 3.77s, environment 0ms)"
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "up10-bundle-controls-final3",
+      "exitCode": 0,
+      "exitSidecar": "up10-bundle-controls-final3.exit",
+      "rawSha256": "2575d555a9c6ca93482eca0b75c4a865acaea9de9320ffd18a54e8ed5fc3b378",
+      "sanitizedSha256": "137fdf017a562e30ef7c59e87ffccc5082d4b065848432d0dc624f538e220849",
+      "archiveSha256": "d3398697f1517ec22af8c262889824ed23ee3b275a6a617041df4c4c613f8023",
+      "redactions": {
+        "ansi": 4,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  5 passed (5)",
+        "Tests  42 passed (42)",
+        "Duration  12.13s (transform 1.50s, setup 576ms, import 2.65s, tests 7.84s, environment 4ms)"
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "up10-plugin-dev-watcher-final",
+      "exitCode": 0,
+      "exitSidecar": "up10-plugin-dev-watcher-final.exit",
+      "rawSha256": "61d0bb4d5848e519dbb7e4c3f97958da0927f01a26a9a955a29c39443604b256",
+      "sanitizedSha256": "c3af7796ef46de0efb80bee33e4b1231ee8dc8d13feeca0d53f9916bf45754d7",
+      "archiveSha256": "a77cc51fff718467f0c3aa7ebcc968b9f71a3e29add5dba484c1d37d0acc833e",
+      "redactions": {
+        "ansi": 96,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  8 passed (8)",
+        "Duration  589ms (transform 104ms, setup 71ms, import 121ms, tests 277ms, environment 0ms)"
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "up10-plugin-dev-watcher-root-final",
+      "exitCode": 0,
+      "exitSidecar": "up10-plugin-dev-watcher-root-final.exit",
+      "rawSha256": "47280620dc2f43b2fd4062d0a735021c1d0b2b4f97445c9b8df12c7d4e65c3a0",
+      "sanitizedSha256": "a8520e53506742ceee1cb3ef8d717ad7813e3f63b07ee0f0d136f63c756e6162",
+      "archiveSha256": "b776e424d98db1d85a5273d7430b96a3bd4e90477235b243cae98d1a9e480f3d",
+      "redactions": {
+        "ansi": 102,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  8 passed (8)",
+        "Duration  1.05s (transform 314ms, setup 198ms, import 363ms, tests 330ms, environment 0ms)"
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "up10-runtime-bundle-preflight",
+      "exitCode": 0,
+      "exitSidecar": "up10-runtime-bundle-preflight.exit",
+      "rawSha256": "3eb57d8a8188155b493bee83aac7e8454c7119b3503ad13bd8f4d329843b6471",
+      "sanitizedSha256": "3eb57d8a8188155b493bee83aac7e8454c7119b3503ad13bd8f4d329843b6471",
+      "archiveSha256": "6fe7902737568156f8e849018b0ed731b6b054698f738bf9619a77892c87fc23",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "up10-runtime-boot-preflight",
+      "exitCode": 0,
+      "exitSidecar": "up10-runtime-boot-preflight.exit",
+      "rawSha256": "532ce01e64ba5a5528ad5fa03b5697815194652b93c49a5598a5f41384f76edd",
+      "sanitizedSha256": "532ce01e64ba5a5528ad5fa03b5697815194652b93c49a5598a5f41384f76edd",
+      "archiveSha256": "6403a177cd370f82b97b6670a5fff4d3c84473dd5dc45a59096c415ec5bd2d9e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "up10-runtime-boot-stop-preflight",
+      "exitCode": 0,
+      "exitSidecar": "up10-runtime-boot-stop-preflight.exit",
+      "rawSha256": "3d7e4f5c3bd000de4d42730d0c9acb882b2ab944e336dd748ba5207ad905e5df",
+      "sanitizedSha256": "3d7e4f5c3bd000de4d42730d0c9acb882b2ab944e336dd748ba5207ad905e5df",
+      "archiveSha256": "a68ddfce8f90a59350fb231481d5018d168a6522f4cc426aed4cebf30c50f329",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "up10-runtime-worker-preflight",
+      "exitCode": 1,
+      "exitSidecar": "up10-runtime-worker-preflight.exit",
+      "rawSha256": "c0fd3336c824d5e1ad85942727327e5643181010f43b3b7e4f821a9fc425c70c",
+      "sanitizedSha256": "20e98f8019c41de9520d74495421887e0ed835213bc2fe0939263d30d26de6be",
+      "archiveSha256": "5ffe1c9e5bd9c1213e894f06b73e2fc4a02d12b2ef5a759d91b13217be1b732f",
+      "redactions": {
+        "ansi": 64,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "v10-current-typecheck",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-typecheck.exit",
+      "rawSha256": "5d91e37a51c0f9ebe8e4e383c42f0e98c1bb1f625e53067b16f4310e8a4a8f55",
+      "sanitizedSha256": "5d91e37a51c0f9ebe8e4e383c42f0e98c1bb1f625e53067b16f4310e8a4a8f55",
+      "archiveSha256": "fd7b0ec8abb86eb3792f3d67b112434f5f558f6a62e08c3d68b73d917d43a846",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "v10-current-build",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-build.exit",
+      "rawSha256": "2981bf55386c63fe175071a99acef36701a8407aa0fb8d9ddf7fafd7b3ae6f3d",
+      "sanitizedSha256": "ad41ec87bb5514a2b2c0865759ce809c56e7315082c12cd1d62d693a47f1335e",
+      "archiveSha256": "bf0d7a34322583fb9f6430e0c0ea05a3973b6b2f43ab249065d277433f3c7734",
+      "redactions": {
+        "ansi": 72,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up10-current-built-runtime-bundle",
+      "exitCode": 0,
+      "exitSidecar": "up10-current-built-runtime-bundle.exit",
+      "rawSha256": "4de5906c62ecd05af7f927d840abe3867b28cc87b25f680c824c9c2a970549fe",
+      "sanitizedSha256": "4de5906c62ecd05af7f927d840abe3867b28cc87b25f680c824c9c2a970549fe",
+      "archiveSha256": "3c26f15a42787da10fa8619b6fa2f1a64baf6aa5b19bd5343c0270d779654aad",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up10-current-built-runtime-worker-stop",
+      "exitCode": 0,
+      "exitSidecar": "up10-current-built-runtime-worker-stop.exit",
+      "rawSha256": "9728a68efa4efb54a0b4bb82eb312a33d0904ef4923878d5057f5d908082fb53",
+      "sanitizedSha256": "9728a68efa4efb54a0b4bb82eb312a33d0904ef4923878d5057f5d908082fb53",
+      "archiveSha256": "fb3d94558dde9373510742e0046f5ebef210822bac12e3ef5832f1031665965a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up10-node-container-pull",
+      "exitCode": 0,
+      "exitSidecar": "up10-node-container-pull.exit",
+      "rawSha256": "42bf4f9b7fb84be693b8d4b57c2bfdef920549af7d0eb96e4f6ef66a52dae624",
+      "sanitizedSha256": "42bf4f9b7fb84be693b8d4b57c2bfdef920549af7d0eb96e4f6ef66a52dae624",
+      "archiveSha256": "1cf34a166523e09b3f58bf6680022117b8663660cb7c96cfa845e9cb9568d1ff",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "53e2161fbd15b5f2eeb81fb249ca82220a0d7d0d"
+    },
+    {
+      "name": "up10-amd64-node-container-artifact",
+      "exitCode": 0,
+      "exitSidecar": "up10-amd64-node-container-artifact.exit",
+      "rawSha256": "c555b10bbac0be296d833c00bcc4d78187fb8bbab2fb05499e2d9c8183467656",
+      "sanitizedSha256": "c555b10bbac0be296d833c00bcc4d78187fb8bbab2fb05499e2d9c8183467656",
+      "archiveSha256": "ac02f8d390e6461c3cb0cab07653ecf30b3c6e3315dc0fdb248634d062b3dd05",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "53e2161fbd15b5f2eeb81fb249ca82220a0d7d0d"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836",
+      "meaning": "Whole workspace build exits0. Fresh generated production bundle boots isolated new database, returns real worker PNG and exits0 on SIGTERM. Concurrent source development means these are checkpoint diagnostics, not final stable deployed artifact acceptance.",
+      "logs": [
+        "v10-current-typecheck",
+        "v10-current-build",
+        "up10-current-built-runtime-bundle",
+        "up10-current-built-runtime-worker-stop"
+      ]
+    },
+    {
+      "sourceCommit": "53e2161fbd15b5f2eeb81fb249ca82220a0d7d0d",
+      "meaning": "Pinned Node amd64 container, read-only actual built artifact mount, isolated fresh database, real worker image and clean SIGTERM. This is an artifact runtime check, not a build/qualification of the application production Docker image or arm64.",
+      "logs": [
+        "up10-node-container-pull",
+        "up10-amd64-node-container-artifact"
+      ]
+    }
+  ]
+}

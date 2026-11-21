@@ -1,0 +1,22 @@
+
+> @paperclipai/db@0.3.1 typecheck /workspace/blentera-v10/packages/db
+> pnpm run check:migrations && tsc --noEmit
+
+
+> @paperclipai/db@0.3.1 check:migrations /workspace/blentera-v10/packages/db
+> tsx src/check-migration-numbering.ts && tsx src/check-migration-safety.ts
+
+Migration safety check passed: 20 historical finding(s) covered by baseline (1 stale baseline id(s) ignored).
+src/transient-write-retry.test.ts(195,50): error TS2345: Argument of type '<T extends any[] = (import("/workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/types/index").Row & Iterable<import("/workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/types/index").Ro...' is not assignable to parameter of type '<T extends any[] = (import("/workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/types/index").Row & Iterable<import("/workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/types/index").Ro...'.
+  Type 'PendingQuery<(Row & Iterable<Row>)[]>' is not assignable to type 'PendingQuery<T>'.
+    The types returned by 'values().then' are incompatible between these types.
+      Type '<TResult1 = ValuesRowList<(Row & Iterable<Row>)[]>, TResult2 = never>(onfulfilled?: ((value: ValuesRowList<(Row & Iterable<Row>)[]>) => TResult1 | PromiseLike<...>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<...>) | ... 1 more ... | undefined) => Promise<...>' is not assignable to type '<TResult1 = ValuesRowList<T>, TResult2 = never>(onfulfilled?: ((value: ValuesRowList<T>) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<...>) | ... 1 more ... | undefined) => Promise<...>'.
+        Types of parameters 'onfulfilled' and 'onfulfilled' are incompatible.
+          Types of parameters 'value' and 'value' are incompatible.
+            Type 'ValuesRowList<(Row & Iterable<Row>)[]>' is not assignable to type 'ValuesRowList<T>'.
+              Types of property 'columns' are incompatible.
+                Type 'ColumnList<string | number | unique symbol>' is not assignable to type 'ColumnList<keyof T[number]>'.
+                  Type 'Column<string>' is not assignable to type 'keyof T[number] extends string ? Column<string & keyof T[number]> : never'.
+/workspace/blentera-v10/packages/db:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @paperclipai/db@0.3.1 typecheck: `pnpm run check:migrations && tsc --noEmit`
+Exit status 1

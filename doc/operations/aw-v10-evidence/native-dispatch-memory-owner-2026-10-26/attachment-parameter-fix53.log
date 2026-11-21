@@ -1,0 +1,31 @@
+Copied and verified source files 120
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+attachment stage predicate diagnostic { matches: true }
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed | 41 skipped) 33917ms
+     × qualifies only the current PG attachment bytes staged by executor admission 30035ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:878:3
+    876|   });
+    877|
+    878|   it("qualifies only the current PG attachment bytes staged by executo…
+       |   ^
+    879|     const positive = await executeVerifiedAttachmentCase("positive");
+    880|     expect(positive.run.nativeInputSourceProtocolVersion).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  02:49:53
+   Duration  46.50s (transform 9.08s, setup 72ms, import 12.39s, tests 33.92s, environment 0ms)
+

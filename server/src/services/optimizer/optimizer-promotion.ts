@@ -3,7 +3,7 @@ import {lockMemoryPrivacy} from "../memory/memory-privacy.js";
 import {assertLearningAssetCurrent} from "../learning/learning-assets.js";
 import type {AuthorizationActor} from "../authorization.js";
 import { createHash } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 
 import type { Db } from "@paperclipai/db";
 import {
@@ -11,6 +11,9 @@ import {
   automationArtifacts,
   companyMemberships,
   workflowOptimizerSuggestions,
+  workflowOptimizerObservations,
+  workflowRuns,
+  workflowStepRuns,
   workflows,
 } from "@paperclipai/db";
 import type {
@@ -197,6 +200,7 @@ export function selectOptimizerCanaryRoute(input: {
 
 export async function executeOptimizerCanaryWithFallback<T>(input: {
   decision: OptimizerPromotionDecision;
+  sideEffectClass: "pure";
   companyId: string;
   promotionKey: string;
   routingKey: string;
@@ -208,6 +212,11 @@ export async function executeOptimizerCanaryWithFallback<T>(input: {
     output: T,
   ) => Promise<{ valid: boolean; reasonCode?: string | null }>;
 }): Promise<OptimizerCanaryExecutionResult<T>> {
+  // Effectful candidates need their original operation owner's reconciliation
+  // protocol. This generic helper has no authority to repeat an unknown effect.
+  if (input.sideEffectClass !== "pure") throw forbidden("Effectful optimizer canaries require effect reconciliation", {
+    code: "optimizer_effectful_canary_unsupported",
+  });
   const eligible =
     input.decision.status === "canary_ready" ||
     input.decision.status === "promotion_ready";
@@ -250,35 +259,25 @@ export async function executeOptimizerCanaryWithFallback<T>(input: {
     };
   }
 
+  let reasonCode: string;
   try {
     const candidateOutput = await input.executeCandidate();
     const validation = await input.validateCandidateOutput(candidateOutput);
-    if (!validation.valid) {
-      return {
-        path: "trusted",
-        fallbackTriggered: true,
-        reasonCode:
-          validation.reasonCode ?? "optimizer_canary_candidate_output_invalid",
-        selection,
-        output: await input.executeTrusted(),
-      };
-    }
-    return {
+    if (validation.valid) return {
       path: "candidate",
       fallbackTriggered: false,
       reasonCode: null,
       selection,
       output: candidateOutput,
     };
+    reasonCode = validation.reasonCode ?? "optimizer_canary_candidate_output_invalid";
   } catch {
-    return {
-      path: "trusted",
-      fallbackTriggered: true,
-      reasonCode: "optimizer_canary_candidate_execution_failed",
-      selection,
-      output: await input.executeTrusted(),
-    };
+    reasonCode = "optimizer_canary_candidate_execution_failed";
   }
+  // Keep the trusted call outside the candidate catch: a failed/uncertain
+  // fallback must propagate, never cause a second trusted invocation.
+  return { path: "trusted", fallbackTriggered: true, reasonCode, selection,
+    output: await input.executeTrusted() };
 }
 
 function assertSystemActor(actor: AutomationArtifactMutationActor): void {
@@ -464,6 +463,44 @@ function assertPromotionBinding(input: {
       currentStatus: input.artifact.status,
     });
   }
+}
+
+/** Re-read durable, exact production canary receipts in the activation
+ * transaction, after the same company/privacy locks used by observation and
+ * retirement writers. A caller-supplied boolean is never a receipt. */
+async function assertCurrentCanaryReceipts(db: Db, input: {
+  companyId: string; suggestionId: string; artifactId: string; expectedArtifactVersionId: string;
+  canaryEvaluationId?: string; sourceActor?: AuthorizationActor;
+}) {
+  if (!input.canaryEvaluationId) throw conflict("Current durable canary evaluation required", {
+    code: "optimizer_canary_receipt_required",
+  });
+  const { assertOptimizerEvaluationBinding, optimizerShadowSummary } = await import("./optimizer-evaluation.js");
+  const { evaluation } = await assertOptimizerEvaluationBinding(db, input.companyId, input.canaryEvaluationId, true, input.sourceActor);
+  if (evaluation.status !== "canary" || evaluation.suggestionId !== input.suggestionId ||
+      evaluation.artifactId !== input.artifactId || evaluation.artifactVersionId !== input.expectedArtifactVersionId)
+    throw conflict("Canary receipt does not match the current activation", { code: "optimizer_canary_receipt_changed" });
+  const observations = await db.select({ observation: workflowOptimizerObservations }).from(workflowOptimizerObservations)
+    .innerJoin(workflowRuns, and(eq(workflowRuns.companyId, workflowOptimizerObservations.companyId),
+      eq(workflowRuns.id, workflowOptimizerObservations.workflowRunId), eq(workflowRuns.workflowId, evaluation.workflowId),
+      eq(workflowRuns.workflowRevisionId, evaluation.workflowRevisionId)))
+    .innerJoin(workflowStepRuns, and(eq(workflowStepRuns.companyId, workflowRuns.companyId),
+      eq(workflowStepRuns.workflowRunId, workflowRuns.id), eq(workflowStepRuns.nodeId, evaluation.nodeId),
+      eq(workflowStepRuns.nodeId, workflowOptimizerObservations.nodeId),
+      eq(workflowStepRuns.automationArtifactVersionId, input.expectedArtifactVersionId)))
+    .where(and(eq(workflowOptimizerObservations.companyId, input.companyId),
+      eq(workflowOptimizerObservations.evaluationId, evaluation.id),
+      ne(workflowRuns.source, "test"), eq(workflowRuns.status, "succeeded"), eq(workflowStepRuns.status, "succeeded")))
+    .orderBy(desc(workflowOptimizerObservations.observedAt)).limit(100).for("share");
+  const currentObservations = observations.map(row => row.observation);
+  if (!evaluation.replayEvaluation || !replayEvidencePassed(evaluation.replayEvaluation) ||
+      !shadowEvidencePassed(optimizerShadowSummary(currentObservations)))
+    throw conflict("Current replay and shadow receipts required", { code: "optimizer_canary_receipt_changed" });
+  const receipts = currentObservations.filter(row => row.mode === "canary");
+  const passed = receipts.filter(row => row.candidateUsed && row.passed);
+  if (new Set(passed.map(row => row.workflowRunId)).size < 10 ||
+      receipts.some(row => !row.passed || row.fallback || row.invariantFailure))
+    throw conflict("Current successful production canary receipts required", { code: "optimizer_canary_receipt_required" });
 }
 
 export function optimizerPromotionService(db: Db) {
@@ -690,6 +727,7 @@ export function optimizerPromotionService(db: Db) {
       sourceActor?:AuthorizationActor;
       approvedByUserId?: string | null;
       approvalId?: string | null;
+      canaryEvaluationId?: string;
     }): Promise<OptimizerPromotionDecision> => {
       assertSystemActor(input.actor);
       await assertLearningAssetCurrent(db,input.companyId,"automation_artifact_version",input.expectedArtifactVersionId,input.sourceActor);
@@ -713,7 +751,7 @@ export function optimizerPromotionService(db: Db) {
         riskClass: decisionState.artifact.riskClass,
         sideEffectClass: decisionState.artifact.sideEffectClass,
         policy: input.policy,
-        evidence: { ...input.evidence, canaryPassed: true },
+        evidence: input.evidence,
       });
       if (decision.status !== "promotion_ready") return decision;
       await assertHumanApprovalReference(db, {
@@ -789,6 +827,15 @@ export function optimizerPromotionService(db: Db) {
             currentStatus: suggestion.status,
           });
         }
+
+        await assertCurrentCanaryReceipts(txDb, input);
+        const currentFlags = await assertPromotionEnabled(txDb);
+        assertPromotionRuntimeEligible(artifact, currentFlags);
+        await assertHumanApprovalReference(txDb, {
+          companyId: input.companyId, suggestionId: suggestion.id, artifactId: artifact.id,
+          artifactVersionId: input.expectedArtifactVersionId, workflowRevisionId: suggestion.workflowRevisionId,
+          decision, approvedByUserId: input.approvedByUserId, approvalId: input.approvalId,
+        });
 
         const now = new Date();
         const artifactUpdated = await txDb

@@ -1,0 +1,21 @@
+{
+  "baseline": "884dbba4a78603a791b65471e41fe950a23e2e4f",
+  "sourcePaths": {
+    "doc/operations/company-export-transfers.md": "1cbdcf46dec1e74dfe03aed21b361a30afec72fb50ea2acc1255ae8bfd4d2f35",
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "packages/db/src/migrations/0580_aberrant_karma.sql": "e22eac270e38642c622e487418857bbf010155778f463fca08d98737eae99b7c",
+    "packages/db/src/migrations/meta/0580_snapshot.json": "8c96e3a9287b1909fd00d1e1f053ad6640376a4c499158af1420649a7ec6af35",
+    "packages/db/src/migrations/meta/_journal.json": "7ce0800bc46b9af6728a94633dbb2810ed9fca8b00676ff69f522b03e21000af",
+    "packages/db/src/schema/company_transfer_runs.ts": "6d8b07578bb745bd0b8bef1d59fb41d6875e647197b29af22520a55d46b5384c",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/company-transfer-runs.test.ts": "043a0c46d192fe176d4fcaab8969d6514004fc01b43256c4cc6fa235b45cdb6f",
+    "server/src/__tests__/resource-governance.integration.test.ts": "be680457b1c2d83cb5512bf377f85644a2f019cfaf5445ac2c796ff51112f24d",
+    "server/src/services/company-export-transfers.ts": "6c77ea294e44b5366e18d37cfcbc55c8734adc42c52d41491284764cb9c6c282",
+    "server/src/services/company-transfer-runs.ts": "deb5aa0edb43606ba15b36e5ed1f844f53645f3d33de6f015ca6ac0e4206646b",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "requirementStatusesPromoted": 0,
+  "phaseStatusesPromoted": 0,
+  "liveProviderHostRestoreQualification": false
+}

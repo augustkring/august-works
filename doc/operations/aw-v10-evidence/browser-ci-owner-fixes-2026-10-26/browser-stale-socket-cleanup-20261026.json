@@ -1,0 +1,6 @@
+{
+  "pid": 1021022,
+  "state": "Z",
+  "dataDir": "/tmp/paperclip-e2e-home-OCgMlR/instances/playwright-e2e/db",
+  "action": "remove stale socket and socket lock only; preserve database and source"
+}

@@ -1,3 +1,4 @@
+import { admitPaidModelProbe } from "@paperclipai/adapter-utils/paid-model-probe";
 import type {
   AdapterEnvironmentCheck,
   AdapterEnvironmentTestContext,
@@ -281,7 +282,7 @@ export async function testEnvironment(
           check.code !== "cursor_version_probe_failed" &&
           check.code !== "cursor_version_probe_timed_out",
       );
-      if (!canRunHelloProbe) {
+      if (!canRunHelloProbe || !admitPaidModelProbe(checks)) {
         return {
           adapterType: ctx.adapterType,
           status: summarizeStatus(checks),

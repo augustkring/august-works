@@ -1,0 +1,164 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.776448133023223,
+      "filesAdvised": 396768,
+      "memoryAfter": 5829783552,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "bafea5850649c61ca27cbe7f37c1f0182382e11d0a38cd14e288f9b9d4fd4649",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/__tests__/chat-channels.integration.test.ts",
+    "src/__tests__/v6-costs.integration.test.ts",
+    "src/__tests__/openapi-routes.test.ts",
+    "-t",
+    "preserves exact Discord source authority through registered Gateway|keeps a verified Slack.*authoritative for.*read and reuse after reach or identity returns|preserves the GitHub resource, task, and conversation across repository rename and transfer|migrates Telegram basic-group reach and topic tasks to the replacement supergroup|continues a legacy Teams binding across a regional route change without forking its task|uses task-bound bot tools and deterministic checks, then denies revoked people|keeps missing costs unknown|cost allocation keeps integer precision|documents partial per-tenant cost coverage"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 3.0655995942652225e-05,
+  "sourceManifest": "github-and-telegram-current-source-regressions-r564-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 61.01112725099665,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 2886307840,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 737758,
+      "parentPid": 737734,
+      "executable": "node",
+      "rssBytes": 1294450688,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 737734,
+      "parentPid": 737689,
+      "executable": "node",
+      "rssBytes": 1053921280,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 737834,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 233947136
+    },
+    {
+      "pid": 737835,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 220356608
+    },
+    {
+      "pid": 737820,
+      "parentPid": 737758,
+      "executable": "postgres",
+      "rssBytes": 24588288
+    },
+    {
+      "pid": 737821,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 13025280
+    },
+    {
+      "pid": 737827,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 9125888
+    },
+    {
+      "pid": 737828,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 7892992
+    },
+    {
+      "pid": 737829,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 7208960
+    },
+    {
+      "pid": 737825,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 5976064
+    },
+    {
+      "pid": 737824,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 5423104
+    },
+    {
+      "pid": 737822,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 5279744
+    },
+    {
+      "pid": 737823,
+      "parentPid": 737820,
+      "executable": "postgres",
+      "rssBytes": 5111808
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 42,
+  "observedPostgresRelatedPids": [
+    737784,
+    737794,
+    737807,
+    737817,
+    737820,
+    737821,
+    737822,
+    737823,
+    737824,
+    737825,
+    737827,
+    737828,
+    737829,
+    737832,
+    737833,
+    737834,
+    737835,
+    737877,
+    737887,
+    737914,
+    737924,
+    737928,
+    737929,
+    737930,
+    737931,
+    737932,
+    737933,
+    737935,
+    737936,
+    737937,
+    737940,
+    737941,
+    737942,
+    737943
+  ],
+  "uniqueTempRoot": "/var/tmp/mpg-kymven8i",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 249,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+}

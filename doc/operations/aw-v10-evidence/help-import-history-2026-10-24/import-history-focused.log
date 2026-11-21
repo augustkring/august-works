@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ✓ src/__tests__/company-import-job-history.integration.test.ts > company import job history route > lists only the current original requester’s bounded company receipts and rechecks access 157ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  21:14:25
+   Duration  17.45s (transform 9.67s, setup 78ms, import 13.68s, tests 3.56s, environment 0ms)
+

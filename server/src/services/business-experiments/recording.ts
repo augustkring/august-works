@@ -12,7 +12,7 @@ import { calculateNativeMetric } from "../business-metrics/native-engine.js";
 import { admitBusinessExperiment, lockBusinessExperimentRoot, inspectBusinessExperimentVersion, businessExperimentRootView, auditBusinessExperiment } from "./service.js";
 import { experimentAnalysisView, experimentInterpretationView } from "./results.js";
 import { assignNativeBusinessExperimentUnit } from "./kernel.js";
-import { EXPERIMENT_OWNER_ENGINE, assignmentMaterial, assignmentView, completionMaterial, executionMaterial, experimentAssignmentKey, experimentBudget, experimentEdges, experimentStatementTime, experimentReviewHash, exposureMaterial, exposureView, nativeExperimentUnit, signedExperimentReceipt,
+import { EXPERIMENT_OWNER_ENGINE, assignmentMaterial, assignmentView, completionMaterial, executionMaterial, experimentAssignmentKey, experimentBudget, experimentEdges, experimentOperationBudgetMs, experimentOperationOutcomeCount, experimentStatementTime, experimentReviewHash, exposureMaterial, exposureView, nativeExperimentUnit, signedExperimentReceipt,
   type ExperimentAssignment, type ExperimentCompletion, type ExperimentExecution, type ExperimentExposure } from "./receipts.js";
 
 export async function transitionExperimentRecording(tx: Db, companyId: string, actor: AuthorizationActor, row: typeof businessExperiments.$inferSelect, state: BusinessExperimentState, rationale: string, at: Date) {
@@ -32,8 +32,11 @@ export function businessExperimentRecordingService(db: Db) {
     return db.transaction(async raw => {
       const tx = raw as unknown as Db;
       await admitBusinessExperiment(tx, companyId, actor);
-      const row = await lockBusinessExperimentRoot(tx, companyId, id);
-      const pin = await inspectBusinessExperimentVersion(tx, row, actor, versionId, false, performance.now() + 30_000);
+      const row = await lockBusinessExperimentRoot(tx, companyId, id), started = performance.now();
+      // PERF-01: a replay of the signed receipts scales its budget with the
+      // outcomes the version's analysis stored (30 s when there are none).
+      const deadline = started + experimentOperationBudgetMs(await experimentOperationOutcomeCount(tx, companyId, id, versionId, "replay"));
+      const pin = await inspectBusinessExperimentVersion(tx, row, actor, versionId, false, deadline);
       return project(pin, row);
     });
   }

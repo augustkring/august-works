@@ -1,0 +1,4 @@
+ ✓ src/__tests__/skill-evaluation-promotion-runtime.integration.test.ts > UP04 evaluated Skill promotion and immutable runtime consumer > earns both promotions from pinned evaluations and preserves only currently authorized immutable assignments 20488ms
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Duration  41.20s (transform 10.88s, setup 79ms, import 15.83s, tests 25.17s, environment 0ms)

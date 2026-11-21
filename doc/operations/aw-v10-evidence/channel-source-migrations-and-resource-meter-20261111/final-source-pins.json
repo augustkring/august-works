@@ -1,0 +1,205 @@
+{
+  "sourceHead": "4e719f91d41a349f32b775abe832e64a69447368",
+  "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "paths": [
+    {
+      "path": "doc/operations/v10-capability-projection.json",
+      "sha256": "c7dbf73ca53d73b0619a1bfbf98eb6244591283178fb751d0d8c78758c867959",
+      "bytes": 301430,
+      "mtimeNs": 1794412114296882473,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "packages/shared/src/saas-costs.ts",
+      "sha256": "a37d835f27d664b06da0bd3ed0655f6f4d22e1a287ec9941e0214c29fa6baa50",
+      "bytes": 8962,
+      "mtimeNs": 1794414566024229442,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "a6c787deb655d516816a51c5db447d261393687f5e4d2d4ca47a905e4c7f77c4"
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/__tests__/chat-channels.integration.test.ts",
+      "sha256": "befb80856a0caa419b3e7dd699dc9831cd571655e1013cff6def94e0b04ace77",
+      "bytes": 2619850,
+      "mtimeNs": 1794415357781733980,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "3a5f87add0b9c8a5d3fe7f0b4bc5e830f425a02784545b8acae55b69e89da880"
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-managed-native-runtime-skills.integration.test.ts",
+      "sha256": "7e0d1c7fea2708f865fe964cd44a4e6c7f77da660142643a3fb3836bb2ccbdcb",
+      "bytes": 19302,
+      "mtimeNs": 1794417390360055724,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
+      "sha256": "cc9d323f8509938f4368670955276138838aa25bbd0b597602ba71776ecdf2ef",
+      "bytes": 83441,
+      "mtimeNs": 1794417603361014819,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "92866d5a12d8809ad2dcb8f96cefd7f7ea292a5085579ee6d06f66ac037b23cf",
+      "bytes": 419805,
+      "mtimeNs": 1794414268972184292,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/__tests__/openapi-routes.test.ts",
+      "sha256": "c796e367ca60ce0acddc5b7aa100442f81ed4bf854b5d41d9efa5b92cf0d639b",
+      "bytes": 80496,
+      "mtimeNs": 1794414566025434232,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "d11960aee76fbc8771285c97aac365dd494515463c486c749cce20ee989fd9a6"
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/__tests__/v6-costs.integration.test.ts",
+      "sha256": "fd55c31d3cd47b045091cac6c15bda37e29cce706e220c2a5c87c0868f182a01",
+      "bytes": 21431,
+      "mtimeNs": 1794414566025162544,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "89a65815028815488c03b392d3921e623dc1ac320ec059ac9b5eb193f86f70a2"
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/services/billing/costs.ts",
+      "sha256": "f37b838e9ff4d8af76b1ee176f3372c90e35bdd9a7e24d38f649de9d256063c3",
+      "bytes": 21390,
+      "mtimeNs": 1794414566024366027,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "d08178cb1aa68c0293a1e7f1262725c48c3f63dca87e9bab811e1b19e2056bf5"
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/services/chat-channels.ts",
+      "sha256": "6f87e3085e415d99957b93a78363b4c9d998ec4c68ce10bd28cba1b3c21ae535",
+      "bytes": 1455143,
+      "mtimeNs": 1794412584599328013,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "10454054c67f5a2eeaaceb84d1036ddb18adbb2272e8a9c79e61f0f31de9fd3d"
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/services/chat-github-reviews.ts",
+      "sha256": "a440c319b647173aa14338d53346feb00acf2b3ff425a26014fce8600f6aea60",
+      "bytes": 50623,
+      "mtimeNs": 1794414717278384939,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "815e5c6e4af4facca9d7c4413bbf033c8a784910ae79a9202bf576c7332b9702"
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/services/chat-github-thread-id.ts",
+      "sha256": "30ca1ac619d83101761eef70e96ad0b6e4afc5584adc199a3a54486eb31381c0",
+      "bytes": 500,
+      "mtimeNs": 1794414256337103038,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "untracked"
+    },
+    {
+      "path": "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts",
+      "sha256": "b2e28f97b7f536db2620a7e8a5a7f8354a5baa1f1e74164cf432fb70017328d7",
+      "bytes": 16015,
+      "mtimeNs": 1794415357782897512,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
+      "sha256": "f6ef6349a1e187ba365953ec4d81fc661dd877f571d0dc03c64d6f1b217b74b3",
+      "bytes": 188816,
+      "mtimeNs": 1794416521993020890,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "sha256": "68f4673038cb324667b05ffa36fbdd0a10e32c94abeb9e726e7639f334f85395",
+      "bytes": 139550,
+      "mtimeNs": 1794417603362439863,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "tests/e2e/fixtures/managed-connection-review.ts",
+      "sha256": "232e169911231202cb08c03e8087bd0c3ba792655f21d7d9ef911cfd2f301872",
+      "bytes": 50153,
+      "mtimeNs": 1794414321073074271,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "ui/src/pages/SaasOperations.test.tsx",
+      "sha256": "9e0fa4cbf3142f534499e265d6b01a3928fdf7642b18c1d61f49887dbd0c4d8e",
+      "bytes": 9298,
+      "mtimeNs": 1794414566025049824,
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      },
+      "worktreeState": "modified"
+    },
+    {
+      "path": "ui/src/pages/SaasOperations.tsx",
+      "sha256": "2e1b5da1e9424ed52e5762c76bb1283dcb2c0e7f38574fdd9b194d70c213e8bc",
+      "bytes": 40490,
+      "mtimeNs": 1794414566024944616,
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "80fbd7481d3ab0dc705ee2d7fdc1599ff21792748940e326fa1ddbf82504a772"
+      },
+      "worktreeState": "modified"
+    }
+  ],
+  "qualificationPromoted": false
+}

@@ -1,0 +1,5 @@
+# Retained metric recovery attempt 105
+
+The pinned one-test browser run exited 1 after the Native provider successfully completed the first chat turn, the second turn, and `query_business_metric`. The provider event capture records successful `get_task_context`, `get_task_history`, and metric result events; the test reached its post-run database checks and found the metric observation. It then failed at the direct helper assertion `assertNativeAnalyticalRunPayloadAccess(...)` after `idle()` had completed the run. That helper constructs an agent JWT reader, whose current authorization requires its bound run to remain `running`; this is a test-side post-completion assertion failure, not a failed chat or metric route.
+
+The run also emitted the existing `task_reader_acl_recheck` observer, but the new content-free SQL breakdown did not emit facts, so it did not identify the denial clause. The attempt is therefore not a source-recovery qualification. Raw log, pins, subprocess receipts, provider event capture, and Playwright error context are preserved here.

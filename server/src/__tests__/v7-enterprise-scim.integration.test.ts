@@ -6,7 +6,9 @@ import { and, eq } from "drizzle-orm";
 import {
   createDb,
   authUsers,
+  authAccounts,
   authSessions,
+  authPasskeys,
   companyMemberships,
   principalPermissionGrants,
   enterpriseIdentityPolicies,
@@ -26,6 +28,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Companies } from "./helpers/v5-fixtures.js";
 import type { Config } from "../config.js";
+import type { AuthorizationActor } from "../services/authorization.js";
 const support = await getEmbeddedPostgresTestSupport(),
   origin = "https://enterprise.example.test";
 (support.supported ? describe : describe.skip)(
@@ -34,6 +37,7 @@ const support = await getEmbeddedPostgresTestSupport(),
     let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,
       db: Db,
       f: Awaited<ReturnType<typeof seedV5Companies>>,
+      operatorActor: AuthorizationActor,
       auth: ReturnType<typeof createBetterAuthInstance>,
       token: string,
       targetUserId: string;
@@ -48,6 +52,48 @@ const support = await getEmbeddedPostgresTestSupport(),
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
       f = await seedV5Companies(db);
+      // Structural native proof fixture for service/domain tests only. The
+      // stored session and passkey rows exercise the assurance SQL; this is
+      // not a Better Auth or WebAuthn ceremony.
+      const operatorSessionId = randomUUID(), proofTime = new Date();
+      await db.insert(authAccounts).values({
+        id: randomUUID(),
+        issuer: "local:credential",
+        accountId: f.userId,
+        providerId: "credential",
+        userId: f.userId,
+        password: "structural-fixture-not-a-password-hash",
+        createdAt: proofTime,
+        updatedAt: proofTime,
+      });
+      await db.insert(authPasskeys).values({
+        id: randomUUID(),
+        name: "SCIM operator structural passkey fixture",
+        publicKey: "structural-fixture-not-a-credential",
+        userId: f.userId,
+        credentialID: randomUUID(),
+        counter: 0,
+        deviceType: "singleDevice",
+        backedUp: false,
+        transports: null,
+        createdAt: proofTime,
+        aaguid: null,
+      });
+      const [operator] = await db.select({
+        authenticatorVersion: authUsers.authenticatorVersion,
+      }).from(authUsers).where(eq(authUsers.id, f.userId));
+      await db.insert(authSessions).values({
+        id: operatorSessionId,
+        userId: f.userId,
+        token: randomUUID(),
+        createdAt: proofTime,
+        updatedAt: proofTime,
+        expiresAt: new Date(proofTime.getTime() + 86400000),
+        authenticationMethod: "passkey",
+        authenticatedAt: proofTime,
+        authenticatorVersion: operator!.authenticatorVersion,
+      });
+      operatorActor = { ...f.actor, sessionId: operatorSessionId };
       await instanceSettingsService(db).updateExperimental({
         saas_deployment_profile_v6: true,
         ai_use_cases_v7: true,
@@ -126,7 +172,7 @@ const support = await getEmbeddedPostgresTestSupport(),
         .select()
         .from(enterpriseIdentityPolicies)
         .where(eq(enterpriseIdentityPolicies.id, policy.id));
-      await service.qualify(f.actor, f.home, {
+      await service.qualify(operatorActor, f.home, {
         expectedVersion: 1,
         configurationHash: enterprisePolicyHash(native!),
         uri: "https://qualification.test.invalid/qualification/local-protocol-fixture",
@@ -224,6 +270,54 @@ const support = await getEmbeddedPostgresTestSupport(),
       );
       expect(callback.status).toBeGreaterThanOrEqual(300);
       expect(await db.select().from(authSessions)).toEqual(before);
+    });
+    it("rejects configured operators without a native passkey session proof", async () => {
+      const service = enterpriseIdentityPolicyService(db, {
+        operatorUserIds: [f.userId],
+        sourceSha: "a".repeat(40),
+        protectedEvidenceOrigin: "https://qualification.test.invalid",
+        appOrigin: origin,
+      });
+      const current = await service.get(f.actor, f.home);
+      await expect(service.qualify(f.actor, f.home, {
+        expectedVersion: current.version,
+        configurationHash: current.configurationHash,
+        uri: "https://qualification.test.invalid/qualification/weak-session-fixture",
+        sha256: "c".repeat(64),
+        expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      })).rejects.toMatchObject({
+        status: 403,
+        details: { code: "recent_authentication_required" },
+      });
+      const passwordSessionId = randomUUID(), now = new Date();
+      const [operator] = await db.select({
+        authenticatorVersion: authUsers.authenticatorVersion,
+      }).from(authUsers).where(eq(authUsers.id, f.userId));
+      await db.insert(authSessions).values({
+        id: passwordSessionId,
+        userId: f.userId,
+        token: randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: new Date(now.getTime() + 86400000),
+        authenticationMethod: "password",
+        authenticatedAt: now,
+        authenticatorVersion: operator!.authenticatorVersion,
+      });
+      await expect(service.qualify(
+        { ...f.actor, sessionId: passwordSessionId },
+        f.home,
+        {
+          expectedVersion: current.version,
+          configurationHash: current.configurationHash,
+          uri: "https://qualification.test.invalid/qualification/password-session-fixture",
+          sha256: "d".repeat(64),
+          expiresAt: new Date(Date.now() + 86400000).toISOString(),
+        },
+      )).rejects.toMatchObject({
+        status: 403,
+        details: { code: "recent_authentication_required" },
+      });
     });
     it("uses the real framework transaction and retains other-company memberships and global sessions on deprovisioning", async () => {
       const response = await send("/scim/v2/Users", "POST", {
@@ -407,7 +501,7 @@ const support = await getEmbeddedPostgresTestSupport(),
         scimRequired: false,
         reason: "Local encrypted OIDC protocol fixture",
       });
-      const qualified = await service.qualify(f.actor, f.guest, {
+      const qualified = await service.qualify(operatorActor, f.guest, {
         expectedVersion: policy.version,
         configurationHash: policy.configurationHash,
         uri: "https://qualification.test.invalid/qualification/oidc-local-fixture",
@@ -445,8 +539,13 @@ const support = await getEmbeddedPostgresTestSupport(),
           .select()
           .from(authSessions)
           .where(eq(authSessions.userId, targetUserId));
+      // A managed subject can later become an owner through the company owner
+      // path; SCIM decommission must still run the canonical security sweep.
+      await db.update(companyMemberships).set({ membershipRole: "owner" }).where(and(
+        eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, targetUserId),
+      ));
       const result = await service.decommissionScim(
-        f.actor,
+        operatorActor,
         f.home,
         before.version,
       );
@@ -474,6 +573,10 @@ const support = await getEmbeddedPostgresTestSupport(),
           ),
         );
       expect(guest?.status).toBe("active");
+      const [home] = await db.select().from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, targetUserId),
+      ));
+      expect(home?.status).toBe("suspended");
       expect(
         await db.select().from(authUsers).where(eq(authUsers.id, targetUserId)),
       ).toHaveLength(1);
@@ -483,7 +586,7 @@ const support = await getEmbeddedPostgresTestSupport(),
         .where(eq(enterpriseSubjectBindings.companyId, f.home));
       expect(binding?.status).toBe("revoked");
       await expect(
-        service.decommissionScim(f.actor, f.home, before.version),
+        service.decommissionScim(operatorActor, f.home, before.version),
       ).rejects.toMatchObject({ status: 409 });
     });
   },

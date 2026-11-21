@@ -1,0 +1,50 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/child-review-outcomes-privacy.integration.test.ts (2 tests | 2 failed) 10680ms
+     × does not expose an Alice-private child outcome to Bob through tool 525ms
+     × does not expose an Alice-private child outcome to Bob through continuation 255ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/child-review-outcomes-privacy.integration.test.ts > native child review outcome privacy > does not expose an Alice-private child outcome to Bob through tool
+AssertionError: expected '[{"id":"f02900a4-e23d-4809-867d-9a480…' not to contain 'f02900a4-e23d-4809-867d-9a480c31b89b'
+
+Expected: "f02900a4-e23d-4809-867d-9a480c31b89b"
+Received: "[{"id":"f02900a4-e23d-4809-867d-9a480c31b89b","kind":"native_completion_review","status":"accepted","result":{"childTaskId":"35672bef-5adb-4554-9b10-d46325ecbf00","childTaskIdentifier":"CRO05D19-2","childTaskStatus":"backlog","sourceDecisionId":"2765cd49-23da-43f2-a9ae-322cb997c386","sourceRunId":"c9f1a01c-f2d0-45b8-8cd1-4b4f2b2c7990","reviewerAgentId":"170e8cc5-506d-411d-9b13-5b0fc78fd32f","reviewerUserId":null,"reviewerRunId":"aa3d8a0a-987e-4636-a835-82a114995730","resolvedAt":"2026-10-24T13:44:51.544Z"}},{"id":"0cd5d32f-9f4b-4afa-8442-d544e14012c0","kind":"native_completion_review","status":"accepted","result":{"childTaskId":"b045f708-00d9-4d48-ba61-ba40f0059a84","childTaskIdentifier":null,"childTaskStatus":"in_review","sourceDecisionId":"24e0e58e-3a19-41f9-8783-d650c091e573","sourceRunId":"6bb98350-cbf2-4e4a-99a2-5b2629c5c6ab","reviewerAgentId":"170e8cc5-506d-411d-9b13-5b0fc78fd32f","reviewerUserId":null,"reviewerRunId":"f415200b-6fb1-45ff-8339-48c225c77262","resolvedAt":"2026-10-24T13:44:51.544Z"}}]"
+
+ ❯ src/services/native-runtime/child-review-outcomes-privacy.integration.test.ts:109:42
+    107|         runId: parentRunId, context: {}, summary: null, exposeLowTrust…
+    108|     expect(JSON.stringify(outcomes)).toContain(openReviewId);
+    109|     expect(JSON.stringify(outcomes)).not.toContain(privateReviewId);
+       |                                          ^
+    110|   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+    111| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/child-review-outcomes-privacy.integration.test.ts > native child review outcome privacy > does not expose an Alice-private child outcome to Bob through continuation
+AssertionError: expected '[{"id":"b82ee9a8-2a69-49cd-bfbf-f6fb3…' not to contain '384ce13a-0167-4ec5-8051-82864e4ef463'
+
+Expected: "384ce13a-0167-4ec5-8051-82864e4ef463"
+Received: "[{"id":"b82ee9a8-2a69-49cd-bfbf-f6fb35b11a70","kind":"native_completion_review","status":"accepted","result":{"childTaskId":"3b42fa39-a257-4731-a43d-b758ddf1bda8","childTaskIdentifier":null,"childTaskStatus":"in_review","sourceDecisionId":"ee7c22c6-749a-4f58-9834-ecd00189f910","sourceRunId":"f150d66d-d0ce-4beb-b641-a6947e051dec","reviewerAgentId":"d4b9f606-2598-4d69-aaf1-fda6aa154304","reviewerUserId":null,"reviewerRunId":"18351e5a-a6a2-4b3f-a4bc-56f53fceec26","resolvedAt":"2026-10-24T13:44:52.065Z"}},{"id":"384ce13a-0167-4ec5-8051-82864e4ef463","kind":"native_completion_review","status":"accepted","result":{"childTaskId":"56349a62-3518-4c49-90e0-d8902ad53789","childTaskIdentifier":"CROCF313-2","childTaskStatus":"backlog","sourceDecisionId":"07d39079-6d87-4cb2-8de5-79c0f5dabb69","sourceRunId":"c10d791a-32f1-47be-b48a-a2b6a3904cac","reviewerAgentId":"d4b9f606-2598-4d69-aaf1-fda6aa154304","reviewerUserId":null,"reviewerRunId":"1a6b7ab7-2d59-4a0d-a0e0-a06a6781ba46","resolvedAt":"2026-10-24T13:44:52.065Z"}}]"
+
+ ❯ src/services/native-runtime/child-review-outcomes-privacy.integration.test.ts:109:42
+    107|         runId: parentRunId, context: {}, summary: null, exposeLowTrust…
+    108|     expect(JSON.stringify(outcomes)).toContain(openReviewId);
+    109|     expect(JSON.stringify(outcomes)).not.toContain(privateReviewId);
+       |                                          ^
+    110|   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+    111| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  13:43:50
+   Duration  61.84s (transform 33.55s, setup 339ms, import 50.06s, tests 10.68s, environment 1ms)
+

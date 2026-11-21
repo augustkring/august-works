@@ -1,0 +1,15 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/native-runtime/current-wake-comments.test.ts > current external-chat wake comment reader > exposes no reader for an inline-complete wake
+ ↓ src/services/native-runtime/current-wake-comments.test.ts > current external-chat wake comment reader > pages every exact accepted comment in order and excludes task history outside the wake
+ ↓ src/services/native-runtime/current-wake-comments.test.ts > current external-chat wake comment reader > requires ordered pages and fails the completion fence after a comment changes
+ ↓ src/services/native-runtime/current-wake-comments.test.ts > current external-chat wake comment reader > surfaces closed attachment omissions and fences their exact snapshot
+ ↓ src/services/native-runtime/current-wake-comments.test.ts > current external-chat wake comment reader > rejects a coalesced comment that arrives between binding resolution and the terminal row lock
+ ✓ src/services/native-runtime/current-wake-comments.test.ts > current external-chat wake comment reader > lets a Task reader fence complete while the receipt writer waits on that Task 247ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 5 skipped (6)
+   Start at  16:42:09
+   Duration  22.45s (transform 12.16s, setup 79ms, import 17.57s, tests 4.68s, environment 0ms)
+

@@ -1,0 +1,98 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > executes Foundation and Memory query nodes with approved and accepted sources only 9596ms
+ × |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > assembles authorized approved Foundation and task context into a durable manifest 127ms
+   → Failed query: insert into "principal_permission_grants" ("id", "company_id", "principal_type", "principal_id", "permission_key", "scope", "granted_by_user_id", "created_at", "updated_at") values (default, $1, $2, $3, $4, $5, default, default, default), (default, $6, $7, $8, $9, $10, default, default, default)
+params: a50828c7-b51a-4ad5-88d7-a4b7dab8e04c,agent,c507df8d-0a38-4f32-a47a-9c821a7a9f2a,foundation:read,,a50828c7-b51a-4ad5-88d7-a4b7dab8e04c,user,user-a50828c7-b51a-4ad5-88d7-a4b7dab8e04c,foundation:read,
+[11:45:52] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"d36688cc-905a-4912-9414-0efddf994a31","actorAgentId":"affb261d-bf53-4127-bee6-f14cc4fe26c7","responsibleUserId":"user-d36688cc-905a-4912-9414-0efddf994a31"}[39m
+[11:45:52] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"d36688cc-905a-4912-9414-0efddf994a31","actorAgentId":"affb261d-bf53-4127-bee6-f14cc4fe26c7","responsibleUserId":"user-d36688cc-905a-4912-9414-0efddf994a31"}[39m
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority 5173ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > preserves an original Human Task source across status changes and rejects it after a canonical body edit 695ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > retrieves only issue-authorized synced GitHub evidence into the governed Context packet 372ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps Memory hydration disabled until Memory flags are enabled 4833ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > hydrates only eligible relevant shared and owner-private Memory into Context 9749ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps unsupported, expired, erased, and foreign Human Task evidence out of Memory payload snapshots 785ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > omits Foundation without foundation:read but still admits authorized task context 3254ms
+ × |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > enforces the represented human's source permission for V5 even in shadow mode 143ms
+   → expected [ { …(18) } ] to deeply equal []
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > assembles authorized approved Foundation and task context into a durable manifest
+Error: Failed query: insert into "principal_permission_grants" ("id", "company_id", "principal_type", "principal_id", "permission_key", "scope", "granted_by_user_id", "created_at", "updated_at") values (default, $1, $2, $3, $4, $5, default, default, default), (default, $6, $7, $8, $9, $10, default, default, default)
+params: a50828c7-b51a-4ad5-88d7-a4b7dab8e04c,agent,c507df8d-0a38-4f32-a47a-9c821a7a9f2a,foundation:read,,a50828c7-b51a-4ad5-88d7-a4b7dab8e04c,user,user-a50828c7-b51a-4ad5-88d7-a4b7dab8e04c,foundation:read,
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/context/context-engine-integration.test.ts:573:5
+    571|   it("assembles authorized approved Foundation and task context into a…
+    572|     const seeded = await seed();
+    573|     await db.insert(principalPermissionGrants).values([
+       |     ^
+    574|       {
+    575|         companyId: seeded.companyId,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { query: 'insert into "principal_permission_grants" ("id", "company_id", "principal_type", "principal_id", "permission_key", "scope", "granted_by_user_id", "created_at", "updated_at") values (default, $1, $2, $3, $4, $5, default, default, default), (default, $6, $7, $8, $9, $10, default, default, default)', params: [ 'a50828c7-b51a-4ad5-88d7-a4b7dab8e04c', 'agent', 'c507df8d-0a38-4f32-a47a-9c821a7a9f2a', 'foundation:read', null, 'a50828c7-b51a-4ad5-88d7-a4b7dab8e04c', 'user', 'user-a50828c7-b51a-4ad5-88d7-a4b7dab8e04c', 'foundation:read', null ] }
+Caused by: PostgresError: duplicate key value violates unique constraint "principal_permission_grants_unique_idx"
+ ❯ ErrorResponse ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23505', detail: 'Key (company_id, principal_type, principal_id, permission_key)=(a50828c7-b51a-4ad5-88d7-a4b7dab8e04c, user, user-a50828c7-b51a-4ad5-88d7-a4b7dab8e04c, foundation:read) already exists.', schema_name: 'public', table_name: 'principal_permission_grants', constraint_name: 'principal_permission_grants_unique_idx', file: 'nbtinsert.c', routine: '_bt_check_unique', query: 'insert into "principal_permission_grants" ("id", "company_id", "principal_type", "principal_id", "permission_key", "scope", "granted_by_user_id", "created_at", "updated_at") values (default, $1, $2, $3, $4, $5, default, default, default), (default, $6, $7, $8, $9, $10, default, default, default)', parameters: [ 'a50828c7-b51a-4ad5-88d7-a4b7dab8e04c', 'agent', 'c507df8d-0a38-4f32-a47a-9c821a7a9f2a', 'foundation:read', null, 'a50828c7-b51a-4ad5-88d7-a4b7dab8e04c', 'user', 'user-a50828c7-b51a-4ad5-88d7-a4b7dab8e04c', 'foundation:read', null ], args: [ 'a50828c7-b51a-4ad5-88d7-a4b7dab8e04c', 'agent', 'c507df8d-0a38-4f32-a47a-9c821a7a9f2a', 'foundation:read', null, 'a50828c7-b51a-4ad5-88d7-a4b7dab8e04c', 'user', 'user-a50828c7-b51a-4ad5-88d7-a4b7dab8e04c', 'foundation:read', null ], types: [ 2950, 25, 25, 25, 3802, 2950, 25, 25, 25, 3802 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > enforces the represented human's source permission for V5 even in shadow mode
+AssertionError: expected [ { …(18) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "authorityDomain": "company_strategy",
++     "citation": {
++       "href": "/foundation/c39aa5e0-25da-418f-a2b8-73add94805d0",
++       "label": "enterprise-strategy",
++     },
++     "companyId": "e7b2e397-9a19-45c0-a4c1-887c1abd833d",
++     "excerpt": "Enterprise strategy requires confidential source permission.",
++     "id": "foundation:c39aa5e0-25da-418f-a2b8-73add94805d0:a5cc2201-d05c-4378-a508-c62552f40639:0",
++     "metadata": {
++       "category": "strategy",
++       "contentHash": "28d41f028730e7919fc2864b98d8e621bf712e7ca59eb2d1dcda5e83f8434d85",
++       "documentType": "strategy",
++       "foundationKey": "enterprise-strategy",
++       "retrievalScore": 60,
++       "revisionNumber": 1,
++     },
++     "observedAt": "2026-10-28T11:46:12.718Z",
++     "sensitivity": "internal",
++     "sourceClass": "foundation",
++     "sourceProvider": "august_works_foundation",
++     "sourceRef": "foundation://c39aa5e0-25da-418f-a2b8-73add94805d0/a5cc2201-d05c-4378-a508-c62552f40639/0",
++     "sourceType": "foundation_section",
++     "sourceUpdatedAt": "2026-10-28T11:46:12.686Z",
++     "sourceVersion": "a5cc2201-d05c-4378-a508-c62552f40639",
++     "title": "Enterprise strategy",
++     "trustLevel": "high",
++     "validFrom": null,
++     "validUntil": null,
++   },
++ ]
+
+ ❯ src/services/context/context-engine-integration.test.ts:1229:40
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 8 passed (10)
+   Start at  11:45:16
+   Duration  55.95s (transform 11.63s, setup 76ms, import 16.86s, tests 38.89s, environment 0ms)
+

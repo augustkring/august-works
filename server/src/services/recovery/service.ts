@@ -127,6 +127,7 @@ import {
 import {
   SANDBOX_PROVIDER_PLUGIN_NOT_READY_REASON,
   sandboxProviderPluginRemedy,
+  buildConfigurationIncompleteRecoveryNoticeSeed,
   buildExecutionReviewParticipantRecoveryNoticeSeed,
   buildExecutionReviewParticipantUnavailableNoticeSeed,
   buildStrandedRecoveryEscalationNotice,
@@ -192,6 +193,7 @@ type RecoveryWakeupOptions = {
   reason?: string | null;
   payload?: Record<string, unknown> | null;
   idempotencyKey?: string | null;
+  returnNullForIdempotentReplay?: boolean;
   requestedByActorType?: "user" | "agent" | "system";
   requestedByActorId?: string | null;
   contextSnapshot?: Record<string, unknown>;
@@ -488,6 +490,10 @@ const TRANSIENT_INFRA_CONTINUATION_ERROR_CODES = new Set<string>([
 ]);
 
 const NON_RETRYABLE_CONTINUATION_ERROR_CODES = new Set<string>([
+  // The ACP host ended a tool call after it stopped reporting updates. The
+  // provider may already have applied an unknown side effect, so generic
+  // continuation must not replay the task automatically.
+  "acpx_tool_stalled",
   "adapter_engine_unavailable",
   "agent_not_invokable",
   "agent_not_found",
@@ -1969,10 +1975,27 @@ export function recoveryService(
       )
         return null;
     }
+    const interactionId = readNonEmptyString(input.extraContext?.interactionId);
+    const interactionStatus = readNonEmptyString(
+      input.extraContext?.interactionStatus,
+    );
+    const interactionWakeKey =
+      input.source === "issue.interaction_continuation_recovery" &&
+      interactionId &&
+      interactionStatus &&
+      ["accepted", "answered", "rejected"].includes(interactionStatus)
+        ? `interaction:${interactionId}:${interactionStatus}`
+        : null;
     const queued = await deps.enqueueWakeup(input.agentId, {
       source: "automation",
       triggerDetail: "system",
       reason: input.reason,
+      ...(interactionWakeKey
+        ? {
+            idempotencyKey: interactionWakeKey,
+            returnNullForIdempotentReplay: true,
+          }
+        : {}),
       // The sweep can combine an old in-progress issue snapshot with a newer
       // successful run. Validate eligibility under the enqueue issue lock so
       // completion or reassignment cannot create a redundant continuation.
@@ -4002,8 +4025,22 @@ export function recoveryService(
           input.successfulRunHandoffEvidence.missingDisposition,
       });
     }
+    // The Run's release path seeds a configuration-incomplete notice from the
+    // structured payload the failed Run recorded; the periodic sweep passes
+    // only a generic comment. Derive the same seed here so the retained notice
+    // names the same gap whichever writer posts it.
+    const configurationIncompletePayload =
+      !input.notice && recoveryCause === "configuration_incomplete"
+        ? readConfigurationIncompletePayload(input.latestRun)
+        : null;
     const escalationNotice = buildStrandedRecoveryEscalationNotice({
-      seed: input.notice,
+      seed:
+        input.notice ??
+        (configurationIncompletePayload
+          ? buildConfigurationIncompleteRecoveryNoticeSeed(
+              configurationIncompletePayload,
+            )
+          : null),
       fallbackBody: input.comment,
       recoveryCause,
       recoveryActionId: recoveryAction.id,
@@ -4031,56 +4068,53 @@ export function recoveryService(
     if (shouldPostEscalationComment) {
       const escalationCommentMarker = `Recovery action: \`${recoveryAction.id}\``;
 
-      const hasEscalationComment = await db
-        .select({
-          id: issueComments.id,
-          body: issueComments.body,
-          metadata: issueComments.metadata,
-        })
-        .from(issueComments)
-        .where(
-          and(
-            eq(issueComments.issueId, input.issue.id),
-            eq(issueComments.authorType, "system"),
-          ),
-        )
-        .orderBy(desc(issueComments.createdAt))
-        .limit(50)
-        .then((rows) =>
-          rows.some(
-            (row) =>
-              noticeMetadataReferencesRecoveryAction(
-                row.metadata,
-                recoveryAction.id,
-              ) || (row.body ?? "").includes(escalationCommentMarker),
-          ),
+      const retainedNotice = notice ?? escalationNotice;
+      // Two writers can escalate the same failed Run at the same time: the
+      // Run's own release path and the periodic stranded-issue sweep. Each
+      // reuses the same source-scoped recovery action, so check for its
+      // retained notice and insert it under one per-Task transaction lock.
+      // Otherwise both writers can see no notice and both insert one.
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`stranded-recovery-notice:${input.issue.companyId}:${input.issue.id}`}, 0))`,
         );
-
-      if (!hasEscalationComment) {
-        if (notice) {
-          await issuesSvc.addComment(
-            input.issue.id,
-            notice.body,
-            {},
-            {
-              authorType: "system",
-              presentation: notice.presentation,
-              metadata: notice.metadata,
-            },
+        const hasEscalationComment = await tx
+          .select({
+            id: issueComments.id,
+            body: issueComments.body,
+            metadata: issueComments.metadata,
+          })
+          .from(issueComments)
+          .where(
+            and(
+              eq(issueComments.issueId, input.issue.id),
+              eq(issueComments.authorType, "system"),
+            ),
+          )
+          .orderBy(desc(issueComments.createdAt))
+          .limit(50)
+          .then((rows) =>
+            rows.some(
+              (row) =>
+                noticeMetadataReferencesRecoveryAction(
+                  row.metadata,
+                  recoveryAction.id,
+                ) || (row.body ?? "").includes(escalationCommentMarker),
+            ),
           );
-        } else {
-          await issuesSvc.addComment(
-            input.issue.id,
-            escalationNotice.body,
-            {},
-            {
-              authorType: "system",
-              presentation: escalationNotice.presentation,
-              metadata: escalationNotice.metadata,
-            },
-          );
-        }
-      }
+        if (hasEscalationComment) return;
+        await issuesSvc.addComment(
+          input.issue.id,
+          retainedNotice.body,
+          {},
+          {
+            authorType: "system",
+            presentation: retainedNotice.presentation,
+            metadata: retainedNotice.metadata,
+          },
+          tx,
+        );
+      });
     }
 
     await logActivity(db, {
@@ -4519,6 +4553,17 @@ export function recoveryService(
         result.skipped += 1;
         continue;
       }
+
+      // `latestRun` was read before the live-path check above. The Run can
+      // finish in between: its own finalizer marks it failed before it
+      // releases the Task, so the check above no longer sees a live path.
+      // Deciding from the earlier queued or running snapshot treats that Run
+      // as unclassified work and schedules a transient retry. The retry then
+      // counts as the Task's successor, so the release does not block the
+      // Task (for example after a `configuration_incomplete` failure) and the
+      // Task stays `in_progress`. A Run with no live path is terminal and
+      // stays terminal, so decide from the Run as it is now.
+      latestRun = await getLatestIssueRun(issue.companyId, issue.id);
 
       if (await hasPendingWakeInteraction(issue.companyId, issue.id)) {
         result.skipped += 1;

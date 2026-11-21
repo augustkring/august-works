@@ -1,0 +1,9 @@
+# Bootstrap source-test migration
+
+Exactly the two redaction branches of the obsolete mocked-Codex first-bootstrap test move to the installed Native text-controller module. All other bytes in the legacy module are preserved. No test is skipped or changed to expect an admission denial.
+
+The old setup directly inserted unsealed plan/comment histories and an already-answered Agent-attributed question, then bypassed wake normalization by editing the queued Run. The replacements create Human-sealed Task/plan/comment records, create and answer the question through the canonical Human service, and submit its actual interaction wake tuple through the scheduler. This does not pretend that a Human-created question has an Agent producer Run.
+
+Both replacements preserve runtime instruction/skill source pins, Task version/body hash, plan revision/body hash, inline and continuation comment hashes, direct response/body/version hashes, registered-secret exclusion, deleted-comment exclusion, cancellation-before-source-mutation, immutable persisted profile, zero provider/backend substitution, final Native cancellation and startup settlement. They also verify actual snapshot owner/schema/digest binding. Continuation hashes use the current canonical Native hash rather than insertion-order JSON encoding. Post-cancel Task edits and comment tombstones use their canonical owners.
+
+The actual full replacement module passed 14/14 with PostgreSQL, including these two cases. The separate active/historical question cases retain all existing paused-work scheduling assertions and add current/historical delivered-document access and independent source/privacy corruption refusals. These software fixtures are not external SDK, provider or physical Host qualification. Remaining legacy recovery cases still require their own admitted lifecycle counterparts.

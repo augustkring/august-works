@@ -1,0 +1,3 @@
+timeout_seconds=600
+test_file=src/services/native-runtime/native-session-resume.test.ts
+test_pattern=.*

@@ -13,9 +13,9 @@ import { companyExperience } from "../services/experience/company-navigation.js"
 import { experienceCommands } from "../services/experience/commands.js";
 import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 
-export function experienceRoutes(db: Db) {
+export function experienceRoutes(db: Db, options: { operatorUserIds?: readonly string[] } = {}) {
   const router = Router();
-  const service = experienceService(db);
+  const service = experienceService(db, options.operatorUserIds ?? []);
   router.get("/companies/:companyId/experience/insight-card", async (req, res) => {
     assertBoard(req); const companyId = z.uuid().parse(req.params.companyId); assertCompanyAccess(req, companyId);
     if (Object.keys(req.query).some(key => key !== "request" && key !== "expectedUserId") || typeof req.query.request !== "string") throw badRequest("Invalid Native insight request");

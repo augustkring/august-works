@@ -1,0 +1,558 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[12:22:14] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:14] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > skips runtime materialization when listing Claude skills 15024ms
+[12:22:14] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:14] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > lists skills without resolving required user-secret env bindings 544ms
+[12:22:15] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:15] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[12:22:15] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:15] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > threads a non-undefined actor secret context into resolveAdapterConfigForRuntime on both skills routes (audit fidelity, skipUserSecrets preserved) 488ms
+[12:22:15] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:15] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > skips runtime materialization when listing Codex skills 485ms
+[12:22:16] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:16] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > passes ACPX Claude config through the agent skill listing route 443ms
+[12:22:16] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:16] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > persists ACPX Codex desired skills through the agent skill sync route 457ms
+[12:22:16] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:16] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > requires an explicit actionable merge mode for skill sync 496ms
+[12:22:17] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:17] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > adds only named desired skills while preserving existing assignments 415ms
+[12:22:17] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:17] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > removes only named desired skills while preserving other assignments 420ms
+[12:22:18] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:18] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > replaces the complete desired skill set only when explicitly requested 419ms
+[12:22:18] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:18] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > rejects version pins while beta skills are disabled 410ms
+[12:22:19] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:19] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > accepts version pins while beta skills are enabled 423ms
+[12:22:19] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:19] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > preserves stale desired keys instead of 422-ing when syncing (PAP-13222) 466ms
+[12:22:19] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:19] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > skips runtime materialization when listing persistent skill adapters 458ms
+[12:22:20] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:20] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > skips runtime materialization when syncing Claude skills 498ms
+[12:22:20] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:20] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > ignores the reserved legacy Paperclip skill for paperclip_runner 489ms
+[12:22:21] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:21] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > allows paperclip_runner to remove a pre-existing legacy Paperclip skill 488ms
+[12:22:21] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:21] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > syncs skills without resolving required user-secret env bindings 472ms
+[12:22:22] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:22] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > canonicalizes desired skill references before syncing 483ms
+[12:22:22] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:22] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > persists canonical desired skills when creating an agent directly 458ms
+[12:22:23] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:23] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > rejects version pins when creating an agent while beta skills are disabled 427ms
+[12:22:23] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:23] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > accepts the security role on direct agent creation and preserves it in telemetry 420ms
+[12:22:24] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:24] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > materializes a managed AGENTS.md for directly created local agents 463ms
+[12:22:24] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:24] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > rejects legacy prompt templates for directly created local agents 448ms
+[12:22:25] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:25] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > materializes the bundled CEO instruction set for default CEO agents 431ms
+[12:22:25] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:25] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > materializes the bundled default instruction set for non-CEO agents with no prompt template 456ms
+[12:22:25] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:25] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > seeds the chief-of-staff persona for the onboarding first agent 435ms
+[12:22:26] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:26] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'codex_local' onboarding agents core and first-task skills via 'agents', preserving 'paperclipai/paperclip/paperclip-creat…' pins 467ms
+[12:22:26] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:26] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'codex_local' onboarding agents core and first-task skills via 'agent-hires', preserving 'paperclipai/paperclip/paperclip-creat…' pins 439ms
+[12:22:27] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:27] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'codex_local' onboarding agents core and first-task skills via 'agents', preserving 'paperclip' pins 453ms
+[12:22:27] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:27] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'codex_local' onboarding agents core and first-task skills via 'agent-hires', preserving 'paperclip' pins 417ms
+[12:22:28] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:28] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'codex_local' onboarding agents core and first-task skills via 'agents', preserving 'paperclipai/paperclip/first-task' pins 421ms
+[12:22:28] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:28] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'codex_local' onboarding agents core and first-task skills via 'agent-hires', preserving 'paperclipai/paperclip/first-task' pins 414ms
+[12:22:28] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:28] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'claude_local' onboarding agents core and first-task skills via 'agents', preserving 'paperclipai/paperclip/paperclip-creat…' pins 430ms
+[12:22:29] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:29] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'claude_local' onboarding agents core and first-task skills via 'agent-hires', preserving 'paperclipai/paperclip/paperclip-creat…' pins 456ms
+[12:22:29] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:29] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'claude_local' onboarding agents core and first-task skills via 'agents', preserving 'paperclip' pins 434ms
+[12:22:30] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:30] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'claude_local' onboarding agents core and first-task skills via 'agent-hires', preserving 'paperclip' pins 412ms
+[12:22:30] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:30] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'claude_local' onboarding agents core and first-task skills via 'agents', preserving 'paperclipai/paperclip/first-task' pins 428ms
+[12:22:31] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:31] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives 'claude_local' onboarding agents core and first-task skills via 'agent-hires', preserving 'paperclipai/paperclip/first-task' pins 411ms
+[12:22:31] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:31] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > leaves ordinary general agents' defaults unchanged via agents 420ms
+[12:22:32] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:32] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > leaves ordinary general agents' defaults unchanged via agent-hires 559ms
+[12:22:32] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:32] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > does not assign first-task to ordinary CEOs via agents 598ms
+[12:22:33] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:33] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > does not assign first-task to ordinary CEOs via agent-hires 419ms
+[12:22:33] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:33] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > does not trust an agent-supplied onboarding marker to select chief-of-staff defaults 400ms
+[12:22:33] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:33] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > creates nothing for rejected Biff payloads and exactly one approval-gated hire after correction 425ms
+[12:22:34] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:34] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > includes canonical desired skills in hire approvals 422ms
+[12:22:34] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:34] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > gives a CEO hire the core paperclip skills when none are requested 455ms
+[12:22:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > omits the legacy operational skill from paperclip_runner CEO defaults 405ms
+[12:22:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > unions requested skills with the CEO defaults instead of replacing them 418ms
+[12:22:36] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:36] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > does not add default skills to non-CEO hires 463ms
+[12:22:36] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:36] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > rejects version pins in agent hires while beta skills are disabled 438ms
+[12:22:36] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:36] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > preserves hire source issues, icons, desired skills, and approval payload details 436ms
+[12:22:37] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[12:22:37] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > uses managed AGENTS config in hire approval payloads 417ms
+[12:22:37] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+ ✓ src/__tests__/agent-skills-routes.test.ts > agent skill routes > rejects legacy prompt templates for hire approval payloads 423ms
+[12:22:37] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+
+ Test Files  1 passed (1)
+      Tests  54 passed (54)
+   Start at  12:21:58
+   Duration  39.13s (transform 11.00s, setup 82ms, import 129ms, tests 38.80s, environment 0ms)
+

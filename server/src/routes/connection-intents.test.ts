@@ -1,4 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import express from "express";
+import type { Db } from "@paperclipai/db";
+import request from "supertest";
+import { errorHandler } from "../middleware/index.js";
+import { createRuntimeToolsToken } from "../runtime-tools-token.js";
+import { runtimeConnectionIntentRoutes } from "./connection-intents.js";
 import {
   CONNECTION_REQUEST_TOOL_DESCRIPTION,
   CONNECTION_RUNTIME_TOOL_NAMES,
@@ -123,4 +129,84 @@ describe("connection intent continuation wake contract", () => {
       expect(wakeup).not.toHaveBeenCalled();
     },
   );
+});
+
+
+const managedRouteIds = {
+  agent: "10000000-0000-4000-8000-000000000001",
+  company: "10000000-0000-4000-8000-000000000002",
+  run: "10000000-0000-4000-8000-000000000003",
+  human: "10000000-0000-4000-8000-000000000004",
+  group: "10000000-0000-4000-8000-000000000005",
+  probe: "10000000-0000-4000-8000-000000000006",
+  plan: "10000000-0000-4000-8000-000000000007",
+  profile: "10000000-0000-4000-8000-000000000008",
+  nonce: "10000000-0000-4000-8000-000000000009",
+};
+const managedRouteAuthorityHash = "a".repeat(64);
+
+function managedRouteToken(scope: "worker_model" | "conversation_model" | "provider_conformance" | "connection_intents") {
+  return createRuntimeToolsToken({
+    agentId: managedRouteIds.agent,
+    companyId: managedRouteIds.company,
+    runId: managedRouteIds.run,
+    responsibleUserId: managedRouteIds.human,
+    scope,
+    ...(scope === "worker_model" ? { workerModelBinding: {
+      planId: managedRouteIds.plan, workerId: managedRouteIds.probe, workerAttemptId: managedRouteIds.nonce,
+      executionManifestId: managedRouteIds.profile, expectedPlanVersion: 1,
+    } } : {}),
+    ...(scope === "conversation_model" ? { conversationModelBinding: {
+      issueId: managedRouteIds.probe, conversationSessionGeneration: 1, executionManifestId: managedRouteIds.profile,
+      executionManifestHash: managedRouteAuthorityHash,
+    } } : {}),
+    ...(scope === "provider_conformance" ? { providerConformanceBinding: {
+      qualificationGroupId: managedRouteIds.group, probeId: managedRouteIds.probe, probeRunId: managedRouteIds.run,
+      planId: managedRouteIds.plan, profileId: managedRouteIds.profile, dispatchNonce: managedRouteIds.nonce,
+      authorityHash: managedRouteAuthorityHash,
+    }, providerConformanceDeadlineAt: new Date(Date.now() + 30_000) } : {}),
+  });
+}
+
+function managedMessagesApp(callManagedMessages: ReturnType<typeof vi.fn>) {
+  const app = express();
+  app.use(express.json());
+  app.use("/api", runtimeConnectionIntentRoutes({} as Db, { callManagedMessages } as never));
+  app.use(errorHandler);
+  return app;
+}
+
+describe("shared managed Messages route scopes", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each(["worker_model", "conversation_model", "provider_conformance"] as const)(
+    "forwards a valid %s claim to the shared gateway",
+    async (scope) => {
+      vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", "managed-messages-route-test-secret");
+      const callManagedMessages = vi.fn().mockResolvedValue({ sse: "event: message\ndata: {}\n\n" });
+      const minted = managedRouteToken(scope);
+      expect(minted).not.toBeNull();
+      const response = await request(managedMessagesApp(callManagedMessages))
+        .post("/api/runtime-tools/model/v1/messages")
+        .set("Authorization", `Bearer ${minted!.token}`)
+        .send({ probe: "synthetic" });
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toContain("text/event-stream");
+      expect(callManagedMessages).toHaveBeenCalledOnce();
+      expect(callManagedMessages.mock.calls[0]?.[0]).toMatchObject({ scope, run_id: managedRouteIds.run });
+      expect(callManagedMessages.mock.calls[0]?.[1]).toEqual({ probe: "synthetic" });
+    },
+  );
+
+  it("keeps general RuntimeTools claims outside the typed managed model route", async () => {
+    vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", "managed-messages-route-test-secret");
+    const callManagedMessages = vi.fn();
+    const minted = managedRouteToken("connection_intents");
+    const response = await request(managedMessagesApp(callManagedMessages))
+      .post("/api/runtime-tools/model/v1/messages")
+      .set("Authorization", `Bearer ${minted!.token}`)
+      .send({ probe: "synthetic" });
+    expect(response.status).toBe(401);
+    expect(callManagedMessages).not.toHaveBeenCalled();
+  });
 });

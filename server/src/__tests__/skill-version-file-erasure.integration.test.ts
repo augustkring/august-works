@@ -42,7 +42,8 @@ const support = await getEmbeddedPostgresTestSupport();
       else {
         await db.update(companies).set({ status: "paused" }).where(eq(companies.id, erased.companyId));
         await instanceSettingsService(db).updateExperimental({ skill_lifecycle_v5: false });
-        await purgeCompanyContent(db, erased.companyId);
+        const purge = await purgeCompanyContent(db, erased.companyId);
+        expect(purge.tables).toEqual(expect.arrayContaining(["company_skills", "company_skill_versions"]));
       }
       expect(await fs.readFile(path.join(erased.entry.source, "SKILL.md"), "utf8")).toContain("Independent");
       const [job] = await db.select().from(memoryJobs).where(eq(memoryJobs.jobKey, `skill-version-file-erasure:v1:${erased.versionId}`));

@@ -1,23 +1,23 @@
 import { and, eq, ne, or } from "drizzle-orm";
-import { agents, projects, cognitiveMemoryBindings, cognitiveProviderOperations, type Db } from "@paperclipai/db";
-import { cognitiveBindingSchema, v7FeatureEnabled, type CognitiveRecallRequest, type EvidenceSensitivity } from "@paperclipai/shared";
+import { agents, projects, cognitiveMemoryBindings, cognitiveProviderOperations, memoryRecords, type Db } from "@paperclipai/db";
+import { cognitiveBindingSchema, v7FeatureEnabled, isUuidLike, type CognitiveRecallRequest, type EvidenceSensitivity } from "@paperclipai/shared";
 import type { z } from "zod";
-import type { AuthorizationActor } from "../authorization.js";
+import { canActorReadProjectPrivacy, type AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
-import { conflict, forbidden, notFound } from "../../errors.js";
+import { conflict, forbidden, notFound, HttpError } from "../../errors.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
 import { memorySensitivityAllowed } from "./memory-retrieval.js";
-import { lockMemoryPrivacy } from "./memory-privacy.js";
+import { lockMemoryPrivacy, canActorReadMemorySources } from "./memory-privacy.js";
 import { cognitiveProjection, cognitiveProviderForKey, assertCognitiveRecallUniverse } from "./cognitive-provider.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 
 export function cognitiveMemoryActor(actor: AuthorizationActor): MemoryMutationActor {
-  if (actor.type === "agent" && actor.agentId) return { principal: { type: "agent", agentId: actor.agentId, responsibleUserId: actor.onBehalfOfUserId ?? null }, runId: actor.runId ?? null };
+  if (actor.type === "agent" && actor.agentId) return { principal: { type: "agent", agentId: actor.agentId, responsibleUserId: actor.onBehalfOfUserId ?? null }, runId: actor.runId ?? null, authorizationActor: actor };
   const userId = v7HumanActorId(actor);
-  return actor.source === "local_implicit" ? { principal: { type: "system", service: "local-board" } } : { principal: { type: "user", userId } };
+  return actor.source === "local_implicit" ? { principal: { type: "system", service: "local-board" } } : { principal: { type: "user", userId }, authorizationActor: actor };
 }
 async function assertManager(db: Db, actor: AuthorizationActor, companyId: string) {
   v7HumanActorId(actor);
@@ -25,6 +25,48 @@ async function assertManager(db: Db, actor: AuthorizationActor, companyId: strin
   if (!(await memoryService(db).getRetentionPolicy(companyId, cognitiveMemoryActor(actor))).canManage) throw forbidden("Cognitive provider configuration requires a company administrator");
 }
 type Binding = typeof cognitiveMemoryBindings.$inferSelect;
+/** The persisted binding owns its scope; a company subscription cannot supply it. */
+export async function cognitiveBindingForReader(db: Db, actor: AuthorizationActor, companyId: string, id: string): Promise<Binding> {
+  await assertV7Authorization(db, actor, companyId, "company_scope:read");
+  const [row] = await db.select().from(cognitiveMemoryBindings).where(and(eq(cognitiveMemoryBindings.companyId, companyId), eq(cognitiveMemoryBindings.id, id)));
+  if (!row || (row.scopeType === "agent" && (actor.type !== "agent" || actor.agentId !== row.scopeId))) throw notFound("Cognitive binding not found");
+  if (row.scopeType === "project") {
+    if (!row.scopeId || !isUuidLike(row.scopeId) || !await canActorReadProjectPrivacy(db, actor, { companyId, id: row.scopeId })) throw notFound("Cognitive binding not found");
+    await assertV7Authorization(db, actor, companyId, "project:read", { type: "project", companyId, projectId: row.scopeId });
+  }
+  await assertV7Authorization(db, actor, companyId, "company_scope:read");
+  return row;
+}
+
+/** A reconciliation's count belongs to its exact persisted source versions. */
+export async function canActorReadCognitiveBindingActivity(db: Db, companyId: string, actor: AuthorizationActor, bindingId: string, action: unknown, operationId: unknown): Promise<boolean> {
+  const deadline = performance.now() + 8000;
+  try {
+    await cognitiveBindingForReader(db, actor, companyId, bindingId);
+    if (performance.now() > deadline) return false;
+    if (action === "memory.cognitive_binding_created") return operationId == null;
+    if (!["memory.cognitive_reconciled", "memory.cognitive_degraded"].includes(String(action)) || typeof operationId !== "string" || !isUuidLike(operationId)) return false;
+    const [operation] = await db.select().from(cognitiveProviderOperations).where(and(
+      eq(cognitiveProviderOperations.companyId, companyId), eq(cognitiveProviderOperations.bindingId, bindingId), eq(cognitiveProviderOperations.id, operationId),
+    ));
+    if (performance.now() > deadline || !operation || operation.operationType !== "reconcile" || !["succeeded", "failed"].includes(operation.status)
+      || !Array.isArray(operation.recordVersions) || operation.recordVersions.length > 100) return false;
+    const seen = new Set<string>();
+    for (const source of operation.recordVersions) {
+      if (performance.now() > deadline || !source || !isUuidLike(source.id) || typeof source.version !== "string" || seen.has(source.id)) return false;
+      seen.add(source.id);
+      const [record] = await db.select({ updatedAt: memoryRecords.updatedAt }).from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, source.id)));
+      if (performance.now() > deadline || !record || record.updatedAt.toISOString() !== source.version) return false;
+      if (!await canActorReadMemorySources(db, companyId, actor, source.id) || performance.now() > deadline) return false;
+    }
+    if (performance.now() > deadline) return false;
+    await cognitiveBindingForReader(db, actor, companyId, bindingId);
+    return performance.now() <= deadline;
+  } catch (error) {
+    if (error instanceof HttpError && [403, 404, 409].includes(error.status)) return false;
+    throw error;
+  }
+}
 export async function cognitiveEligibleRecords(db: Db, binding: Binding, actor: AuthorizationActor, purpose: string, ceiling: EvidenceSensitivity) {
   await assertV7Authorization(db, actor, binding.companyId, "company_scope:read");
   await assertSaasDomainAdmission(db, binding.companyId, "memory.use");
@@ -38,10 +80,7 @@ export async function cognitiveEligibleRecords(db: Db, binding: Binding, actor: 
 export function cognitiveMemoryService(db: Db) {
   async function binding(actor: AuthorizationActor, companyId: string, id: string) {
     await assertV7Enabled(db, "cognitive_memory_v7");
-    await assertV7Authorization(db, actor, companyId, "company_scope:read");
-    const [row] = await db.select().from(cognitiveMemoryBindings).where(and(eq(cognitiveMemoryBindings.companyId, companyId), eq(cognitiveMemoryBindings.id, id)));
-    if (!row || (row.scopeType === "agent" && (actor.type !== "agent" || actor.agentId !== row.scopeId))) throw notFound("Cognitive binding not found");
-    return row;
+    return cognitiveBindingForReader(db, actor, companyId, id);
   }
   return {
     status: async (actor: AuthorizationActor, companyId: string) => {
@@ -49,7 +88,12 @@ export function cognitiveMemoryService(db: Db) {
       await assertV7Authorization(db, actor, companyId, "company_scope:read");
       const bindings = await db.select().from(cognitiveMemoryBindings).where(and(eq(cognitiveMemoryBindings.companyId, companyId),
         actor.type === "agent" && actor.agentId ? or(ne(cognitiveMemoryBindings.scopeType, "agent"), eq(cognitiveMemoryBindings.scopeId, actor.agentId)) : ne(cognitiveMemoryBindings.scopeType, "agent")));
-      return { mode: "governed_only", providers: ["local_baseline", "noop"], hindsight: "deferred_pending_qualification", bindings };
+      const visible: Binding[] = [];
+      for (const row of bindings) {
+        try { visible.push(await cognitiveBindingForReader(db, actor, companyId, row.id)); }
+        catch (error) { if (!(error instanceof HttpError && [403, 404, 409].includes(error.status))) throw error; }
+      }
+      return { mode: "governed_only", providers: ["local_baseline", "noop"], hindsight: "deferred_pending_qualification", bindings: visible };
     },
     createBinding: async (actor: AuthorizationActor, companyId: string, raw: z.input<typeof cognitiveBindingSchema>) => {
       await assertV7Enabled(db, "cognitive_memory_v7"); await assertManager(db, actor, companyId);
@@ -61,10 +105,16 @@ export function cognitiveMemoryService(db: Db) {
       }
       if (input.scope.type === "project") {
         const [project] = await db.select({ id: projects.id }).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, input.scope.id!)));
-        if (!project) throw notFound("Cognitive scope project not found");
+        if (!project || !await canActorReadProjectPrivacy(db, actor, { companyId, id: project.id })) throw notFound("Cognitive scope project not found");
+        await assertV7Authorization(db, actor, companyId, "project:read", { type: "project", companyId, projectId: project.id });
       }
       const conformance = await cognitiveProviderForKey(input.providerKey).conformance();
       return withV7ActivityTransaction(db, async (tx, publications) => {
+        await assertManager(tx, actor, companyId);
+        if (input.scope.type === "project") {
+          if (!await canActorReadProjectPrivacy(tx, actor, { companyId, id: input.scope.id! })) throw notFound("Cognitive scope project not found");
+          await assertV7Authorization(tx, actor, companyId, "project:read", { type: "project", companyId, projectId: input.scope.id! });
+        }
         const [row] = await tx.insert(cognitiveMemoryBindings).values({ companyId, bindingKey: input.bindingKey, providerKey: input.providerKey,
           scopeType: input.scope.type, scopeId: input.scope.id, sensitivityCeiling: input.sensitivityCeiling, purpose: input.purpose,
           approvedPrivateProjection: input.approvedPrivateProjection, capabilitySnapshot: conformance, conformanceHash: nativeSha256(conformance) }).onConflictDoNothing().returning();
@@ -75,11 +125,15 @@ export function cognitiveMemoryService(db: Db) {
     },
     reconcile: async (actor: AuthorizationActor, companyId: string, id: string) => {
       await assertManager(db, actor, companyId);
-      const row = await binding(actor, companyId, id), provider = cognitiveProviderForKey(row.providerKey);
+      await binding(actor, companyId, id);
       return withV7ActivityTransaction(db, async (tx, publications) => {
         await lockMemoryPrivacy(tx, companyId);
+        await assertManager(tx, actor, companyId);
+        const row = await cognitiveBindingForReader(tx, actor, companyId, id);
+        const provider = cognitiveProviderForKey(row.providerKey);
         const records = await cognitiveEligibleRecords(tx, row, actor, row.purpose, row.sensitivityCeiling);
         const versions = records.map((record) => ({ id: record.id, version: record.updatedAt.toISOString() }));
+        await assertManager(tx, actor, companyId);
         const [operation] = await tx.insert(cognitiveProviderOperations).values({ companyId, bindingId: id, operationType: "reconcile", recordVersions: versions, status: "running", attemptCount: 1 }).returning();
         try {
           const health = await provider.health(), conformance = await provider.conformance();

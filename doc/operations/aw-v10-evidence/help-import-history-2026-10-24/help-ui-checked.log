@@ -1,0 +1,43 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ |@paperclipai/ui| src/App.cases-routing.test.tsx (15 tests | 2 failed) 2647ms
+     × retains support state after return while releasing the modal's work-surface effects 251ms
+     × retains support state after escape while releasing the modal's work-surface effects 271ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > retains support state after return while releasing the modal's work-surface effects
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > retains support state after escape while releasing the modal's work-surface effects
+AssertionError: expected <textarea …(1)></textarea> to be <textarea …(1)></textarea> // Object.is equality
+
+- Expected
++ Received
+
+  <textarea
+    aria-label="Unsent support"
+- >
+-   Private unsent support
+- </textarea>
++ />
+
+ ❯ src/App.cases-routing.test.tsx:312:77
+    310|     openCases();
+    311|     await vi.waitFor(() => expect(document.querySelector<HTMLElement>(…
+    312|     expect(document.querySelector('textarea[aria-label="Unsent support…
+       |                                                                             ^
+    313|     expect(support.value).toBe("Private unsent support");
+    314|     unmountApp(root);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  2 failed | 37 passed (39)
+   Start at  21:01:07
+   Duration  25.46s (transform 11.68s, setup 56ms, import 19.02s, tests 4.04s, environment 1.86s)
+

@@ -1,0 +1,334 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts (20 tests | 14 failed) 123756ms
+     × actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false) 60028ms
+     × actual migrated owner admits registered effect only with balanced pretreatment invariants (true; DoWhy=false) 28ms
+     × captures all assigned native outcomes at one actual time including unexposed units, signs immutable receipts and permits one advisory interpretation 11ms
+     × replays the historical fully copied outcome lineage without changing signed facts and erases its final-only project ancestry 10ms
+     × withholds inference for a missing exposure receipt and requires explicit human abstention 10ms
+     × retains unknown/material concurrent changes as an invalid causal gate without invented effects 10ms
+     × admits explicit safety-stop analysis without future outcomes or confirmatory effects 10ms
+     × a missed preregistered final-capture deadline invalidates actual retained outcomes 11ms
+     × erases protocol, result and human prose when the actual final-capture project is erased with flags off 9ms
+     × actual native company purge includes saved analyses and interpretations with rollout disabled 9ms
+     × rejects omitted final outcomes at deferred commit and blocks ordinary receipt deletion 13ms
+     × projects a current analysis without participant registers or operator identities and rechecks its Source 13ms
+     × public analysis routes reject pasted result/integrity fields and preserve current account/no-store 11ms
+     × rejects one forged Source or binary value among otherwise identical inserted outcome inputs 12ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+Error: Test timed out in 60000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:213:146
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (true; DoWhy=false)
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: 11f33e66-e65b-4471-a298-0f7c29217a35,structural-sandbox-fixture,local-board,2f4c65dd-e12e-4043-9030-7134b0c105e5,0,singleDevice,false,2026-10-26T20:53:09.511Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ '11f33e66-e65b-4471-a298-0f7c29217a35', 'structural-sandbox-fixture', 'local-board', '2f4c65dd-e12e-4043-9030-7134b0c105e5', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.511Z' ], args: [ '11f33e66-e65b-4471-a298-0f7c29217a35', 'structural-sandbox-fixture', 'local-board', '2f4c65dd-e12e-4043-9030-7134b0c105e5', +0, 'singleDevice', false, '2026-10-26T20:53:09.511Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > captures all assigned native outcomes at one actual time including unexposed units, signs immutable receipts and permits one advisory interpretation
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: 3ce36534-22c9-48e3-82ca-781bafc8328f,structural-sandbox-fixture,local-board,b50cf26b-2ed8-40a4-87e2-0704900b51b1,0,singleDevice,false,2026-10-26T20:53:09.523Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ '3ce36534-22c9-48e3-82ca-781bafc8328f', 'structural-sandbox-fixture', 'local-board', 'b50cf26b-2ed8-40a4-87e2-0704900b51b1', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.523Z' ], args: [ '3ce36534-22c9-48e3-82ca-781bafc8328f', 'structural-sandbox-fixture', 'local-board', 'b50cf26b-2ed8-40a4-87e2-0704900b51b1', +0, 'singleDevice', false, '2026-10-26T20:53:09.523Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > replays the historical fully copied outcome lineage without changing signed facts and erases its final-only project ancestry
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: cd007465-dfcf-445d-af70-84df723d3276,structural-sandbox-fixture,local-board,5ab322c9-f95b-4d68-a1bf-0a1335cb9250,0,singleDevice,false,2026-10-26T20:53:09.534Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ 'cd007465-dfcf-445d-af70-84df723d3276', 'structural-sandbox-fixture', 'local-board', '5ab322c9-f95b-4d68-a1bf-0a1335cb9250', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.534Z' ], args: [ 'cd007465-dfcf-445d-af70-84df723d3276', 'structural-sandbox-fixture', 'local-board', '5ab322c9-f95b-4d68-a1bf-0a1335cb9250', +0, 'singleDevice', false, '2026-10-26T20:53:09.534Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > withholds inference for a missing exposure receipt and requires explicit human abstention
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: 88263339-2aee-470c-b1c2-52f95f1a123c,structural-sandbox-fixture,local-board,a4fdecc8-3415-488c-9bed-e5fcffd061d7,0,singleDevice,false,2026-10-26T20:53:09.544Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ '88263339-2aee-470c-b1c2-52f95f1a123c', 'structural-sandbox-fixture', 'local-board', 'a4fdecc8-3415-488c-9bed-e5fcffd061d7', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.544Z' ], args: [ '88263339-2aee-470c-b1c2-52f95f1a123c', 'structural-sandbox-fixture', 'local-board', 'a4fdecc8-3415-488c-9bed-e5fcffd061d7', +0, 'singleDevice', false, '2026-10-26T20:53:09.544Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > retains unknown/material concurrent changes as an invalid causal gate without invented effects
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: 72ee2143-7ed9-4b3f-8b1c-598bef6da119,structural-sandbox-fixture,local-board,a464ab50-a500-4974-b19d-a329d4116ac5,0,singleDevice,false,2026-10-26T20:53:09.554Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ '72ee2143-7ed9-4b3f-8b1c-598bef6da119', 'structural-sandbox-fixture', 'local-board', 'a464ab50-a500-4974-b19d-a329d4116ac5', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.554Z' ], args: [ '72ee2143-7ed9-4b3f-8b1c-598bef6da119', 'structural-sandbox-fixture', 'local-board', 'a464ab50-a500-4974-b19d-a329d4116ac5', +0, 'singleDevice', false, '2026-10-26T20:53:09.554Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > admits explicit safety-stop analysis without future outcomes or confirmatory effects
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: 842f111c-388c-41a9-b662-a3eb4662aa80,structural-sandbox-fixture,local-board,5386fc74-5c3b-4a71-a2a5-a98312d31516,0,singleDevice,false,2026-10-26T20:53:09.564Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ '842f111c-388c-41a9-b662-a3eb4662aa80', 'structural-sandbox-fixture', 'local-board', '5386fc74-5c3b-4a71-a2a5-a98312d31516', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.564Z' ], args: [ '842f111c-388c-41a9-b662-a3eb4662aa80', 'structural-sandbox-fixture', 'local-board', '5386fc74-5c3b-4a71-a2a5-a98312d31516', +0, 'singleDevice', false, '2026-10-26T20:53:09.564Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > a missed preregistered final-capture deadline invalidates actual retained outcomes
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: 5cf9d665-9720-49b6-8b84-165487da12b4,structural-sandbox-fixture,local-board,e702e8b9-d3dc-4709-9073-3d3e06cfc2cc,0,singleDevice,false,2026-10-26T20:53:09.574Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ '5cf9d665-9720-49b6-8b84-165487da12b4', 'structural-sandbox-fixture', 'local-board', 'e702e8b9-d3dc-4709-9073-3d3e06cfc2cc', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.574Z' ], args: [ '5cf9d665-9720-49b6-8b84-165487da12b4', 'structural-sandbox-fixture', 'local-board', 'e702e8b9-d3dc-4709-9073-3d3e06cfc2cc', +0, 'singleDevice', false, '2026-10-26T20:53:09.574Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > erases protocol, result and human prose when the actual final-capture project is erased with flags off
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: bc119c88-880f-437d-bc84-141f569e7013,structural-sandbox-fixture,local-board,408b2354-1712-4a06-9eaf-2fdf00e8e72b,0,singleDevice,false,2026-10-26T20:53:09.583Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ 'bc119c88-880f-437d-bc84-141f569e7013', 'structural-sandbox-fixture', 'local-board', '408b2354-1712-4a06-9eaf-2fdf00e8e72b', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.583Z' ], args: [ 'bc119c88-880f-437d-bc84-141f569e7013', 'structural-sandbox-fixture', 'local-board', '408b2354-1712-4a06-9eaf-2fdf00e8e72b', +0, 'singleDevice', false, '2026-10-26T20:53:09.583Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual native company purge includes saved analyses and interpretations with rollout disabled
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: 5b9202ac-bcca-4f08-a5ad-4381bb5db449,structural-sandbox-fixture,local-board,8c6155b1-c64c-455b-b6b6-573afd9bb704,0,singleDevice,false,2026-10-26T20:53:09.592Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ '5b9202ac-bcca-4f08-a5ad-4381bb5db449', 'structural-sandbox-fixture', 'local-board', '8c6155b1-c64c-455b-b6b6-573afd9bb704', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.592Z' ], args: [ '5b9202ac-bcca-4f08-a5ad-4381bb5db449', 'structural-sandbox-fixture', 'local-board', '8c6155b1-c64c-455b-b6b6-573afd9bb704', +0, 'singleDevice', false, '2026-10-26T20:53:09.592Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > rejects omitted final outcomes at deferred commit and blocks ordinary receipt deletion
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: a1609751-3014-4792-a020-e76555cd6c1b,structural-sandbox-fixture,local-board,124da038-c8bc-4990-8504-58d1b00e94b4,0,singleDevice,false,2026-10-26T20:53:09.606Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ 'a1609751-3014-4792-a020-e76555cd6c1b', 'structural-sandbox-fixture', 'local-board', '124da038-c8bc-4990-8504-58d1b00e94b4', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.606Z' ], args: [ 'a1609751-3014-4792-a020-e76555cd6c1b', 'structural-sandbox-fixture', 'local-board', '124da038-c8bc-4990-8504-58d1b00e94b4', +0, 'singleDevice', false, '2026-10-26T20:53:09.606Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > projects a current analysis without participant registers or operator identities and rechecks its Source
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: d9b33750-3ca6-4f65-bac8-d5119856f620,structural-sandbox-fixture,local-board,e68b3543-ce63-4a66-8155-dd46bc4fa16b,0,singleDevice,false,2026-10-26T20:53:09.619Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ 'd9b33750-3ca6-4f65-bac8-d5119856f620', 'structural-sandbox-fixture', 'local-board', 'e68b3543-ce63-4a66-8155-dd46bc4fa16b', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.619Z' ], args: [ 'd9b33750-3ca6-4f65-bac8-d5119856f620', 'structural-sandbox-fixture', 'local-board', 'e68b3543-ce63-4a66-8155-dd46bc4fa16b', +0, 'singleDevice', false, '2026-10-26T20:53:09.619Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > public analysis routes reject pasted result/integrity fields and preserve current account/no-store
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: 53ca4488-695a-41a5-8449-8c2fbdf5000b,structural-sandbox-fixture,local-board,e8af1cf2-7b1c-4568-a799-9fa011316d51,0,singleDevice,false,2026-10-26T20:53:09.630Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ '53ca4488-695a-41a5-8449-8c2fbdf5000b', 'structural-sandbox-fixture', 'local-board', 'e8af1cf2-7b1c-4568-a799-9fa011316d51', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.630Z' ], args: [ '53ca4488-695a-41a5-8449-8c2fbdf5000b', 'structural-sandbox-fixture', 'local-board', 'e8af1cf2-7b1c-4568-a799-9fa011316d51', +0, 'singleDevice', false, '2026-10-26T20:53:09.630Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/14]⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > rejects one forged Source or binary value among otherwise identical inserted outcome inputs
+Error: Failed query: insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)
+params: ea8c2e5c-40bc-418c-b4a3-698101145009,structural-sandbox-fixture,local-board,94866a8f-8fb8-4cf3-9ad4-a82c61751425,0,singleDevice,false,2026-10-26T20:53:09.642Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedNativePasskeySession src/__tests__/helpers/native-authentication-fixtures.ts:9:3
+      7| export async function seedNativePasskeySession(db: Db, userId: string)…
+      8|   const now = new Date(), sessionId = randomUUID();
+      9|   await db.insert(authPasskeys).values({ id: randomUUID(), userId,
+       |   ^
+     10|     publicKey: "structural-sandbox-fixture", credentialID: randomUUID(…
+     11|     counter: 0, deviceType: "singleDevice", backedUp: false, createdAt…
+ ❯ seedCurrentHumanSourceActor src/__tests__/helpers/current-human-source-fixture.ts:25:65
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:51:13
+
+Caused by: PostgresError: could not obtain lock on row in relation "user"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '55P03', where: 'SQL statement "SELECT id FROM "user" WHERE id=owner_id FOR UPDATE NOWAIT"\nPL/pgSQL function aw_authenticator_changed(text,boolean,boolean) line 5 at PERFORM\nSQL statement "SELECT aw_authenticator_changed(NEW.user_id,true,true)"\nPL/pgSQL function aw_authenticator_passkey_guard() line 28 at PERFORM', file: 'heapam.c', routine: 'heap_lock_tuple', query: 'insert into "passkey" ("id", "name", "public_key", "user_id", "credential_id", "counter", "device_type", "backed_up", "transports", "created_at", "aaguid") values ($1, default, $2, $3, $4, $5, $6, $7, default, $8, default)', parameters: [ 'ea8c2e5c-40bc-418c-b4a3-698101145009', 'structural-sandbox-fixture', 'local-board', '94866a8f-8fb8-4cf3-9ad4-a82c61751425', '0', 'singleDevice', 'f', '2026-10-26T20:53:09.642Z' ], args: [ 'ea8c2e5c-40bc-418c-b4a3-698101145009', 'structural-sandbox-fixture', 'local-board', '94866a8f-8fb8-4cf3-9ad4-a82c61751425', +0, 'singleDevice', false, '2026-10-26T20:53:09.642Z' ], types: [ 25, 25, 25, 25, 20, 25, 16, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/14]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  14 failed | 6 passed (20)
+   Start at  20:50:49
+   Duration  141.04s (transform 12.08s, setup 94ms, import 17.05s, tests 123.76s, environment 0ms)
+

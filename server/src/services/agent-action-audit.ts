@@ -5,9 +5,12 @@ import { activityLog, heartbeatRuns, issueComments, issueDocuments, issues } fro
 import { createActivityDetailsRedactor } from "./activity-log.js";
 import { badRequest } from "../errors.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
+import { activitySourceReadSqlCondition } from "./activity-privacy.js";
+import type { AuthorizationActor } from "./authorization.js";
 
 export interface AgentActionAuditFilters {
   companyId: string;
+  reader?: AuthorizationActor;
   actorScope?: "agents" | "all";
   agentId?: string;
   responsibleUserId?: string;
@@ -54,7 +57,8 @@ export function agentActionAuditService(db: Db) {
       const cursor = decodeCursor(filters.cursor);
       if (filters.cursor && !cursor) throw badRequest("Invalid audit cursor");
       const effectiveResponsibleUserId = sql<string | null>`coalesce(${activityLog.responsibleUserId}, ${heartbeatRuns.responsibleUserId})`;
-      const conditions = [eq(activityLog.companyId, filters.companyId)];
+      const conditions = [eq(activityLog.companyId, filters.companyId),
+        await activitySourceReadSqlCondition(db, filters.reader ?? { type: "none" })];
       // Preserve the historical agent-audit query unless the caller opts into
       // the unified all-actors feed explicitly.
       if (filters.actorScope !== "all") conditions.push(isNotNull(activityLog.agentId));

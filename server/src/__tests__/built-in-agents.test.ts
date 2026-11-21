@@ -8,6 +8,7 @@ import {
   activityLog,
   agentConfigRevisions,
   agents,
+  authUsers,
   approvals,
   budgetPolicies,
   builtInManagedResources,
@@ -138,6 +139,7 @@ describeEmbeddedPostgres("built-in agents", () => {
     await db.delete(agents);
     await db.delete(budgetPolicies);
     await db.delete(companies);
+    await db.delete(authUsers);
     // Some tests drop the built-in marker unique index to simulate legacy
     // (pre-migration 0192) duplicates; restore it now that all rows are gone.
     await db.execute(sql.raw(BUILT_IN_MARKER_UNIQUE_INDEX_DDL));
@@ -1396,6 +1398,8 @@ describeEmbeddedPostgres("built-in agents", () => {
 
   it("gates Reflection Coach proposal mutations until an accepted follow-up apply step", async () => {
     const companyId = await seedCompany();
+    await db.insert(authUsers).values({ id: "board-user", name: "Reviewing Human", email: "reviewer@test.invalid", createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "board-user", status: "active", membershipRole: "member" });
     const agentsSvc = agentService(db);
     await agentsSvc.create(companyId, {
       name: "CEO",

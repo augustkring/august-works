@@ -1,0 +1,4 @@
+6d548d8b558674d967079ad3f936920a7a168da0f195b34c0bb1fe807b4ecf4e  packages/shared/src/validators/native-payload-source-snapshot.ts
+1537ef1ddb65aed8c8aef2e15db49c5f42236def699d9701de561968dacde7e2  packages/shared/src/validators/native-payload-source-snapshot.test.ts
+c9409ece071195cf92af5a797539a3dcc57476c73048a835c066224e53b2a890  packages/shared/src/index.ts
+4dc2acd1e36325f6c61c7ce8b00b380e22e8c1c33e6d70f0e08dc0602e117bee  packages/shared/src/validators/index.ts

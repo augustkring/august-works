@@ -1,0 +1,76 @@
+{
+  "invocations": [
+    {
+      "invocation": "literal-mode-source-full40-and-diagnostics-r1",
+      "passed": 72,
+      "failed": 0,
+      "unselected": 0,
+      "seconds": 56.035561204997066,
+      "observedPeakOwnedDescendantRssBytes": 3434459136,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "retained-context-all13-r2",
+      "passed": 13,
+      "failed": 0,
+      "unselected": 0,
+      "seconds": 152.85873432899825,
+      "observedPeakOwnedDescendantRssBytes": 2758447104,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "delayed-gateway-observer-r1",
+      "passed": 4,
+      "failed": 0,
+      "unselected": 0,
+      "seconds": 13.643524806997448,
+      "observedPeakOwnedDescendantRssBytes": 1446400000,
+      "scope": "controlled component modules, no PostgreSQL process observed; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "native-text-retained-context-group-a-r1",
+      "passed": 15,
+      "failed": 0,
+      "unselected": 10,
+      "seconds": 117.34978152200347,
+      "observedPeakOwnedDescendantRssBytes": 3233804288,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "native-text-retained-context-group-b-r1",
+      "passed": 11,
+      "failed": 0,
+      "unselected": 28,
+      "seconds": 86.54246043999592,
+      "observedPeakOwnedDescendantRssBytes": 3183382528,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    }
+  ],
+  "serverTypecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 91.16599990100076,
+        "peakGroupRssBytes": 6141894656,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "uniqueCases": 115,
+  "limits": [
+    "115 unique local cases: manual Task Source40 + execution input29 + failure logging3 + Context13 + Native Text25 + manual authority refusal1 + assigned-Gateway observer4. Repeated invocations are not added.",
+    "The actual Git branch transitions use real repositories, canonical current-Human initial Project/workspace, Task and Plan, and the installed aw_text_only HTTP transport. No mocked paid Codex execution or transport bypass remains in the retired fixture.",
+    "The final retained-Context implementation passes all13 owner cases and the full25 Native Text cases in disjoint A15/B10 groups. B also selects the manual authority refusal. Source72 predates the retained-reader change; exact invocation manifests remain authoritative.",
+    "SDK Project/serial Human verification fixtures, callback receipt correction, automatic bootstrap Context assertion and additional bounded failure diagnostics compile but await current-head real managed SDK CI.",
+    "The previous commit649 has real managed SDK failures: Native2/4/5/6/7/11/12/16. These are not converted to passing evidence. The Context read fix addresses the exact Native11/Native4 owner-error source; other unresolved errors retain precise diagnostic changes. No queue cleanup change was made on an unproven hypothesis.",
+    "No requirement or migration status promotion, live paid provider, physical Host, deployment, release, representative Human acceptance or full V10 completion claim."
+  ]
+}

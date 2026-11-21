@@ -11,6 +11,7 @@ import {
   activityLog,
   budgetPolicies,
   companies,
+  companyMemberships,
   companySkills,
   createDb,
   environmentLeases,
@@ -20,6 +21,7 @@ import {
   issueRelations,
   issues,
   projects,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -28,6 +30,7 @@ import {
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
 import { registerServerAdapter, unregisterServerAdapter } from "../adapters/index.ts";
 import { createPostgresRunDispatchAdapter } from "../modules/run-dispatch/adapters/postgres.js";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const mockTelemetryClient = vi.hoisted(() => ({ track: vi.fn() }));
 const mockTrackAgentTaskRun = vi.hoisted(() => vi.fn());
@@ -70,6 +73,7 @@ const mockedAppendHeartbeatRunEvent = vi.mocked(appendHeartbeatRunEvent);
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 const PROVIDER_QUOTA_TEST_ADAPTER = "provider_quota_test";
+let providerQuotaExecuteCalls = 0;
 
 if (!embeddedPostgresSupport.supported) {
   console.warn(
@@ -95,14 +99,28 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
   let db!: ReturnType<typeof createDb>;
   let heartbeat!: ReturnType<typeof heartbeatService>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let restoreApiUrl: (() => void) | null = null;
+
+  async function insertCompanyFixture(values: typeof companies.$inferInsert | Array<typeof companies.$inferInsert>) {
+    const rows = Array.isArray(values) ? values : [values];
+    await db.insert(companies).values(values as typeof companies.$inferInsert | Array<typeof companies.$inferInsert>);
+    for (const row of rows) {
+      if (row.id && row.defaultResponsibleUserId) {
+        await seedHeartbeatResponsibleHuman(db, row.id, row.defaultResponsibleUserId, "owner");
+      }
+    }
+  }
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-retry-scheduling-");
     db = createDb(tempDb.connectionString);
     heartbeat = heartbeatService(db);
     registerServerAdapter({
       type: PROVIDER_QUOTA_TEST_ADAPTER,
-      execute: async () => ({
+      execute: async () => {
+        providerQuotaExecuteCalls += 1;
+        return {
         exitCode: 1,
         signal: null,
         timedOut: false,
@@ -116,7 +134,8 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
           retryNotBefore: "2030-04-22T21:00:00.000Z",
           providerQuotaRetryNotBefore: "2030-04-22T21:00:00.000Z",
         },
-      }),
+        };
+      },
       testEnvironment: async () => ({
         adapterType: PROVIDER_QUOTA_TEST_ADAPTER,
         status: "pass",
@@ -141,6 +160,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
   afterAll(async () => {
     unregisterServerAdapter(PROVIDER_QUOTA_TEST_ADAPTER);
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   });
 
   async function cleanupRetryFixture() {
@@ -178,6 +198,8 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
     await db.delete(budgetPolicies);
     await db.delete(agents);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
   }
 
@@ -196,7 +218,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
   }) {
     const adapterType = input.adapterType ?? "codex_local";
     const agentName = input.agentName ?? (adapterType === "claude_local" ? "ClaudeCoder" : "CodexCoder");
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: input.companyId,
       name: "Paperclip",
       issuePrefix: `T${input.companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
@@ -306,54 +328,32 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       resultJson: { executionRecovery: { kind: "bootstrap", providerWorkStarted: false } } }).where(eq(heartbeatRuns.id, scheduled.run!.id));
     expect(await heartbeat.scheduleBoundedRetry(scheduled.run!.id, { now, random: () => 0 })).toMatchObject({ outcome: "retry_exhausted" });
   });
-  it("records pre-provider quota rejection, schedules the reset-time retry, and leaves the agent idle", async () => {
+  it("schedules a seeded pre-provider quota failure at reset time and preserves an already idle Agent", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();
 
-    await db.insert(companies).values({
-      id: companyId,
-      name: "Paperclip",
-      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
-      requireBoardApprovalForNewAgents: false,
-      defaultResponsibleUserId: "responsible-user",
-    });
-
-    await db.insert(agents).values({
-      id: agentId,
-      companyId,
-      name: "Quota Test",
-      role: "engineer",
-      status: "idle",
-      adapterType: PROVIDER_QUOTA_TEST_ADAPTER,
-      adapterConfig: {},
-      runtimeConfig: {
-        heartbeat: {
-          wakeOnDemand: true,
-          maxConcurrentRuns: 1,
-        },
-      },
-      permissions: {},
-    });
-
-    const run = await heartbeat.invoke(agentId, "on_demand", {}, "manual");
-    expect(run).not.toBeNull();
-
-    const failedRun = await waitForRunToFinish(heartbeat, run!.id);
+    const runId = randomUUID();
+    const now = new Date("2030-04-22T12:00:00.000Z");
+    const retryNotBefore = "2030-04-22T21:00:00.000Z";
+    // Component preconditions: the adapter/classifier has already persisted a
+    // pre-provider failure, and its lifecycle owner has already made the Agent
+    // idle. This proves scheduling, not paid admission or idle terminalization.
+    await seedRetryFixture({ runId, companyId, agentId, now, errorCode: "provider_quota",
+      adapterType: PROVIDER_QUOTA_TEST_ADAPTER, resultJson: {
+        executionRecovery: { kind: "bootstrap", providerWorkStarted: false },
+        errorFamily: "provider_quota", retryNotBefore, providerQuotaRetryNotBefore: retryNotBefore,
+      } });
+    await db.update(agents).set({ status: "idle", errorReason: null }).where(eq(agents.id, agentId));
+    const callsBefore = providerQuotaExecuteCalls;
+    const scheduled = await heartbeat.scheduleBoundedRetry(runId, { now, random: () => 0 });
+    expect(scheduled.outcome).toBe("scheduled");
+    expect(providerQuotaExecuteCalls).toBe(callsBefore);
+    const failedRun = await heartbeat.getRun(runId);
     expect(failedRun?.status).toBe("failed");
     expect(failedRun?.errorCode).toBe("provider_quota");
     expect((failedRun?.resultJson as Record<string, unknown> | null)?.errorFamily).toBe("provider_quota");
-
-    await expect
-      .poll(
-        () =>
-          db
-            .select({ id: heartbeatRuns.id })
-            .from(heartbeatRuns)
-            .where(eq(heartbeatRuns.retryOfRunId, run!.id))
-            .then((rows) => rows.length),
-        { timeout: 5_000, interval: 50 },
-      )
-      .toBe(1);
+    expect(await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+      .where(eq(heartbeatRuns.retryOfRunId, runId))).toHaveLength(1);
 
     const retryRun = await db
       .select({
@@ -364,7 +364,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
         contextSnapshot: heartbeatRuns.contextSnapshot,
       })
       .from(heartbeatRuns)
-      .where(eq(heartbeatRuns.retryOfRunId, run!.id))
+      .where(eq(heartbeatRuns.retryOfRunId, runId))
       .then((rows) => rows[0] ?? null);
     expect(retryRun?.status).toBe("scheduled_retry");
     expect(retryRun?.scheduledRetryReason).toBe("transient_failure");
@@ -388,6 +388,26 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       .toEqual({ status: "idle", errorReason: null });
   });
 
+  it("refuses the opaque quota adapter before execute without inventing a provider-quota retry", async () => {
+    const companyId = randomUUID(), agentId = randomUUID();
+    await insertCompanyFixture({ id: companyId, name: "Unavailable quota adapter",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false, defaultResponsibleUserId: "responsible-user" });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Quota admission", role: "engineer", status: "idle",
+      adapterType: PROVIDER_QUOTA_TEST_ADAPTER, adapterConfig: {}, permissions: {},
+      runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } });
+    const callsBefore = providerQuotaExecuteCalls;
+    const run = await heartbeat.invoke(agentId, "on_demand", {}, "manual");
+    if (!run) throw new Error("Expected an actual quota-adapter admission attempt");
+    const failedRun = await waitForRunToFinish(heartbeat, run.id);
+    await heartbeat.waitForRunExecutionDrain(run.id);
+    expect(failedRun).toMatchObject({ status: "failed", errorCode: "configuration_incomplete",
+      resultJson: { configurationIncomplete: { reason: "paid_transport_unqualified" } } });
+    expect(providerQuotaExecuteCalls).toBe(callsBefore);
+    expect((failedRun?.resultJson as Record<string, unknown> | null)?.errorFamily).not.toBe("provider_quota");
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.retryOfRunId, run.id))).toHaveLength(0);
+  });
+
   async function seedMaxTurnFixture(input?: {
     companyId?: string;
     agentId?: string;
@@ -397,6 +417,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
     scheduledRetryAttempt?: number;
     runtimeConfig?: Record<string, unknown>;
     issueStatus?: string;
+    bindBodySnapshot?: boolean;
   }) {
     const companyId = input?.companyId ?? randomUUID();
     const agentId = input?.agentId ?? randomUUID();
@@ -405,7 +426,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
     const now = input?.now ?? new Date("2026-04-20T12:00:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -472,6 +493,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       executionLockedAt: now,
       issueNumber: 1,
       identifier: `${issuePrefix}-1`,
+      ...(input?.bindBodySnapshot ? { payloadSourceProtocolVersion: 1 } : {}),
     });
 
     return { companyId, agentId, issueId, runId, now };
@@ -564,7 +586,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
     const sourceRunId = randomUUID();
     const now = new Date("2026-04-20T12:00:00.000Z");
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
@@ -970,7 +992,10 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       }),
     },
   ])("quarantines a failed $name workspace before scheduling the accepted interaction retry", async ({ workspaceValidation }) => {
-    const { companyId, agentId, issueId, runId, now } = await seedMaxTurnFixture({ issueStatus: "in_review" });
+    const { companyId, agentId, issueId, runId, now } = await seedMaxTurnFixture({
+      issueStatus: "in_review",
+      bindBodySnapshot: true,
+    });
     const projectId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const validation = workspaceValidation(executionWorkspaceId);
@@ -1006,6 +1031,17 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
         executionWorkspaceSettings: { mode: "isolated_workspace" },
       })
       .where(eq(issues.id, issueId));
+
+    // Bind only after setting the retry workspace preference. This structural
+    // snapshot exercises invalidation, not an authenticated source capture.
+    await db.execute(sql`update issues target set payload_source_snapshot=(
+      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','issue','companyId',target.company_id,
+          'id',target.id,'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+      ) body
+    ) where target.company_id=${companyId}::uuid and target.id=${issueId}::uuid`);
 
     const interactionId = randomUUID();
     await db
@@ -1043,6 +1079,8 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
         executionWorkspaceId: issues.executionWorkspaceId,
         executionWorkspacePreference: issues.executionWorkspacePreference,
         executionWorkspaceSettings: issues.executionWorkspaceSettings,
+        payloadSourceSnapshot: issues.payloadSourceSnapshot,
+        payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
       })
       .from(issues)
       .where(eq(issues.id, issueId))
@@ -1052,6 +1090,8 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       executionWorkspaceId: null,
       executionWorkspacePreference: null,
       executionWorkspaceSettings: { mode: "isolated_workspace" },
+      payloadSourceSnapshot: null,
+      payloadSourceSnapshotInvalidated: true,
     });
 
     const workspace = await db
@@ -1698,7 +1738,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
     const sourceRunId = randomUUID();
     const now = new Date("2026-04-20T13:00:00.000Z");
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
@@ -1866,7 +1906,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
     const cappedRunId = randomUUID();
     const now = new Date("2026-04-20T18:00:00.000Z");
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
@@ -2377,7 +2417,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       const now = new Date("2026-05-05T00:00:00.000Z");
 
       await seedRetryFixture({ runId: randomUUID(), companyId, agentId, now, errorCode: "adapter_failed" });
-      await db.insert(companies).values({
+      await insertCompanyFixture({
         id: otherCompanyId,
         name: "Other Co",
         issuePrefix: `T${otherCompanyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
@@ -2490,7 +2530,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       const now = new Date("2026-05-05T00:00:00.000Z");
       const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-      await db.insert(companies).values({
+      await insertCompanyFixture({
         id: companyId,
         name: "Paperclip",
         issuePrefix,

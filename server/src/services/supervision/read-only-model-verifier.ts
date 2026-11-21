@@ -560,7 +560,8 @@ function readOnlyModelConsumer(
         prepared.request,
         credential,
         controller.signal,
-        { fetch: options.fetch },
+        { fetch: options.fetch ? async (...args) => options.fetch!(...args) : undefined,
+          onWireDispatch: async wire => { await reservations.recordWireDispatch(actor, input.companyId, reservation.id, wire); } },
       );
       controller.signal.throwIfAborted();
       await checkAuthority();

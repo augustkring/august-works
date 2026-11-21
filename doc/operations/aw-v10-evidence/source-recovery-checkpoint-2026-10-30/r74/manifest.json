@@ -1,0 +1,29 @@
+{
+  "purpose": "RECOVERY ONLY; no source activation, publication, or broad qualification claim.",
+  "capturedAtUtc": "2026-11-01T21:56:17.650196+00:00",
+  "mainHead": "79de0bfbdd0e8b5ff18a27b14346653e944c8658",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 45,
+  "archive": {
+    "path": "private-delta.tar.gz",
+    "bytes": 724494,
+    "sha256": "b370880e105327f81e6bd868c4f811396bdf4cb6d47c1ea16e23b6c8dbe95f82",
+    "verifiedEntries": 45
+  },
+  "references": {
+    "R73ManifestSha256": "3254eb77d06c5d3feecb1e79173e8378f17d157d57e0ae702c2eecf6d9800f98",
+    "R73ArchiveSha256": "658659a3eb279e0f477a8ff871f3767397ce48524ed4ec46671496eb0590a91e",
+    "CodeProductionPatchSha256": "c46eddd00bc28394fe87e37892df6da338943305946e4a0bdf9fb1903e3b60e0",
+    "CodeFixturePatchSha256": "022a6e7c0c3626f91d8c4f5e0e11eb53fc659f02f6ac42791e3c0491e2de0dce",
+    "CodePGReceiptSha256": "90e8d09467c6da777ac02cc2702acbacb3b63e63b3f8b6301c208d91e4420d36",
+    "NativeR128ReceiptSha256": "f54c19325211304ac48dc6fbbc68281b565c9a0de5cc4e0a79445092fc9fa68b",
+    "NativeR129PinsSha256": "f1d8290775e4991e0fd8b220564eda1af1705aa8c3505512f860f596b4821d53",
+    "NativeR130PinsSha256": "7d9c144f1985511eba0a39652bc3042cdba81a0c92b4ed1c0c1db32a1eb5b25e",
+    "NativeR131ReceiptSha256": "56ab7c14c65031288d91a9b739f3ab5dd23dcea9f60e04d12eaa08c2622f2479",
+    "Host75PinsSha256": "06909aa092c499883fdc195101d224e1f47820fae79a1d4bb3be5690b4424211",
+    "Host76PinsSha256": "bab8915200072e286afc861f86f45fee8d3f46ebf01a5e29d1621f517e2b0fcd",
+    "Host77PinsSha256": "14497cad2f1fd98588a051be4e83a410366911310e92f934a8475228a29250c9",
+    "Host76RecoveredMjsSha256": "41b6d589f3fe90a9dc1222418cc7b1c87305b1ee9dbdbe93972c6da4e9ca8242"
+  },
+  "qualificationStatus": "Code preserve assessment passed its scoped 48 PostgreSQL cases; Native R131 passed scoped Agent 48 and full server TypeScript but its actual Worker caller-collector assertion failed. Native R128 failed a strict agent assertion; R129 is Oxc syntax-only and R130 is test-only. Host75 passed 77 Node tests and full server TypeScript with exact restore. Host76 is represented only by its recovered source and provenance receipt. Host77 has frozen source; a read-only review with no remaining P1/P2 was reported in the owner thread, but no durable review artifact was located. Host77 has no qualification-runner claim. Host78 is excluded. No C7, broad Native, Host77 runtime, or final aggregate acceptance is claimed."
+}

@@ -1,0 +1,28 @@
+Reading config file '/tmp/blentera-drizzle-custom-20261026-cuiy1_df/drizzle.config.cjs'
+Prepared empty file for your custom SQL migration!
+[✓] Your SQL migration file ➜ ../../../../tmp/blentera-drizzle-custom-20261026-cuiy1_df/migrations/0545_native_attachment_stage_dispatch_binding.sql 🚀
+Reading config file '/tmp/blentera-drizzle-custom-20261026-cuiy1_df/drizzle.config.cjs'
+Prepared empty file for your custom SQL migration!
+[✓] Your SQL migration file ➜ ../../../../tmp/blentera-drizzle-custom-20261026-cuiy1_df/migrations/0546_human_memory_evidence_snapshot_seal.sql 🚀
+{
+  "generator": "original installed drizzle-kit generate --custom",
+  "schema": "/workspace/v10-dep-qualification/packages/db/dist/schema",
+  "temporaryOutput": "/tmp/blentera-drizzle-custom-20261026-cuiy1_df/migrations",
+  "tags": [
+    "0545_native_attachment_stage_dispatch_binding",
+    "0546_human_memory_evidence_snapshot_seal"
+  ],
+  "oldJournalSha256": "bd7a5b98a2f191bb7bfd08e6acef64fee7cccc49267936a32f8475815fcd9488",
+  "newJournalSha256": "022892a4d8d6935d39cde30df85adad8b00cb46f613721d196c7b2ce4b1a2fe2",
+  "generatedSnapshots": [
+    {
+      "path": "meta/0545_snapshot.json",
+      "sha256": "bd406129e07d32fe540cd8d5f5d5ac34ea008c42797e6fd3bb95a059b87cc8ad"
+    },
+    {
+      "path": "meta/0546_snapshot.json",
+      "sha256": "7db8f8a6110b3ec04c70eab3261f1cc372c2cf7ad29e2604e4a5bf1ceeddd23a"
+    }
+  ],
+  "authoredSqlPreserved": true
+}

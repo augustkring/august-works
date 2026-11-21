@@ -42,6 +42,7 @@ import type { NativeRunIdentity } from "../contracts/types.js";
 import type { PrpEvent } from "../protocol/replay-contract.js";
 import { NativeSessionCloseUnrecoverableError } from "../contracts/native-session-backend.js";
 import type {
+  HarnessConfirmedRunBinding,
   HarnessRuntimeRequestResolution,
   PersistedHarnessProviderIdentity,
 } from "../contracts/harness-driver.js";
@@ -273,6 +274,47 @@ function latestArchivedControlPlaneState(
     }
   }
   return null;
+}
+
+function coldLeaseHandoffSeedState(
+  root: string,
+  handoff: NonNullable<CapabilityRunnerdCodexTransportOptions["coldLeaseHandoff"]>,
+  desired: DurableRecoveryIdentity,
+  localStateOwner: boolean,
+): Record<string, unknown> {
+  const prior = handoff.priorIdentity;
+  const breaks = resolve(root, "continuity-breaks");
+  const directory = resolve(handoff.archivedControlPlaneDirectory);
+  if (
+    !/^[a-f0-9]{64}$/.test(handoff.evidenceDigest) ||
+    dirname(dirname(directory)) !== breaks ||
+    basename(directory) !== "control-plane" ||
+    prior.runnerInstanceId !== desired.runnerInstanceId ||
+    prior.normalizedSessionId !== desired.normalizedSessionId ||
+    prior.runId === desired.runId ||
+    prior.environmentLeaseId === desired.environmentLeaseId ||
+    existsSync(resolve(root, "control-plane")) ||
+    (localStateOwner && existsSync(resolve(root, "runner", "runner-state.json")))
+  ) {
+    throw new Error("native_runner_cold_lease_handoff_unproven");
+  }
+  assertRealDirectory(breaks);
+  assertRealDirectory(dirname(directory));
+  assertRealDirectory(directory);
+  const state = readControlPlaneState(directory);
+  const identity = controlPlaneIdentity(state);
+  if (
+    identity.runnerInstanceId !== prior.runnerInstanceId ||
+    identity.environmentLeaseId !== prior.environmentLeaseId ||
+    identity.runId !== prior.runId ||
+    identity.normalizedSessionId !== prior.normalizedSessionId ||
+    state.warmTransition !== undefined ||
+    state.schema ===
+      "paperclip.runner.durable.control-plane-state.warm-transition.v1"
+  ) {
+    throw new Error("native_runner_cold_lease_handoff_unproven");
+  }
+  return state;
 }
 
 function rotateLocalAuthorityEpoch(
@@ -1138,6 +1180,16 @@ export interface CapabilityRunnerdCodexTransportOptions {
   /** Provider system instructions supplied by a native execution caller. */
   baseInstructions?: string;
   closeGraceMs?: number;
+  /**
+   * Close-time check supplied by the controller. When it resolves true for
+   * this exact run, close skips the durable suspension barrier and the runner
+   * process exit wait (both exist only to make a resumable checkpoint safe),
+   * releases process ownership without a checkpoint, and does not raise
+   * NativeSessionCloseUnrecoverableError. The controller then owns
+   * containment by destroying the runner's sandbox. Absent, false, or a
+   * failing check keeps the normal close unchanged.
+   */
+  discardWithoutCheckpoint?: () => Promise<boolean>;
   /** Bounded provider turn-admission wait; defaults to 30 seconds. */
   turnStartTimeoutMs?: number;
   onDiagnostic?: (message: string) => void;
@@ -1194,6 +1246,27 @@ export interface CapabilityRunnerdCodexTransportOptions {
     normalizedSessionId: string;
     turnId: string;
     itemId: string;
+  };
+  /**
+   * Server-verified cold lease handoff (CONF15 A2). The controller proved the
+   * prior Run terminal, its runner authority suspended, its lease released
+   * with the stored remote-termination receipt and its process cleanup
+   * settled, then archived only that Run's PRP control-plane and runner
+   * identity (provider data stays). The archived state is read only as the
+   * provider seed for a fresh runner bound to `prpIdentity` (same runner
+   * instance and session, this Run and its current lease). It never binds
+   * this runner to the prior Run or lease. Without this evidence an archived
+   * identity for another lease is never accepted.
+   */
+  coldLeaseHandoff?: {
+    archivedControlPlaneDirectory: string;
+    priorIdentity: {
+      runnerInstanceId: string;
+      environmentLeaseId: string;
+      runId: string;
+      normalizedSessionId: string;
+    };
+    evidenceDigest: string;
   };
   /** Registers the run-bound PRP authority on Paperclip's shared HTTP server. */
   controlPlaneRegistration?: (
@@ -3201,11 +3274,30 @@ const OPEN_CODE_RUNNER_ENVIRONMENT_KEYS = new Set([
   "PAPERCLIP_NATIVE_MCP_TOKEN",
 ]);
 
+const MANAGED_OPEN_CODE_ENVIRONMENT_KEYS = [
+  "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+  "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+  "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+] as const;
+
 function createSanitizedOpenCodeRunnerEnvironment(
   source: NodeJS.ProcessEnv | undefined,
 ): NodeJS.ProcessEnv {
-  const candidate = { ...process.env, ...source };
-  return Object.fromEntries(
+  // Heartbeat has already composed the provider's configured values with the
+  // small runner-owned host allowlist. Preserve non-secret host context when
+  // callers provide a partial source, but never reintroduce ambient credentials
+  // such as API keys or MCP bearer tokens into a sandbox exec request.
+  const candidate = { ...(source ?? process.env) };
+  if (source) {
+    for (const key of OPEN_CODE_RUNNER_ENVIRONMENT_KEYS) {
+      if (source[key] !== undefined || /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)) {
+        continue;
+      }
+      const value = process.env[key];
+      if (typeof value === "string") candidate[key] = value;
+    }
+  }
+  const sanitized = Object.fromEntries(
     Object.entries(candidate).filter(
       ([key, value]) =>
         typeof value === "string" &&
@@ -3213,6 +3305,66 @@ function createSanitizedOpenCodeRunnerEnvironment(
           /^LC_[A-Z0-9_]{1,32}$/.test(key)),
     ),
   );
+  // These reserved values are minted by the server from the authenticated model
+  // capability. Never inherit them from the runnerd process environment: the
+  // source must carry one complete, bounded profile tuple.
+  for (const key of MANAGED_OPEN_CODE_ENVIRONMENT_KEYS) delete sanitized[key];
+  const origin = source?.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
+  const inputBound = parseManagedModelBound(
+    source?.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND,
+    1,
+    2_000_000,
+  );
+  const outputBound = parseManagedModelBound(
+    source?.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS,
+    256,
+    8_192,
+  );
+  if (isQualifiedManagedModelOrigin(origin) && inputBound !== null && outputBound !== null) {
+    sanitized.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = origin;
+    sanitized.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = String(inputBound);
+    sanitized.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = String(outputBound);
+  }
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    console.warn("managed_model_runner_environment_diagnostic", {
+      stage: "post_sanitizer",
+      sourceOriginQualified: isQualifiedManagedModelOrigin(origin),
+      sourceInputBoundValid: inputBound !== null,
+      sourceOutputBoundValid: outputBound !== null,
+      outputOriginPresent: typeof sanitized.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string",
+      outputInputBoundPresent: typeof sanitized.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === "string",
+      outputOutputBoundPresent: typeof sanitized.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === "string",
+    });
+  }
+  return sanitized;
+}
+
+function parseManagedModelBound(
+  raw: string | undefined,
+  minimum: number,
+  maximum: number,
+): number | null {
+  if (!raw || !/^(?:0|[1-9][0-9]*)$/.test(raw)) return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= minimum && value <= maximum
+    ? value
+    : null;
+}
+
+function isQualifiedManagedModelOrigin(raw: string | undefined): raw is string {
+  if (!raw || raw.length > 2_048) return false;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "https:" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      parsed.pathname === "/" &&
+      parsed.search === "" &&
+      parsed.hash === "" &&
+      raw === parsed.origin;
+  } catch {
+    return false;
+  }
 }
 
 export function resolveSourceCodexHome(
@@ -3737,6 +3889,32 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     );
   }
 
+  /**
+   * CONF15-P2 (d): the binding runnerd authenticated with on this transport's
+   * durable authority, read from that live authenticated connection (equal to
+   * the core's current identity), only after startup completed and with no
+   * warm transition or transport failure pending. It is never read from
+   * `options.persistedSession` or the resume snapshot.
+   */
+  confirmedRunBinding(): HarnessConfirmedRunBinding | null {
+    const core = this.#core;
+    if (
+      core === null ||
+      !this.#startupComplete ||
+      this.#failure !== null ||
+      this.#pendingWarmRecoveryCompletion !== null
+    )
+      return null;
+    const identity = core.authenticatedRunnerIdentity();
+    if (identity === null) return null;
+    return {
+      runId: identity.runId,
+      normalizedSessionId: identity.normalizedSessionId,
+      runnerInstanceId: identity.runnerInstanceId,
+      environmentLeaseId: identity.environmentLeaseId,
+    };
+  }
+
   async attachRun(input: {
     runId: string;
     turnId: string;
@@ -4121,6 +4299,13 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     let runnerSuspended = false;
     let providerDrained = false;
     let suspensionRequired = false;
+    // A remote handle also owns its awaited model-provider Stop. Durable
+    // suspension cannot replace successful completion of that exact owner.
+    let exactCompletionConfirmed = this.#handle === null;
+    // Decided once per close; any failure keeps the normal checkpointing close.
+    const discardWithoutCheckpoint = this.options.discardWithoutCheckpoint
+      ? await this.options.discardWithoutCheckpoint().then((value) => value === true, () => false)
+      : false;
     if (
       this.#core !== null &&
       (this.#handle !== null || adoptedRunner !== undefined) &&
@@ -4156,54 +4341,61 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           Math.min(5_000, Math.max(0, preparationDeadline - Date.now())),
         );
       }
-      // Local durable roots are reused too. Process exit alone cannot prove
-      // their authority is safe to rotate; require the same exact suspension
-      // barrier even when there is no remote checkpoint callback.
-      suspensionRequired = true;
-      runnerSuspended = await awaitRunnerSuspensionBarrier({
-        commands: () => this.#core?.store.state.commands ?? [],
-        queueSuspend: (commandId) => {
-          this.#core?.queueCommand("runner.suspend", {}, commandId, true);
-        },
-        readRunnerState: async () => {
-          const state = await this.#readDurableRunnerState();
-          assertSuspendedRunnerState(state, this.#core!.store.state.identity);
-          return state;
-        },
-        runnerHasExited: () => this.#runnerHasExited(),
-        pump: () => this.#pumpEventsSafely(),
-        deadline: closeDeadline,
-      });
-      if (!runnerSuspended) {
+      if (discardWithoutCheckpoint) {
         this.#diagnostic(
-          "runner did not prove durable suspension before checkpoint",
+          "runner closed without a suspension checkpoint: the controller discards its sandbox",
         );
-      }
-      try {
-        if (this.#handle) {
-          const result = await waitForProcess(
-            this.#handle,
-            Math.max(0, closeDeadline - Date.now()),
+      } else {
+        // Local durable roots are reused too. Process exit alone cannot prove
+        // their authority is safe to rotate; require the same exact suspension
+        // barrier even when there is no remote checkpoint callback.
+        suspensionRequired = true;
+        runnerSuspended = await awaitRunnerSuspensionBarrier({
+          commands: () => this.#core?.store.state.commands ?? [],
+          queueSuspend: (commandId) => {
+            this.#core?.queueCommand("runner.suspend", {}, commandId, true);
+          },
+          readRunnerState: async () => {
+            const state = await this.#readDurableRunnerState();
+            assertSuspendedRunnerState(state, this.#core!.store.state.identity);
+            return state;
+          },
+          runnerHasExited: () => this.#runnerHasExited(),
+          pump: () => this.#pumpEventsSafely(),
+          deadline: closeDeadline,
+        });
+        if (!runnerSuspended) {
+          this.#diagnostic(
+            "runner did not prove durable suspension before checkpoint",
           );
-          this.#evidence.runnerExited = true;
-          this.#evidence.runnerExitCode = result.code;
-          this.#evidence.runnerSignal = result.signal as NodeJS.Signals | null;
-          if (result.stderr.trim())
-            this.#diagnostic(result.stderr.trim().slice(-4_096));
-        } else if (adoptedRunner) {
-          while (
-            (await adoptedRunner.isAlive()) &&
-            Date.now() < closeDeadline
-          ) {
-            await new Promise((resolveWait) => setTimeout(resolveWait, 25));
-          }
-          if (await adoptedRunner.isAlive()) {
-            await adoptedRunner.signal?.("SIGKILL");
-          }
-          this.#evidence.runnerExited = !(await adoptedRunner.isAlive());
         }
-      } catch (error) {
-        this.#diagnostic(`runner shutdown failed: ${String(error)}`);
+        try {
+          if (this.#handle) {
+            const result = await waitForProcess(
+              this.#handle,
+              Math.max(0, closeDeadline - Date.now()),
+            );
+            exactCompletionConfirmed = true;
+            this.#evidence.runnerExited = true;
+            this.#evidence.runnerExitCode = result.code;
+            this.#evidence.runnerSignal = result.signal as NodeJS.Signals | null;
+            if (result.stderr.trim())
+              this.#diagnostic(result.stderr.trim().slice(-4_096));
+          } else if (adoptedRunner) {
+            while (
+              (await adoptedRunner.isAlive()) &&
+              Date.now() < closeDeadline
+            ) {
+              await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+            }
+            if (await adoptedRunner.isAlive()) {
+              await adoptedRunner.signal?.("SIGKILL");
+            }
+            this.#evidence.runnerExited = !(await adoptedRunner.isAlive());
+          }
+        } catch (error) {
+          this.#diagnostic(`runner shutdown failed: ${String(error)}`);
+        }
       }
     }
     this.#flushPendingTraceRehydrations();
@@ -4244,6 +4436,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     // an incomplete or identity-conflicting state remains fail-closed.
     const finalProviderState = this.#providerDrainState();
     const runnerSettled =
+      exactCompletionConfirmed &&
       runnerSuspended &&
       providerDrained &&
       this.#core?.semanticToolResultsSettled() === true &&
@@ -4258,7 +4451,8 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
         // that never authenticated to this controller (for example after an
         // executable upgrade). Retain its prior checkpoint without rewriting it.
         checkpoint:
-          adoptedRunner && !this.#adoptedRunnerAuthenticated
+          discardWithoutCheckpoint ||
+          (adoptedRunner && !this.#adoptedRunnerAuthenticated)
             ? null
             : this.#controlPlaneCheckpoint,
         forceKill: () => {
@@ -4897,7 +5091,47 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       identity.turnId === desiredIdentity.turnId &&
       identity.itemId === desiredIdentity.itemId;
     let rotatedAuthority = false;
-    if (controlPlaneState === null) {
+    const coldLeaseHandoff = this.options.coldLeaseHandoff;
+    if (coldLeaseHandoff !== undefined) {
+      // Only a fresh runner may take a verified cold handoff: no active or
+      // warm-transition authority can coexist with the archived predecessor.
+      if (!localProvider || controlPlaneState !== null || hasWarmBoundary) {
+        throw new Error("native_runner_cold_lease_handoff_unproven");
+      }
+      const seedState = coldLeaseHandoffSeedState(
+        this.#root,
+        coldLeaseHandoff,
+        desiredIdentity,
+        localStateOwner,
+      );
+      if (!localStateOwner) {
+        // Provider data stays in the sandbox (on another provider lease the
+        // controller restored it from the verified failover backup). Only the
+        // prior Run's suspended runner state moves aside, through the same
+        // external archive an ordinary rotation uses, so a fresh runnerd
+        // binds this Run and lease.
+        if (
+          this.options.readRunnerState === undefined ||
+          this.options.prepareExternalRunnerState === undefined ||
+          this.options.archiveExternalRunnerState === undefined
+        ) {
+          throw new Error("native_runner_cold_lease_handoff_unproven");
+        }
+        await this.options.prepareExternalRunnerState();
+        const priorIdentity = controlPlaneIdentity(seedState);
+        const archivedRunnerState =
+          await this.options.archiveExternalRunnerState({
+            archiveKey: basename(
+              authorityArchiveDirectory(this.#root, priorIdentity),
+            ).replace(/^epoch-/, ""),
+            priorIdentity,
+          });
+        assertSuspendedRunnerState(archivedRunnerState, priorIdentity);
+      }
+      controlPlaneState = seedState;
+      identity = desiredIdentity;
+      rotatedAuthority = true;
+    } else if (controlPlaneState === null) {
       if (!localProvider) {
         throw new Error("PRP provider resume state is unavailable");
       }
@@ -5128,7 +5362,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
         committedEvents[adoptedProviderIdentityIndex]!,
       );
     } else if (
-      (exactAuthority || warmRecovery !== null) &&
+      (exactAuthority || warmRecovery !== null || coldLeaseHandoff !== undefined) &&
       this.options.resumeProviderSession?.driverSessionId.trim() &&
       this.options.resumeProviderSession.providerSessionId?.trim()
     ) {
@@ -5769,6 +6003,41 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       if (await this.#runnerHasExited())
         throw new Error(`runnerd exited while waiting for ${type}`);
       await new Promise((resolveWait) => setTimeout(resolveWait, 10));
+    }
+    if (!this.#startupComplete && (type === "run.prepare" || type === "session.open")) {
+      const state = this.#core?.store.state;
+      const startupCommand = state?.commands.find((candidate) => candidate.type === type);
+      let runnerStatePresent = false;
+      let runnerStateIdentityMatches = false;
+      try {
+        const runnerState = await this.#readDurableRunnerState();
+        runnerStatePresent = true;
+        runnerStateIdentityMatches =
+          runnerState.runId === this.#eventIdentity?.runId &&
+          runnerState.runnerInstanceId === this.#eventIdentity?.runnerInstanceId &&
+          runnerState.environmentLeaseId === this.#eventIdentity?.environmentLeaseId &&
+          runnerState.normalizedSessionId === this.#eventIdentity?.normalizedSessionId;
+      } catch {
+        // The remote state read is best effort; absence and unreadability are
+        // intentionally represented by the same bounded diagnostic bit.
+      }
+      const authenticatedConnectionCount = Math.max(0, state?.connectionCount ?? 0);
+      const malformedFrameCount = Math.max(0, state?.malformedFrames ?? 0);
+      const authenticationObservation = authenticatedConnectionCount > 0
+        ? "authenticated_connection_seen"
+        : malformedFrameCount > 0
+          ? "unauthenticated_malformed_frames_seen"
+          : "no_authenticated_connection_seen";
+      this.#diagnostic(`native_prp_startup_wait ${JSON.stringify({
+        phase: type,
+        commandStatus: startupCommand?.status ?? "missing",
+        runnerExited: await this.#runnerHasExited(),
+        authenticationObservation,
+        authenticatedConnectionCount: Math.min(1_000_000, authenticatedConnectionCount),
+        malformedFrameCount: Math.min(1_000_000, malformedFrameCount),
+        runnerStatePresent,
+        runnerStateIdentityMatches,
+      })}`);
     }
     throw new Error(
       `${this.#startupComplete ? "provider_transport_failed" : this.#startupFailureCode}: PRP command ${type} timed out`,
@@ -6622,6 +6891,7 @@ export const runnerdLaunchProfileInternals = Object.freeze({
 });
 
 export const runnerdRecoveryInternals = Object.freeze({
+  coldLeaseHandoffSeedState,
   completedMaintenanceTerminalReceipt,
   completedMaintenanceTerminalReplayMatches,
   awaitProviderDrainBarrier,
@@ -6637,6 +6907,10 @@ export const runnerdRecoveryInternals = Object.freeze({
   turnStartCommandResultValid,
   turnStartNotificationDisposition,
   turnStartResponseReady,
+});
+
+export const runnerdEnvironmentInternals = Object.freeze({
+  createSanitizedOpenCodeRunnerEnvironment,
 });
 
 

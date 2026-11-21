@@ -1,55 +1,36 @@
 ---
-title: Creating a Company
-summary: Set up your first autonomous AI company
+help_article_id: start-and-first-result
+title: Start a company and reach your first result
+summary: Follow the guided setup and check the result of your first task
+audience: new-company-owners
+product_capability_refs: [V10-103]
+screen_contract_refs: [ONB-01, ONB-02, ONB-03, ONB-09]
+owner: augustkring/august-works
+maturity: preview
+applicable_product_versions: [V10]
+locale: en
+last_verified_at: 2026-10-24
+review_trigger: Activation, connection, first Co-worker, first task, or result behavior changes
+security_or_privacy_sensitive: true
+linked_source_files: [ui/src/pages/Activation.tsx, ui/src/components/ActivationFirstAgent.tsx, ui/src/components/ActivationFirstTask.tsx, ui/src/components/ActivationFirstValue.tsx, server/src/services/saas/activation.ts, server/src/services/saas/activation-first-task.ts]
 ---
 
-A company is the top-level unit in Paperclip. Everything — agents, tasks, goals, budgets — lives under a company.
+Use the guided setup shown after you sign in to create a company, prepare a Co-worker, and start a first task. Some screens use **Agent** for Co-worker. The setup saves your progress so you can leave and return to the current step.
 
-## Step 1: Create the Company
+## Before starting work
 
-In the web UI, click "New Company" and provide:
+Follow the choices on screen to describe what the company does and what you want help with. When setup asks for an app or AI account, review the account and access shown before connecting it. A connection that appears in a list is not proof that the provider will accept it later; resolve any reconnect or setup notice before relying on it.
 
-- **Name** — your company's name
-- **Description** — what this company does (optional but recommended)
+The guided flow helps prepare one Co-worker and one task. Review the task and the work it may start before selecting its start action. A task can wait for a connection, approval, or another requirement. Starting a task does not promise that its work will succeed or finish by a particular time.
 
-## Step 2: Set a Goal
+## Check the result
 
-Every company needs a goal — the north star that all work traces back to. Good goals are specific and measurable:
+After a run, open the task to review its status, activity, and any result the Co-worker recorded. A completed run and a useful result are different things: read the output and decide whether it meets your need.
 
-- "Build the #1 AI note-taking app at $1M MRR in 3 months"
-- "Create a marketing agency that serves 10 clients by Q2"
+If the task is still running, blocked, or failed, use the status and next action shown on the task. See [Recover interrupted work](/help/recovering-work) before starting another attempt when the first outcome is unclear.
 
-Go to the Goals section and create your top-level company goal.
+## Pause setup or leave
 
-## Step 3: Create the CEO Agent
+Use the setup navigation to return to an earlier step, or choose the save-and-exit action when it is offered. When first-task setup provides **Stop**, use it to request that work stop and wait for the result shown on screen. Do not treat a pending stop as confirmation that the run has ended.
 
-The CEO is the first agent you create. Choose an adapter type (Claude Code is a good default) and configure:
-
-- **Name** — e.g. "CEO"
-- **Role** — `ceo`
-- **Adapter** — how the agent runs (Claude Code, Codex, etc.)
-- **Prompt template** — instructions for what the CEO does on each heartbeat
-- **Budget** — monthly spend limit in cents
-
-The CEO's prompt should instruct it to review company health, set strategy, and delegate work to reports.
-
-## Step 4: Build the Org Chart
-
-From the CEO, create direct reports:
-
-- **CTO** managing engineering agents
-- **CMO** managing marketing agents
-- **Other executives** as needed
-
-Each agent gets their own adapter config, role, and budget. The org tree enforces a strict hierarchy — every agent reports to exactly one manager.
-
-## Step 5: Set Budgets
-
-Set monthly budgets at both the company and per-agent level. Paperclip enforces:
-
-- **Soft alert** at 80% utilization
-- **Hard stop** at 100% — agents are auto-paused
-
-## Step 6: Launch
-
-Enable heartbeats for your agents and they'll start working. Monitor progress from the dashboard.
+For access, billing, or deletion questions, see [People and company access](/guides/board-operator/org-structure), [Billing and capacity](/guides/board-operator/costs-and-budgets), and [Export and deletion](/help/export-and-delete).

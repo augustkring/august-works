@@ -1,0 +1,64 @@
+{
+  "parentCommit": "24bb59196",
+  "requirements": [
+    "UP-03",
+    "CE-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "originalActualLockCounterexamples": {
+      "exit": 1,
+      "passed": 1,
+      "failed": 3,
+      "log": "generic-task-credential-lifetime-red.log"
+    },
+    "initialFixedLockCases": {
+      "exit": 0,
+      "passed": 4,
+      "failed": 0,
+      "log": "generic-task-credential-lifetime-owned.log"
+    },
+    "expandedNativeOwners": {
+      "exit": 0,
+      "passed": 93,
+      "suites": 5,
+      "log": "generic-task-credential-lifetime-expanded.log"
+    },
+    "additionalBusyCounterexample": {
+      "exit": 1,
+      "passed": 6,
+      "failed": 1,
+      "log": "generic-task-credential-lifetime-busy-red.log"
+    },
+    "finalCredentialCases": {
+      "exit": 0,
+      "passed": 7,
+      "failed": 0,
+      "log": "generic-task-credential-lifetime-final.log"
+    },
+    "serverTypes": {
+      "exit": 0,
+      "log": "generic-task-credential-lifetime-types.log"
+    },
+    "builtCookieBrowser": {
+      "exit": 0,
+      "passed": 1,
+      "log": "generic-task-credential-lifetime-browser.log"
+    }
+  },
+  "observations": [
+    "The actual existing generic issueService.update admitted authenticated Board mutations after session expiry or key revocation while waiting on a real Task row lock. A separate actual issue_labels DELETE wait occurs after authorization and the Task write; session expiry there incorrectly committed both effects. Original PostgreSQL counterexamples reproduce all three failures with a live-session positive control.",
+    "The original shared Task owner reuses pinCurrentBoardActor for actual server-authenticated Board credentials after the Task wait, retains its original/current earliest deadline, keeps User/session/key pins on the physical transaction, and checks actual database clock and pending account deletion after child-row effects before returning. Existing canonical action/privacy controls remain authoritative.",
+    "The no-wait native credential pins retain the existing account-erasure lock-order protection. Original authenticated actor identity is supplied privately by trusted server callers; no request body metadata or saved historical ownership becomes a credential.",
+    "Board test fixtures own actual PostgreSQL Users/memberships/session/key rows and model the server-owned authenticated actor carrier. All race cases observe real pg_stat_activity row waits and actual database elapsed time. Agent additions sign and verify a real local JWT against its actual owned run; no fixture qualifies complete-source/provider proof.",
+    "Additional current PostgreSQL controls verify actual local AgentJWT signing/verification with an owned running accountable run, JWT expiry during observed Task wait, original session expiry despite a concurrent real session renewal, and a real held session row. Root corrected the prepared Agent fixture to retain claims verified inside its temporary-secret scope, and normalized the omitted standard JWT scope like middleware. The7-case stage first passed6 and reproduced raw55P03 on the held row; the caller now reuses isAuthenticationStateBusy and the existing409 authentication_state_busy response. Final7 cases pass. Board session/key fixtures remain post-authentication carriers; Agent JWT cases qualify the actual local signing/verifying helper, not a complete HTTP authentication flow or provider execution.",
+    "The final deadline also applies to an original finite AgentJWT ceiling. Actual Agent key pinning/revocation and later surrounding-transaction/dispatch boundaries are not qualified by that check. Nonfinite credential ceilings are rejected, including the value returned by the existing Board pinner.",
+    "The expanded93 cases cover generic credential mutations plus existing manual Task source/replay, native ControlPlanePort and safe replacement suites. The final7 credential cases add three cases to that population; the stages overlap and are not100 distinct tests.",
+    "A bounded gpt-6-luna agent prepared real lock regressions and audited the shared pin/caller path; root reviewed the fixtures, implemented the shared owner guard and busy mapping, and ran verification.",
+    "The existing built native-profile browser now performs an ordinary Task PATCH using its actual signup/login cookie, verifies priority high and private source fields omitted, and subsequently verifies all five literal-Human source owner hashes/audits. The full actual CLI-consent/authenticator lifecycle browser passes. WebAuthn uses a software virtual authenticator, not physical hardware."
+  ],
+  "limits": [
+    "Final deadline qualification is at this owner boundary. An external caller that continues work in a surrounding transaction owns its later final effect/commit boundary; this check does not qualify arbitrary subsequent waits or external dispatch.",
+    "Actual Agent key pinning, other domain read/write/dispatch families, complete source receipts, typed/private-Memory/temporal source cases, representative provider/host/hardware qualification and full V10/PR gates remain separate open work. No release/merge/deployment or PR readiness is claimed."
+  ]
+}

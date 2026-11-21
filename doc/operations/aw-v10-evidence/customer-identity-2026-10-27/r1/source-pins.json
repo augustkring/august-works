@@ -1,0 +1,37 @@
+{
+  "sourceHead": "d3d6033c4bf122b7d68418b4d81dd6215fc2f3ab",
+  "files": [
+    {
+      "path": "scripts/check-customer-brand.mjs",
+      "sha256": "32c80c1b986810920dd5f4f144d4cf8fbad3c950eb60e66bea39959dcb499e1c"
+    },
+    {
+      "path": "scripts/check-customer-brand.test.mjs",
+      "sha256": "30d7524e9d3c86b019d56ff2a0d1cda3747ad2e12b77208c90bad4c1afb73041"
+    },
+    {
+      "path": "scripts/customer-brand-compatibility.json",
+      "sha256": "561b2c6c46991748857eae62a0111000941d0a3c446ef6c96fe99724e75956f3"
+    },
+    {
+      "path": "scripts/cli-command-migration.test.mjs",
+      "sha256": "973361a8d155bb16190ae7f19bdb121c94e47038612b66d6c01b816fbbd5877b"
+    },
+    {
+      "path": "cli/bin/paperclipai.mjs",
+      "sha256": "7541f8d259816d4327df3282a824c54ad59336df3a558e9e5b35124611c15d77"
+    },
+    {
+      "path": "cli/package.json",
+      "sha256": "310ff36caa8839a9c2090ea84b54c61a1b28a9763edb415323edd6337fa6d1f1"
+    },
+    {
+      "path": "cli/src/index.ts",
+      "sha256": "d41fa52f77eede589e65890f8810ef8a87b2012d0a5f8a9abf4989b41a73bf75"
+    },
+    {
+      "path": "docs/cli/migration.md",
+      "sha256": "94c825ed96d5d7e2d035a61bb5a21f61379c7865ceecdf97df0345640596c2b9"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "sourceHead": "9877c7a604958ae87d8aa3f2385ca5c098e1804d",
+  "sourceSha256": {
+    "server/src/services/native-project-output.ts": "02a45a38c213c3e7fa168b4e9b21aa01143a795230d3541c78fb575c7ee5608e",
+    "server/src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts": "6b8a4f2e862405447f974b02597149ac67c09636c55d7b0c680dc7ba48e241ae"
+  },
+  "testFile": "server/src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts",
+  "passed": 1,
+  "failed": 0,
+  "exitCode": 0,
+  "command": "/workspace/v10-preparation/run-pinned-native-test.sh managed-project-activity-r1-20261029 src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts .",
+  "rawLogSha256": "d4094f52f45e59a8b37ce5df2e46947f9e3db5a419f3db97d593dd9723951dda",
+  "behavior": "Qualified managed Native Project creation retains the canonical name/sourceIssueId/workspace activity fields consumed by the existing Task/chat activity projection. Actual activityService.forIssue returns exactly one matching creation event; original replay, tamper, source and model-result assertions remain in the passing test.",
+  "limitations": "This focused integration does not claim the new browser journey or unsupported Codex source capture is qualified."
+}

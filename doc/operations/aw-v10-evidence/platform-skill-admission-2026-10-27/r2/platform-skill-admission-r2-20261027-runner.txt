@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/platform-skill-admission.integration.test.ts
+test_pattern=required platform procedure admission

@@ -1,0 +1,23 @@
+{
+  "recordedAt": "2026-10-23T00:14:29.966481+00:00",
+  "meaning": "Source-only inspected owner/current file fingerprints, not runtime proof or upfront frozen capture graph",
+  "files": {
+    "server/src/services/heartbeat.ts": "24769d49ec221f329c6b069041ce85a957cc2e3267cdeda370e6e737ba01c9f9",
+    "server/src/services/agent-runtime-fabric.ts": "2b277c366db759027722d38d0d0dcf7537de92ada3b924a1aac4492cadd5478e",
+    "server/src/services/native-runtime/native-execution-input.ts": "cb1822f81574192c6ef10dcbc0d2d37230428eebcbc44f1a27792bf85e9dbf69",
+    "server/src/services/native-runtime/native-session-executor.ts": "b8d7ae5a0360d6d3dd9fada6fe45edbae0c435169fef84e48a978c1cac8f205d",
+    "server/src/services/native-runtime/native-session-resume.ts": "a219a9e945637e4164e89aed330d455ceb47b6da868add79263b1dffa8c6dbcd",
+    "server/src/services/native-runtime/continuation-contract.ts": "d87669aadd7906818e4446a33f3e5a4cac1b4f606c136e72002efe370797b541",
+    "server/src/services/native-runtime/native-runner-file-handoff.ts": "c1ee6469079ae4db32cddad9c7f2760a42919a911d44d5f75399aa75612ccb08",
+    "server/src/services/native-runtime/current-wake-comments.ts": "2cf89d1cea7715995579f6c03f63cfbf186c9b5dc5ab4bdf640df7d9fcf55fca",
+    "server/src/services/native-runtime/chat-attachment-read.ts": "d8ace885fb618d91eb5ff3a09ae3a73ef2c214c858aac495788397cb27d544b5",
+    "server/src/services/native-runtime/runtime-context.ts": "730e7c466e63fdcc293e9732093694ee59c401a973477f21324fe6bb71173d06",
+    "server/src/services/context/context-runtime.ts": "904cdf7609e61456b68499376c5feddf7901049fbf4f535df1a9ed697cf19055",
+    "server/src/services/context/context-manifest.ts": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8",
+    "server/src/services/agent-conversations.ts": "024ce08ba86de65ccf416f5b4bd734a535bd677c22e43aa9b7ea0dfe9afefed4",
+    "server/src/services/run-identity.ts": "1316cdd648edcf77fe51d459c1d0bc2ab5605b0efb689169bc744ab0c7092b05",
+    "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+    "packages/db/src/schema/execution_manifests.ts": "7cb9daa095108aa73fbc611d819a109bea55f32e6fe90c2bba67372f117a39a4",
+    "packages/shared/src/execution-manifest.ts": "d9fcc2f80067dfc64c093968f50567501261163df7f7d2b493e69884e46419db"
+  }
+}

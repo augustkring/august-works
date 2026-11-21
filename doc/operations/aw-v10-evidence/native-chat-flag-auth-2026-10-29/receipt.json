@@ -1,0 +1,19 @@
+{
+  "sourceHead": "f93f8bf4466b2ca66c70225004a6cf98ab52333b",
+  "sourceSha256": {
+    "tests/e2e/agent-chat.shared.ts": "e3d47f5ebe17c6f60dffb7e94bcd1d3eeb9bf8326ab873c22e7b7475ccbf7c8b",
+    "tests/e2e/agent-chat-projects.spec.ts": "e23df4ca3bcff4fc82056cde0914564ec75d17e36ec507106d2ac0484ab24cfe"
+  },
+  "commandScript": "/workspace/v10-preparation/run-agent-chat-project-current-r1-20261029.sh",
+  "browser": "system Chromium",
+  "qualification": "selected active-turn flag shutdown and retained history case passed in 23.1 seconds",
+  "cohort": {
+    "passed": 1,
+    "failed": 1,
+    "exitCode": 1,
+    "unresolvedFailure": "dedicated Project creation from a private Codex conversation is refused by the source-proof boundary; no full-suite pass is claimed"
+  },
+  "rawLogSha256": "b623e00e1ce4b59794c85fb75a1ab4f61aed22e8a945de1388cf7b497987f7fc",
+  "rawLogDisposition": "workspace-only; includes disposable bootstrap URLs",
+  "sourcePinsSha256": "7cb5987081d452787e8b46a8887d6627f5c1fe6e0a929a8a7c9e9697cd45eae3"
+}

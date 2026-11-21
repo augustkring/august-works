@@ -1,3 +1,4 @@
+import { assertNativeBlockedInteractionResult } from "../native-direct-input.js";
 import { createHash } from "node:crypto";
 
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
@@ -340,6 +341,7 @@ export class NativeRunCoordinatorStore {
     });
 
     return this.#db.transaction(async (tx) => {
+      await assertNativeBlockedInteractionResult(tx, this.#binding, validated.result);
       // Match task -> run lock ordering before the result's task foreign-key
       // check; a concurrent task mutation may also need this run row.
       await tx.select({ id: issues.id }).from(issues)

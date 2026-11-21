@@ -1,6 +1,6 @@
 import { notificationChannelPreferenceViewSchema, notificationChannelPreferenceReceiptSchema,
   notificationChannelUpdateSchema, type NotificationChannelCategory, type NotificationChannelUpdate } from "@paperclipai/shared";
-import { nativeSupportReviewSchema } from "@paperclipai/shared";
+import { nativeSupportReviewSchema, accountDeletionReceiptSchema } from "@paperclipai/shared";
 import type {
   RuntimeVersionCandidate,
   RuntimeVersionTransition,
@@ -25,6 +25,8 @@ import type {
   SaasUsage,
 } from "@paperclipai/shared";
 import { api, ApiError } from "./client";
+import { AuthApiError } from "./auth";
+import { i18n } from "@/i18n";
 const companyPath = (id: string) => "/companies/" + encodeURIComponent(id);
 const scoped = (path: string, userId: string) =>
   path +
@@ -67,13 +69,14 @@ function supportApprovalReceipt(
   return row;
 }
 export const saasApi = {
-  costs: (userId: string) =>
-    api.get<SaasCostSnapshot | null>(scoped("/saas/internal/costs", userId)),
+  costs: (userId: string, signal?: AbortSignal) =>
+    api.get<SaasCostSnapshot | null>(scoped("/saas/internal/costs", userId), { signal, cache: "no-store" }),
   recordCosts: (userId: string, input: unknown) =>
     api.post<SaasCostSnapshot>(scoped("/saas/internal/costs", userId), input),
-  providerInventory: (userId: string) =>
+  providerInventory: (userId: string, signal?: AbortSignal) =>
     api.get<{ observedAt: string; report: SaasProviderInventory } | null>(
       scoped("/saas/internal/fleet/inventory", userId),
+      { signal, cache: "no-store" },
     ),
   backupPolicy: (companyId: string, userId: string, cellId: string) =>
     api.get<SaasRuntimeBackupPolicy | null>(
@@ -493,9 +496,10 @@ export const saasApi = {
         userId,
       ),
     ),
-  deletion: (companyId: string, userId: string) =>
+  deletion: (companyId: string, userId: string, signal?: AbortSignal) =>
     api.get<SaasDeletion | null>(
       scoped(companyPath(companyId) + "/deletion", userId),
+      { signal, cache: "no-store" },
     ),
   deleteCompany: (
     companyId: string,
@@ -513,13 +517,21 @@ export const saasApi = {
         "id" | "companyId" | "status" | "stage" | "createdAt" | "completedAt"
       >[]
     >(scoped("/saas/account/deletion-receipts", userId), { signal, cache: "no-store" }),
+  prepareAccountDeletionReceipt: (userId: string, idempotencyKey: string) =>
+    api.post<{ ready: true }>(scoped("/saas/account/deletion/receipt-access", userId), { idempotencyKey })
+      .then(row => { if (row?.ready !== true) throw new Error("Deletion receipt access is unavailable"); return row; }),
+  accountDeletionReceipt: (signal?: AbortSignal) =>
+    api.post<unknown>("/saas/account/deletion/receipt", {}, { signal })
+      .then(row => accountDeletionReceiptSchema.parse(row)),
   deleteAccount: (
     userId: string,
     input: {
       confirmation: "DELETE MY ACCOUNT";
-      password: string;
+      password?: string;
+      reauthenticationProofId?: string;
       acknowledgeExport: true;
       idempotencyKey: string;
+      receiptRequired?: true;
     },
   ) =>
     api.post<{
@@ -528,9 +540,10 @@ export const saasApi = {
       createdAt: string;
       completedAt: string | null;
     }>(scoped("/saas/account/deletion", userId), input),
-  operations: (userId: string) =>
+  operations: (userId: string, signal?: AbortSignal) =>
     api.get<SaasOperationsSnapshot>(
       scoped("/saas/internal/operations", userId),
+      { signal, cache: "no-store" },
     ),
   registerRuntimeVersion: (userId: string, input: RuntimeVersionCandidate) =>
     api.post(scoped("/saas/internal/runtime-versions", userId), input),
@@ -623,15 +636,24 @@ export async function saasAuthAction(
   const response = await fetch("/api/auth/" + path, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Blentera-Locale": i18n.resolvedLanguage === "da" ? "da" : "en",
+    },
     body: JSON.stringify(input),
   });
   if (!response.ok) {
     const value = await response.json().catch(() => null);
-    throw new Error(
+    const code = typeof value?.code === "string" ? value.code
+      : typeof value?.error?.code === "string" ? value.error.code
+        : typeof value?.details?.code === "string" ? value.details.code : null;
+    throw new AuthApiError(
       typeof value?.message === "string"
         ? value.message
         : "The request failed. Please try again.",
+      response.status,
+      value,
+      code,
     );
   }
 }

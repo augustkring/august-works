@@ -1,0 +1,57 @@
+{
+  "scope": "Original Context Memory root immutable selected-body snapshot integrity; not source completeness or permission",
+  "firstGeneration": {
+    "actualExit": 2,
+    "log": "/workspace/v10-preparation/up03-context-memory-root-generate-first.log",
+    "durableExit": "/workspace/v10-preparation/up03-context-memory-root-generate-first.exit",
+    "exactPreCorrection0511Test": "/workspace/v10-preparation/up03-context-memory-root-pre-typefix-0511-test.ts",
+    "finding": "Previously committed0511 test helper used Record<string,unknown> instead of native postgres.json parameter type; corrected only parameter type"
+  },
+  "generation": {
+    "actualExit": 0,
+    "log": "/workspace/v10-preparation/up03-context-memory-root-generate.log",
+    "durableExit": "/workspace/v10-preparation/up03-context-memory-root-generate.exit",
+    "command": "pnpm db:generate",
+    "historicalSnapshotsRestoredExactHEAD": 49
+  },
+  "current": {
+    "actualExit": 0,
+    "log": "/workspace/v10-preparation/up03-context-memory-root-current.log",
+    "durableExit": "/workspace/v10-preparation/up03-context-memory-root-current.exit",
+    "before": "/workspace/v10-preparation/up03-context-memory-root-current-before.sha256",
+    "after": "/workspace/v10-preparation/up03-context-memory-root-current-after.sha256",
+    "pinsUnchanged": true,
+    "suiteCounts": {
+      "old0511": 8,
+      "new0512": 5
+    },
+    "actualEmbeddedPostgresCleanupClosed": true,
+    "passed": 13,
+    "durationSeconds": 50.35
+  },
+  "files": {
+    "packages/db/src/schema/context_memory_roots.ts": "873914b12cc2fd374c53c1596ad8d47cbbfc73603a99ce6f806103206480db95",
+    "packages/db/src/migrations/0512_flimsy_satana.sql": "5f075cb91e42197e987121f7601700bede2ab181f33a8afe733dd36249688a54",
+    "packages/db/src/migrations/meta/_journal.json": "b00eb9279bc934135ed5b1984c7b4210bd35eb17d6d7375ecb937d68e57c54f8",
+    "packages/db/src/migrations/meta/0512_snapshot.json": "5295ffd462877bfc0bd2db7daa7c7dbbb32da17625897cae2cff072d5dd852cb",
+    "packages/db/src/context-memory-root-snapshot.test.ts": "cb5b88c3855b7b4ccb677bda74a2c1fce409751a7f3fb58c963cc2c06f92a658",
+    "packages/db/src/native-run-input-source-receipt.test.ts": "3a29f9aa7cd0cd963785d25c8ff203d48f4c4cf1603dbd4006032492f6e6c25c"
+  },
+  "sourceTrace": {
+    "productionUpdateCallersFound": 0,
+    "insertOwners": [
+      "context/context-manifest.ts (original Date.toISOString ms version)",
+      "agent-runtime-fabric.ts (expectedVersion)",
+      "analytical-context-privacy.ts (analytical contentHash legacy version)"
+    ]
+  },
+  "limits": [
+    "Structural source-free Memory snapshot fixtures, not actual native producer qualification",
+    "Historical NULL roots cannot be upgraded; analytical hash-version NULL inserts retain original behavior",
+    "Other INSERT owners remain unknown until explicitly instrumented; no fabricated captures",
+    "Original ContextManifestService instrumentation/tests owned by Root, not qualified by these DB tests",
+    "No new protocol/Ready flag/table/registry and no permission change",
+    "Exact snapshot stays unchanged after later Memory body changes; current intrinsic policy and erasure remain separate guards",
+    "No Git commit by A"
+  ]
+}

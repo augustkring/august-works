@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+native_model_input_dispatch_closure_diagnostic {
+  closurePresent: true,
+  closureMatches: true,
+  mismatch: 'unclassified',
+  sourceProtocolVersion: 0,
+  responsibleUserPresent: true,
+  existingReceiptValid: false,
+  noPriorNativeEffects: true,
+  priorIntentCount: 0,
+  priorAssociationCount: 0,
+  priorResultCaptureCount: 0,
+  attachmentStagePresent: false
+}
+
+ ✓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows 20388ms
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > continues the real conversation after a metric tool result with its original immutable source receipt
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates one private Project from a current conversation dispatch and carries its exact result into the next request
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 4 skipped (5)
+   Start at  23:20:49
+   Duration  39.73s (transform 11.38s, setup 91ms, import 15.26s, tests 24.25s, environment 0ms)
+

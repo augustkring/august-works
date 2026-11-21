@@ -1,0 +1,21 @@
+2026-10-22T19:13:24Z
+b3fc8b0a81f71b48c49a0d54947ad2294c6889088f102796d819feb4b1665595  server/src/__tests__/agent-auth-audit.integration.test.ts
+e002afb69b5cdaf4e0856636b842dde52600b1c7126cf35edce3c9df938a61dd  server/src/middleware/auth.ts
+28b089f710e89f7abcf4b00ad8ffebd9a8642d6f5733304c9fc758864cb5a9c1  server/src/services/board-auth.ts
+d337ac08574be0e5a98a47d8d12db0d0f064eb9d04e825b6b6590bc3e1cfc8a1  server/src/agent-auth-jwt.ts
+692011333f7b82174f05509043ce1058820bd3409a65dcdd3cd40788b6711f74  server/src/middleware/error-handler.ts
+5bf1911980adc5457afd06e3b56a7e867e2bdad2f96c91862c6fed52c7f5d00f  server/src/__tests__/helpers/embedded-postgres.ts
+a47fa6bf83303012a18ca4c3adb829ddf731a23e1054a3e1f4fb56e3ad187e67  packages/db/src/client.ts
+20f3ca6d9fa6a2eb98725d7ebccdcd3189a89d7cbc105040d608c07af2fd462c  packages/db/src/test-embedded-postgres.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  19:13:26
+   Duration  76.25s (transform 33.56s, setup 205ms, import 47.39s, tests 28.11s, environment 0ms)
+

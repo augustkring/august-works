@@ -1,0 +1,14 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/access-routes-permissions-upgrade.test.ts > access routes permissions upgrade compatibility > rejects owner self-lockout through the member route after the permissions upgrade
+ ✓ src/__tests__/access-routes-permissions-upgrade.test.ts > access routes permissions upgrade compatibility > allows an explicitly authorized recent Human to security-suspend the last owner and records owner recovery 431ms
+ ↓ src/__tests__/access-routes-permissions-upgrade.test.ts > access routes permissions upgrade compatibility > does not let local implicit administrator access read, create, or revoke Human workflow coverage
+ ↓ src/__tests__/access-routes-permissions-upgrade.test.ts > access routes permissions upgrade compatibility > keeps custom grants when the role-only member route changes a member role
+ ↓ src/__tests__/access-routes-permissions-upgrade.test.ts > access routes permissions upgrade compatibility > sweeps personal connection access when the member route suspends a user
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 4 skipped (5)
+   Start at  17:25:49
+   Duration  20.40s (transform 10.78s, setup 80ms, import 4.33s, tests 15.87s, environment 0ms)
+

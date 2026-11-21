@@ -40,7 +40,7 @@ const execFile = promisify(execFileCallback);
 
 interface SpawnRunnerHandle {
   runner: CommandManagedRuntimeRunner;
-  calls: Array<{ command: string; args?: string[]; cwd?: string; stdin?: string }>;
+  calls: Array<{ command: string; args?: string[]; cwd?: string; stdin?: string; nativePreparationPurpose?: string }>;
 }
 
 // A runner that actually executes the shell scripts (piping stdin through a real
@@ -50,7 +50,7 @@ function makeSpawnRunner(options: {
   supportsSingleStreamStdinProgress?: boolean;
   maxStdoutBytes?: number;
 } = {}): SpawnRunnerHandle {
-  const calls: Array<{ command: string; args?: string[]; cwd?: string; stdin?: string }> = [];
+  const calls: Array<{ command: string; args?: string[]; cwd?: string; stdin?: string; nativePreparationPurpose?: string }> = [];
   const runner: CommandManagedRuntimeRunner = {
     supportsSingleStreamStdinProgress: options.supportsSingleStreamStdinProgress,
     execute: async (input) =>
@@ -60,6 +60,7 @@ function makeSpawnRunner(options: {
           args: input.args,
           cwd: input.cwd,
           stdin: input.stdin,
+          nativePreparationPurpose: input.nativePreparationPurpose,
         });
         const startedAt = new Date().toISOString();
         const command =
@@ -76,8 +77,9 @@ function makeSpawnRunner(options: {
         child.stderr.on("data", (chunk) => {
           stderr += chunk.toString("utf8");
         });
-        child.on("error", () => {
-          resolve({ exitCode: 127, signal: null, timedOut: false, stdout, stderr, pid: null, startedAt });
+        child.on("error", (error) => {
+          resolve({ exitCode: 127, signal: null, timedOut: false, stdout,
+            stderr: `${error.name}:${error.message}; cwd=${input.cwd ?? ""}`, pid: null, startedAt });
         });
         child.on("close", async (code) => {
           if (
@@ -459,6 +461,31 @@ describe("command managed runtime", () => {
     await expect(readFile(path.join(remoteWorkspaceDir, "README.md"), "utf8")).resolves.toBe("local workspace\n");
   });
 
+  it("keeps verified projectless task staging commands inside the exact workspace root", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-runtime-private-task-cwd-"));
+    cleanupDirs.push(rootDir);
+    const localWorkspaceDir = path.join(rootDir, "local-workspace");
+    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    await mkdir(localWorkspaceDir, { recursive: true });
+    await mkdir(remoteWorkspaceDir, { recursive: true });
+    await writeFile(path.join(localWorkspaceDir, "README.md"), "private task workspace\n", "utf8");
+
+    const { runner, calls } = makeSpawnRunner();
+    const prepared = await prepareCommandManagedRuntime({
+      runner,
+      spec: { remoteCwd: remoteWorkspaceDir, timeoutMs: 30_000 },
+      adapterKey: "paperclip-runner",
+      workspaceLocalDir: localWorkspaceDir,
+      workspaceRepositoryMode: "server_verified_none",
+    });
+
+    expect(prepared.workspaceRemoteDir).toBe(remoteWorkspaceDir);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((call) => call.cwd === remoteWorkspaceDir)).toBe(true);
+    await expect(readFile(path.join(remoteWorkspaceDir, "README.md"), "utf8"))
+      .resolves.toBe("private task workspace\n");
+  });
+
   it("uploads a multi-MB payload in a single process and preserves exact bytes", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-write-"));
     cleanupDirs.push(rootDir);
@@ -602,6 +629,53 @@ describe("command managed runtime", () => {
     const base = makeSpawnRunner().runner;
     const client = createCommandManagedRuntimeClient({ runner: base, commandCwd: "/", timeoutMs: 1 });
     expect(client.allowConcurrentSyncOperations).toBe(true);
+  });
+
+  it("marks only verified no-repository workspace staging commands and clears the marker before restore", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-native-workspace-prepare-"));
+    cleanupDirs.push(rootDir);
+    const localWorkspaceDir = path.join(rootDir, "local");
+    const remoteWorkspaceDir = path.join(rootDir, "remote");
+    await mkdir(localWorkspaceDir, { recursive: true });
+    await mkdir(remoteWorkspaceDir, { recursive: true });
+    await writeFile(path.join(localWorkspaceDir, "README.md"), "conversation task root\n", "utf8");
+
+    const { runner: baseRunner, calls } = makeSpawnRunner({ supportsSingleStreamStdinProgress: true });
+    let nativeSyncInCalls = 0;
+    const runner: CommandManagedRuntimeRunner = {
+      ...baseRunner,
+      syncIn: async (operations) => {
+        nativeSyncInCalls += 1;
+        return { operations: operations.map((operation) => ({
+          operationId: operation.operationId,
+          filesTransferred: operation.files.length,
+          bytesTransferred: 0,
+        })) };
+      },
+      syncOut: async () => ({ operations: [] }),
+    };
+    const prepared = await prepareCommandManagedRuntime({
+      runner,
+      spec: { remoteCwd: remoteWorkspaceDir, timeoutMs: 30_000 },
+      adapterKey: "paperclip-runner",
+      workspaceLocalDir: localWorkspaceDir,
+      workspaceRepositoryMode: "server_verified_none",
+      nativeWorkspacePreparation: true,
+    });
+
+    const stagingCalls = [...calls];
+    expect(nativeSyncInCalls).toBe(0);
+    expect(stagingCalls.length).toBeGreaterThan(0);
+    expect(stagingCalls.every((call) => call.nativePreparationPurpose === "native_workspace_prepare")).toBe(true);
+    expect(stagingCalls.every((call) => call.cwd === remoteWorkspaceDir)).toBe(true);
+    expect(stagingCalls.filter((call) => call.stdin != null).length).toBe(1);
+    expect(stagingCalls.filter((call) => call.stdin != null).every((call) =>
+      /^[A-Za-z0-9+/=]+$/.test(call.stdin ?? "") && Buffer.byteLength(call.stdin ?? "", "utf8") <= 4 * 1024 * 1024,
+    )).toBe(true);
+    expect(stagingCalls.some((call) => call.args?.join(" ").includes("tar -xf"))).toBe(true);
+
+    await prepared.restoreWorkspace();
+    expect(calls.slice(stagingCalls.length).every((call) => call.nativePreparationPurpose == null)).toBe(true);
   });
 
   it("undeclared native runner reports allowConcurrentSyncOperations false", () => {

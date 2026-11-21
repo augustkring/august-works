@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { agentExecutionManifests, analyticalContextRoots, completionContracts, contextManifestMemoryRoots, documentRevisions, documents, issueDocuments, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSignals, toolInvocations, verificationRuns, type Db } from "@paperclipai/db";
-import { orchestrationCompletionSchema, verificationReviewSchema, trajectoryReviewSchema, type TrajectoryReviewInput, type VerificationPacket, type VerificationEvidenceRef, type VerificationReviewInput } from "@paperclipai/shared";
+import { agentExecutionManifests, analyticalContextRoots, completionContracts, contextManifestMemoryRoots, heartbeatRuns, issueExecutionDecisions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSignals, toolInvocations, verificationRuns, type Db } from "@paperclipai/db";
+import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, orchestrationCompletionSchema, verificationReviewSchema, trajectoryReviewSchema, type TrajectoryReviewInput, type VerificationPacket, type VerificationEvidenceRef, type VerificationReviewInput } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { assertDerivedManager } from "../memory/derived-memory.js";
@@ -10,12 +12,20 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { validateWorkflowOutput } from "../workflows/workflow-output-schema.js";
+import { assertNativeManagedProjectCreateReceiptCurrentInTransaction, managedNativeProjectResultDto, type NativeProjectCreateReceipt } from "../native-project-output.js";
+import type { NativeModelOutputCapture, NativePayloadSourceSet } from "../native-runtime/native-execution-input.js";
+import { projectService } from "../projects.js";
+import { checkTaskDocumentOutput, readTaskDocumentOutputs } from "./task-document-output.js";
 import { reconcileOrchestrationAttempts } from "../orchestration/orchestration-admission.js";
 import { orchestrationService, assertOrchestrationSources } from "../orchestration/orchestration-service.js";
 import { issueService, executeIssuePostCommitActions, type IssuePostCommitAction } from "../issues.js";
+import { normalizeIssueExecutionPolicy, parseIssueExecutionState } from "../issue-execution-policy.js";
 import { enqueueSupervisionStop, ensureSupervisionSession } from "./supervision-outbox.js";
 import { conflict, notFound } from "../../errors.js";
+
+function record(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
 
 /** Independent accountable human review; automated providers must qualify a separate read-only consumer. */
 export function verificationService(db: Db) {
@@ -44,17 +54,82 @@ export function verificationService(db: Db) {
     if (liveAttempts) failures.push("worker_attempt_still_running");
     for (const subject of subjectWorkers) if (subjectAttempts.find(a => a.workerId === subject.id)?.status !== "succeeded") failures.push(`worker_attempt_not_successful:${subject.workerKey}`);
     if (!worker && plan.mode === "planned_parallel" && workers.some(w => w.status !== "completed")) failures.push("worker_joins_incomplete");
-    const outputRows = await tx.select({ key: issueDocuments.key, doc: documents }).from(issueDocuments).innerJoin(documents,and(eq(documents.companyId,issueDocuments.companyId),eq(documents.id,issueDocuments.documentId))).where(and(eq(issueDocuments.companyId,companyId),eq(issueDocuments.issueId,issueId))).for("share",{ of: documents });
+    const outputRows = await readTaskDocumentOutputs(tx,{ companyId,issueId,lock: true });
     for (const required of contract.requiredOutputs) {
-      const output = outputRows.find(o => o.key === required.key);
-      if (!output?.doc.latestBody.trim() || !output.doc.latestRevisionId) { failures.push(`output_missing:${required.key}`); continue; }
-      const [revision] = await tx.select().from(documentRevisions).where(and(eq(documentRevisions.companyId,companyId),eq(documentRevisions.documentId,output.doc.id),eq(documentRevisions.id,output.doc.latestRevisionId))).for("share");
-      if (!revision || revision.body !== output.doc.latestBody || revision.revisionNumber !== output.doc.latestRevisionNumber) failures.push(`output_revision_mismatch:${required.key}`);
-      if (required.jsonSchema) {
-        try { if (Buffer.byteLength(output.doc.latestBody,"utf8")>256000) throw new Error("bounded_output_limit"); validateWorkflowOutput(required.jsonSchema,JSON.parse(output.doc.latestBody)); }
-        catch { failures.push(`output_schema_mismatch:${required.key}`); }
+      if (required.kind === "private_project") {
+        const candidates: Array<{ run: typeof heartbeatRuns.$inferSelect; receipt: NativeProjectCreateReceipt;
+          sourceSet: NativePayloadSourceSet; outputCapture: NativeModelOutputCapture }> = [];
+        for (const attempt of subjectAttempts.filter(value => value.status === "succeeded" && value.runId)) {
+          const [producerRun] = await tx.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, attempt.runId!),
+            eq(heartbeatRuns.nativeIssueId, issueId), eq(heartbeatRuns.runtimeMode, "native"),
+          )).for("share");
+          if (!producerRun || producerRun.status !== "succeeded") continue;
+          const profile = record(producerRun.runnerProfileJson);
+          const captures = Array.isArray(profile.nativeToolResultSourceCaptures)
+            ? profile.nativeToolResultSourceCaptures.map(record).filter(capture => capture.managedOpenCode === true &&
+                capture.tool === "create_project" && capture.source && record(capture.source).kind === "tool_result" &&
+                capture.projectCreate && typeof capture.projectCreate === "object") : [];
+          const resultJson = record(producerRun.resultJson);
+          const receipts = record(resultJson.nativeProjectCreateReceipts);
+          for (const capture of captures) {
+            const projectCapture = record(capture.projectCreate);
+            const receiptRaw = projectCapture.receipt;
+            const sourceSetRaw = record(projectCapture.sourceSet);
+            const policy = nativePayloadSourcePolicySchema.safeParse(sourceSetRaw.policy);
+            const inputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetRaw.inputs);
+            const outputCapture = projectCapture.outputCapture;
+            if (!policy.success || !inputs.success || !outputCapture || typeof outputCapture !== "object") continue;
+            const sourceSet: NativePayloadSourceSet = { policy: policy.data, inputs: inputs.data };
+            const receipt = receiptRaw as NativeProjectCreateReceipt;
+            if (!receipt || typeof receipt.callId !== "string" || typeof receipt.projectId !== "string" ||
+              !isDeepStrictEqual(receipts[createHash("sha256").update(receipt.callId, "utf8").digest("hex")], receipt)) continue;
+            candidates.push({ run: producerRun, receipt, sourceSet, outputCapture: outputCapture as NativeModelOutputCapture });
+          }
+        }
+        if (candidates.length !== 1) {
+          failures.push(candidates.length ? `output_ambiguous:${required.key}` : `output_missing:${required.key}`);
+          continue;
+        }
+        const candidate = candidates[0]!;
+        const workspaceSources = nativePayloadSourceInputSchema.array().safeParse(candidate.receipt.workspaceSources);
+        if (!workspaceSources.success || workspaceSources.data.length < 1 ||
+          workspaceSources.data.some(source => source.kind !== "project_workspace")) {
+          failures.push(`output_project_workspace_missing:${required.key}`);
+          continue;
+        }
+        const project = await projectService(tx as unknown as Db).getById(candidate.receipt.projectId);
+        if (!project) {
+          failures.push(`output_project_missing:${required.key}`);
+          continue;
+        }
+        const result = managedNativeProjectResultDto(project);
+        try {
+          await assertNativeManagedProjectCreateReceiptCurrentInTransaction(tx as unknown as Parameters<Parameters<Db["transaction"]>[0]>[0], { companyId, issueId,
+            runId: candidate.run.id,
+            actor: { type: "agent", source: "agent_jwt", companyId, agentId: candidate.run.agentId,
+              runId: candidate.run.id, onBehalfOfUserId: candidate.run.responsibleUserId ?? undefined },
+            receipt: candidate.receipt, sourceSet: candidate.sourceSet, outputCapture: candidate.outputCapture,
+            result, allowSucceededRun: true });
+        } catch (error) {
+          const status = error && typeof error === "object" ? (error as { status?: unknown }).status : undefined;
+          if (typeof status === "number" && [403, 404, 409].includes(status)) {
+            failures.push(`output_project_not_current:${required.key}`);
+            continue;
+          }
+          throw error;
+        }
+        evidence.push({ ref: `project:${candidate.receipt.projectId}:${candidate.receipt.sourceSnapshotDigest}`,
+          type: "private_project", sourceId: candidate.receipt.projectId,
+          sourceVersion: candidate.receipt.projectSource.sourceVersion, hash: candidate.receipt.resultDigest });
+        continue;
       }
-      evidence.push({ ref: `document:${output.doc.id}:${output.doc.latestRevisionId}`,type: "task_document",sourceId: output.doc.id,sourceVersion: output.doc.latestRevisionId,hash: nativeSha256(output.doc.latestBody) });
+      // One check with the Native evidence classifier's document evidence (MS1f decision 2).
+      const output = await checkTaskDocumentOutput(tx,{ companyId,output: outputRows.find(o => o.key === required.key),jsonSchema: required.jsonSchema,lock: true });
+      if (output.status === "missing") { failures.push(`output_missing:${required.key}`); continue; }
+      if (!output.revisionCurrent) failures.push(`output_revision_mismatch:${required.key}`);
+      if (output.schemaValid === false) failures.push(`output_schema_mismatch:${required.key}`);
+      evidence.push(output.evidence);
     }
     const receipts = await tx.select({ receipt: toolInvocations }).from(orchestrationToolCharges).innerJoin(toolInvocations,and(eq(toolInvocations.companyId,orchestrationToolCharges.companyId),eq(toolInvocations.id,orchestrationToolCharges.invocationId))).where(and(eq(orchestrationToolCharges.companyId,companyId),eq(orchestrationToolCharges.planId,id))).orderBy(desc(toolInvocations.createdAt)).limit(1000);
     for (const [index,condition] of contract.requiredPostconditions.entries()) {
@@ -69,6 +144,45 @@ export function verificationService(db: Db) {
         if (!receipt) { failures.push(`postcondition_missing:${index}`); continue; }
         evidence.push({ ref: `tool:${receipt.id}`,type: "tool_receipt",sourceId: receipt.id,sourceVersion: receipt.updatedAt.toISOString(),hash: nativeSha256({ arguments: receipt.argumentsHash,result: receipt.resultHash,approval: receipt.approvalState }) });
       }
+    }
+    // MS1f. The declared execution-policy stages of the subject Task are part
+    // of the result under review. Verification passes only when every
+    // declared stage is completed and its latest decision is an approval:
+    // otherwise execution_stage_changes_requested:<stageId> (latest decision
+    // asked for changes and the stage is not back in review) or
+    // execution_stage_incomplete:<stageId> (pending, not started, or completed
+    // without an approval). A pending or returned stage the policy no longer
+    // declares also blocks. The approving latest decision of each completed
+    // stage is evidence, as ids and hashes only (never the decision body).
+    // For schema-valid plans the subject Task is also every subject worker's
+    // Task (a single worker runs the root Task; a parallel worker is verified
+    // on its own Task first).
+    const stageState = parseIssueExecutionState(task.executionState);
+    let declaredStageIds: string[] = [];
+    try { declaredStageIds = normalizeIssueExecutionPolicy(task.executionPolicy ?? null)?.stages.map(stage => stage.id) ?? []; }
+    catch { failures.push("execution_policy_invalid"); }
+    const completedStageIds = new Set(stageState?.completedStageIds ?? []);
+    const stageIds = [...new Set([...declaredStageIds, ...completedStageIds])];
+    const latestDecisions = new Map<string, typeof issueExecutionDecisions.$inferSelect>();
+    if (stageIds.length) {
+      const decisions = await tx.select().from(issueExecutionDecisions).where(and(eq(issueExecutionDecisions.companyId,companyId),eq(issueExecutionDecisions.issueId,task.id),inArray(issueExecutionDecisions.stageId,stageIds))).orderBy(desc(issueExecutionDecisions.createdAt),desc(issueExecutionDecisions.id)).limit(257).for("share");
+      if (decisions.length > 256) throw conflict("The complete verification source set exceeds its budget");
+      for (const decision of decisions) if (!latestDecisions.has(decision.stageId)) latestDecisions.set(decision.stageId, decision);
+    }
+    for (const stageId of declaredStageIds) {
+      const latest = latestDecisions.get(stageId);
+      if (completedStageIds.has(stageId) && latest?.outcome === "approved") continue;
+      const inReview = stageState?.status === "pending" && stageState.currentStageId === stageId;
+      failures.push(!inReview && latest?.outcome === "changes_requested" ? `execution_stage_changes_requested:${stageId}` : `execution_stage_incomplete:${stageId}`);
+    }
+    if ((stageState?.status === "pending" || stageState?.status === "changes_requested") && !declaredStageIds.includes(stageState.currentStageId ?? ""))
+      failures.push(`execution_stage_incomplete:${stageState.currentStageId ?? "unknown"}`);
+    for (const stageId of completedStageIds) {
+      // The latest decision of a completed stage is the one that completed it.
+      const decision = latestDecisions.get(stageId);
+      if (decision?.outcome !== "approved") continue;
+      evidence.push({ ref: `stage_decision:${decision.id}`,type: "stage_decision",sourceId: decision.id,sourceVersion: decision.updatedAt.toISOString(),
+        hash: nativeSha256({ issueId: decision.issueId,stageId: decision.stageId,stageType: decision.stageType,outcome: decision.outcome,actorAgentId: decision.actorAgentId,actorUserId: decision.actorUserId,createdByRunId: decision.createdByRunId,bodySha256: nativeSha256(decision.body) }) });
     }
     const manifests = subjectAttempts.flatMap(a => a.executionManifestId ? [a.executionManifestId] : []);
     if (manifests.length) {

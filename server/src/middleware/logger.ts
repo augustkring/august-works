@@ -20,16 +20,94 @@ const sharedOpts = {
   singleLine: true,
 };
 
+const SAFE_ERROR_TYPES = new Set([
+  "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError",
+  "URIError", "EvalError", "AggregateError", "AbortError", "TimeoutError",
+  "DatabaseError", "HttpError",
+]);
+const SAFE_ERROR_MESSAGES = new Set([
+  "Private experience request failed",
+  "SaaS ingress request failed",
+  "Chat webhook request failed",
+  "Secret-sensitive request failed",
+]);
+
+function errorField(value: unknown, key: string): unknown {
+  if (!value || typeof value !== "object") return undefined;
+  try { return (value as Record<string, unknown>)[key]; } catch { return undefined; }
+}
+
+function safeErrorType(value: unknown, sqlState?: string, status?: number): string {
+  if (sqlState) return "DatabaseError";
+  if (status !== undefined) return "HttpError";
+  const projectedType = errorField(value, "type");
+  if (typeof projectedType === "string" && SAFE_ERROR_TYPES.has(projectedType)) return projectedType;
+  const name = errorField(value, "name");
+  return typeof name === "string" && SAFE_ERROR_TYPES.has(name) ? name : "Error";
+}
+
+function safeErrorLocation(value: unknown): { line: number; column: number } | undefined {
+  const projected = errorField(value, "location");
+  if (projected && typeof projected === "object") {
+    const line = errorField(projected, "line"), column = errorField(projected, "column");
+    if (typeof line === "number" && Number.isInteger(line) && line > 0 &&
+      typeof column === "number" && Number.isInteger(column) && column > 0)
+      return { line, column };
+  }
+  const stack = errorField(value, "stack");
+  if (typeof stack !== "string") return undefined;
+  // Keep numeric location only. Filenames, paths, function names and source text
+  // can contain user data when an Error is constructed from untrusted input.
+  for (const line of stack.split(/\r?\n/).slice(1, 8)) {
+    const match = /:(\d+):(\d+)\)?\s*$/.exec(line);
+    if (match) return { line: Number(match[1]), column: Number(match[2]) };
+  }
+  return undefined;
+}
+
+/** A content-free projection for every application logger error field. */
+export function safeErrorLogProjection(value: unknown): Record<string, unknown> {
+  const seen = new Set<object>();
+  const project = (current: unknown, depth: number): Record<string, unknown> => {
+    if (!current || typeof current !== "object" || seen.has(current) || depth > 3)
+      return { type: "Error" };
+    seen.add(current);
+    const rawCode = errorField(current, "code") ?? errorField(current, "sqlState");
+    const sqlState = typeof rawCode === "string" && /^[0-9A-Z]{5}$/.test(rawCode) ? rawCode : undefined;
+    const rawStatus = errorField(current, "statusCode") ?? errorField(current, "status");
+    const status = typeof rawStatus === "number" && Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599
+      ? rawStatus : undefined;
+    const projection: Record<string, unknown> = { type: safeErrorType(current, sqlState, status) };
+    if (sqlState) projection.sqlState = sqlState;
+    if (status !== undefined) projection.status = status;
+    const rawMessage = errorField(current, "message");
+    if (typeof rawMessage === "string" && SAFE_ERROR_MESSAGES.has(rawMessage)) projection.message = rawMessage;
+    const location = safeErrorLocation(current);
+    if (location) projection.location = location;
+    const cause = errorField(current, "cause");
+    if (cause !== undefined && depth < 3) projection.cause = project(cause, depth + 1);
+    return projection;
+  };
+  try { return project(value, 0); } catch { return { type: "Error" }; }
+}
+
+const errorSerializers = {
+  err: safeErrorLogProjection,
+  error: safeErrorLogProjection,
+};
+
 const isProduction = process.env.NODE_ENV === "production";
 export const logger = isProduction
   ? pino({
       level: process.env.PAPERCLIP_LOG_LEVEL?.trim() || "info",
       redact: [...HTTP_LOG_REDACT_PATHS],
+      serializers: errorSerializers,
     })
   : pino(
       {
         level: process.env.PAPERCLIP_LOG_LEVEL?.trim() || "debug",
         redact: [...HTTP_LOG_REDACT_PATHS],
+        serializers: errorSerializers,
       },
       pino.transport({
         target: "pino-pretty",
@@ -92,6 +170,7 @@ export function createHttpLogger(baseLogger: Logger) {
   return pinoHttp({
     logger: baseLogger,
     serializers: {
+      err: safeErrorLogProjection,
       req(req: Record<string, unknown> & { url?: unknown }) {
         if (
           isContentPrivate({
@@ -152,14 +231,10 @@ export function createHttpLogger(baseLogger: Logger) {
         return `${req.method} ${requestLogUrl(req)} ${res.statusCode} — request failed`;
       }
       const ctx = (res as any).__errorContext;
-      const errMsg =
-        ctx?.error?.message ||
-        err?.message ||
-        (res as any).err?.message ||
-        "unknown error";
-      return `${req.method} ${stripSecretBearingUrlParts(req.url ?? "")} ${res.statusCode} — ${errMsg}`;
+      const safeError = safeErrorLogProjection(ctx?.error ?? err ?? (res as any).err);
+      return `${req.method} ${stripSecretBearingUrlParts(req.url ?? "")} ${res.statusCode} — request failed (${safeError.type})`;
     },
-    customErrorObject(req, _res, _err, value) {
+    customErrorObject(req, _res, err, value) {
       // pino-http serializes res.err independently of customProps/errorContext.
       // Do not rely on a particular error handler having sanitized an SDK Error.
       return isContentPrivate(req)
@@ -174,7 +249,10 @@ export function createHttpLogger(baseLogger: Logger) {
                 : "Chat webhook request failed",
             },
           }
-        : value;
+        : {
+            ...value,
+            err: safeErrorLogProjection(err ?? (value as Record<string, unknown>).err),
+          };
     },
     customProps(req, res) {
       if (res.statusCode >= 400) {
@@ -200,7 +278,7 @@ export function createHttpLogger(baseLogger: Logger) {
             // for setup routes; the status, route, and redacted body remain.
             errorContext: secretSensitiveRoute
               ? { name: "Error" }
-              : redactSensitive(ctx.error),
+              : safeErrorLogProjection(ctx.error),
             reqBody: redactSensitive(ctx.reqBody),
             reqParams: redactSensitive(ctx.reqParams),
           };

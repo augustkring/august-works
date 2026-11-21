@@ -164,7 +164,7 @@ function resourceByProfile(
   );
   if (matches.length > 1) {
     throw new Error(
-      `Multiple Anthropic ${resourceLabel} resources use Paperclip profile ${profileKey}; pass an explicit resource ID`,
+      `Multiple Anthropic ${resourceLabel} resources use Blentera profile ${profileKey}; pass an explicit resource ID`,
     );
   }
   return matches[0] ?? null;
@@ -189,7 +189,7 @@ export function assertSafeManagedEnvironment(environment: Record<string, unknown
     || installed.length > 0
   ) {
     throw new Error(
-      "Existing Anthropic Environment does not match Paperclip's no-network, no-package profile",
+      "Existing Anthropic Environment does not match Blentera's no-network, no-package profile",
     );
   }
 }
@@ -241,8 +241,8 @@ async function resolveEnvironment(
   if (options.probe) throw new Error("Probe found no matching Anthropic Environment");
 
   const environment = await anthropicRequest(key, "POST", "/v1/environments", {
-    name: `Paperclip · ${options.displayName}`,
-    description: "Paperclip remote-agent environment: no network or added packages.",
+    name: `Blentera · ${options.displayName}`,
+    description: "Blentera remote-agent environment: no network or added packages.",
     config: {
       type: "cloud",
       networking: {
@@ -294,8 +294,8 @@ async function resolveAgent(
   if (options.probe) throw new Error("Probe found no matching Anthropic Agent");
 
   const agent = await anthropicRequest(key, "POST", "/v1/agents", {
-    name: `Paperclip · ${options.displayName}`,
-    description: "Versioned Paperclip remote agent; runnerd supplies session tools.",
+    name: `Blentera · ${options.displayName}`,
+    description: "Versioned Blentera remote agent; runnerd supplies session tools.",
     model: options.model,
     system: CLAUDE_MANAGED_SYSTEM_PROMPT,
     tools: [],

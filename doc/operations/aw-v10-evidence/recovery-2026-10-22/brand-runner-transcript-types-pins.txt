@@ -1,0 +1,2 @@
+c006e8a78d1b9429611029a0791d3fb4acf8b8555be4af0c1a0b6ad2a145c9d8  ui/src/adapters/paperclip-runner/index.ts
+3eece96eb99b675c5d7420f0a609f81ae25987e8a5919eb6ce34186700ef1f93  ui/src/adapters/codex-local/config-fields.test.tsx

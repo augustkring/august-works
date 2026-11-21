@@ -1,0 +1,14 @@
+33d488555bba4623589f165edb03cbf67c634452f33f6de6e0d7d5d8895a2ae9  ./README.md
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./native-chat-sessions-remaining-attempt-052-2026-10-26-list.exit
+a1834f52fa9f926819dbf065c2a5eb0c88570b5b3e1d1ebcd1cd9a58b3ad8a6b  ./native-chat-sessions-remaining-attempt-052-2026-10-26-list.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./native-chat-sessions-remaining-attempt-052-2026-10-26-privacy.exit
+4a57ed48639f19f56ac08915de1f5e727bb9dc6ff5e8bb38dde8d3f067c9eafb  ./native-chat-sessions-remaining-attempt-052-2026-10-26-privacy.log
+c4cc4607dccfe04139f761b96de73b3824ae6a15925da73fbca0772c4c94d024  ./native-chat-sessions-remaining-attempt-052-2026-10-26-resource-check.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./native-chat-sessions-remaining-attempt-052-2026-10-26-snapshot.exit
+f28cb8e339ae3e1ce858343840b0edcf487ac8cc5d04e2cf00e6fe1f8f2b49e9  ./native-chat-sessions-remaining-attempt-052-2026-10-26-snapshot.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./native-chat-sessions-remaining-attempt-052-2026-10-26-socket-cleanup.exit
+6ab7189f059c45be14bef23eedcc7a466ed30241e6922f63a383c06e4ed56ec3  ./native-chat-sessions-remaining-attempt-052-2026-10-26-socket-cleanup.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./native-chat-sessions-remaining-attempt-052-2026-10-26-syntax.exit
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./native-chat-sessions-remaining-attempt-052-2026-10-26-syntax.log
+b05578b5983940ef23951b3d094faea73104b148166519b5a6af7714cd71890c  ./native-chat-sessions-remaining-attempt-052-2026-10-26-test.log
+d701fb9bcecdb1812beca7d08a4458d671d29270de207e580405eedb118b58de  ./source-pins.json

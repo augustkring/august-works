@@ -1,0 +1,88 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects non-CEO agents from CEO-safe export preview routes 12788ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects non-CEO export preview callers before validating request shape 57ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects non-CEO agents from legacy and CEO-safe export bundle routes 60ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > allows CEO agents to use company-scoped export preview routes 51ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > allows CEO agents to export through legacy and CEO-safe bundle routes 55ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > allows board users to export through legacy and CEO-safe bundle routes 55ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > keeps CEO-agent exports available by default but rejects support-case opt-in on all export routes 53ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > requires the current Board principal for support-case export, preview, and download 52ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > requires instance-admin access when a company export includes external instructions 102ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > allows an instance admin to export companies with external instructions 41ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > uses the export selector resolver before checking external instructions 45ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > keeps non-agent exports open when external instructions are excluded 54ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects CEO agents from exporting another company before services run 47ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects replace collision strategy on CEO-safe import routes 50ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects CEO agents from previewing or applying imports against another route company 39ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects CEO-safe import bodies that target a different company than the route 43ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > keeps global import preview routes board-only 45ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > keeps global import preview board-only before validating request shape 53ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > requires instance admin for new-company import preview 37ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects replace collision strategy on CEO-safe import apply routes 58ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects non-CEO agents from CEO-safe import preview routes 103ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects non-CEO import preview callers before validating request shape 42ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects non-CEO agents from CEO-safe import apply routes 47ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > requires instance admin for new-company import apply 56ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > accepts trusted Cloud async import jobs and reports success by job id 96ms
+[12:08:50] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-2caf8165-732d-4ce3-bf7b-27fe5609208a"}[39m
+[12:08:50] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-51c309ae-5ed9-47dd-972e-4e75b2f6b680"}[39m
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > retains a native pre-effect preview mismatch as known rejection rather than unknown effects 75ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > retains a native pre-effect source refusal as a known rejection 72ms
+[12:08:50] [31mERROR[39m: [36mcompany import domain operation requires reconciliation[39m [90m{"operationId":"tenant-import-6fccc34e-12d4-4354-8f71-e550f07b177f","failureClass":"Error","httpStatus":422}[39m
+[12:08:50] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-6fccc34e-12d4-4354-8f71-e550f07b177f"}[39m
+[12:08:50] [31mERROR[39m: [36mcompany import domain operation requires reconciliation[39m [90m{"operationId":"tenant-import-503b8a83-4e59-4f2a-b7a6-f0bae3bbfb1e","failureClass":"Error"}[39m
+[12:08:50] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-503b8a83-4e59-4f2a-b7a6-f0bae3bbfb1e"}[39m
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > does not treat an ordinary domain 422 as proof that no effect committed 85ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > reports trusted Cloud async import job failures with the tenant error message 90ms
+[12:08:50] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-5ccec746-bcf3-4227-96ff-753e44f07fb6"}[39m
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > accepts trusted Cloud async import jobs before validating the full import payload 87ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > floors global import apply on a cloud-managed instance, even for the trusted tenant actor 60ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > forwards pauseAutomations from the global import body to the portability service 53ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > runs board-session async imports as jobs and reports the full result by job id 118ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > hides a board import job from other board users 76ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > returns 409 with the running job when a board user resubmits an import 96ms
+[12:08:51] [31mERROR[39m: [36mcompany import domain operation requires reconciliation[39m [90m{"operationId":"import-1aea5ce3-a0d8-4b65-9e2c-f09a1c993d90","failureClass":"Error"}[39m
+[12:08:51] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"import-1aea5ce3-a0d8-4b65-9e2c-f09a1c993d90"}[39m
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects a concurrent different import without adopting the running job 79ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > fails a board async import job when the bundle import throws 80ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > keeps the import job status route board-only 95ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > returns 404 for an unknown import job id 73ms
+[12:08:51] [31mERROR[39m: [36mcompany import domain operation requires reconciliation[39m [90m{"operationId":"import-35a473a0-593f-403d-8518-891ace591934","failureClass":"ReferenceError"}[39m
+[12:08:51] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"import-35a473a0-593f-403d-8518-891ace591934"}[39m
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > requests cancellation only for the original current actor and reports partial work as inconclusive 96ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > forwards pauseAutomations from CEO-safe import apply bodies to the portability service 63ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > imports a company from a multipart zip upload, unzipping into the same inline bundle 81ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > previews a company from a multipart zip upload 70ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > runs a multipart zip import as an async board job via ?async=1 76ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > engages the async path for board sessions via ?async=1, not the stripped cloud header 57ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > keeps a board import synchronous when neither async signal is present 69ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > still engages the async path for cloud tenants via the x-paperclip-cloud-async-import header 65ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects a truncated zip upload without importing anything 52ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts [ server/src/__tests__/company-portability.test.ts ]
+ReferenceError: Cannot access 'agentInstructionsSvc' before initialization
+ ❯ agentInstructionsService src/__tests__/company-portability.test.ts:176:35
+    174|
+    175| vi.mock("../services/agent-instructions.js", () => ({
+    176|   agentInstructionsService: () => agentInstructionsSvc,
+       |                                   ^
+    177|   agentInstructionsBundleMode: (agent: { adapterConfig?: unknown }) =>…
+    178|     const config = agent.adapterConfig as Record<string, unknown> | un…
+ ❯ src/services/feedback.ts:112:25
+ ❯ src/services/index.ts:5:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  48 passed (48)
+   Start at  12:08:26
+   Duration  30.21s (transform 15.04s, setup 141ms, import 4.04s, tests 20.94s, environment 0ms)
+

@@ -1,0 +1,4 @@
+69b01365fc5d46b668ee451f3be1384a544371a2976fb095affa54dec0166d36  packages/db/src/schema/support_cases.ts
+a81d196aca6ee94b84463ee1baf3e3a682ecae9d560536726efae80b955c73ef  packages/db/src/migrations/0515_happy_screwball.sql
+783cf0850d5a0923602bc4be9a3ba5aac5c74b87db8962885c8e6c6595383577  server/src/__tests__/support-case-storage.integration.test.ts
+0b3c09193d45ab0c69b0d5fcd0ff55e0e30dc4b4f9fcf38802f43861e21283b2  packages/shared/src/customer-support.ts

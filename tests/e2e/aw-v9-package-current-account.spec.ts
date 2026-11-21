@@ -2,7 +2,9 @@ import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS } from "../../packages/shared/src/v5-feature-flags.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json();
 }
@@ -38,7 +40,7 @@ test("package setup withdraws during session checks and requires a fresh readine
       versionId: roleVersionId, contentHash: "a".repeat(64), name: "PRIVATE role" }, ...automationChoices] } }));
   await page.route(`**/api/companies/${company.id}/agent-package-installations?*`, route => route.fulfill({ json: [{
     id: randomUUID(), packageId, installedVersionId: versionId, agentId, version: 3, status: "degraded",
-    updatePolicy: "manual", readiness: { reasons: [], warnings: [] }, installedByUserId: "local-board" }] }));
+    updatePolicy: "manual", readiness: { reasons: [], warnings: [] }, installedByUserId: session.user.id }] }));
   await page.route(`**/api/companies/${company.id}/agent-package-update-proposals?*`, route => route.fulfill({ json: [] }));
   await page.route(`**/api/companies/${company.id}/agent-packages/internal-review/preview?*`, route => {
     reviewedPins = route.request().postDataJSON().components;
@@ -102,6 +104,7 @@ test("package setup withdraws during session checks and requires a fresh readine
 test("a lost installation response keeps one locator and reads it after reload and rollout closure", async ({ page, request }) => {
   const flags = await json(await request.get("/api/instance/settings/experimental"));
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable original installation fixture" } }));
+  const session = await json(await request.get("/api/auth/get-session"));
   const packageId = randomUUID(), agentId = randomUUID(), versionId = randomUUID(), roleId = randomUUID(), roleVersionId = randomUUID(), installationId = randomUUID();
   const patch = { ...Object.fromEntries(V5_FEATURE_KEYS.map(key => [key, true])), enableFoundationV1: true,
     enableContextEngineV1: true, enableCollectiveMemoryV1: true, saas_deployment_profile_v6: true,
@@ -126,7 +129,7 @@ test("a lost installation response keeps one locator and reads it after reload a
   });
   await page.route(`**/api/companies/${company.id}/agent-package-installations/requests/*?*`, route => {
     reads++; expect(route.request().method()).toBe("GET");
-    expect(new URL(route.request().url()).searchParams.get("expectedUserId")).toBe("local-board");
+    expect(new URL(route.request().url()).searchParams.get("expectedUserId")).toBe(session.user.id);
     expect(route.request().url()).toContain(`/requests/${original}?`);
     return route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: {
       companyId: company.id, requestId: original, installationId, installationVersion: 1,

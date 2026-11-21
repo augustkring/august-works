@@ -1,0 +1,25 @@
+src/auth/better-auth.ts(357,34): error TS2345: Argument of type '{ baseURL: string | undefined; secret: string; trustedOrigins: string[]; user: { additionalFields: { locale: { type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<...>; }; }; }; }; ... 7 more ...; plugins: ({ ...; } | BetterAuthPlugin)[]; }' is not assignable to parameter of type 'BetterAuthOptions'.
+  Types of property 'user' are incompatible.
+    Type '{ additionalFields: { locale: { type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }; }; }' is not assignable to type 'BetterAuthDBOptions<"user", "createdAt" | "email" | "emailVerified" | "id" | "image" | "name" | "updatedAt"> & { validateUserInfo?: ((data: { user: Partial<{ id: string; ... 5 more ...; image?: string | ... 1 more ... | undefined; }> & Record<...>; source: ValidateUserInfoSource; }, context: GenericEndpointContext) ...'.
+      Type '{ additionalFields: { locale: { type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }; }; }' is not assignable to type 'BetterAuthDBOptions<"user", "createdAt" | "email" | "emailVerified" | "id" | "image" | "name" | "updatedAt">'.
+        Types of property 'additionalFields' are incompatible.
+          Type '{ locale: { type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }; }' is not assignable to type '{ [x: string]: DBFieldAttribute; }'.
+            Property 'locale' is incompatible with index signature.
+              Type '{ type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }' is not assignable to type 'DBFieldAttribute'.
+                Type '{ type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }' is not assignable to type '{ type: DBFieldType; }'.
+                  Types of property 'type' are incompatible.
+                    Type 'string' is not assignable to type 'DBFieldType'.
+src/auth/better-auth.ts(368,35): error TS2345: Argument of type '{ baseURL: string | undefined; secret: string; trustedOrigins: string[]; user: { additionalFields: { locale: { type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<...>; }; }; }; }; ... 7 more ...; advanced: { ...; }; }' is not assignable to parameter of type 'BetterAuthOptions'.
+  Types of property 'user' are incompatible.
+    Type '{ additionalFields: { locale: { type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }; }; }' is not assignable to type 'BetterAuthDBOptions<"user", "createdAt" | "email" | "emailVerified" | "id" | "image" | "name" | "updatedAt"> & { validateUserInfo?: ((data: { user: Partial<{ id: string; ... 5 more ...; image?: string | ... 1 more ... | undefined; }> & Record<...>; source: ValidateUserInfoSource; }, context: GenericEndpointContext) ...'.
+      Type '{ additionalFields: { locale: { type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }; }; }' is not assignable to type 'BetterAuthDBOptions<"user", "createdAt" | "email" | "emailVerified" | "id" | "image" | "name" | "updatedAt">'.
+        Types of property 'additionalFields' are incompatible.
+          Type '{ locale: { type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }; }' is not assignable to type '{ [x: string]: DBFieldAttribute; }'.
+            Property 'locale' is incompatible with index signature.
+              Type '{ type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }' is not assignable to type 'DBFieldAttribute'.
+                Type '{ type: string; required: boolean; input: boolean; returned: boolean; validator: { output: ZodNullable<ZodEnum<{ da: "da"; en: "en"; }>>; }; }' is not assignable to type '{ type: DBFieldType; }'.
+                  Types of property 'type' are incompatible.
+                    Type 'string' is not assignable to type 'DBFieldType'.
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --singleThreaded

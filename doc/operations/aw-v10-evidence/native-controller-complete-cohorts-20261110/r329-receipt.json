@@ -1,0 +1,157 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.3944534290058073,
+      "filesAdvised": 367844,
+      "memoryAfter": 8651378688,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "11f4be96aa0028806678cfd16b29fcdfc28f793d9ced4de6d1b7decb5d4b4bdd",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+    "--testNamePattern",
+    "(?:captures\\ first\\-bootstrap\\ Task,\\ plan,\\ and\\ wake\\ sources\\ without\\ secret\\ redaction\\ before\\ provider\\ dispatch|captures\\ first\\-bootstrap\\ Task,\\ plan,\\ and\\ wake\\ sources\\ with\\ secret\\ redaction\\ before\\ provider\\ dispatch|holds\\ a\\ completed\\ Native\\ Text\\ result\\ for\\ canonical\\ Human\\ Plan\\ verification|continues\\ once\\ after\\ a\\ Human\\ withdraws\\ the\\ last\\ review\\ interaction,\\ then\\ creates\\ a\\ fresh\\ review\\ path|coalesces\\ wakes\\ behind\\ an\\ owner\\-managed\\ active\\ execution\\ hold\\ and\\ resumes\\ through\\ the\\ installed\\ controller|retains\\ a\\ resolved\\ no\\-replay\\ fence\\ until\\ an\\ execution\\ owner\\ records\\ safe\\ continuation|keeps\\ an\\ unknown\\ NativeText\\ charge\\ blocked\\ until\\ a\\ Human\\ continues\\ through\\ the\\ stopped\\-run\\ owner|resumes\\ a\\ reopened\\ Task\\ from\\ its\\ captured\\ continuation\\ summary\\ on\\ a\\ fresh\\ Human\\ assignment\\ wake|keeps\\ a\\ one\\-document\\ Task\\ idle\\ while\\ blocked,\\ then\\ completes\\ one\\ scheduler\\ Run\\ for\\ Human\\ review|adopts\\ another\\ Human's\\ retained\\ comment\\ queue\\ only\\ through\\ the\\ installed\\ Native\\ startup\\ owner:\\ manual|adopts\\ another\\ Human's\\ retained\\ comment\\ queue\\ only\\ through\\ the\\ installed\\ Native\\ startup\\ owner:\\ forged_payload|keeps\\ the\\ Task\\ owner\\ as\\ Native\\ Run\\ responsibility\\ for\\ a\\ canonical\\ automated\\ wake\\ requested\\ by\\ another\\ Human|contains\\ a\\ queued\\ second\\ Human\\ Run\\ after\\ canonical\\ membership\\ withdrawal\\ \\(withdraw:\\ false\\)|contains\\ a\\ queued\\ second\\ Human\\ Run\\ after\\ canonical\\ membership\\ withdrawal\\ \\(withdraw:\\ true\\)|keeps\\ a\\ paused\\ Native\\ Text\\ Task\\ run\\-free\\ for\\ ordinary\\ and\\ forged\\ wakes,\\ then\\ admits\\ the\\ current\\ Human\\ comment\\ \\(trigger\\ question:\\ false\\)|keeps\\ a\\ paused\\ Native\\ Text\\ Task\\ run\\-free\\ for\\ ordinary\\ and\\ forged\\ wakes,\\ then\\ admits\\ the\\ current\\ Human\\ comment\\ \\(trigger\\ question:\\ true\\))$",
+    "--maxWorkers=1",
+    "--no-file-parallelism",
+    "--reporter=verbose"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 4.089198773726821e-05,
+  "sourceManifest": "native-controller-cohort-1-r329-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 220.44877872400684,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 3455897600,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 390478,
+      "parentPid": 390454,
+      "executable": "node",
+      "rssBytes": 1272840192,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 390454,
+      "parentPid": 390409,
+      "executable": "node",
+      "rssBytes": 900452352,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 390542,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 508674048
+    },
+    {
+      "pid": 390543,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 363012096
+    },
+    {
+      "pid": 390544,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 324030464
+    },
+    {
+      "pid": 390528,
+      "parentPid": 390478,
+      "executable": "postgres",
+      "rssBytes": 24588288
+    },
+    {
+      "pid": 390530,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 14401536
+    },
+    {
+      "pid": 390535,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 9236480
+    },
+    {
+      "pid": 390536,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 8089600
+    },
+    {
+      "pid": 390537,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 7225344
+    },
+    {
+      "pid": 390533,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 6656000
+    },
+    {
+      "pid": 390531,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 6123520
+    },
+    {
+      "pid": 390532,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 5439488
+    },
+    {
+      "pid": 390529,
+      "parentPid": 390528,
+      "executable": "postgres",
+      "rssBytes": 5128192
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 28,
+  "observedPostgresRelatedPids": [
+    390492,
+    390502,
+    390515,
+    390523,
+    390525,
+    390528,
+    390529,
+    390530,
+    390531,
+    390532,
+    390533,
+    390535,
+    390536,
+    390537,
+    390540,
+    390542,
+    390543,
+    390544,
+    391182,
+    391499
+  ],
+  "uniqueTempRoot": "/var/tmp/mpg-i8fdbu3m",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 959,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+}

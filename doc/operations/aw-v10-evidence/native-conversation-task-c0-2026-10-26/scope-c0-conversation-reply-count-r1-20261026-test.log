@@ -1,0 +1,59 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+native_model_input_dispatch_closure_diagnostic {
+  closurePresent: true,
+  closureMatches: true,
+  mismatch: 'unclassified',
+  sourceProtocolVersion: 0,
+  responsibleUserPresent: true,
+  existingReceiptValid: false,
+  noPriorNativeEffects: true,
+  priorIntentCount: 0,
+  priorAssociationCount: 0,
+  priorResultCaptureCount: 0,
+  attachmentStagePresent: false
+}
+
+ × src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows 22908ms
+   → expected { status: 'in_review', …(2) } to match object { status: 'in_review', …(2) }
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > continues the real conversation after a metric tool result with its original immutable source receipt
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates one private Project from a current conversation dispatch and carries its exact result into the next request
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+AssertionError: expected { status: 'in_review', …(2) } to match object { status: 'in_review', …(2) }
+
+- Expected
++ Received
+
+  {
+    "conversationState": "waiting",
+-   "executionRunId": "858395b2-d57b-442b-83ec-b35954b06127",
++   "executionRunId": null,
+    "status": "in_review",
+  }
+
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:105:38
+    103|     expect(result.conversationCommentCount).toBe(2);
+    104|     expect(result.reviewInteractionCount).toBe(0);
+    105|     expect(result.conversationIssue).toMatchObject({ status: "in_revie…
+       |                                      ^
+    106|       executionRunId: result.run?.id });
+    107|     expect([403, 404]).toContain(result.foreignWriteStatus);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  23:14:16
+   Duration  42.29s (transform 11.43s, setup 96ms, import 15.16s, tests 26.91s, environment 0ms)
+

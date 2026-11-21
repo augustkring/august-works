@@ -1,0 +1,33 @@
+{
+  "parentCommit": "58c6680cedb6e5a9c4756b8c86ef6d5c187d546e",
+  "requirements": [
+    "CE-03",
+    "CE-04",
+    "V10-166"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "nativeHttpSupportCostsAccount": {
+      "exit": 0,
+      "suites": 4,
+      "passed": 41
+    },
+    "serverCompiler": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "All original internal human HTTP controllers require actual configured verified native operator passkey proof. Mutation admission additionally requires the actual database-clock recent authentication event. Static roles, Board-key provenance and a session label do not qualify.",
+    "Operations, fleet, inventory and cost metadata queries run under native proof pins in the original route-owned transactions and recheck before commit. Existing bounded projections and no-store headers are retained. The existing cost latest owner accepts the transaction reader.",
+    "Native tests cover positive current proof, missing/passive-password/Board-key/deleted proof refusal, stale passkey reads permitted while mutation is refused, metadata projections and actual private support status alongside original company-owner approval and revocation.",
+    "These use a trusted fixture actor carrier plus real migrated PostgreSQL proof rows and original services, not a real browser/cookie/WebAuthn ceremony. Separate maintained native browser qualification remains in native-passkeys-2026-10-24."
+  ],
+  "compatibility": [
+    "No migration or dependency change. Cost latest accepts an optional read runner; existing direct calls retain their original default. Original account/tenant and host/scheduler lanes are not replaced."
+  ],
+  "limits": [
+    "Middleware is only preflight for effects. Original catalog/fleet/control/cost mutation transactions and later host/provider dispatch/completion still need qualified actual authority and original outcome owners.",
+    "Original package Context/Memory failures, payload privacy/typed-origin/portability failures and complete V10 remain open.",
+    "Latest full workspace typecheck/test/build, deployed replica/host qualification and PR-ready admission are not claimed."
+  ]
+}

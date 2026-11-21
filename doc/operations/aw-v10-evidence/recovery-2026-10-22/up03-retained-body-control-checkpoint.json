@@ -1,0 +1,112 @@
+{
+  "date": "2026-10-23",
+  "productionBase": "4c3d8bf45",
+  "status": "negative control retained; both policy-only candidates rejected and restored",
+  "controlTestSha256": "6beab03e9c6c8f4d0c78415a72ccfcd20ffa40ea1b2493931e24d8833194f1f2",
+  "runs": [
+    {
+      "name": "current-baseline",
+      "result": "3 failed",
+      "seconds": 178.36
+    },
+    {
+      "name": "retained-body-control",
+      "result": "1 passed, 2 filtered",
+      "seconds": 115.08
+    },
+    {
+      "name": "run-only-policy-candidate",
+      "result": "1 failed, 1 passed, 1 filtered",
+      "seconds": 114.19
+    },
+    {
+      "name": "all-anchor-policy-candidate",
+      "result": "1 passed, 1 failed, 1 filtered; releases previously private body",
+      "seconds": 99.73
+    }
+  ],
+  "finding": "A later Task assignment does not release previously retained private body roots. Run and Task policy-only traversal requires exact captured payload closure first. Migration0503 already normalizes the native run Task binding.",
+  "scope": "No production source graph change or qualification. Original three source privacy failures remain open. Candidate owners restored before subsequent key work. All experiment sessions closed.",
+  "artifacts": [
+    {
+      "path": "up03-policy-shortcut-candidate-authorization.txt.gz",
+      "sha256": "622709fdde5fd16e65cbad129468e298ae860e247c050b8a0b719b7f818be798"
+    },
+    {
+      "path": "up03-policy-shortcut-candidate-memory.txt.gz",
+      "sha256": "24d50f6924002df8416b4f9a07e8120585d6e7bf2446598c46f6a7abc82f4790"
+    },
+    {
+      "path": "up03-policy-shortcut-candidate-pins.txt",
+      "sha256": "485a64200f818877547eea5b38a69cd748001b267d1c1b46c54b466a31bb3b4b"
+    },
+    {
+      "path": "up03-policy-shortcut-candidate.exit",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "up03-policy-shortcut-candidate.log",
+      "sha256": "050b30720421d0842331597d6bb225b5bb74c3c4ce5b1e7d978d17fe6f4ecbf8"
+    },
+    {
+      "path": "up03-policy-shortcut-candidate.patch.txt",
+      "sha256": "55b3b5a009094de3251ff7aafc2c2989b1cd8bd3b8c1b34aa1ee4175db1bce27"
+    },
+    {
+      "path": "up03-policy-shortcut-original-authorization.txt.gz",
+      "sha256": "404974176d81180edeb00bdee36d80a9b8d578976ded6f77c61c7961777099fe"
+    },
+    {
+      "path": "up03-policy-shortcut-original-memory.txt.gz",
+      "sha256": "460a7df1de19b5c1738103859015cc5e802358667fbe7a540f3b7e9631fd2b3c"
+    },
+    {
+      "path": "up03-policy-shortcut-v2-authorization.txt.gz",
+      "sha256": "9f41768885e12901d6693a5e275ba008ebe59d2edfe9dbb9fbc059dbd196ab84"
+    },
+    {
+      "path": "up03-policy-shortcut-v2-candidate.patch.txt",
+      "sha256": "e7df362da49e93880179c71033d038d1a60f7f975fbcb3a4ef21a8043bdfeb6e"
+    },
+    {
+      "path": "up03-policy-shortcut-v2-memory.txt.gz",
+      "sha256": "d22068ce0870e7e4de26754e6f10822ecdd859fbad077c34b3d60365a12e5f35"
+    },
+    {
+      "path": "up03-policy-shortcut-v2-pins.txt",
+      "sha256": "5fcdedf5d453d5e13f57b1147103e31aa4ed9ee93677a0eb8ce1e5cc323f9ea6"
+    },
+    {
+      "path": "up03-policy-shortcut-v2.exit",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "up03-policy-shortcut-v2.log",
+      "sha256": "ca3c0c10d64f6f3b7be49df2933d0c557f9074854109217f6c5097fc7ff487b1"
+    },
+    {
+      "path": "up03-retained-producer-body-control-pins.txt",
+      "sha256": "e6af0b6ca1ecf081e4d1ec1d332bbdc08b302f2781c73173cb0c9f05dcd76d31"
+    },
+    {
+      "path": "up03-retained-producer-body-control.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "up03-retained-producer-body-control.log",
+      "sha256": "79eb0b7b0d7c9b63442565f0a72640fca651ba8c78fe6fafdf6d9191126408c0"
+    },
+    {
+      "path": "up03-source-privacy-current-baseline-pins.txt",
+      "sha256": "c0a6edbba2ce10125bfeb5de2253cf90f9d89473f91654ea33d974551c07d680"
+    },
+    {
+      "path": "up03-source-privacy-current-baseline.exit",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "up03-source-privacy-current-baseline.log",
+      "sha256": "4da8e18ae63d5c5c742ac5fa5854feffc8b4fe26ab6dbbb2dce30ff993df8074"
+    }
+  ]
+}

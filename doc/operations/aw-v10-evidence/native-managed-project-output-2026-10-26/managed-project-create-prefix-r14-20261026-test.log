@@ -1,0 +1,13 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+managed_project_create_diagnostic {"stage":"native_call","tool":"create_project","turnBound":true}
+managed_project_create_diagnostic {"stage":"capture_prepared","toolUsePresent":true,"toolUseName":"create_project"}
+managed_project_create_diagnostic {"stage":"authority_entry","captureRefPresent":true,"capturePresent":true,"managedUsePresent":true,"managedUseTool":"create_project","managedUseCallMatches":true}
+managed_project_create_diagnostic {"stage":"service_accepted","projectIdPresent":true,"sourceInputs":4,"workspacePins":1}
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  11:04:39
+   Duration  48.02s (transform 10.63s, setup 93ms, import 14.48s, tests 33.31s, environment 0ms)
+

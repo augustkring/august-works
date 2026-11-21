@@ -1,0 +1,22 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "d4a8a2618a214cd6925da2c770d9cdf31e5e3e621fcbca70d772c2ad8a968773",
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+    "server/src/__tests__/heartbeat-issue-liveness-escalation.test.ts": "2d440f3f9df97ce74fd868e5cb608168ecfd42213c9d7c1bfb004952b76bad06",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "a90529e45012737cd3b0c4a952e5a27a49aafa9d5ec8e721a94ff82634afb98c",
+    "server/src/services/execution-continuation.ts": "f3792e52a6d1b7e518d00f84bf54fca25ef4cf605f353e0791e1d3af7c2058dc",
+    "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts": "9c63563c5a2456a91f7a3319cfec6ecf93c7d095bf5d7f2a9ed317079754c1f5",
+    "server/src/services/native-runtime/native-attachment-remote-stage.test.ts": "56f1a20a3ec1ecb239b5f5bb8c832a71ba915a6b82b962a5e689bbb22cf316ed",
+    "server/src/services/native-runtime/native-attachment-remote-stage.ts": "95e169bb2bf7eeb5ddb81b5dfc1849502e79511cae27a6cb6119b824eef03748",
+    "server/src/services/native-runtime/native-execution-input.test.ts": "56d183c427aecb7375d3f91c7da29bed41b56a18cfd6756094c8f44a67d32d3e",
+    "server/src/services/native-runtime/native-execution-input.ts": "2024700cca39af654a717c0bd658e2eb66f87407bf2f6255c05e3923ad81a429",
+    "server/src/services/native-runtime/native-session-executor.ts": "ebb8d3baa809c205b30b60dfd8abedeebf5da8bd5895ef8fa3111f8f0271c6e5",
+    "server/src/services/native-runtime/remote-deliverable-file.ts": "05a6a7e95e9d11fdf09168375f5e686fc1fffa01d3df439ccb550e7fdc3231f6",
+    "server/src/services/runtime/control.ts": "cad66dfa516f84a88c89df5994c6bb05b661969a32f2fa462560e8dae96114d7",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "allPinsUnchanged": true
+}

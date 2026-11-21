@@ -1,0 +1,8 @@
+
+> @paperclipai/plugin-sdk@1.0.0 build /workspace/blentera-v10/packages/plugins/sdk
+> pnpm --filter @paperclipai/shared build && tsc
+
+
+> @paperclipai/shared@0.3.1 build /workspace/blentera-v10/packages/shared
+> tsc && mkdir -p dist/cliplab && cp src/cliplab/LICENSE src/cliplab/PROVENANCE.md dist/cliplab/
+

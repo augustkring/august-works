@@ -1,0 +1,17 @@
+# Company deletion failure recovery — R92, 11 November 2026
+
+CE-14 now parks closed deterministic offboarding failures in the existing failed state instead of retrying them indefinitely. Safe lastFailure evidence records only code, stage, time and whether repair is required. Unknown provider outcomes, scheduled erasure, backups and holds remain incomplete at their original owners. No failed operation releases credentials, identities, resource liabilities or retention holds.
+
+The existing internal operator surface lists at most 100 failed operations per page with an opaque next cursor. A configured verified Human with current passkey authentication can inspect them; retry also requires recent authentication. The domain repeats current proof after lock waits, locks company then original operation, matches the exact failure and requeues the same stage. The original platform audit records the request. No new deletion is admitted, no stage skipped and no completion inferred. Accepted recovery remains available after rollout withdrawal.
+
+Workers compare the original stage, status and exact PostgreSQL notBefore epoch text before advancing or recording failure. PostgreSQL microseconds are retained rather than rounded through a JavaScript Date. Concurrent funding and erasure evidence is merged. A real two-worker billing race confirms that a late acknowledgement cannot advance or unpark a newer failed operation, and that independent evidence survives.
+
+The customer page uses English/Danish status, stage and safe reason labels. It shows the original request ID and human privacy contact, explains that failure requires operator repair and pauses retries, and shows the earliest next automatic reconciliation time for pending work. It checks existing status before offering a new form and keeps accepted status readable when new admission is disabled. Company status responses and the client use private/no-store handling. EN/DA Help and the operator runbook describe these limits.
+
+R605 passes all 41 purge/HTTP/OpenAPI tests with actual embedded PostgreSQL. Original secret and provider absence cases remain intact. HTTP cases cover current/recent/revoked/nonoperator sessions, strict recovery input, stale/duplicate recovery, pagination, private customer status and rollout withdrawal. Structurally seeded real DB passkey assurance records and a controlled provider boundary exercise service authorization; they do not qualify a real passkey ceremony or live provider erasure.
+
+R606 passes all 44 affected UI/client/localization tests and the design-token gate. R607 passes full recursive workspace typecheck and build. Final hashes and modification times remain unchanged during these checks; compiler file modes are restored. R605 exits normally with zero remaining owned PostgreSQL/runtime processes. Exact logs and input pins are attached.
+
+R601's missing array bound in OpenAPI was a generic converter defect and is corrected once at that converter. R604 was deliberately stopped before editing additional CE-14 customer reason/reconciliation-time requirements; it is not passing qualification. Prior attempts remain separately identified.
+
+No schema or migration changes, new queue, operator authority shortcut or feature release promotion is introduced. Complete current-head CI, actual SDK/Host/provider and restore/operator/Human journeys and durable company export remain open. PR42 remains draft and unmerged; this scoped evidence does not declare all V10 complete.

@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import {
   activityLog,
   agentWakeupRequests,
+  authUsers,
   agents,
   companies,
   companyMemberships,
@@ -36,7 +37,9 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { accessService } from "../services/access.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor, updateCanonicalHumanProject } from "./helpers/current-human-source-fixture.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
+import { authorizationService, canActorReadTypedTaskSourcePrivacy } from "../services/authorization.js";
 
 function registerRoutineServiceMock() {
   vi.doMock("../services/routines.js", async () => {
@@ -44,8 +47,9 @@ function registerRoutineServiceMock() {
 
     return {
       ...actual,
-      routineService: (db: any) =>
-        actual.routineService(db, {
+      routineService: (db: any, options: any = {}) => {
+        return actual.routineService(db, {
+          ...options,
           heartbeat: {
             wakeup: async (agentId: string, wakeupOpts: any) => {
               const issueId =
@@ -81,7 +85,8 @@ function registerRoutineServiceMock() {
               return { id: queuedRunId };
             },
           },
-        }),
+        });
+      },
     };
   });
 }
@@ -124,6 +129,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
     await db.delete(projectWorkspaces);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(routineDocuments);
     await db.delete(routines);
     await db.delete(documentRevisions);
@@ -196,7 +202,6 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
   async function seedFixture() {
     const companyId = randomUUID();
     const agentId = randomUUID();
-    const projectId = randomUUID();
     const userId = randomUUID();
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
@@ -206,6 +211,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
     });
+    const humanActor = await seedCurrentHumanSourceActor(db, [companyId], userId);
 
     await db.insert(agents).values({
       id: agentId,
@@ -219,23 +225,10 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
       permissions: {},
     });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Routine Project",
-      status: "in_progress",
-    });
+    const project = await createCanonicalHumanProject(db, companyId, humanActor, "Routine Project");
+    const projectId = project.id;
 
-    const access = accessService(db);
-    const membership = await access.ensureMembership(companyId, "user", userId, "owner", "active");
-    await access.setMemberPermissions(
-      companyId,
-      membership.id,
-      [{ permissionKey: "tasks:assign" }],
-      userId,
-    );
-
-    return { companyId, agentId, projectId, userId };
+    return { companyId, agentId, projectId, userId, humanActor };
   }
 
   it.each(["bearer", "hmac_sha256", "github_hmac", "none"] as const)(
@@ -331,7 +324,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
   it("keeps setup deliveries out of runs, persists test receipts, and restores removed triggers", async () => {
     vi.stubEnv("PAPERCLIP_API_URL", "http://localhost:3100");
     vi.stubEnv("PAPERCLIP_IN_WORKTREE", "false");
-    const { companyId, agentId, projectId, userId } = await seedFixture();
+    const { companyId, agentId, projectId, userId, humanActor } = await seedFixture();
     const board = await createApp({ type: "board", source: "local_implicit", userId, isInstanceAdmin: true });
     const created = await request(board).post(`/api/companies/${companyId}/routines`).send({
       projectId, assigneeAgentId: agentId, title: "Verify deployment", description: "Inspect deployment", concurrencyPolicy: "always_enqueue",
@@ -365,7 +358,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
     expect(await db.select().from(routineRuns)).toHaveLength(0);
     const live = await deliver("live-event");
     expect(live.status, JSON.stringify(live.body)).toBe(202);
-    expect(live.body.status).toBe("issue_created");
+    expect(live.body.status, JSON.stringify(live.body)).toBe("issue_created");
     expect(await db.select().from(issues)).toHaveLength(1);
     expect((await deliver("live-event")).body.id).toBe(live.body.id);
     expect(await db.select().from(activityLog).where(eq(activityLog.action, "routine.run_triggered"))).toHaveLength(1);
@@ -387,13 +380,10 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
   });
 
   it("supports creating, scheduling, and manually running a routine through the API", async () => {
-    const { companyId, agentId, projectId, userId } = await seedFixture();
+    const { companyId, agentId, projectId, userId, humanActor } = await seedFixture();
     const app = await createApp({
-      type: "board",
-      userId,
-      source: "session",
+      ...humanActor,
       isInstanceAdmin: false,
-      companyIds: [companyId],
     });
 
     const createRes = await request(app)
@@ -450,9 +440,31 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
     });
 
     expect(runRes.status).toBe(202);
-    expect(runRes.body.status).toBe("issue_created");
+    expect(runRes.body.status, JSON.stringify(runRes.body)).toBe("issue_created");
     expect(runRes.body.source).toBe("manual");
     expect(runRes.body.linkedIssueId).toBeTruthy();
+
+    const canReadRoutineRun = (actor: typeof humanActor, runId = runRes.body.id) => db.transaction(tx =>
+      canActorReadTypedTaskSourcePrivacy(tx, actor, {
+        sourceKind: "routine_run",
+        id: runId,
+        companyId,
+      }));
+    expect(await canReadRoutineRun(humanActor)).toBe(true);
+    const foreignHumanActor = await seedCurrentHumanSourceActor(db, [companyId], randomUUID());
+    expect(await canReadRoutineRun(foreignHumanActor)).toBe(false);
+    expect(await canReadRoutineRun({ ...humanActor, sessionId: undefined })).toBe(false);
+    const localImplicitActor = { type: "board" as const, source: "local_implicit" as const, companyIds: [companyId] };
+    await expect(db.transaction(tx => authorizationService(tx).withReadRoutineSources(
+      companyId, localImplicitActor, [runRes.body.id], async () => true,
+    ))).rejects.toMatchObject({ status: 403 });
+    expect(await canReadRoutineRun({
+      ...humanActor,
+      source: "board_key",
+      sessionId: undefined,
+      keyId: randomUUID(),
+      authenticatedKeyHash: "unbacked-fixture-key",
+    })).toBe(false);
 
     const listRes = await request(app).get(`/api/companies/${companyId}/routines`);
     expect(listRes.status).toBe(200);
@@ -513,16 +525,22 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
         "routine.run_triggered",
       ]),
     );
+
+    await db.update(routineTriggers).set({ nextRunAt: new Date(Date.now() - 60_000) })
+      .where(eq(routineTriggers.id, createdTrigger.id));
+    const { routineService } = await import("../services/routines.js");
+    await routineService(db, { sourceActor: humanActor }).tickScheduledTriggers(new Date());
+    const scheduledRun = (await db.select().from(routineRuns).where(eq(routineRuns.routineId, routineId)))
+      .find(candidate => candidate.source === "schedule");
+    expect(scheduledRun).toBeDefined();
+    expect(await canReadRoutineRun(humanActor, scheduledRun!.id)).toBe(false);
   }, 15_000);
 
   it("runs routines with variable inputs and interpolates the execution issue description", async () => {
-    const { companyId, agentId, projectId, userId } = await seedFixture();
+    const { companyId, agentId, projectId, userId, humanActor } = await seedFixture();
     const app = await createApp({
-      type: "board",
-      userId,
-      source: "session",
+      ...humanActor,
       isInstanceAdmin: false,
-      companyIds: [companyId],
     });
 
     const createRes = await request(app)
@@ -558,17 +576,42 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
       .from(issues)
       .where(eq(issues.id, runRes.body.linkedIssueId));
 
-    expect(issue?.description).toBe("Review paperclip for high bugs");
+    expect(issue?.description, JSON.stringify(runRes.body)).toBe("Review paperclip for high bugs");
+  });
+
+  it("uses the company timezone only when a new schedule omits its timezone", async () => {
+    const { companyId, agentId, projectId, userId } = await seedFixture();
+    await db.update(companies).set({ timezone: "Europe/Copenhagen" }).where(eq(companies.id, companyId));
+    const board = await createApp({ type: "board", source: "local_implicit", userId, isInstanceAdmin: true });
+    const created = await request(board).post(`/api/companies/${companyId}/routines`).send({
+      projectId,
+      assigneeAgentId: agentId,
+      title: "Company-local schedule",
+      description: "Uses the configured company timezone when omitted.",
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+
+    const inherited = await request(board).post(`/api/routines/${created.body.id}/triggers`).send({
+      kind: "schedule",
+      cronExpression: "0 9 * * 1-5",
+    });
+    expect(inherited.status, JSON.stringify(inherited.body)).toBe(201);
+    expect(inherited.body.trigger.timezone).toBe("Europe/Copenhagen");
+
+    const explicit = await request(board).post(`/api/routines/${created.body.id}/triggers`).send({
+      kind: "schedule",
+      cronExpression: "30 9 * * 1-5",
+      timezone: "America/Chicago",
+    });
+    expect(explicit.status, JSON.stringify(explicit.body)).toBe(201);
+    expect(explicit.body.trigger.timezone).toBe("America/Chicago");
   });
 
   it("defaults activity gates and rejects invalid activity gate values", async () => {
-    const { companyId, agentId, projectId, userId } = await seedFixture();
+    const { companyId, agentId, projectId, userId, humanActor } = await seedFixture();
     const app = await createApp({
-      type: "board",
-      userId,
-      source: "session",
+      ...humanActor,
       isInstanceAdmin: false,
-      companyIds: [companyId],
     });
 
     const createRes = await request(app)
@@ -602,13 +645,10 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
   });
 
   it("allows drafting a routine without defaults and running it with one-off overrides", async () => {
-    const { companyId, agentId, projectId, userId } = await seedFixture();
+    const { companyId, agentId, projectId, userId, humanActor } = await seedFixture();
     const app = await createApp({
-      type: "board",
-      userId,
-      source: "session",
+      ...humanActor,
       isInstanceAdmin: false,
-      companyIds: [companyId],
     });
 
     const createRes = await request(app)
@@ -630,7 +670,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
     });
 
     expect(runRes.status).toBe(202);
-    expect(runRes.body.status).toBe("issue_created");
+    expect(runRes.body.status, JSON.stringify(runRes.body)).toBe("issue_created");
 
     const [issue] = await db
       .select({
@@ -647,15 +687,12 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
   });
 
   it("persists execution workspace selections from manual routine runs", async () => {
-    const { companyId, agentId, projectId, userId } = await seedFixture();
+    const { companyId, agentId, projectId, humanActor } = await seedFixture();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const app = await createApp({
-      type: "board",
-      userId,
-      source: "session",
+      ...humanActor,
       isInstanceAdmin: false,
-      companyIds: [companyId],
     });
 
     await db.insert(projectWorkspaces).values({
@@ -677,19 +714,14 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
       status: "active",
       providerType: "git_worktree",
     });
-    await db
-      .update(projects)
-      .set({
-        executionWorkspacePolicy: {
-          enabled: true,
-          defaultMode: "shared_workspace",
-          defaultProjectWorkspaceId: projectWorkspaceId,
-        },
-      })
-      .where(eq(projects.id, projectId));
-    await db.insert(instanceSettings).values({
-      experimental: { enableIsolatedWorkspaces: true },
+    await updateCanonicalHumanProject(db, companyId, humanActor, projectId, {
+      executionWorkspacePolicy: {
+        enabled: true,
+        defaultMode: "shared_workspace",
+        defaultProjectWorkspaceId: projectWorkspaceId,
+      },
     });
+    await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
     const createRes = await request(app)
       .post(`/api/companies/${companyId}/routines`)

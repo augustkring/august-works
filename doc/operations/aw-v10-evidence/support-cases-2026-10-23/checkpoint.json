@@ -1,0 +1,99 @@
+{
+  "checkpoint": "V10 local customer support case API and final server typecheck evidence",
+  "recordedAt": "2026-10-23T18:02:38.972625+00:00",
+  "scope": "Local native API regression evidence only. This does not qualify an external support gateway, provider delivery, hosted configuration, production retention, operator workflow, or complete V10 release.",
+  "sourceFiles": [
+    {
+      "path": "packages/shared/src/customer-support.ts",
+      "sha256": "39204cdb776b73788a283cc01b3ea6e8ef48af5e931931f35642d18648cd1525"
+    },
+    {
+      "path": "server/src/services/authorization.ts",
+      "sha256": "0a532ba43499dd08d66a75e5a20d291774f68485d1710db1a2d2f3a05251c07f"
+    },
+    {
+      "path": "server/src/services/experience/support-cases.ts",
+      "sha256": "674f282076ee1a9690c3f471bc8040e74e113855e6a2efcdb16e070c2069e8e8"
+    },
+    {
+      "path": "server/src/routes/customer-support.ts",
+      "sha256": "ab0ace13a378ddb97bff6e18f35e445438bdd13647cbf064dcbd1fa6c9a5f1b4"
+    },
+    {
+      "path": "server/src/index.ts",
+      "sha256": "fbb9963f889b77021ddb31d230f116891c39c8db017cd08ff23231e5d357b8b0"
+    },
+    {
+      "path": "server/src/services/saas/account-deletion.ts",
+      "sha256": "6bfb8fb3b53461fd8951cdabe76668e2e6660cd14064dda8122ecd791df8cd0e"
+    },
+    {
+      "path": "server/src/__tests__/v10-support-cases.integration.test.ts",
+      "sha256": "dc1b3a6d0f6dc4a260379942bcaeaee2d4968045f8955c2dd543a5befe579de9"
+    }
+  ],
+  "finalPinComparison": {
+    "pins": "support-case-api-types-final-pins.txt",
+    "result": "Every listed source hash matches the final current source hashes recorded above.",
+    "serverTypecheck": {
+      "result": "passed",
+      "exitCode": 0,
+      "log": "support-case-api-final-server-types.log",
+      "exit": "support-case-api-final-server-types.exit"
+    },
+    "sharedTypecheck": {
+      "result": "passed",
+      "exitCode": 0,
+      "log": "support-case-api-text-shared-types.log",
+      "exit": "support-case-api-text-shared-types.exit"
+    }
+  },
+  "regressionRuns": [
+    {
+      "name": "final local support regression",
+      "result": "25 passed, 2 files passed",
+      "log": "support-case-api-text.log",
+      "exit": "support-case-api-text.exit",
+      "pins": "support-case-api-text-pins.txt"
+    },
+    {
+      "name": "erased account replay follow-up",
+      "result": "33 passed, 3 files passed",
+      "log": "support-case-api-erased-replay.log",
+      "exit": "support-case-api-erased-replay.exit",
+      "pins": "support-case-api-erased-replay-pins.txt"
+    },
+    {
+      "name": "account deletion and support budget follow-up",
+      "result": "32 passed, 3 files passed",
+      "log": "support-case-api-account-budget.log",
+      "exit": "support-case-api-account-budget.exit",
+      "pins": "support-case-api-account-budget-pins.txt"
+    },
+    {
+      "name": "earlier broad overlapping regression run",
+      "result": "142 passed, 4 files passed",
+      "log": "support-case-api-final.log",
+      "exit": "support-case-api-final.exit",
+      "pins": "support-case-api-final-pins.txt"
+    }
+  ],
+  "interpretation": [
+    "The 25-, 33-, and 32-test runs overlap and are separate reruns, not cumulative coverage counts.",
+    "The earlier 142-test run is also overlapping historical evidence and must not be added to later counts.",
+    "Initial setup failed because the fixture inserted the singleton instance_settings row twice; no support-case test body ran in that attempt.",
+    "Earlier expiry fixtures violated the database retention binding; the final fixture sets a short future expiry and waits on actual PostgreSQL time before checking exclusion and erasure.",
+    "Earlier server typechecks exposed an ActivityPublication wrapper mismatch; the corrected source passed the final server typecheck.",
+    "The 142-test and 32-test runs precede the native publication fix; the 33-test run includes the actual company live-event assertion and erased-request replay fence. The 25-test run adds strict text/Unicode validation."
+  ],
+  "limits": [
+    "The authenticated embedded-Postgres runs use explicit test-only support policy values and do not prove operator production values are configured.",
+    "No configured external SupportCaseGateway or delivery acknowledgement is qualified; customer receipts remain local and delivery-pending.",
+    "Provider-side deletion, real legal-hold process, marker expiry, backup restoration horizon, and hosted customer/operator acceptance remain open."
+  ],
+  "uiEvidenceCheckpoint": {
+    "file": "ui-checkpoint.json",
+    "note": "Separate bounded UI evidence with its own source pins, logs, exit files, and explicit coverage limits."
+  },
+  "archivedScratch": "This directory contains byte-preserved support-case-api scratch logs, exit files, source pins, and compressed failed/intermediate source captures from /workspace/v10-preparation."
+}

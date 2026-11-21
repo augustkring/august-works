@@ -1,0 +1,171 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/activity-routes.test.ts (10 tests | 4 failed) 15248ms
+     × returns redacted all-actors rows to a basic company reader 3968ms
+     × keeps attribution for a permitted all-actors reader 987ms
+     × limits company activity lists by default 1298ms
+     × caps requested company activity list limits 1182ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/activity-routes.test.ts > activity routes > returns redacted all-actors rows to a basic company reader
+AssertionError: expected "vi.fn()" to be called with arguments: [ { companyId: 'company-1', …(2) } ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+    {
+      "actorScope": "all",
+      "companyId": "company-1",
+      "limit": 50,
++     "reader": {
++       "companyIds": [
++         "company-1",
++       ],
++       "isInstanceAdmin": false,
++       "source": "session",
++       "type": "board",
++       "userId": "user-1",
++     },
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/__tests__/activity-routes.test.ts:146:46
+    144|
+    145|     expect(res.status).toBe(200);
+    146|     expect(mockAgentActionAuditService.list).toHaveBeenCalledWith({
+       |                                              ^
+    147|       companyId: "company-1",
+    148|       actorScope: "all",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/activity-routes.test.ts > activity routes > keeps attribution for a permitted all-actors reader
+AssertionError: expected "vi.fn()" to be called with arguments: [ { companyId: 'company-1', …(3) } ]
+
+Received:
+
+  1st vi.fn() call:
+
+@@ -2,7 +2,16 @@
+    {
+      "actorScope": "all",
+      "actorType": "system",
+      "companyId": "company-1",
+      "limit": 50,
++     "reader": {
++       "companyIds": [
++         "company-1",
++       ],
++       "isInstanceAdmin": false,
++       "source": "session",
++       "type": "board",
++       "userId": "user-1",
++     },
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/__tests__/activity-routes.test.ts:194:46
+    192|
+    193|     expect(res.status).toBe(200);
+    194|     expect(mockAgentActionAuditService.list).toHaveBeenCalledWith({
+       |                                              ^
+    195|       companyId: "company-1",
+    196|       actorScope: "all",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/activity-routes.test.ts > activity routes > limits company activity lists by default
+AssertionError: expected "vi.fn()" to be called with arguments: [ { companyId: 'company-1', …(4) } ]
+
+Received:
+
+  1st vi.fn() call:
+
+@@ -3,7 +3,16 @@
+      "agentId": undefined,
+      "companyId": "company-1",
+      "entityId": undefined,
+      "entityType": undefined,
+      "limit": 100,
++     "reader": {
++       "companyIds": [
++         "company-1",
++       ],
++       "isInstanceAdmin": false,
++       "source": "session",
++       "type": "board",
++       "userId": "user-1",
++     },
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/__tests__/activity-routes.test.ts:216:38
+    214|
+    215|     expect(res.status).toBe(200);
+    216|     expect(mockActivityService.list).toHaveBeenCalledWith({
+       |                                      ^
+    217|       companyId: "company-1",
+    218|       agentId: undefined,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/activity-routes.test.ts > activity routes > caps requested company activity list limits
+AssertionError: expected "vi.fn()" to be called with arguments: [ { companyId: 'company-1', …(4) } ]
+
+Received:
+
+  1st vi.fn() call:
+
+@@ -3,7 +3,16 @@
+      "agentId": undefined,
+      "companyId": "company-1",
+      "entityId": undefined,
+      "entityType": "issue",
+      "limit": 500,
++     "reader": {
++       "companyIds": [
++         "company-1",
++       ],
++       "isInstanceAdmin": false,
++       "source": "session",
++       "type": "board",
++       "userId": "user-1",
++     },
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/__tests__/activity-routes.test.ts:234:38
+    232|
+    233|     expect(res.status).toBe(200);
+    234|     expect(mockActivityService.list).toHaveBeenCalledWith({
+       |                                      ^
+    235|       companyId: "company-1",
+    236|       agentId: undefined,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  4 failed | 34 passed (38)
+   Start at  11:18:46
+   Duration  117.10s (transform 29.60s, setup 519ms, import 33.48s, tests 81.69s, environment 2ms)
+

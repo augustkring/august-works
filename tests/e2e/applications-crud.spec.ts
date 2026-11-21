@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { deleteCompany } from "./company-cleanup";
 
 // Current Apps lifecycle coverage. The legacy Tools -> Applications CRUD table
 // was retired; old links now redirect to /apps. Keep this harness focused on
@@ -68,7 +69,7 @@ test.describe.serial("applications lifecycle", () => {
 
   test.afterAll(async ({ request }) => {
     if (!seed?.companyId) return;
-    await request.delete(`/api/companies/${seed.companyId}`).catch(() => undefined);
+    await deleteCompany(request, seed.companyId).catch(() => undefined);
   });
 
   test("Connections list surfaces connected and not-connected apps", async ({ page, request }) => {

@@ -3,6 +3,9 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
+  agentIdentities,
+  activityLog,
+  authUsers,
   companySecretBindings,
   companySecrets,
   companies,
@@ -13,20 +16,27 @@ import {
   connectionGrants,
   instanceUserRoles,
   issues,
+  heartbeatRuns,
+  humanWorkflowCoverages,
   principalPermissionGrants,
+  routines,
+  routineRevisions,
   toolAccessAuditEvents,
   toolApplications,
   toolConnections,
   userSecretDeclarations,
   userSecretDefinitions,
+  workflowRevisions,
+  workflows,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { accessService } from "../services/access.js";
+import { issueService } from "../services/issues.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
-import { backfillPrincipalAccessCompatibility } from "../services/principal-access-compatibility.js";
+import { backfillPrincipalAccessCompatibility, ensureHumanRoleDefaultGrants } from "../services/principal-access-compatibility.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -77,15 +87,138 @@ describeEmbeddedPostgres("access service", () => {
     await db.delete(companySecrets);
     await db.delete(userSecretDefinitions);
     await db.delete(issues);
+    await db.delete(activityLog);
+    await db.delete(routineRevisions);
+    await db.delete(routines);
     await db.delete(principalPermissionGrants);
+    await db.delete(humanWorkflowCoverages);
+    await db.delete(workflows);
+    await db.delete(heartbeatRuns);
     await db.delete(instanceUserRoles);
     await db.delete(agents);
+    await db.delete(agentIdentities);
     await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(companies);
   });
 
   afterAll(async () => {
     await tempDb?.cleanup();
+  });
+
+  it("routes exact published-workflow coverage without copying rights and withdraws it on member suspension", async () => {
+    const company = await db.insert(companies).values({ name: `Coverage ${randomUUID()}`, issuePrefix: `CV${randomUUID().slice(0, 6).toUpperCase()}` }).returning().then(rows => rows[0]!);
+    const principalUserId = randomUUID(), delegateeUserId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values([principalUserId, delegateeUserId].map(id => ({
+      id, name: id, email: `${id}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now,
+    })));
+    const [principal, delegatee] = await db.insert(companyMemberships).values([
+      { companyId: company.id, principalType: "user", principalId: principalUserId, membershipRole: "owner", status: "active" },
+      { companyId: company.id, principalType: "user", principalId: delegateeUserId, membershipRole: "operator", status: "active" },
+    ]).returning();
+    const workflowId = randomUUID(), revisionId = randomUUID();
+    await db.transaction(async tx => {
+      await tx.insert(workflows).values({ id: workflowId, companyId: company.id, name: "Coverage target", status: "active", publishedRevisionId: revisionId });
+      await tx.insert(workflowRevisions).values({
+        id: revisionId, companyId: company.id, workflowId, revisionNumber: 1, state: "published",
+        graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} },
+        createdByUserId: principalUserId,
+      });
+    });
+    const workflow = (await db.select().from(workflows).where(eq(workflows.id, workflowId)))[0]!;
+    const revision = (await db.select().from(workflowRevisions).where(eq(workflowRevisions.id, revisionId)))[0]!;
+    await db.insert(principalPermissionGrants).values([principalUserId, delegateeUserId].map(userId => ({
+      companyId: company.id, principalType: "user" as const, principalId: userId,
+      permissionKey: "workflows:run" as const,
+    })));
+
+    const access = accessService(db), actor = { type: "board" as const, source: "session" as const, userId: principalUserId };
+    const input = { requestId: randomUUID(), delegateeUserId, workflowId: workflow.id, workflowRevisionId: revision.id,
+      scopeType: "manual" as const, taskId: null, startsAt: new Date(Date.now() - 5_000),
+      expiresAt: new Date(Date.now() + 60_000), reason: "Temporary Human absence" };
+    const created = await access.createWorkflowCoverage(company.id, input, actor);
+    expect(created.created).toBe(true);
+    expect(created.coverage).toMatchObject({ principalUserId, delegateeUserId, actionKey: "workflows:run", workflowId: workflow.id,
+      workflowRevisionId: revision.id, scopeType: "manual", taskId: null, revokedAt: null });
+    expect((await access.createWorkflowCoverage(company.id, input, actor)).created).toBe(false);
+    await expect(access.createWorkflowCoverage(company.id, { ...input, reason: "Different request meaning" }, actor))
+      .rejects.toMatchObject({ status: 409, details: { code: "workflow_coverage_request_reused" } });
+    await db.transaction(async tx => expect(await access.authorizeWorkflowCoverage({
+      tx: tx as never, companyId: company.id, coverageId: created.coverage.id, delegateeUserId,
+      workflowId: workflow.id, workflowRevisionId: revision.id, scopeType: "manual", taskId: null,
+    })).toMatchObject({ id: created.coverage.id }));
+
+    await access.setMemberPermissions(company.id, delegatee.id, [], principalUserId);
+    const [permissionWithdrawn] = await db.select().from(humanWorkflowCoverages)
+      .where(eq(humanWorkflowCoverages.id, created.coverage.id));
+    expect(permissionWithdrawn?.revokedAt).toBeInstanceOf(Date);
+    await access.setMemberPermissions(company.id, delegatee.id, [{ permissionKey: "workflows:run" }], principalUserId);
+    await db.transaction(async tx => expect(access.authorizeWorkflowCoverage({
+      tx: tx as never, companyId: company.id, coverageId: created.coverage.id, delegateeUserId,
+      workflowId: workflow.id, workflowRevisionId: revision.id, scopeType: "manual", taskId: null,
+    })).rejects.toMatchObject({ status: 403, details: { code: "workflow_coverage_unavailable" } }));
+
+    const secondCoverage = await access.createWorkflowCoverage(company.id, { ...input, requestId: randomUUID() }, actor);
+    await access.updateMemberAndPermissions(company.id, delegatee.id, {
+      membershipRole: "viewer", grants: [],
+    }, principalUserId);
+    const [roleWithdrawn] = await db.select().from(humanWorkflowCoverages)
+      .where(eq(humanWorkflowCoverages.id, secondCoverage.coverage.id));
+    expect(roleWithdrawn?.revokedAt).toBeInstanceOf(Date);
+
+    await access.updateMember(company.id, delegatee.id, { status: "suspended" }, principalUserId);
+    const [withdrawn] = await db.select().from(humanWorkflowCoverages).where(eq(humanWorkflowCoverages.id, created.coverage.id));
+    expect(withdrawn).toMatchObject({ revokedByUserId: principalUserId });
+    expect(withdrawn?.revokedAt).toBeInstanceOf(Date);
+    await db.transaction(async tx => expect(access.authorizeWorkflowCoverage({
+      tx: tx as never, companyId: company.id, coverageId: created.coverage.id, delegateeUserId,
+      workflowId: workflow.id, workflowRevisionId: revision.id, scopeType: "manual", taskId: null,
+    })).rejects.toMatchObject({ status: 403 }));
+  });
+
+  it("requires both Humans' current privacy-respecting Task authority for Task-scoped coverage", async () => {
+    const company = await db.insert(companies).values({ name: `Task coverage ${randomUUID()}`, issuePrefix: `TC${randomUUID().slice(0, 6).toUpperCase()}` }).returning().then(rows => rows[0]!);
+    const principalUserId = randomUUID(), delegateeUserId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values([principalUserId, delegateeUserId].map(id => ({
+      id, name: id, email: `${id}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now,
+    })));
+    await db.insert(companyMemberships).values([
+      { companyId: company.id, principalType: "user", principalId: principalUserId, membershipRole: "owner", status: "active" },
+      { companyId: company.id, principalType: "user", principalId: delegateeUserId, membershipRole: "operator", status: "active" },
+    ]);
+    const workflowId = randomUUID(), revisionId = randomUUID();
+    await db.transaction(async tx => {
+      await tx.insert(workflows).values({ id: workflowId, companyId: company.id, name: "Task coverage target", status: "active", publishedRevisionId: revisionId });
+      await tx.insert(workflowRevisions).values({
+        id: revisionId, companyId: company.id, workflowId, revisionNumber: 1, state: "published",
+        graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} },
+        createdByUserId: principalUserId,
+      });
+    });
+    const workflow = (await db.select().from(workflows).where(eq(workflows.id, workflowId)))[0]!;
+    const revision = (await db.select().from(workflowRevisions).where(eq(workflowRevisions.id, revisionId)))[0]!;
+    await db.insert(principalPermissionGrants).values([principalUserId, delegateeUserId].map(userId => ({
+      companyId: company.id, principalType: "user" as const, principalId: userId, permissionKey: "workflows:run" as const,
+    })));
+    const privateTask = await issueService(db).create(company.id, {
+      title: "Private coverage Task", visibility: "private", createdByUserId: principalUserId,
+    });
+    const access = accessService(db), actor = { type: "board" as const, source: "session" as const, userId: principalUserId };
+    const terms = { delegateeUserId, workflowId: workflow.id, workflowRevisionId: revision.id,
+      scopeType: "task" as const, startsAt: new Date(Date.now() - 1_000), expiresAt: new Date(Date.now() + 60_000),
+      reason: "One private Task" };
+    await expect(access.createWorkflowCoverage(company.id, { ...terms, requestId: randomUUID(), taskId: privateTask.id }, actor))
+      .rejects.toMatchObject({ status: 403, details: { code: "workflow_coverage_task_authority_unavailable" } });
+
+    const openTask = await issueService(db).create(company.id, {
+      title: "Open coverage Task", createdByUserId: principalUserId, assigneeUserId: delegateeUserId,
+    });
+    const created = await access.createWorkflowCoverage(company.id, { ...terms, requestId: randomUUID(), taskId: openTask.id }, actor);
+    expect(created.coverage).toMatchObject({ scopeType: "task", taskId: openTask.id });
+    await db.transaction(async tx => expect(await access.authorizeWorkflowCoverage({
+      tx: tx as never, companyId: company.id, coverageId: created.coverage.id, delegateeUserId,
+      workflowId: workflow.id, workflowRevisionId: revision.id, scopeType: "task", taskId: openTask.id,
+    })).toMatchObject({ id: created.coverage.id }));
   });
 
   it.each(["owner", "admin"])("keeps the existing %s role when one read permission changes", async role => {
@@ -96,6 +229,8 @@ describeEmbeddedPostgres("access service", () => {
     expect(await service.getMembership(company.id,"user",owner.principalId)).toMatchObject({ status: "active", membershipRole: role });
     await service.setPrincipalPermission(company.id, "user", owner.principalId, "foundation:read", false, owner.principalId);
     expect(await service.getMembership(company.id,"user",owner.principalId)).toMatchObject({ status: "active", membershipRole: role });
+    await backfillPrincipalAccessCompatibility(db);
+    await expect(service.canUser(company.id, owner.principalId, "foundation:read")).resolves.toBe(false);
   });
 
   it("rejects combined access updates that would demote the last active owner", async () => {
@@ -209,6 +344,180 @@ describeEmbeddedPostgres("access service", () => {
       .where(eq(issues.id, doneIssue.id))
       .then((rows) => rows[0]!);
     expect(historicalIssue.assigneeUserId).toBe(member.principalId);
+  });
+
+  it("archives without a routine replacement, pauses active work, and leaves an owner action", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const member = await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: `member-${randomUUID()}`,
+      status: "active",
+      membershipRole: "operator",
+    }).returning().then((rows) => rows[0]!);
+    const routine = await db.insert(routines).values({
+      companyId: company.id,
+      title: "Member-owned routine",
+      status: "active",
+      responsibleUserId: member.principalId,
+    }).returning().then((rows) => rows[0]!);
+    const result = await accessService(db).archiveMember(company.id, member.id, {
+      routineResponsibleUserId: owner.principalId,
+    }, owner.principalId);
+    expect(result).toMatchObject({ reassignedRoutineCount: 0, pausedRoutineCount: 1, ownerActionRoutineCount: 1 });
+    expect((await accessService(db).getMemberById(company.id, member.id))?.status).toBe("archived");
+    const pausedRoutine = (await db.select().from(routines).where(eq(routines.id, routine.id)))[0]!;
+    expect(pausedRoutine).toMatchObject({ status: "paused", responsibleUserId: member.principalId });
+    const latestRevision = (await db.select().from(routineRevisions).where(eq(routineRevisions.id, pausedRoutine.latestRevisionId!)))[0]!;
+    expect(latestRevision).toMatchObject({ responsibleUserId: member.principalId, snapshot: { routine: { status: "paused", responsibleUserId: member.principalId } } });
+    expect(await db.select().from(activityLog).where(and(
+      eq(activityLog.entityType, "routine"),
+      eq(activityLog.entityId, routine.id),
+      eq(activityLog.action, "routine.paused_for_responsible_user_offboarding"),
+    ))).toMatchObject([{ actorId: owner.principalId, responsibleUserId: member.principalId }]);
+  });
+
+  it("transfers manual routine responsibility through the retained revision writer", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const member = await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: `member-${randomUUID()}`,
+      status: "active",
+      membershipRole: "operator",
+    }).returning().then((rows) => rows[0]!);
+    const routine = await db.insert(routines).values({
+      companyId: company.id,
+      title: "Member-owned routine",
+      status: "paused",
+      responsibleUserId: member.principalId,
+    }).returning().then((rows) => rows[0]!);
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: owner.principalId,
+      name: "Routine replacement owner",
+      email: `${owner.principalId}@example.test`,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const result = await accessService(db).archiveMember(company.id, member.id, {
+      routineResponsibleUserId: owner.principalId,
+    }, owner.principalId);
+    expect(result).toMatchObject({ reassignedRoutineCount: 1, pausedRoutineCount: 0, ownerActionRoutineCount: 0 });
+    const transferredRoutine = (await db.select().from(routines).where(eq(routines.id, routine.id)))[0]!;
+    expect(transferredRoutine).toMatchObject({ status: "paused", responsibleUserId: owner.principalId });
+    const latestRevision = (await db.select().from(routineRevisions).where(eq(routineRevisions.id, transferredRoutine.latestRevisionId!)))[0]!;
+    expect(latestRevision).toMatchObject({ responsibleUserId: owner.principalId, snapshot: { routine: { status: "paused", responsibleUserId: owner.principalId } } });
+    expect(await db.select().from(activityLog).where(and(
+      eq(activityLog.entityType, "routine"),
+      eq(activityLog.entityId, routine.id),
+      eq(activityLog.action, "routine.responsibility_transferred"),
+    ))).toMatchObject([{ actorId: owner.principalId, responsibleUserId: owner.principalId }]);
+  });
+
+  it("keeps a private conversation routine with its source owner and pauses it during archive", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const member = await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: `member-${randomUUID()}`,
+      status: "active",
+      membershipRole: "operator",
+    }).returning().then((rows) => rows[0]!);
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: member.principalId,
+      name: "Private routine source owner",
+      email: `${member.principalId}@example.test`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const identity = await db.insert(agentIdentities).values({
+      name: "Private routine source agent",
+      homeCompanyId: company.id,
+    }).returning().then((rows) => rows[0]!);
+    const agent = await db.insert(agents).values({
+      companyId: company.id,
+      agentIdentityId: identity.id,
+      name: "Private routine source agent",
+      status: "idle",
+    }).returning().then((rows) => rows[0]!);
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      status: "active",
+      membershipRole: "member",
+    });
+    const conversation = await issueService(db).create(company.id, {
+      title: "Private routine conversation",
+      status: "in_progress",
+      assigneeAgentId: agent.id,
+      conversationAgentId: agent.id,
+      conversationUserId: member.principalId,
+      conversationState: "active",
+      createdByUserId: member.principalId,
+    });
+    const originRun = await db.insert(heartbeatRuns).values({
+      companyId: company.id,
+      agentId: agent.id,
+      responsibleUserId: member.principalId,
+      nativeIssueId: conversation.id,
+      runtimeMode: "native",
+      status: "running",
+      contextSnapshot: { issueId: conversation.id, conversationSessionGeneration: 0 },
+    }).returning().then((rows) => rows[0]!);
+    const inserted = await db.insert(routines).values({
+      companyId: company.id,
+      title: "Private conversation routine",
+      status: "active",
+      originKind: "conversation_draft",
+      originId: originRun.id,
+      createdByAgentId: agent.id,
+      responsibleUserId: member.principalId,
+    }).returning().then((rows) => rows[0]!);
+    const [unErased] = await db.execute<{ erased: boolean }>(sql`
+      select aw_conversation_routine_source_erased(${company.id}::uuid, ${inserted.id}::uuid) as erased
+    `);
+    expect(unErased?.erased).toBe(false);
+
+    const result = await accessService(db).archiveMember(company.id, member.id, {}, owner.principalId);
+    expect(result).toMatchObject({ reassignedRoutineCount: 0, pausedRoutineCount: 1, ownerActionRoutineCount: 1 });
+    expect((await accessService(db).getMemberById(company.id, member.id))?.status).toBe("archived");
+    const privateRoutine = (await db.select().from(routines).where(eq(routines.id, inserted.id)))[0]!;
+    expect(privateRoutine).toMatchObject({ status: "paused", originKind: "conversation_draft", originId: originRun.id, createdByAgentId: agent.id, responsibleUserId: member.principalId });
+    const latestRevision = (await db.select().from(routineRevisions).where(eq(routineRevisions.id, privateRoutine.latestRevisionId!)))[0]!;
+    expect(latestRevision).toMatchObject({ responsibleUserId: member.principalId, snapshot: { routine: { responsibleUserId: member.principalId, status: "paused" } } });
+  });
+
+  it.each(["suspended", "pending"] as const)("moves an active member to %s and pauses owned routines through the retained revision writer", async (status) => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const member = await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: `member-${randomUUID()}`,
+      status: "active",
+      membershipRole: "operator",
+    }).returning().then((rows) => rows[0]!);
+    const routine = await db.insert(routines).values({
+      companyId: company.id,
+      title: "Routine paused on suspension",
+      status: "active",
+      responsibleUserId: member.principalId,
+    }).returning().then((rows) => rows[0]!);
+
+    const suspended = await accessService(db).updateMember(
+      company.id,
+      member.id,
+      { status },
+      owner.principalId,
+    );
+    expect(suspended?.status).toBe(status);
+    const paused = (await db.select().from(routines).where(eq(routines.id, routine.id)))[0]!;
+    expect(paused).toMatchObject({ status: "paused", responsibleUserId: member.principalId });
+    const latestRevision = (await db.select().from(routineRevisions).where(eq(routineRevisions.id, paused.latestRevisionId!)))[0]!;
+    expect(latestRevision).toMatchObject({ responsibleUserId: member.principalId, snapshot: { routine: { status: "paused", responsibleUserId: member.principalId } } });
   });
 
   it("rejects instance-level company access removal for self and protected users", async () => {
@@ -933,7 +1242,7 @@ describeEmbeddedPostgres("access service", () => {
     await expect(access.canUser(company.id, viewer.principalId, "environments:manage")).resolves.toBe(false);
   });
 
-  it("backfills pre-upgrade human memberships with missing role grants without replacing custom grants", async () => {
+  it("initializes uninitialized human memberships without replacing custom grants", async () => {
     const { company, owner } = await createCompanyWithOwner(db);
     const scopedEnvironmentGrant = { environmentId: "env-1" };
     const humanRows = await db
@@ -1006,6 +1315,75 @@ describeEmbeddedPostgres("access service", () => {
     expect(ownerEnvironmentGrants).toHaveLength(1);
     expect(ownerEnvironmentGrants[0]?.scope).toEqual(scopedEnvironmentGrant);
     expect(ownerEnvironmentGrants[0]?.grantedByUserId).toBe("custom-author");
+    const initializedRows = await db.select({ initializedAt: companyMemberships.permissionsInitializedAt })
+      .from(companyMemberships).where(eq(companyMemberships.companyId, company.id));
+    expect(initializedRows.length).toBeGreaterThan(0);
+    expect(initializedRows.every(row => row.initializedAt instanceof Date)).toBe(true);
+  });
+
+  it("does not restore explicitly revoked role defaults on compatibility backfill", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const access = accessService(db);
+    await ensureHumanRoleDefaultGrants(db, { companyId: company.id, principalId: owner.principalId,
+      membershipRole: "owner", grantedByUserId: null });
+    await expect(access.canUser(company.id, owner.principalId, "pipelines:write")).resolves.toBe(true);
+
+    await access.setMemberPermissions(company.id, owner.id, [], "permission-manager");
+    const backfill = await backfillPrincipalAccessCompatibility(db);
+    expect(backfill.humanGrantsInserted).toBe(0);
+    await expect(access.canUser(company.id, owner.principalId, "pipelines:write")).resolves.toBe(false);
+    const [membership] = await db.select().from(companyMemberships).where(eq(companyMemberships.id, owner.id));
+    expect(membership?.permissionsInitializedAt).toBeInstanceOf(Date);
+  });
+
+  it("preserves migrated historical owner grants without adding the new pipeline default", async () => {
+    const { company } = await createCompanyWithOwner(db);
+    const principalId = `historical-owner-${randomUUID()}`;
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId,
+      status: "active", membershipRole: "owner", permissionsInitializedAt: new Date() });
+
+    await backfillPrincipalAccessCompatibility(db);
+    await expect(accessService(db).canUser(company.id, principalId, "pipelines:write")).resolves.toBe(false);
+    const grants = await db.select().from(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, company.id), eq(principalPermissionGrants.principalId, principalId),
+    ));
+    expect(grants).toHaveLength(0);
+  });
+
+  it("marks combined role and permission replacements initialized even when the grant set is empty", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    await ensureHumanRoleDefaultGrants(db, { companyId: company.id, principalId: owner.principalId,
+      membershipRole: "owner", grantedByUserId: null });
+    const [member] = await db.insert(companyMemberships).values({ companyId: company.id,
+      principalType: "user", principalId: `operator-${randomUUID()}`, status: "active", membershipRole: "operator" })
+      .returning();
+    await ensureHumanRoleDefaultGrants(db, { companyId: company.id, principalId: member!.principalId,
+      membershipRole: "operator", grantedByUserId: null });
+    await expect(accessService(db).canUser(company.id, member!.principalId, "workflows:edit")).resolves.toBe(true);
+
+    await accessService(db).updateMemberAndPermissions(company.id, member!.id,
+      { membershipRole: "operator", grants: [] }, owner.principalId);
+    expect(await db.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, company.id), eq(principalPermissionGrants.principalType, "user"),
+      eq(principalPermissionGrants.principalId, member!.principalId),
+    ))).toEqual([]);
+    const backfill = await backfillPrincipalAccessCompatibility(db);
+    expect(backfill.humanGrantsInserted).toBe(0);
+    await expect(accessService(db).canUser(company.id, member!.principalId, "workflows:edit")).resolves.toBe(false);
+    const [updated] = await db.select().from(companyMemberships).where(eq(companyMemberships.id, member!.id));
+    expect(updated?.permissionsInitializedAt).toBeInstanceOf(Date);
+  });
+
+  it("keeps explicit empty principal grant replacements empty across compatibility backfill", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const access = accessService(db);
+    await ensureHumanRoleDefaultGrants(db, { companyId: company.id, principalId: owner.principalId,
+      membershipRole: "owner", grantedByUserId: null });
+    await access.setPrincipalGrants(company.id, "user", owner.principalId, [], "permission-manager");
+
+    const backfill = await backfillPrincipalAccessCompatibility(db);
+    expect(backfill.humanGrantsInserted).toBe(0);
+    await expect(access.canUser(company.id, owner.principalId, "pipelines:write")).resolves.toBe(false);
   });
 
   it("backfills non-terminal agents as active company members without reviving pending or terminated agents", async () => {

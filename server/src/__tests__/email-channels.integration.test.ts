@@ -6,7 +6,9 @@ import express from "express";
 import type WebSocket from "ws";
 import request from "supertest";
 import { issueRoutes } from "../routes/issues.js";
+import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/index.js";
+import { actorMiddleware } from "../middleware/auth.js";
 import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
 import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
@@ -47,7 +49,8 @@ import {
   toolConnections,
   toolConnectionInstalls,
   connectionGrants,
-  projects,
+  toolPolicies,
+  toolRateLimitCounters,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import {
@@ -56,6 +59,7 @@ import {
 } from "../services/email-channels.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import {
   agentmailMessageSchema,
   type AgentmailMessage,
@@ -116,8 +120,15 @@ describe("AgentMail durable email pipeline", () => {
   });
   it("installs one connector skill and provider tools only for the assigned agent", async () => {
     const f = await fixture();
-    const binding = { companyId: f.companyId, agentId: f.agentId, runId: randomUUID() };
-    await db.insert(heartbeatRuns).values({ id: binding.runId, companyId: f.companyId, agentId: f.agentId, status: "running" });
+    const sourceActor = await seedCurrentHumanSourceActor(db, [f.companyId], "email-board");
+    const task = await issueService(db).create(f.companyId, {
+      title: "Inspect the assigned email connector",
+      description: "Human-authored request to inspect the assigned inbox tools.",
+      status: "todo", createdByUserId: "email-board", responsibleUserId: "email-board",
+    }, db, undefined, { manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor });
+    const binding = { companyId: f.companyId, agentId: f.agentId, runId: randomUUID(), issueId: task.id };
+    await db.insert(heartbeatRuns).values({ id: binding.runId, companyId: f.companyId, agentId: f.agentId,
+      nativeIssueId: task.id, responsibleUserId: "email-board", status: "running", contextSnapshot: { issueId: task.id } });
     const assignments = await resolveConnectorAssignments(db, binding);
     expect(assignments).toHaveLength(1);
     expect(assignments[0].resources[0].id).toBe(f.endpointId);
@@ -663,6 +674,182 @@ describe("AgentMail durable email pipeline", () => {
       (await f.service.publication(input.idempotencyKey, f.companyId)).outcome,
     ).toBe("failed");
   });
+  // GW6: publishing takes a send's rate-limit token and the queued row carries
+  // it, bound to that publication, so the dispatch re-check excludes exactly
+  // that token. Refusals use the Tool Access 429 contract.
+  describe("email send rate limits", () => {
+    async function rateLimited(limit: number) {
+      const f = await fixture();
+      const parent = await issueService(db).create(f.companyId, {
+        title: "Parent",
+        status: "todo",
+        assigneeAgentId: f.agentId,
+      });
+      const [rateLimit] = await db
+        .insert(toolPolicies)
+        .values({
+          companyId: f.companyId,
+          name: "Email sends per minute",
+          policyType: "rate_limit",
+          selectors: { toolName: "email.send" },
+          config: { rateLimit: { limit, windowSeconds: 60 } },
+        })
+        .returning();
+      const input = (text: string, extra: Record<string, unknown> = {}) =>
+        emailSendSchema.parse({
+          endpointId: f.endpointId,
+          parentIssueId: parent.id,
+          to: ["recipient@example.test"],
+          subject: "Hello",
+          text,
+          idempotencyKey: randomUUID(),
+          ...extra,
+        });
+      const queue = (send: ReturnType<typeof input>) =>
+        f.service.queueSend(f.companyId, send, { userId: "email-board" });
+      const counts = async () =>
+        (
+          await db
+            .select()
+            .from(toolRateLimitCounters)
+            .where(eq(toolRateLimitCounters.policyId, rateLimit!.id))
+        )
+          .sort((left, right) => left.windowStartAt.getTime() - right.windowStartAt.getTime())
+          .map((row) => row.limit - row.remaining);
+      const storedActor = async (publicationId: string) =>
+        (
+          await db
+            .select()
+            .from(emailSends)
+            .where(eq(emailSends.publicationId, publicationId))
+        )[0]!.actor as Record<string, unknown>;
+      return { ...f, rateLimit: rateLimit!, input, queue, counts, storedActor };
+    }
+
+    it("dispatches exactly as many sends as the limit admitted and refuses the next with 429", async () => {
+      const windowInstant = new Date();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(windowInstant);
+      try {
+        const f = await rateLimited(2);
+        // A send that is never queued holds no token.
+        await expect(
+          f.queue(f.input("Not queued", { attachmentIds: [randomUUID()] })),
+        ).rejects.toThrow(/attachments must belong/);
+        expect(await f.counts()).toEqual([0]);
+        const first = f.input("First");
+        const second = f.input("Second");
+        await f.queue(first);
+        await f.queue(second);
+        await f.queue(first);
+        expect(await f.counts()).toEqual([2]);
+        expect(await f.storedActor(first.idempotencyKey)).toMatchObject({
+          userId: "email-board",
+          rateLimitCharge: {
+            owner: `email-send:${first.idempotencyKey}`,
+            windows: [expect.objectContaining({ policyId: f.rateLimit.id })],
+          },
+        });
+        const refusal = await f
+          .queue(f.input("Third"))
+          .then(() => null, (error: unknown) => error);
+        expect(refusal).toMatchObject({
+          status: 429,
+          message: "Tool access rate limit exceeded.",
+          details: {
+            code: "rate_limited",
+            tool: "email.send",
+            decision: "rate_limited",
+            matchedPolicyIds: [f.rateLimit.id],
+            rateLimitState: expect.objectContaining({ limited: true, limit: 2 }),
+          },
+        });
+        await f.service.tick();
+        await f.service.tick();
+        // Both admitted sends pass their dispatch re-check and reach AgentMail.
+        // (The fixture gives every new send the same provider thread, so the
+        // later one can record "uncertain"; neither is refused.)
+        expect(f.sends.map((send) => send.key).sort()).toEqual(
+          [first.idempotencyKey, second.idempotencyKey].sort(),
+        );
+        for (const send of [first, second])
+          expect(
+            (await f.service.publication(send.idempotencyKey, f.companyId))
+              .outcome,
+          ).not.toBe("failed");
+        expect(await f.counts()).toEqual([2]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("counts a send whose stored token belongs to another send or is missing", async () => {
+      const windowInstant = new Date();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(windowInstant);
+      try {
+        const f = await rateLimited(3);
+        const owner = f.input("Owner");
+        const borrower = f.input("Borrower");
+        const untracked = f.input("Untracked");
+        for (const send of [owner, borrower, untracked]) await f.queue(send);
+        expect(await f.counts()).toEqual([3]);
+        // The borrower presents the owner's token; the untracked send has none.
+        const ownerActor = await f.storedActor(owner.idempotencyKey);
+        await db
+          .update(emailSends)
+          .set({ actor: ownerActor as typeof emailSends.$inferInsert.actor })
+          .where(eq(emailSends.publicationId, borrower.idempotencyKey));
+        const { rateLimitCharge: _dropped, ...withoutCharge } =
+          await f.storedActor(untracked.idempotencyKey);
+        await db
+          .update(emailSends)
+          .set({ actor: withoutCharge as typeof emailSends.$inferInsert.actor })
+          .where(eq(emailSends.publicationId, untracked.idempotencyKey));
+        await f.service.tick();
+        await f.service.tick();
+        expect(f.sends.map((send) => send.key)).toEqual([owner.idempotencyKey]);
+        for (const send of [borrower, untracked])
+          expect(
+            await f.service.publication(send.idempotencyKey, f.companyId),
+          ).toMatchObject({
+            outcome: "failed",
+            error: "Tool access rate limit exceeded.",
+          });
+        expect(await f.counts()).toEqual([3]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("gives a queued send no credit after its window rolls over", async () => {
+      const windowInstant = new Date();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(windowInstant);
+      try {
+        const f = await rateLimited(1);
+        const early = f.input("Queued in the first window");
+        await f.queue(early);
+        vi.setSystemTime(new Date(windowInstant.getTime() + 60_000));
+        const late = f.input("Queued in the next window");
+        await f.queue(late);
+        expect(await f.counts()).toEqual([1, 1]);
+        await f.service.tick();
+        await f.service.tick();
+        expect(f.sends.map((send) => send.key)).toEqual([late.idempotencyKey]);
+        expect(
+          await f.service.publication(early.idempotencyKey, f.companyId),
+        ).toMatchObject({
+          outcome: "failed",
+          error: "Tool access rate limit exceeded.",
+        });
+        expect(await f.counts()).toEqual([1, 1]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   it("updates delivery receipts once without creating another task or wake", async () => {
     const f = await fixture();
     const parent = await issueService(db).create(f.companyId, {
@@ -897,6 +1084,9 @@ describe("AgentMail durable email pipeline", () => {
       status: "running",
       runtimeMode: "native",
       nativeIssueId: conversation.issueId,
+      // Heartbeat resolves the email Run's Human from the Task: email comments
+      // are system-authored, so this is the inbox sponsor.
+      responsibleUserId: "email-board",
       contextSnapshot: { issueId: conversation.issueId },
     });
     await db
@@ -946,6 +1136,77 @@ describe("AgentMail durable email pipeline", () => {
     expect((await f.service.publication(queued.id, f.companyId)).outcome).toBe(
       "failed",
     );
+  });
+
+  // C2b: email Tasks are chat_channel Tasks with no linked Human. Their Native
+  // tools require the bound inbox policy and the Task's current responsible Human.
+  it("keeps email Native tools bound to the current inbox policy and responsible Human", async () => {
+    const f = await fixture();
+    const other = await fixture();
+    await f.receive(f.message());
+    const [conversation] = await db.select().from(chatConversations)
+      .where(eq(chatConversations.companyId, f.companyId));
+    const [task] = await db.select().from(issues).where(eq(issues.id, conversation.issueId));
+    expect(task).toMatchObject({ originKind: "chat_channel", responsibleUserId: "email-board",
+      conversationAgentId: null, conversationUserId: null });
+    const runId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: runId, companyId: f.companyId, agentId: f.agentId, status: "running", runtimeMode: "native",
+      nativeIssueId: conversation.issueId, responsibleUserId: "email-board",
+      contextSnapshot: { issueId: conversation.issueId },
+    });
+    await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, conversation.issueId));
+    const binding = { companyId: f.companyId, agentId: f.agentId, runId, issueId: conversation.issueId };
+    const { assertNativeConversationToolNoPlanScope } = await import("../services/orchestration/native-tool-boundary.js");
+    const check = () => assertNativeConversationToolNoPlanScope(db, binding);
+    const denied = /outside its current inbox policy and responsible Human/;
+    await expect(check()).resolves.toBeUndefined();
+
+    // Negative: the Run's Human is not the Task's responsible Human.
+    await db.update(heartbeatRuns).set({ responsibleUserId: "other-user" }).where(eq(heartbeatRuns.id, runId));
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(heartbeatRuns).set({ responsibleUserId: "email-board" }).where(eq(heartbeatRuns.id, runId));
+    // Negative: the responsible Human is removed or downgraded to viewer.
+    const membership = and(eq(companyMemberships.companyId, f.companyId), eq(companyMemberships.principalId, "email-board"));
+    await db.update(companyMemberships).set({ status: "suspended" }).where(membership);
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(companyMemberships).set({ status: "active", membershipRole: "viewer" }).where(membership);
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(companyMemberships).set({ membershipRole: "operator" }).where(membership);
+    // Negative: the inbox is paused, or this Run no longer owns the Task.
+    await db.update(chatEndpoints).set({ status: "paused" }).where(eq(chatEndpoints.id, f.endpointId));
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(chatEndpoints).set({ status: "active" }).where(eq(chatEndpoints.id, f.endpointId));
+    await db.update(issues).set({ executionRunId: null }).where(eq(issues.id, conversation.issueId));
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, conversation.issueId));
+    await expect(check()).resolves.toBeUndefined();
+
+    // Negative: another company's Run cannot use this inbox through its own scope.
+    const otherRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: otherRunId, companyId: other.companyId, agentId: other.agentId, status: "running", runtimeMode: "native",
+      nativeIssueId: conversation.issueId, responsibleUserId: "email-board", contextSnapshot: { issueId: conversation.issueId },
+    });
+    const otherBinding = { companyId: other.companyId, agentId: other.agentId, runId: otherRunId,
+      issueId: conversation.issueId, workMode: "standard" };
+    const request = emailSendSchema.parse({ endpointId: f.endpointId, conversationId: conversation.id,
+      replyToMessageId: [...f.messages.keys()][0], text: "Cross-company reply", idempotencyKey: randomUUID() });
+    const crossCompany = await (async () => {
+      const otherAuthority = new PaperclipRunnerToolAuthority(db, { ...otherBinding,
+        connectorAssignments: await resolveConnectorAssignments(db, otherBinding) });
+      return otherAuthority.execute({ tool: "agentmail_send", callId: randomUUID(), arguments: { request } });
+    })().then(() => null, (error: unknown) => error);
+    expect(crossCompany).toBeInstanceOf(Error);
+    expect((crossCompany as Error).message).toBe("paperclip_runner_tool_binding_not_authorized");
+    expect(await db.select().from(emailSends).where(eq(emailSends.companyId, f.companyId))).toHaveLength(0);
+    expect(f.sends).toHaveLength(0);
+
+    // Negative: the inbox lane is keyed on the bound AgentMail endpoint. A
+    // non-email chat Task still needs a current linked-Human channel turn.
+    await db.update(chatEndpoints).set({ provider: "slack" }).where(eq(chatEndpoints.id, f.endpointId));
+    await expect(check()).rejects.toThrow(/outside its current linked-Human turn/);
+    await db.update(chatEndpoints).set({ provider: "agentmail" }).where(eq(chatEndpoints.id, f.endpointId));
   });
 
   it("enforces one inbox owner across companies and reconnects the same identity", async () => {
@@ -1155,10 +1416,16 @@ describe("AgentMail durable email pipeline", () => {
         { userId: "email-board" },
       ),
     ).rejects.toThrow(/boundary/);
-    const [project] = await db
-      .insert(projects)
-      .values({ companyId: f.companyId, name: "Email work" })
-      .returning();
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const projectResponse = await request(app)
+      .post(`/api/companies/${f.companyId}/projects`)
+      .send({ name: "Email work", status: "in_progress" })
+      .expect(201);
+    const project = projectResponse.body as { id: string };
     await db
       .update(agents)
       .set({

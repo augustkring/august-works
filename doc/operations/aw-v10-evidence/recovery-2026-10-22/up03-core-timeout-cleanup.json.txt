@@ -1,0 +1,8 @@
+{
+  "observedAt": "2026-10-22T20:28:30.212991+00:00",
+  "failedRun": "up03-core-auth-restored-green.log",
+  "result": "beforeAll hook timeout, no tests executed",
+  "ownedDirectory": "/tmp/paperclip-authorization-service-yowHvk",
+  "activeOwnedPostgresProcesses": [],
+  "removed": true
+}

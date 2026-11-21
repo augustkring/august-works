@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Browse } from "./Browse";
 import { getAppStoreDefinition } from "@paperclipai/shared";
 import { queryKeys } from "@/lib/queryKeys";
@@ -190,6 +191,15 @@ describe("Connections landing page", () => {
     await flushReact();
     return client;
   }
+
+  it("exposes the loading placeholder as a labelled status region", async () => {
+    listGalleryMock.mockReturnValue(new Promise(() => {}));
+    await renderBrowse();
+    const loading = container.querySelector('[aria-label="Loading connections"]');
+    expect(loading).not.toBeNull();
+    // aria-label is prohibited on a generic div; axe flags it as aria-prohibited-attr.
+    expect(loading?.getAttribute("role")).toBe("status");
+  });
 
   it("shows retirement guidance before paused state for an obsolete Composio account", async () => {
     listApplicationsMock.mockResolvedValue({ applications: [application({ id: "old-app", name: "Composio", metadata: { sourceTemplateKey: "composio" } })] });
@@ -513,7 +523,7 @@ describe("Connections landing page", () => {
     await act(() => remove!.click());
     await flushReact();
     expect(chatSetupMock).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Existing Paperclip tasks and conversation history remain available.");
+    expect(document.body.textContent).toContain(`Existing ${PRODUCT_IDENTITY.productName} tasks and conversation history remain available.`);
     chatListMock.mockResolvedValue([]);
     await act(() => Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Remove connection")!.click());
     await flushReact();

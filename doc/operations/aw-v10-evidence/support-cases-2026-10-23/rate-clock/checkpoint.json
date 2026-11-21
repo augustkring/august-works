@@ -1,0 +1,44 @@
+{
+  "checkpoint": "Custom native quota windows use the database statement clock",
+  "recordedAt": "2026-10-23",
+  "scope": "Four existing account/feedback/image/support upserts, with quota keys/counts/limits/window behavior preserved; no new table/helper/cache.",
+  "sources": "rate-database-clock-final.sources",
+  "baseline": {
+    "result": "New skew regression against original owners:1 failed,52 filtered in55.10s; exit1. After an application-clock jump of one hour, original budget count was1 instead of2.",
+    "log": "rate-database-clock-baseline.log",
+    "exit": "rate-database-clock-baseline.exit",
+    "originalSources": [
+      {
+        "source": "server/src/services/experience/support-cases.ts",
+        "capture": "0-original.ts.txt.gz",
+        "sha256": "dcd9da3c16f1f6f6fde40dea242086f2f1cbb73306d3c7cb5f222a0515c9eaf2"
+      },
+      {
+        "source": "server/src/services/customer-feedback.ts",
+        "capture": "1-original.ts.txt.gz",
+        "sha256": "09c9ab05615345a88f19909504dbebbe31e1c035fae1349b79f924e819492ef9"
+      },
+      {
+        "source": "server/src/services/saas/account-deletion.ts",
+        "capture": "2-original.ts.txt.gz",
+        "sha256": "0dff6c1a3218d1205ac7160f7cf0ece1d23b91e036cb883994fbfa8eb71a30dd"
+      }
+    ]
+  },
+  "final": {
+    "result": "112 tests passed across4 native suites in188.75s; exit0. Includes the skew regression, concurrent support admission and original account/feedback/image behavior.",
+    "log": "rate-database-clock-final.log",
+    "exit": "rate-database-clock-final.exit"
+  },
+  "serverCompiler": {
+    "result": "exit0, actual process closed",
+    "log": "rate-database-clock-server-types.log",
+    "exit": "rate-database-clock-server-types.exit"
+  },
+  "verification": "All four exact final source pins matched after actual check exits; all sessions closed.",
+  "limits": [
+    "Skew is injected in an application process against the actual shared PostgreSQL budget row; two physical replicas and process restart were not exercised.",
+    "This concerns quota clocks only. No general credential/reauthentication clock, full workspace, source privacy or V10/PR qualification is implied.",
+    "No UI contract changed. Prior policy browser evidence remains its own exact source checkpoint."
+  ]
+}

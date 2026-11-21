@@ -265,7 +265,8 @@ function sourceFromRow(row: SourceRow): PipelineCaseOutputSource {
 
 export function pipelineCaseOutputsService(db: Db) {
   return {
-    listCaseOutputs: async (companyId: string, caseId: string): Promise<PipelineCaseOutputsResponse> => {
+    listCaseOutputs: async (companyId: string, caseId: string,
+      canReadSourceIssue?: (issueId: string, sourceRunId?: string | null) => Promise<boolean>): Promise<PipelineCaseOutputsResponse> => {
       const [caseRow, company] = await Promise.all([
         db
           .select({ id: pipelineCases.id, pipelineId: pipelineCases.pipelineId })
@@ -307,7 +308,11 @@ export function pipelineCaseOutputsService(db: Db) {
         ))
         .orderBy(desc(pipelineCaseIssueLinks.createdAt), desc(pipelineCaseIssueLinks.id));
 
-      const sources = sourceRows.map(sourceFromRow);
+      const readableSourceRows = canReadSourceIssue
+        ? (sourceRows.length > 256 ? [] : (await Promise.all(sourceRows.map(async source =>
+          await canReadSourceIssue(source.issueId, source.createdByRunId) ? source : null))).filter((source): source is typeof sourceRows[number] => source !== null))
+        : sourceRows;
+      const sources = readableSourceRows.map(sourceFromRow);
       const sourceByIssueId = new Map(sources.map((source) => [source.issueId, source]));
       const sourceIssueIds = sources.map((source) => source.issueId);
       const items: PipelineCaseOutputItem[] = [];
@@ -351,6 +356,8 @@ export function pipelineCaseOutputsService(db: Db) {
         for (const row of documentRows) {
           const source = sourceByIssueId.get(row.issueId);
           if (!source) continue;
+          const sourceRunId = row.latestRevisionCreatedByRunId ?? source.createdByRunId;
+          if (canReadSourceIssue && !await canReadSourceIssue(source.issueId, sourceRunId)) continue;
           const sourceTrust = row.sourceTrust ?? source.sourceTrust ?? null;
           const title = row.title ?? row.key;
           items.push({
@@ -364,7 +371,7 @@ export function pipelineCaseOutputsService(db: Db) {
             sourceIssueStatus: source.issueStatus,
             sourceRole: source.role,
             sourceTrust,
-            sourceRunId: row.latestRevisionCreatedByRunId ?? source.createdByRunId,
+            sourceRunId,
             sourceAgentId: row.updatedByAgentId ?? row.createdByAgentId,
             preview: previewFor({ body: row.latestBody, sourceTrust }),
             createdAt: row.createdAt,
@@ -413,6 +420,8 @@ export function pipelineCaseOutputsService(db: Db) {
         for (const row of workProductRows) {
           const source = sourceByIssueId.get(row.issueId);
           if (!source) continue;
+          const sourceRunId = row.createdByRunId ?? source.createdByRunId;
+          if (canReadSourceIssue && !await canReadSourceIssue(source.issueId, sourceRunId)) continue;
           const sourceTrust = row.sourceTrust ?? source.sourceTrust ?? null;
           items.push({
             id: `work_product:${row.workProductId}`,
@@ -425,7 +434,7 @@ export function pipelineCaseOutputsService(db: Db) {
             sourceIssueStatus: source.issueStatus,
             sourceRole: source.role,
             sourceTrust,
-            sourceRunId: row.createdByRunId ?? source.createdByRunId,
+            sourceRunId,
             sourceAgentId: row.sourceAgentId,
             preview: previewFor({ summary: row.summary, sourceTrust }),
             createdAt: row.createdAt,
@@ -469,6 +478,7 @@ export function pipelineCaseOutputsService(db: Db) {
         for (const row of attachmentRows) {
           const source = sourceByIssueId.get(row.issueId);
           if (!source) continue;
+          if (canReadSourceIssue && !await canReadSourceIssue(source.issueId, source.createdByRunId)) continue;
           const path = contentPath(row.attachmentId);
           items.push({
             id: `attachment:${row.attachmentId}`,

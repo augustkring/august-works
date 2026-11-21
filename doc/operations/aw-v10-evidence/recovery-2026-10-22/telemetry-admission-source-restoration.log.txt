@@ -1,0 +1,8 @@
+2026-10-22T19:42:00Z
+BACKUP_DIRECTORY=/workspace/v10-preparation/telemetry-old-source.10fYrB
+packages/shared/src/config-schema.ts: OK
+packages/shared/src/telemetry/config.ts: OK
+packages/shared/src/telemetry/client.ts: OK
+0af3e98afd2e0f1aee172c4b09ad27607e2f4ad418d3e2c2ba0dff13923bf826  packages/shared/src/config-schema.ts
+ca845f532863908408f6a665ed6261e76c6edb3238b3ad85ea670b1d0c1814ee  packages/shared/src/telemetry/config.ts
+9d98a2d42200b2f4fde7d561c4abab256b62b9b5f73eb6b27ea0fc4ea80a92b5  packages/shared/src/telemetry/client.ts

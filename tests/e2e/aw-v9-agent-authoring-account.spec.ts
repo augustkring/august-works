@@ -1,6 +1,10 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS, agentAuthoringContentSchema, agentAuthoringDraftViewSchema } from "../../packages/shared/src/index.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
+
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
@@ -90,7 +94,7 @@ for (const kind of ["custom", "hire"] as const) {
       expect(Array.isArray(runs) ? runs : runs.items).toEqual([]);
       await page.screenshot({ path: info.outputPath(`v9-${kind}-account-draft-mobile.png`), fullPage: true });
     } finally {
-      await json(await request.delete(`/api/companies/${company.id}`));
+      await json(await deleteCompany(request, company.id));
     }
   });
 }

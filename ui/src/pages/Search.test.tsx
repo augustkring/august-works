@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import type { ReactNode } from "react";
+import { act, type ReactNode } from "react";
+import { i18n } from "../i18n";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -182,6 +183,33 @@ describe("Search page", () => {
     container.remove();
   });
 
+  it("uses the current Help language without retaining the previous language as placeholder data", async () => {
+    let finishDanish!: (value: unknown) => void;
+    const response = (locale: "en" | "da") => ({ ...emptyResponse(), scope: "help", results: [{
+      id: `article-${locale}`, type: "help", score: 1, title: locale === "en" ? "English guidance canary" : "Dansk vejledning",
+      href: `https://docs.blentera.com/${locale === "da" ? "da/" : ""}help/index`,
+      matchedFields: ["title"], sourceLabel: "Help", snippet: "Guidance", snippets: [], updatedAt: null, previewImageUrl: null,
+      helpArticle: { articleId: `article-${locale}`, source: "mintlify", audience: "company-members", maturity: "preview",
+        applicableProductVersions: ["V10"], locale, lastVerifiedAt: "2026-10-25" },
+    }], countsByType: { ...emptyResponse().countsByType, help: 1 } });
+    searchApiMock.search.mockImplementation((_company, params) => params.locale === "da"
+      ? new Promise(resolve => { finishDanish = resolve; }) : Promise.resolve(response("en")));
+    const { root } = renderSearch("/search?q=help&scope=help", container);
+    try {
+      await waitForAssertion(() => expect(container.textContent).toContain("English guidance canary"));
+      await act(async () => { await i18n.changeLanguage("da"); });
+      await waitForAssertion(() => {
+        expect(finishDanish).toBeTypeOf("function");
+        expect(container.textContent).not.toContain("English guidance canary");
+      });
+      await act(async () => finishDanish(response("da")));
+      await waitForAssertion(() => expect(container.textContent).toContain("Dansk vejledning"));
+    } finally {
+      flushSync(() => root.unmount());
+      await act(async () => { await i18n.changeLanguage("en"); });
+    }
+  });
+
   it("issues a search request when ?q is in the URL and renders the result", async () => {
     searchApiMock.search.mockResolvedValueOnce({
       query: "auth flake",
@@ -190,7 +218,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 1, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 1, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -246,6 +274,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth flake",
         scope: "all",
         limit: 20,
@@ -263,6 +292,93 @@ describe("Search page", () => {
     });
   });
 
+  it("renders federated owner results with typed destinations and discloses incomplete domains", async () => {
+    searchApiMock.search.mockResolvedValueOnce(emptyResponse({
+      federation: {
+        results: [{
+          id: "routine-1", domain: "routines", type: "routine", title: "Review pipeline",
+          summary: "A current company routine", breadcrumb: "Routines", canonicalRef: "routines:company-1:routine-1",
+          href: "/routines/routine-1", updatedAt: "2026-10-27T00:00:00.000Z", score: 100,
+          whyMatched: ["title"], action: { kind: "navigate", href: "/routines/routine-1" },
+        }, {
+          id: "release-1", domain: "notices", type: "release-notice", title: "Release 1.2",
+          summary: "Release notice · New search destinations", breadcrumb: "Release notice",
+          canonicalRef: "notices:company-1:release-notice:release-1", href: "https://docs.example.test/releases/1.2",
+          updatedAt: "2026-10-27T00:00:00.000Z", score: 100, whyMatched: ["title"],
+          action: { kind: "open_external", href: "https://docs.example.test/releases/1.2" },
+        }],
+        countsByDomain: { routines: 1, notices: 1 },
+        coverage: [{ domain: "routines", status: "partial", message: "Some routines may be outside this bounded search page." },
+          { domain: "apps", status: "unavailable", message: "Apps search is temporarily unavailable." }],
+        complete: false,
+      },
+    }));
+
+    const { root } = renderSearch("/search?q=pipeline", container);
+    try {
+      await waitForAssertion(() => {
+        const result = container.querySelector<HTMLAnchorElement>('a[data-result-domain="routines"]');
+        expect(result?.getAttribute("href")).toBe("/routines/routine-1");
+        expect(result?.textContent).toContain("Review pipeline");
+        const notice = container.querySelector<HTMLAnchorElement>('a[data-result-domain="notices"]');
+        expect(notice?.getAttribute("href")).toBe("https://docs.example.test/releases/1.2");
+        expect(notice?.getAttribute("target")).toBe("_blank");
+        expect(notice?.getAttribute("rel")).toContain("noopener");
+        expect(container.textContent).toContain("Apps search is temporarily unavailable.");
+        expect(container.textContent).toContain("Some routines may be outside this bounded search page.");
+      });
+    } finally {
+      flushSync(() => root.unmount());
+    }
+  });
+
+  it("renders Help articles as explicitly preview-scoped Mintlify links", async () => {
+    searchApiMock.search.mockResolvedValue({
+      query: "imports",
+      normalizedQuery: "imports",
+      scope: "help",
+      limit: 20,
+      offset: 0,
+      sort: "relevance",
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 1 },
+      filterOptionCounts: { status: {}, priority: {}, assigneeAgentId: {}, assigneeUserId: {}, projectId: {}, labelId: {}, updatedWithin: {} },
+      zeroResults: null,
+      hasMore: false,
+      results: [{
+        id: "company-import-export",
+        type: "help",
+        score: 100,
+        title: "Importing & Exporting Companies",
+        href: "https://docs.blentera.com/guides/board-operator/importing-and-exporting",
+        matchedFields: ["title"],
+        sourceLabel: "Help · Preview",
+        snippet: "Preview, import, and recover a company package safely",
+        snippets: [],
+        helpArticle: {
+          articleId: "company-import-export",
+          audience: "company-administrators",
+          maturity: "preview",
+          applicableProductVersions: ["V10"],
+          locale: "en",
+          lastVerifiedAt: "2026-10-24",
+          source: "mintlify",
+        },
+        updatedAt: null,
+        previewImageUrl: null,
+      }],
+    });
+    const { root } = renderSearch("/search?q=imports&scope=help", container);
+
+    await waitForAssertion(() => {
+      const link = container.querySelector<HTMLAnchorElement>('[data-result-type="help"]');
+      expect(link?.href).toBe("https://docs.blentera.com/guides/board-operator/importing-and-exporting");
+      expect(link?.target).toBe("_blank");
+      expect(link?.rel).toContain("noreferrer");
+      expect(link?.textContent).toContain("Preview · V10");
+    });
+    flushSync(() => root.unmount());
+  });
+
   it.each(["relevance", "updated"])("preserves server %s order across result sources", async (sort) => {
     const results = ["document", "title", "comment"].map((field, index) => ({
       id: `rank-${index}`, type: "issue", score: 300 - index,
@@ -276,7 +392,7 @@ describe("Search page", () => {
     }));
     searchApiMock.search.mockResolvedValue({ query: "rank", normalizedQuery: "rank", scope: "all",
       sort, limit: 20, offset: 0, hasMore: false, zeroResults: null, results,
-      countsByType: { issue: 1, comment: 1, document: 1, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 1, comment: 1, document: 1, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: { status: {}, priority: {}, assigneeAgentId: {}, assigneeUserId: {}, projectId: {}, labelId: {}, updatedWithin: {} },
     });
     const { root } = renderSearch(`/search?q=rank&sort=${sort}`, container);
@@ -295,7 +411,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -346,6 +462,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "launch brief",
         scope: "artifacts",
         limit: 20,
@@ -371,7 +488,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 1, document: 1, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 1, document: 1, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -503,7 +620,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -539,6 +656,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "deflake",
         scope: "all",
         limit: 20,
@@ -558,7 +676,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 1, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 1, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -623,7 +741,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -659,7 +777,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -678,6 +796,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -704,7 +823,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -732,6 +851,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -763,6 +883,7 @@ describe("Search page", () => {
     await new Promise((resolve) => setTimeout(resolve, 350));
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -779,7 +900,7 @@ describe("Search page", () => {
     await new Promise((resolve) => setTimeout(resolve, 350));
     await waitForAssertion(() => {
       const lastCall = searchApiMock.search.mock.calls.at(-1);
-      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20 });
+      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20, locale: "en" });
     });
 
     flushSync(() => {
@@ -802,6 +923,7 @@ describe("Search page", () => {
     await new Promise((resolve) => setTimeout(resolve, 350));
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -827,7 +949,7 @@ describe("Search page", () => {
     await waitForAssertion(() => {
       expect(input.value).toBe("auth");
       const lastCall = searchApiMock.search.mock.calls.at(-1);
-      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20 });
+      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20, locale: "en" });
     });
 
     flushSync(() => {
@@ -843,7 +965,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -902,7 +1024,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -926,6 +1048,7 @@ describe("Search page", () => {
 
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -951,6 +1074,7 @@ describe("Search page", () => {
     // First request carries the status filter from the URL.
     await waitForAssertion(() => {
       expect(searchApiMock.search).toHaveBeenCalledWith("company-1", {
+        locale: "en",
         q: "auth",
         scope: "all",
         limit: 20,
@@ -975,7 +1099,7 @@ describe("Search page", () => {
     // After removal the search re-fires with no status filter.
     await waitForAssertion(() => {
       const lastCall = searchApiMock.search.mock.calls.at(-1);
-      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20 });
+      expect(lastCall?.[1]).toEqual({ q: "auth", scope: "all", limit: 20, locale: "en" });
     });
 
     flushSync(() => {

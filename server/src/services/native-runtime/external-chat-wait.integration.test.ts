@@ -43,6 +43,7 @@ import type {
 } from "../../vendor/paperclip-runner/index.js";
 
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { finalizeNativeRun } from "./native-run-finalizer.js";
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import {
@@ -65,8 +66,14 @@ import { questionResponseDeliveryValues } from "../question-response-delivery.js
 import { resolveExternalChatQuestionResponse } from "./external-chat-question-response.js";
 import { materializeExternalChatQuestionResponseInput } from "./external-chat-question-response-input.js";
 import * as nativeInteractionBridge from "./native-interaction-bridge.js";
-import type { AskUserQuestionsInteraction } from "@paperclipai/shared";
+import { nativeSha256 } from "./canonical.js";
+import type {
+  AskUserQuestionsInteraction,
+  NativePayloadSourceInput,
+} from "@paperclipai/shared";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
 import { subscribeAllCompanyLiveEvents } from "../live-events.js";
@@ -1162,7 +1169,15 @@ describe("native external-chat response wait", () => {
       provider === "github"
         ? await seedGitHubBoardAnsweredTurn()
         : await seedAnsweredChatTurn(provider);
+    const responsibleUserId = randomUUID();
+    await seedCurrentHumanSourceActor(db, [fixture.companyId], responsibleUserId);
+    await db.update(issues).set({ responsibleUserId }).where(eq(issues.id, fixture.issueId));
+    await db.update(heartbeatRuns).set({ responsibleUserId }).where(eq(heartbeatRuns.id, fixture.runId));
     await attestAnswer(fixture);
+    if ("sourceRunId" in fixture && typeof fixture.sourceRunId === "string")
+      await db.update(heartbeatRuns).set({ responsibleUserId }).where(eq(heartbeatRuns.id, fixture.sourceRunId));
+    await preparePlatformSkillAdmission(db, { companyId: fixture.companyId, agentId: fixture.agentId,
+      runId: fixture.runId, responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
     const root = await mkdtemp(path.join(tmpdir(), "answered-chat-file-"));
     try {
       const workspaceRoot = path.join(root, "workspace");
@@ -1903,6 +1918,19 @@ describe("native external-chat response wait", () => {
     const { fixture, parents } = await seedSequentialQuestionChain();
     await attestAnswer(fixture);
     const parent = parents[0]!;
+    const sourceVersions = new Map(
+      (await db
+        .select({
+          id: issueThreadInteractions.id,
+          sourceVersion: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text`,
+        })
+        .from(issueThreadInteractions)
+        .where(eq(issueThreadInteractions.issueId, fixture.issueId)))
+        .map((row) => [row.id, row.sourceVersion]),
+    );
+    const sourceCaptures: Array<
+      Extract<NativePayloadSourceInput, { kind: "interaction" }>
+    > = [];
     let reached!: () => void;
     let release!: () => void;
     const ready = new Promise<void>((resolve) => {
@@ -1916,14 +1944,16 @@ describe("native external-chat response wait", () => {
     const spy = vi
       .spyOn(nativeInteractionBridge, "materializeNativeInteractionResponses")
       .mockImplementationOnce(async (input) => {
+        const responses = await original(input);
         reached();
         await released;
-        return original(input);
+        return responses;
       });
     const prompt = materializeExternalChatQuestionResponseInput({
       db,
       binding: fixture,
       contextSnapshot: fixture.context,
+      onSourceCapture: (source) => sourceCaptures.push(source),
     });
     let mutation: Promise<void> | null = null;
     let mutationPid = 0;
@@ -1973,22 +2003,43 @@ describe("native external-chat response wait", () => {
         );
         expect(waiting!.waiting).toBe(true);
       });
+      expect(sourceCaptures).toEqual([]);
       release();
       const captured = await prompt;
       await mutation;
+      expect(sourceCaptures).toHaveLength(captured.length);
+      expect(new Set(sourceCaptures.map((source) => source.interactionId)).size).toBe(
+        captured.length,
+      );
+      for (const response of captured) {
+        expect(response).not.toHaveProperty("selectedSourceVersion");
+        const source = sourceCaptures.find(
+          (candidate) => candidate.interactionId === response.interactionId,
+        );
+        expect(source).toEqual({
+          kind: "interaction",
+          issueId: fixture.issueId,
+          interactionId: response.interactionId,
+          sourceVersion: sourceVersions.get(response.interactionId),
+          contentHash: nativeSha256(response),
+        });
+      }
       expect(captured.map((response) => response.interactionId)).toEqual([
         parent.interactionId,
         fixture.interactionId,
       ]);
       expect(JSON.stringify(captured)).toContain("Cobalt");
       expect(JSON.stringify(captured)).not.toContain("Amber");
+      const capturesBeforeDeniedRetry = sourceCaptures.slice();
       await expect(
         materializeExternalChatQuestionResponseInput({
           db,
           binding: fixture,
           contextSnapshot: fixture.context,
+          onSourceCapture: (source) => sourceCaptures.push(source),
         }),
       ).rejects.toThrow("reviewed_chat_execution_binding_not_authorized");
+      expect(sourceCaptures).toEqual(capturesBeforeDeniedRetry);
     } finally {
       release();
       await Promise.allSettled([prompt, ...(mutation ? [mutation] : [])]);
@@ -2088,11 +2139,42 @@ describe("native external-chat response wait", () => {
           .update(agentWakeupRequests)
           .set({ requestedByActorId: "another-user" })
           .where(eq(agentWakeupRequests.id, parent.wakeId));
-      if (kind === "different_parent_issue")
-        await db
-          .update(heartbeatRuns)
-          .set({ nativeIssueId: fixture.sourceRunId })
-          .where(eq(heartbeatRuns.id, parent.runId));
+      if (kind === "different_parent_issue") {
+        const foreignIssueId = randomUUID();
+        const foreignRunId = randomUUID();
+        await db.insert(issues).values({
+          id: foreignIssueId,
+          companyId: fixture.companyId,
+          issueNumber: 2,
+          identifier: `W${fixture.companyId.replaceAll("-", "").toUpperCase()}-2`,
+          title: "Separate task for the foreign question source",
+          status: "in_progress",
+          workMode: "standard",
+          assigneeAgentId: fixture.agentId,
+        });
+        await db.insert(heartbeatRuns).values({
+          id: foreignRunId,
+          companyId: fixture.companyId,
+          agentId: fixture.agentId,
+          status: "succeeded",
+          runtimeMode: "native",
+          nativeIssueId: foreignIssueId,
+          contextSnapshot: { source: "chat:telegram", issueId: foreignIssueId, taskId: foreignIssueId },
+        });
+        // Keep every child reference internally consistent while making its
+        // answer depend on a native parent run owned by a different Task.
+        const childContext = { ...fixture.context, sourceRunId: foreignRunId };
+        await db.update(heartbeatRuns).set({ contextSnapshot: childContext }).where(eq(heartbeatRuns.id, fixture.runId));
+        await db.update(issueThreadInteractions).set({ sourceRunId: foreignRunId })
+          .where(eq(issueThreadInteractions.id, fixture.interactionId));
+        await db.update(issueQuestionResponseDeliveries).set({ sourceRunId: foreignRunId })
+          .where(eq(issueQuestionResponseDeliveries.id, fixture.responseDeliveryId));
+        const [wake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, fixture.wakeId));
+        await db.update(agentWakeupRequests).set({ payload: { ...wake!.payload, sourceRunId: foreignRunId } })
+          .where(eq(agentWakeupRequests.id, fixture.wakeId));
+        fixture.context.sourceRunId = foreignRunId;
+        fixture.sourceRunId = foreignRunId;
+      }
       if (kind === "source_cycle") {
         const [wake] = await db
           .select()

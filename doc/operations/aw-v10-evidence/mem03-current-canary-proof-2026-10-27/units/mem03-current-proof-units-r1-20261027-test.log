@@ -1,0 +1,20 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer promotion policy > allows low-risk pure candidates into canary only when replay, shadow, rollback and drift gates pass 3ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer promotion policy > rejects inconsistent replay and shadow proof even when top-level status says passed 0ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer promotion policy > requires human approval for C2 and C3 and rejects C4 1ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer promotion policy > never weakens the risk class below the observed side effect 0ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer promotion policy > requires a successful canary before final promotion eligibility 0ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer promotion policy > blocks replay, shadow, and critical-invariant failures before canary 0ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer canary routing and fallback > propagates an uncertain trusted fallback without executing it twice 2ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer canary routing and fallback > refuses an effectful candidate before either execution path starts 1ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer canary routing and fallback > assigns the same routing key deterministically and honors 0/100 percent boundaries 1ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer canary routing and fallback > falls back to the trusted path on guard, output, or candidate execution failure 1ms
+ ✓ src/services/optimizer/optimizer-promotion.test.ts > optimizer canary routing and fallback > uses candidate output only after the canary guard and output validator pass 0ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  04:26:33
+   Duration  13.24s (transform 9.23s, setup 78ms, import 13.03s, tests 11ms, environment 0ms)
+

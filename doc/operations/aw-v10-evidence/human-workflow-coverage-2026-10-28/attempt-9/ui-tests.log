@@ -1,0 +1,476 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps an existing conversation on its agent-addressed route 105ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > refreshes the canonical agent chat after source loss without showing cached private history 46ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > creates an unused conversation only for the first message and updates its canonical cache 49ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > creates an unused conversation only for the first attachment and updates its canonical cache 40ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > retries the chosen initial chat mode after creation succeeded but mode persistence failed 119ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > opens artifact cards in the shared gallery at the selected image without duplicating attachments 97ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > loads from the pending state into issue detail without changing hook order 60ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > preserves explicit upload receipt IDs through the page mutation (reassign=false) 67ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > preserves explicit upload receipt IDs through the page mutation (reassign=true) 70ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps hierarchy breadcrumbs and label chips out of the Streamlined task header 50ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > preserves hierarchy breadcrumbs and label chips when Streamlined UI is off 69ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > lifts the redesigned desktop thread into the side-panel header band 48ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > does not register a redundant breadcrumb side-panel toggle in Streamlined UI 47ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > retains the production breadcrumb side-panel toggle when Streamlined UI is off 43ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > uses task activity for recency and ignores passive revisits 88ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > opens a closed desktop pane and routes an ordinary document to its own tab on direct load 45ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > leaves ordinary document links to the classic center-column surface 66ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > clears document routing when the URL no longer names a document 104ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > routes plan to the Plan pane tab and leaves continuation-summary on its existing surface 87ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > replays document routing when the current same-page hash is clicked again 68ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > maximizes the desktop pane once per viewer=full deep link 66ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > re-maximizes when navigating to another issue with an identical viewer=full hash 53ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > reveals new artifacts once in the task panel (mobile: false) 142ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > reveals new artifacts once in the task panel (mobile: true) 124ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > opens the mobile properties sheet for a document deep link 45ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > opens a plan deep link in the shared mobile side-panel sheet 45ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > loads ancestors, subtask membership and created work independently and refreshes on issue activity 51ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > moves subtask data into the properties panel instead of the chat center pane 32ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > hides the full sub-task tree when the task has no subtasks 34ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps the properties panel stable across unrelated chat-detail renders 33ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > does not loop openPanel when the sub-task list query is still loading (PAP-508) 48ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > does not load or render decision sections in the issue header 52ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > updates status from the task header control and hides the priority control (PAP-411) 69ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > moves a blocked task back to todo when the no-live-path notice tries again 59ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > connects the inline disposition retry to current state (success) 78ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > connects the inline disposition retry to current state (failure) 74ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > connects the inline disposition retry to current state (pending question) 59ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > removes an inbox-origin archived issue and restores it when the toast Undo action is pressed 97ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps an archived task hidden and reports an error when toast Undo fails 80ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > archives a task-page issue with y and returns to the inbox 81ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > arms the inbox archive shortcut only for the selected inbox row 71ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > uses history Back for a live inbox origin and a route fallback for direct links 86ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > shows assignee and originating avatars in the issue header metadata 187ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > attributes an agent-created issue to the transitive responsible user with a via affordance 97ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > does not mark the wake comment for the current live run as queued when active-run cache is stale 55ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps the persisted authoring run for private Board replies: missing_activity 52ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps the persisted authoring run for private Board replies: conflicting_activity 52ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > recovers historical follow-up provenance from overlapping run chronology 49ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > does not infer follow-up provenance from an unrelated overlapping linked run 48ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > recovers follow-up provenance across an intervening activity-linked run 49ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps acknowledged question answers at their submission time while recording successor delivery 61ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > projects a resolved plan decision as queued for an active acpx_local legacy run 66ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > projects a resolved plan decision as queued for an active claude_local legacy run 97ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > projects a resolved plan decision as queued for an active codex_local legacy run 82ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > queues messages against a queued live run and interrupts that exact run 109ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > projects a native follow-up into the steering well before the post resolves 95ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > does not rebind a queued message when another run becomes live before its request settles 60ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > does not optimistically queue a fresh comment from an unlocked stale active-run cache 94ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > hides the plan decomposition panel by default 61ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > hides file viewer entry points by default 58ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > shows file viewer entry points when the experimental flag is enabled 61ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > hides the properties sidebar on the first onboarding task until a plan document exists 58ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > starts a planning-mode task as chat-only until its plan document exists 69ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > reveals the planning-mode task sidebar when its plan document exists 55ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps the Show properties button clickable on the first task and reveals the sidebar on demand 75ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > reveals the properties sidebar on the first onboarding task once a plan document exists 63ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > shows the properties sidebar immediately on a non-first task 40ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > passes blocker attention to the issue detail header status icon 44ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > refreshes a released pause and shows partial wake failure=false inline 158ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > refreshes a released pause and shows partial wake failure=true inline 121ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > pauses the subtree immediately without preview or confirmation 51ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps active-run run controls distinct from pausing future work 154ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps composer run controls distinct from pausing future work 135ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > routes live-run finalization actions through run cancellation before issue status update 100ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > reports partial success when run finalization stops the run but task status update fails 64ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > passes planning work mode to the issue chat thread 42ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > reports the selected continuation action after rejecting completion 47ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > passes ask work mode to the issue chat thread 80ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > falls back to execCommand when copying the task from an insecure context 70ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > renders the task chat thread as the default thread 46ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > renders the legacy issue chat thread when the classic task interface flag is on 68ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > restores master's task chat thread when Streamlined UI is off 49ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > still honors Classic Task Interface when Streamlined UI is off 31ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > passes @task mention options to the thread by default 44ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > forwards composer work mode changes to the issues API 36ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > composer tree control (mobile=false) > allows a message while tree control is pending and remains enabled after success 36ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > composer tree control (mobile=false) > blocks the composer when the pending tree control request fails 64ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > composer tree control (mobile=false) > applies a late pause response (root=true) 63ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > composer tree control (mobile=false) > applies a late pause response (root=false) 75ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > composer tree control (mobile=true) > allows a message while tree control is pending and remains enabled after success 69ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > composer tree control (mobile=true) > blocks the composer when the pending tree control request fails 66ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > composer tree control (mobile=true) > applies a late pause response (root=true) 59ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > composer tree control (mobile=true) > applies a late pause response (root=false) 58ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > renders a quiet task pause notice and defaults leaf resume to wake the assignee 144ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > exposes restore subtree from the issue actions menu 113ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > confirms cancellation once without a reason, checkbox, or task inventory 100ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps the authoritative Paperclip queue mounted after handoff promotion 30ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > loads only the shared queue projection for an active codex_local run after reassignment 34ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > loads only the shared queue projection for an active claude_local run after reassignment 33ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > loads only the shared queue projection for an active opencode_local run after reassignment 31ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > loads only the shared queue projection for an active process run after reassignment 30ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > loads only the shared queue projection for an active http run after reassignment 33ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > loads only the shared queue projection for an active custom_plugin run after reassignment 55ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps the last queued message mounted until steering is acknowledged so rejection stays visible 54ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > promotes a steered message immediately while its durable timeline position refreshes 57ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps an unacknowledged queue visible while withholding server controls 52ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > keeps a discarded queued comment out of the thread when the queue becomes empty 56ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > IssueDetail > uses queue identity for discard and surfaces a persistent too-late error 72ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > canBoardResolveRecoveryAction > falls back to companyIds when memberships are not populated 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > canBoardResolveRecoveryAction > uses populated memberships as the authoritative board access source 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > canBoardManageRuntime > falls back to companyIds when memberships are not populated 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > canBoardManageRuntime > denies viewers the runtime-manage-gated break-glass affordance 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > canBoardManageRuntime > allows non-viewer active members (mirrors the backend runtime:manage member gate) 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > readRecoveryReconcileWorkspaceId > returns null when the action is missing 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > readRecoveryReconcileWorkspaceId > returns null for non-workspace_validation actions even with a workspace id in evidence 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > readRecoveryReconcileWorkspaceId > prefers persistedExecutionWorkspaceId (git_worktree_branch_incoherence shape) 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > readRecoveryReconcileWorkspaceId > falls back to executionWorkspaceId (git_worktree_not_reusable shape) 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > readRecoveryReconcileWorkspaceId > returns null when the evidence carries no workspace reference (so the caller falls back to the page-level id) 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > readRecoveryReconcileWorkspaceId > ignores non-string / empty workspace ids 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > shouldScrollIssueDetailToTopOnNavigation > does not scroll when only URL search params changed for the same issue 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > shouldScrollIssueDetailToTopOnNavigation > scrolls on forward navigation to a different issue 0ms
+ ✓ |@paperclipai/ui| src/pages/IssueDetail.test.tsx > shouldScrollIssueDetailToTopOnNavigation > does not scroll on browser back or forward restoration 0ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > hides a late coverage response after the Human session changes and labels each party correctly
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > renders a compact member table without redundant explanatory copy 337ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > hides a late coverage response after the Human session changes and labels each party correctly 112ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > saves member role and status without touching grants 133ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > removes a member with an issue reassignment target 145ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: account
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: account 199ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: renewed session
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: renewed session 134ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: withdraw and restore 124ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: company 151ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: unmount 91ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: unchanged 91ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: local trusted unchanged 92ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal success before refresh begins
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > denies dispatch when the same Human's session changes after clicking 59ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal success before refresh begins 61ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal error before refresh begins
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Approve human acknowledgement after a held refresh and session renewal
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal error before refresh begins 124ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Reject human acknowledgement after a held refresh and session renewal
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Approve human acknowledgement after a held refresh and session renewal 40ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Reject human acknowledgement after a held refresh and session renewal 47ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > shows protected member removal reasons from the API 22ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > redirects legacy access deep links to the permissions extension route when installed 4ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > shows a read-only unavailable fallback for legacy access deep links 5ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > shows Members and Invites tabs with Members active by default 20ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > opens the Invites tab from a ?tab=invites deep link 34ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > hides the Invites tab when the operator hides company.invites 21ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > offers Cloud invitations to the current stack's owner even with local invites hidden 24ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > offers Cloud invitations to the current stack's admin even with local invites hidden 24ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > does not expose Cloud invitations to a member who owns another stack 22ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > does not expose Cloud invitations to a support who owns another stack 21ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > does not expose Cloud invitations to a unknown who owns another stack 27ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > waits for the Cloud role before showing the invitation action 43ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > hides a cached invitation action when the Cloud role refresh fails 42ms
+ ✓ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > requires an identified current stack and a configured Cloud destination 50ms
+ ✓ |@paperclipai/ui| src/pages/WorkflowBuilder.test.tsx > WorkflowBuilder > provides a non-drag outline editor and adds a registered node 126ms
+ ✓ |@paperclipai/ui| src/pages/WorkflowBuilder.test.tsx > WorkflowBuilder > shows optimizer evidence separately from executed workflow state 45ms
+ ✓ |@paperclipai/ui| src/pages/WorkflowBuilder.test.tsx > WorkflowBuilder > preserves the local graph when save hits a revision conflict 92ms
+ ✓ |@paperclipai/ui| src/pages/WorkflowBuilder.test.tsx > WorkflowBuilder > runs the published revision through the explicit live-run action 41ms
+ ✓ |@paperclipai/ui| src/pages/WorkflowBuilder.test.tsx > WorkflowBuilder > configures External Agent only through governed OpenClaw bindings 56ms
+ ✓ |@paperclipai/ui| src/pages/WorkflowBuilder.test.tsx > WorkflowBuilder > renders governed capability availability without exposing raw IDs 26ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > tenant-session recovery > keeps concurrent failures pending and schedules one top-level reload 74ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > tenant-session recovery > preserves ApiError handling for an unrelated 401 3ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > in-tab GET coalescing > shares one underlying fetch for identical in-flight GETs 1ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > in-tab GET coalescing > issues a fresh fetch after the previous one settles 0ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > in-tab GET coalescing > does not coalesce different paths 2ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > in-tab GET coalescing > stops later callers joining a detached in-flight GET 1ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > in-tab GET coalescing > never coalesces mutations 1ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > per-caller abort semantics > aborting one caller rejects only that caller, not the shared fetch 0ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > per-caller abort semantics > aborts the shared fetch once every caller has aborted 1ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > per-caller abort semantics > rejects immediately if the caller signal is already aborted 0ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > preserves JSON and observability headers when posting with an idempotency key 2ms
+ ✓ |@paperclipai/ui| src/api/client.test.ts > passes session-binding headers through private GET and DELETE requests 1ms
+
+ Test Files  4 passed (4)
+      Tests  170 passed (170)
+   Start at  16:37:14
+   Duration  19.79s (transform 3.07s, setup 39ms, import 7.19s, tests 10.15s, environment 1.87s)
+

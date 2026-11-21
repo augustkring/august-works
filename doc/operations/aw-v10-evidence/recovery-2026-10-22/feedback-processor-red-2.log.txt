@@ -1,0 +1,62 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/feedback-share-client.test.ts (3 tests | 2 failed) 135ms
+     × does not export to an unconfigured processor 37ms
+     × does not follow a configured processor redirect to another receiver 87ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/feedback-share-client.test.ts > feedback trace share client > does not export to an unconfigured processor
+AssertionError: promise resolved "{ objectKey: 'feedback-traces/test.j…' }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "objectKey": "feedback-traces/test.json",
+  }
+
+ ❯ src/__tests__/feedback-share-client.test.ts:42:8
+     40|       integrity: {},
+     41|       files: [],
+     42|     })).rejects.toThrow("Feedback export is not configured");
+       |        ^
+     43|     expect(fetch).not.toHaveBeenCalled();
+     44|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/feedback-share-client.test.ts > feedback trace share client > does not follow a configured processor redirect to another receiver
+AssertionError: promise resolved "{ objectKey: 'unexpected-receiver' }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "objectKey": "unexpected-receiver",
+  }
+
+ ❯ src/__tests__/feedback-share-client.test.ts:131:10
+    129|         surface: null, paperclipRun: null, rawAdapterTrace: null,
+    130|         normalizedAdapterTrace: null, privacy: null, integrity: {}, fi…
+    131|       })).rejects.toThrow();
+       |          ^
+    132|       expect(redirectedRequests).toBe(0);
+    133|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  19:13:28
+   Duration  974ms (transform 115ms, setup 225ms, import 89ms, tests 135ms, environment 0ms)
+

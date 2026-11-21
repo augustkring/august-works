@@ -140,7 +140,7 @@ export function WorkflowDescribe({ company, principal }: { company: string; prin
       {!feature.enabled && <p role="status">{t("workflowIntent.unavailable")}</p>}
       <footer className="flex items-center justify-between gap-4">
         <Link className="inline-flex min-h-11 items-center underline" to="/workflows">{t("workflowIntent.back")}</Link>
-        <Button type="submit" className="min-h-11" disabled={busy || !storageReady || !feature.enabled || feature.query.isFetching || !form.name.trim() || !form.outcome.trim()}>
+        <Button type="submit" className="min-h-11" disabled={busy || !storageReady || !canCreate() || !form.name.trim() || !form.outcome.trim()}>
           {t(busy ? "loading" : "workflowIntent.save")}
         </Button>
       </footer>

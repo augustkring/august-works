@@ -14,6 +14,7 @@ const mockTreeControlService = vi.hoisted(() => ({
   cancelIssueStatusesForHold: vi.fn(),
   restoreIssueStatusesForHold: vi.fn(),
   getHold: vi.fn(),
+  getActivePauseHoldGate: vi.fn(),
   releaseHold: vi.fn(),
   cancelUnclaimedWakeupsForTree: vi.fn(),
 }));
@@ -69,7 +70,13 @@ describe("issue tree control routes", () => {
     mockHeartbeatFactory.mockReturnValue(mockHeartbeatService);
     mockReplayBlocks.mockResolvedValue([]);
     mockExecutionBlocker.mockResolvedValue(null);
-    mockTreeControlService.getHold.mockResolvedValue(null);
+    mockTreeControlService.getHold.mockResolvedValue({
+      id: "33333333-3333-4333-8333-333333333333", rootIssueId: "11111111-1111-4111-8111-111111111111", mode: "pause",
+    });
+    mockTreeControlService.getActivePauseHoldGate.mockResolvedValue(null);
+    mockTreeControlService.preview.mockResolvedValue({ issues: ["11111111-1111-4111-8111-111111111111", "child"].map(id => ({
+      id, skipped: false, activeHoldIds: ["33333333-3333-4333-8333-333333333333"],
+    })) });
     mockIssueService.getById.mockResolvedValue({
       id: "11111111-1111-4111-8111-111111111111",
       companyId: "company-2",
@@ -142,6 +149,9 @@ describe("issue tree control routes", () => {
       mockIssueService.getById.mockImplementation(async (id: string) =>
         issues.find((issue) => issue.id === id),
       );
+      mockTreeControlService.preview.mockResolvedValue({ issues: issues.map(issue => ({
+        id: issue.id, skipped: false, activeHoldIds: [holdId],
+      })) });
       mockTreeControlService.releaseHold.mockResolvedValue({
         id: holdId,
         mode: "pause",
@@ -289,6 +299,40 @@ describe("issue tree control routes", () => {
     expect(response.body.error).toContain("Resume without waking agents");
     expect(mockTreeControlService.releaseHold).not.toHaveBeenCalled();
     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
+  it("wakes a late descendant outside the historical snapshot but preserves independent and newly acquired holds", async () => {
+    const rootId = "11111111-1111-4111-8111-111111111111";
+    const holdId = "33333333-3333-4333-8333-333333333333";
+    mockIssueService.getById.mockImplementation(async (id: string) => ({
+      id, companyId: "company-2", status: "todo", assigneeAgentId: id,
+    }));
+    mockTreeControlService.getHold.mockResolvedValue({
+      id: holdId, rootIssueId: rootId, mode: "pause", members: [{ issueId: rootId }],
+    });
+    mockTreeControlService.releaseHold.mockResolvedValue({
+      id: holdId, mode: "pause", status: "released", members: [{ issueId: rootId }],
+    });
+    mockTreeControlService.preview.mockResolvedValue({ issues: [
+      { id: rootId, skipped: false, activeHoldIds: [holdId] },
+      { id: "late-child", skipped: false, activeHoldIds: [holdId] },
+      { id: "independent-child", skipped: false, activeHoldIds: [holdId, "independent-hold"] },
+      { id: "newly-held-child", skipped: false, activeHoldIds: [holdId] },
+    ] });
+    mockTreeControlService.getActivePauseHoldGate.mockImplementation(async (_company: string, id: string) =>
+      id === "newly-held-child" ? { holdId: "new-hold" } : null);
+    const app = await createApp({ type: "board", userId: "user-1", companyIds: ["company-2"], source: "session" });
+    const response = await request(app).post(`/api/issues/${rootId}/tree-holds/${holdId}/release`)
+      .send({ metadata: { wakeAgents: true } });
+    expect(response.status).toBe(200);
+    expect(mockTreeControlService.releaseHold).toHaveBeenCalledTimes(1);
+    expect(mockHeartbeatService.wakeup.mock.calls.map(([id]) => id)).toEqual([rootId, "late-child"]);
+    const { params } = new PgDialect().sqlToQuery(mockReplayWhere.mock.calls[0]![0]);
+    expect(params).toContain("late-child");
+    expect(params).not.toContain("independent-child");
+    expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith("late-child", expect.objectContaining({
+      reason: "issue_tree_resumed", contextSnapshot: expect.objectContaining({ issueId: "late-child", holdId }),
+    }));
   });
 
   it("rejects cross-company preview requests with a uniform 404 before calling the preview service", async () => {

@@ -1,0 +1,29 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ❯ src/__tests__/v9-customer-feedback.integration.test.ts (19 tests | 1 failed | 18 skipped) 19656ms
+     × preserves the feedback privacy latch when a general settings write overlaps flag enablement 10317ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v9-customer-feedback.integration.test.ts > V9 native customer feedback on migrated PostgreSQL > preserves the feedback privacy latch when a general settings write overlaps flag enablement
+AssertionError: expected 1 to be greater than or equal to 2
+ ❯ vi.waitFor.timeout src/__tests__/v9-customer-feedback.integration.test.ts:724:32
+    722|                 and query ilike '%instance_settings%'
+    723|                 and ${holderPid} = any(pg_blocking_pids(pid))`);
+    724|             expect(row!.count).toBeGreaterThanOrEqual(minimum);
+       |                                ^
+    725|           }, { timeout: 10_000, interval: 25 });
+    726|         };
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 skipped (19)
+   Start at  09:58:40
+   Duration  58.41s (transform 24.85s, setup 324ms, import 37.88s, tests 19.66s, environment 0ms)
+
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/__tests__/v9-customer-feedback.integration.test.ts -t preserves the feedback privacy latch when a general settings write overlaps flag enablement --maxWorkers=1

@@ -1,0 +1,101 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts (8 tests | 5 failed) 10617ms
+     × immediately withholds derived influence after a source revocation with V7 switched off 1593ms
+     × rebuilds through the existing leased Memory worker, retains versions and requires new review 19ms
+     × erases all derived versions and re-applies source deletion tombstones after restore 22ms
+     × rejects foreign roots, private-to-company promotion, lower sensitivity and agent self-approval 23ms
+     × propagates Context root erasure into run/Task payloads and blocks late restored writes 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > immediately withholds derived influence after a source revocation with V7 switched off
+Error: Memory record not found
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertMemorySourceAccess src/services/memory/memory-service.ts:596:103
+ ❯ src/services/memory/memory-service.ts:2375:9
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ Object.revoke src/services/memory/memory-service.ts:2347:23
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts:85:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > rebuilds through the existing leased Memory worker, retains versions and requires new review
+Error: This feature is not enabled
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertV7Enabled src/services/v7-authorization.ts:7:94
+ ❯ Object.createModel src/services/memory/derived-memory.ts:170:57
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts:93:51
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > erases all derived versions and re-applies source deletion tombstones after restore
+Error: This feature is not enabled
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertV7Enabled src/services/v7-authorization.ts:7:94
+ ❯ Object.createObservation src/services/memory/derived-memory.ts:125:57
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts:105:57
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > rejects foreign roots, private-to-company promotion, lower sensitivity and agent self-approval
+AssertionError: expected Error: This feature is not enabled { …(2) } to match object { status: 403 }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "status": 403,
++ HttpError {
++   "status": 404,
+  }
+
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts:119:78
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > propagates Context root erasure into run/Task payloads and blocks late restored writes
+Error: This feature is not enabled
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertV7Enabled src/services/v7-authorization.ts:7:94
+ ❯ Object.createModel src/services/memory/derived-memory.ts:170:57
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts:125:51
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  5 failed | 40 passed (45)
+   Start at  13:07:57
+   Duration  42.04s (transform 10.51s, setup 189ms, import 18.73s, tests 22.64s, environment 0ms)
+

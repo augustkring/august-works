@@ -1,0 +1,61 @@
+{
+  "parentCommit": "beaefee09",
+  "requirements": [
+    "KRN-01",
+    "CE-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "initialNativeSuites": {
+      "exit": 1,
+      "passed": 41,
+      "failed": 3,
+      "suites": 2,
+      "log": "native-document-tool-source-initial.log"
+    },
+    "parentProductionTaskUpdateControl": {
+      "exit": 1,
+      "failed": 1,
+      "unselected": 25,
+      "log": "native-document-tool-source-parent-control.log"
+    },
+    "ownedAuthorityExecutorAndPersistence": {
+      "exit": 0,
+      "passed": 517,
+      "suites": 3,
+      "log": "native-document-tool-source-owned.log"
+    },
+    "expandedFourSuites": {
+      "exit": 1,
+      "passed": 541,
+      "failed": 1,
+      "suites": 4,
+      "log": "native-document-tool-source-final.log"
+    },
+    "finalNativePersistenceAndReassignment": {
+      "exit": 0,
+      "passed": 44,
+      "suites": 2,
+      "log": "native-document-tool-source-checked.log"
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "native-document-tool-source-types.log"
+    }
+  },
+  "observations": [
+    "The actual read_document owner now uses the existing document getter source callback in the same read that returns the model-visible document. Each call keeps its own exact revision/issue/body hash and nullable retained snapshot. Unknown remains null; a later document revision is never substituted.",
+    "The optional callback is awaited after successful orchestration tool execution and before returning its result. It receives only bounded source metadata and SHA256 of the selected structured JSON result, including ordinary JSON Date serialization. Callback failure withholds that result; other tools do not emit a document capture.",
+    "The original runnerd authority epoch passes a current-run callback, including warm backend rebinding. The current launch event sequence is established by the awaited session admission before tool dispatch. Existing current analytical source checks surround persistence; current lease is rechecked afterward. A revoked document reader epoch cannot return the pending result.",
+    "Persistence follows owned coordinator lease, exact native running run, and exact company/agent/process-start event binding. It appends capture-time nullable actual responsible Human, call/tool/digest and exact source, with256 entries/2MiB bounds. Exact RETURNING acknowledgement and a repeated lease fence detect a suppressed write. Driver diagnostics are replaced by finite private errors. No raw document body/path is added to these facts.",
+    "Parent production reproduces an existing native child/dependency mutation failure. Three issue.update callers discarded their actual run ID, preventing current canonical mutation authority from resolving the actual responsible Human. They now carry the original binding.runId, as the original create path already did. No permission fallback was added. Fixtures use actual User/membership/responsible runs; the conversation-lock negative uses that same real conversation owner.",
+    "Initial fixture failures included an incorrect upsert return wrapper and document fixture leakage into an old exact-count assertion. Both were corrected without changing their assertions. The final expanded run passes541 and finds only an old invented conversation UID mismatch; the final two native suites pass44 after that fixture correction and an additional actual direct-Human revision/foreign-owner control. Across the final stages, all543 distinct cases in the four affected suites pass. Server compilation passes.",
+    "A bounded gpt-6-luna agent implemented the per-call authority callback/tests and repaired native fixture identities. Root reviewed and implemented the owned executor persistence and native caller fixes."
+  ],
+  "limits": [
+    "These are partial selected-tool-result intent facts, not transport acknowledgement, a complete run input receipt, source permission or protocol1 admission. The run protocol remains unchanged. A successful orchestration read may precede a later result-capture failure; its computation receipt is not a delivery receipt.",
+    "The actual PostgreSQL checks cover metadata persistence/lease/owner/rollback/suppression and actual document owners. Executor backend/transport tests use structural mocks; no external provider/host or representative hardware runtime qualification is claimed. UI was unchanged; the built cookie/authenticator browser passed at the preceding upload checkpoint and was not repeated for this runtime-only slice.",
+    "The selected document capture can be unknown. Other tools/runtime/workspace/history sources and full append-only receipt production remain open. These private run-profile facts use existing run retention/erasure; they do not reconstruct historical inputs.",
+    "The six typed/private-Memory/temporal regressions, canonical read/action closure for other projections, physical source/credential lifetimes and broader V10/PR gates remain open. No private-work enablement, full V10/PR readiness, release, merge or deployment is claimed."
+  ]
+}

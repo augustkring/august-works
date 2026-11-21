@@ -1,0 +1,12 @@
+{
+  "status": "passed",
+  "scope": "typed-task-private-sources.integration.test.ts: 19/19 actual PostgreSQL cases, including current Routine/Workflow list/count/search/project policy, exact sessions, source withdrawal, exports, narrow Agent and bounded candidate population. Exact copied source pins define this result; later edits and final full-workspace gates are excluded.",
+  "attempts": "The earlier root-current-typed19-20261026 attempt failed to transform a mid-edit Fabric file and ran no tests; retained in preparation workspace, not a pass.",
+  "files": {
+    "run.log": "347d4da8d6352ad58615d86c4560464284b864c02a0d2964b87fbc407c8db8b9",
+    "run.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "run-source-pins.json": "5ed124edad8bd021f3d4f4518088a99676a5fffaec628e6468d8bcc627c7f328",
+    "run-syntax.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "run-snapshot.log": "2b46a7080705bd4f0944bcbaab0fd4719866e4f05e58b16a76b0bd72bbe0a88f"
+  }
+}

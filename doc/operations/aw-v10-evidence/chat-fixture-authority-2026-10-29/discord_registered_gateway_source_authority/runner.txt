@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/chat-channels.integration.test.ts
+test_pattern=preserves exact Discord source authority through registered Gateway file_revisions updates

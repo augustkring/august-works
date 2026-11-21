@@ -1,0 +1,703 @@
+[WebServer] (node:1298447) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] 
+[WebServer] > @paperclipai/ui@0.3.1 build /workspace/v10-dep-qualification/ui
+[WebServer] > vite build "--outDir" "../server/ui-dist" "--emptyOutDir"
+[WebServer] 
+[WebServer] (node:1298467) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+[WebServer]   - `__dirname` (vite.config.ts:15:30). Use `import.meta.dirname` instead
+[WebServer]   - import "./src/lib/vite-watch" without a file extension (vite.config.ts:5:41). Add the file extension
+[WebServer]   - import "./src/lib/vite-api-proxy" without a file extension (vite.config.ts:6:32). Add the file extension
+[WebServer]   - import "./src/lib/vite-sw-build-id" without a file extension (vite.config.ts:7:44). Add the file extension
+[WebServer]   - import "./src/lib/vite-build-commit" without a file extension (vite.config.ts:8:40). Add the file extension
+[WebServer] Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+[WebServer] Both esbuild and oxc options were set. oxc options will be used and esbuild options will be ignored. The following esbuild options were set: `{
+[WebServer]   keepNames: true,
+[WebServer]   drop: [ 'console', 'debugger' ],
+[WebServer]   legalComments: 'none'
+[WebServer] }`
+[WebServer] vite v8.3.5 building client environment for production...
+[WebServer] transforming...
+[WebServer] Found 4 warnings while optimizing generated CSS:
+[WebServer] 
+[WebServer] Issue #1:
+[WebServer] │   background-color: var(--streamlined-task-detail-bg);
+[WebServer] │ }
+[WebServer] │ ::highlight(paperclip-doc-annotation-open) {
+[WebServer] ┆             ^-- 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?
+[WebServer] ┆
+[WebServer] │   background-color: transparent;
+[WebServer] │   color: inherit;
+[WebServer] 
+[WebServer] Issue #2:
+[WebServer] │   color: inherit;
+[WebServer] │ }
+[WebServer] │ ::highlight(paperclip-doc-annotation-focused) {
+[WebServer] ┆             ^-- 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?
+[WebServer] ┆
+[WebServer] │   background-color: transparent;
+[WebServer] │   color: inherit;
+[WebServer] 
+[WebServer] Issue #3:
+[WebServer] │   color: inherit;
+[WebServer] │ }
+[WebServer] │ ::highlight(paperclip-doc-annotation-stale) {
+[WebServer] ┆             ^-- 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?
+[WebServer] ┆
+[WebServer] │   background-color: transparent;
+[WebServer] │   color: inherit;
+[WebServer] 
+[WebServer] Issue #4:
+[WebServer] │   color: inherit;
+[WebServer] │ }
+[WebServer] │ ::highlight(paperclip-doc-annotation-resolved) {
+[WebServer] ┆             ^-- 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?
+[WebServer] ┆
+[WebServer] │   background-color: transparent;
+[WebServer] │   color: inherit;
+[WebServer] 
+[WebServer] ✓ 8043 modules transformed.
+[WebServer] rendering chunks...
+[WebServer] computing gzip size...
+[WebServer] ../server/ui-dist/index.html                                             9.27 kB │ gzip:     2.70 kB
+[WebServer] ../server/ui-dist/assets/index-BObSrivU.css                            532.14 kB │ gzip:    76.10 kB
+[WebServer] ../server/ui-dist/assets/Costs.production-eySoJWRW.js                    0.06 kB │ gzip:     0.07 kB
+[WebServer] ../server/ui-dist/assets/treemap-WGGIJYW6-CIduz1X1.js                    0.12 kB │ gzip:     0.12 kB
+[WebServer] ../server/ui-dist/assets/pie-WAS4IAKB-BpjgF-0j.js                        0.12 kB │ gzip:     0.12 kB
+[WebServer] ../server/ui-dist/assets/info-A6RAGUB7-Z6ypG_C0.js                       0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/radar-RG4KPBEZ-D5mxR4cc.js                      0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/packet-AYTQ26CC-bQ24UnVK.js                     0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/cynefin-OW5HDTMX-BYcIk6u8.js                    0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/wardley-WFR3VGLG-DdpAXmWT.js                    0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/gitGraph-4MIJSDKK-B6NAq7QT.js                   0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/railroad-74A4TZTK-CxLizjZv.js                   0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/treeView-Q6P3EWNA-B2hmN4jv.js                   0.12 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/railroad-peg-WCYAUIDC-gz3Vg_YL.js               0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/architecture-7GRP2DOG-DmEnny1y.js               0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/railroad-abnf-HS5TGJTU-DiR6Tcmf.js              0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/railroad-ebnf-LZEXJU2U-BGpqaH5S.js              0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/eventmodeling-NTZA5JFV-CQda5Gy6.js              0.13 kB │ gzip:     0.13 kB
+[WebServer] ../server/ui-dist/assets/check-a-idIyBc.js                               0.13 kB │ gzip:     0.14 kB
+[WebServer] ../server/ui-dist/assets/chevron-down-BQkv_Jzg.js                        0.13 kB │ gzip:     0.14 kB
+[WebServer] ../server/ui-dist/assets/chevron-right-nMNghapi.js                       0.14 kB │ gzip:     0.14 kB
+[WebServer] ../server/ui-dist/assets/loader-circle-CBIugiuu.js                       0.15 kB │ gzip:     0.16 kB
+[WebServer] ../server/ui-dist/assets/x-nQFUOEgT.js                                   0.16 kB │ gzip:     0.15 kB
+[WebServer] ../server/ui-dist/assets/clock-Ckcoyl1Q.js                               0.17 kB │ gzip:     0.17 kB
+[WebServer] ../server/ui-dist/assets/iso-B3-tzSvQ.js                                 0.18 kB │ gzip:     0.17 kB
+[WebServer] ../server/ui-dist/assets/channel-DMope_xD.js                             0.20 kB │ gzip:     0.19 kB
+[WebServer] ../server/ui-dist/assets/array-CL5Tisss.js                               0.21 kB │ gzip:     0.18 kB
+[WebServer] ../server/ui-dist/assets/init-BXPE0p7i.js                                0.23 kB │ gzip:     0.19 kB
+[WebServer] ../server/ui-dist/assets/chunk-Y2CYZVJY-OvsAdhaO.js                      0.26 kB │ gzip:     0.17 kB
+[WebServer] ../server/ui-dist/assets/external-link-DIB46n2V.js                       0.26 kB │ gzip:     0.20 kB
+[WebServer] ../server/ui-dist/assets/chunk-XXDRQBXY-BHKklQts.js                      0.29 kB │ gzip:     0.24 kB
+[WebServer] ../server/ui-dist/assets/chunk-2Q5K7J3B-CkPHWFj-.js                      0.30 kB │ gzip:     0.22 kB
+[WebServer] ../server/ui-dist/assets/Agents.production-BldWYayv.js                   0.31 kB │ gzip:     0.25 kB
+[WebServer] ../server/ui-dist/assets/CompanySkills.production-DJR_BnYf.js            0.33 kB │ gzip:     0.25 kB
+[WebServer] ../server/ui-dist/assets/chunk-JWPE2WC7--HEGjv3t.js                      0.33 kB │ gzip:     0.23 kB
+[WebServer] ../server/ui-dist/assets/bot-BndT6Sfc.js                                 0.33 kB │ gzip:     0.23 kB
+[WebServer] ../server/ui-dist/assets/chunk-5VM5RSS4-2H3r6wq0.js                      0.36 kB │ gzip:     0.27 kB
+[WebServer] ../server/ui-dist/assets/diff-C60bAYOU.js                                0.39 kB │ gzip:     0.29 kB
+[WebServer] ../server/ui-dist/assets/useIsFetching-DZbFZRZE.js                       0.40 kB │ gzip:     0.31 kB
+[WebServer] ../server/ui-dist/assets/octagon-alert-BXE9UtbC.js                       0.43 kB │ gzip:     0.26 kB
+[WebServer] ../server/ui-dist/assets/partial-DQfgxqNJ.js                             0.49 kB │ gzip:     0.30 kB
+[WebServer] ../server/ui-dist/assets/flowDiagram-HODETNUW-Eg9EqSQ8.js                0.57 kB │ gzip:     0.31 kB
+[WebServer] ../server/ui-dist/assets/chunk-POPQ4Y6H-DIFW-PHA.js                      0.58 kB │ gzip:     0.40 kB
+[WebServer] ../server/ui-dist/assets/infoDiagram-27XIBGKW-Br3ZE6u5.js                0.65 kB │ gzip:     0.42 kB
+[WebServer] ../server/ui-dist/assets/brainfuck-NEHkmXMc.js                           0.70 kB │ gzip:     0.38 kB
+[WebServer] ../server/ui-dist/assets/instanceSettings-Dq572614.js                    0.74 kB │ gzip:     0.35 kB
+[WebServer] ../server/ui-dist/assets/properties-BKTTDgau.js                          0.77 kB │ gzip:     0.40 kB
+[WebServer] ../server/ui-dist/assets/workflow-CPbuW54w.js                            0.78 kB │ gzip:     0.42 kB
+[WebServer] ../server/ui-dist/assets/classDiagram-ZZMXUADV-CjWPu51C.js               0.79 kB │ gzip:     0.46 kB
+[WebServer] ../server/ui-dist/assets/classDiagram-v2-VYDZK3BY-CjWPu51C.js            0.79 kB │ gzip:     0.46 kB
+[WebServer] ../server/ui-dist/assets/stateDiagram-v2-MP3YSRHH-CfMVoz2-.js            0.80 kB │ gzip:     0.46 kB
+[WebServer] ../server/ui-dist/assets/swimlanesDiagram-VR7AAH4N-CKPMflqp.js           0.83 kB │ gzip:     0.48 kB
+[WebServer] ../server/ui-dist/assets/business-metric-targets-Cno3mHA6.js             0.87 kB │ gzip:     0.43 kB
+[WebServer] ../server/ui-dist/assets/cmake-koz-qBlo.js                               0.92 kB │ gzip:     0.54 kB
+[WebServer] ../server/ui-dist/assets/asciiarmor-DFLNSgns.js                          0.92 kB │ gzip:     0.48 kB
+[WebServer] ../server/ui-dist/assets/rolldown-runtime-D6McoBPk.js                    0.94 kB │ gzip:     0.52 kB
+[WebServer] ../server/ui-dist/assets/protobuf-UWh8gh_j.js                            0.97 kB │ gzip:     0.59 kB
+[WebServer] ../server/ui-dist/assets/definition-BGYtrrly.js                          0.99 kB │ gzip:     0.58 kB
+[WebServer] ../server/ui-dist/assets/solr-Dj8ahEwG.js                                1.06 kB │ gzip:     0.55 kB
+[WebServer] ../server/ui-dist/assets/ExperienceToolUI-DyO47V3q.js                    1.06 kB │ gzip:     0.64 kB
+[WebServer] ../server/ui-dist/assets/line-DECjHZ3g.js                                1.08 kB │ gzip:     0.55 kB
+[WebServer] ../server/ui-dist/assets/sizeCapture-INFHLROL-XURNLuv_.js                1.09 kB │ gzip:     0.58 kB
+[WebServer] ../server/ui-dist/assets/troff-Lns35Xcq.js                               1.09 kB │ gzip:     0.51 kB
+[WebServer] ../server/ui-dist/assets/enterprise-DTld-Edr.js                          1.11 kB │ gzip:     0.44 kB
+[WebServer] ../server/ui-dist/assets/http-0jwMmfWP.js                                1.12 kB │ gzip:     0.55 kB
+[WebServer] ../server/ui-dist/assets/useV9CurrentAccount-B0N4B2mj.js                 1.22 kB │ gzip:     0.65 kB
+[WebServer] ../server/ui-dist/assets/spreadsheet-B8doD_pL.js                         1.24 kB │ gzip:     0.59 kB
+[WebServer] ../server/ui-dist/assets/toml-Civ2fTsu.js                                1.24 kB │ gzip:     0.60 kB
+[WebServer] ../server/ui-dist/assets/ordinal-BJyFM1v8.js                             1.39 kB │ gzip:     0.67 kB
+[WebServer] ../server/ui-dist/assets/chunk-GVQU2GXP-DenExfrf.js                      1.53 kB │ gzip:     0.86 kB
+[WebServer] ../server/ui-dist/assets/mbox-JGl1Fgvq.js                                1.54 kB │ gzip:     0.74 kB
+[WebServer] ../server/ui-dist/assets/clipboard-Dp1lCbIk.js                           1.64 kB │ gzip:     0.92 kB
+[WebServer] ../server/ui-dist/assets/factor-CM3-9V3b.js                              1.67 kB │ gzip:     0.61 kB
+[WebServer] ../server/ui-dist/assets/railroadDiagram-O6MQD6OU-ZDpEft6d.js            1.67 kB │ gzip:     0.77 kB
+[WebServer] ../server/ui-dist/assets/rpm-Csj9nLHl.js                                 1.71 kB │ gzip:     0.88 kB
+[WebServer] ../server/ui-dist/assets/preload-helper-Bq-5Tx7W.js                      1.77 kB │ gzip:     0.94 kB
+[WebServer] ../server/ui-dist/assets/readiness-B0YjF5qf.js                           1.80 kB │ gzip:     0.90 kB
+[WebServer] ../server/ui-dist/assets/sieve-CcvsXPZo.js                               1.83 kB │ gzip:     0.87 kB
+[WebServer] ../server/ui-dist/assets/folder-CtwObi66.js                              1.84 kB │ gzip:     0.85 kB
+[WebServer] ../server/ui-dist/assets/StatusGlyph-CCYRTPEE.js                         1.84 kB │ gzip:     0.95 kB
+[WebServer] ../server/ui-dist/assets/z80-CB2cGLew.js                                 1.85 kB │ gzip:     0.88 kB
+[WebServer] ../server/ui-dist/assets/abnfDiagram-VCTEODGH-DcqO20aT.js                1.86 kB │ gzip:     0.90 kB
+[WebServer] ../server/ui-dist/assets/provider-capabilities-BvnP8j0k.js               1.91 kB │ gzip:     0.83 kB
+[WebServer] ../server/ui-dist/assets/dockerfile-BttNdtK0.js                          1.93 kB │ gzip:     0.65 kB
+[WebServer] ../server/ui-dist/assets/chunk-P2QGCYS3-Dvgkvnoe.js                      1.96 kB │ gzip:     0.97 kB
+[WebServer] ../server/ui-dist/assets/eiffel-DuLnr4-r.js                              1.97 kB │ gzip:     1.02 kB
+[WebServer] ../server/ui-dist/assets/chunk-F27PBJKO-BU9U-Yh9.js                      2.02 kB │ gzip:     0.91 kB
+[WebServer] ../server/ui-dist/assets/pegDiagram-XKGWAZYB-CRwzmfpZ.js                 2.03 kB │ gzip:     0.94 kB
+[WebServer] ../server/ui-dist/assets/mathematica-CE9SaVsW.js                         2.07 kB │ gzip:     0.90 kB
+[WebServer] ../server/ui-dist/assets/dist-YH7EZ8d1.js                                2.08 kB │ gzip:     1.31 kB
+[WebServer] ../server/ui-dist/assets/ebnf-bm-I2WIh.js                                2.08 kB │ gzip:     0.86 kB
+[WebServer] ../server/ui-dist/assets/ebnfDiagram-PWID7BFC-CqH4JqQG.js                2.08 kB │ gzip:     0.89 kB
+[WebServer] ../server/ui-dist/assets/elm-njbaCU-L.js                                 2.12 kB │ gzip:     0.95 kB
+[WebServer] ../server/ui-dist/assets/turtle-DTIS1YQ7.js                              2.17 kB │ gzip:     1.01 kB
+[WebServer] ../server/ui-dist/assets/mumps-C7oS353s.js                               2.20 kB │ gzip:     1.07 kB
+[WebServer] ../server/ui-dist/assets/ntriples-5ckCopnn.js                            2.22 kB │ gzip:     0.81 kB
+[WebServer] ../server/ui-dist/assets/smalltalk-Cmg-4mjQ.js                           2.24 kB │ gzip:     0.96 kB
+[WebServer] ../server/ui-dist/assets/dtd-CCVZU5Da.js                                 2.26 kB │ gzip:     0.98 kB
+[WebServer] ../server/ui-dist/assets/fcl-nWsMJ92o.js                                 2.27 kB │ gzip:     1.04 kB
+[WebServer] ../server/ui-dist/assets/yacas-BG9ha7tU.js                               2.35 kB │ gzip:     1.19 kB
+[WebServer] ../server/ui-dist/assets/dist-BWAQU_8v.js                                2.39 kB │ gzip:     1.09 kB
+[WebServer] ../server/ui-dist/assets/apl-MHzTCvfx.js                                 2.41 kB │ gzip:     1.30 kB
+[WebServer] ../server/ui-dist/assets/octave-D1J2QQNt.js                              2.48 kB │ gzip:     1.20 kB
+[WebServer] ../server/ui-dist/assets/commonlisp-C4OOCwkD.js                          2.49 kB │ gzip:     1.20 kB
+[WebServer] ../server/ui-dist/assets/pascal-B-I6JP0Y.js                              2.50 kB │ gzip:     1.29 kB
+[WebServer] ../server/ui-dist/assets/simple-mode-B79cVo-x.js                         2.52 kB │ gzip:     1.22 kB
+[WebServer] ../server/ui-dist/assets/path-D6mommQw.js                                2.53 kB │ gzip:     1.14 kB
+[WebServer] ../server/ui-dist/assets/tcl-RZa1cqc-.js                                 2.56 kB │ gzip:     1.33 kB
+[WebServer] ../server/ui-dist/assets/webidl-ChvzbZ5-.js                              2.64 kB │ gzip:     1.32 kB
+[WebServer] ../server/ui-dist/assets/forth-DSRmH8Tm.js                               2.68 kB │ gzip:     1.41 kB
+[WebServer] ../server/ui-dist/assets/puppet-BAHVzCkO.js                              2.69 kB │ gzip:     1.28 kB
+[WebServer] ../server/ui-dist/assets/pig-FQI0W3S3.js                                 2.70 kB │ gzip:     1.48 kB
+[WebServer] ../server/ui-dist/assets/dist-DoBOMP6Y.js                                2.71 kB │ gzip:     1.55 kB
+[WebServer] ../server/ui-dist/assets/button-CCVgGbBn.js                              2.78 kB │ gzip:     1.28 kB
+[WebServer] ../server/ui-dist/assets/shell-BSKClwid.js                               2.80 kB │ gzip:     1.33 kB
+[WebServer] ../server/ui-dist/assets/v9-feature-flags-D5PJ9HcQ.js                    2.87 kB │ gzip:     1.30 kB
+[WebServer] ../server/ui-dist/assets/velocity-BIIn-Nl2.js                            2.88 kB │ gzip:     1.22 kB
+[WebServer] ../server/ui-dist/assets/tiddlywiki-C9bm_Oju.js                          3.04 kB │ gzip:     1.20 kB
+[WebServer] ../server/ui-dist/assets/modelica-5XCgKQt8.js                            3.04 kB │ gzip:     1.41 kB
+[WebServer] ../server/ui-dist/assets/r-CktBKya9.js                                   3.14 kB │ gzip:     1.47 kB
+[WebServer] ../server/ui-dist/assets/oz-CPsllMDD.js                                  3.17 kB │ gzip:     1.42 kB
+[WebServer] ../server/ui-dist/assets/BusinessExperimentMetricPicker-DAqRTM7q.js      3.35 kB │ gzip:     1.55 kB
+[WebServer] ../server/ui-dist/assets/dialog-DSVnY8m2.js                              3.37 kB │ gzip:     1.27 kB
+[WebServer] ../server/ui-dist/assets/stex-CW6K5Nmu.js                                3.44 kB │ gzip:     1.36 kB
+[WebServer] ../server/ui-dist/assets/dist-BDnkwdyH.js                                3.45 kB │ gzip:     1.76 kB
+[WebServer] ../server/ui-dist/assets/NewGovernedSkill-BEA3oJKu.js                    3.55 kB │ gzip:     1.36 kB
+[WebServer] ../server/ui-dist/assets/vhdl-Cn8cC8Yb.js                                3.60 kB │ gzip:     1.63 kB
+[WebServer] ../server/ui-dist/assets/lua-Vher-70I.js                                 3.61 kB │ gzip:     1.56 kB
+[WebServer] ../server/ui-dist/assets/tiki-DJOT-rFT.js                                3.63 kB │ gzip:     1.45 kB
+[WebServer] ../server/ui-dist/assets/mscgen-mVFg19ri.js                              3.71 kB │ gzip:     1.09 kB
+[WebServer] ../server/ui-dist/assets/v5-feature-flags-DE9-Ob2d.js                    3.71 kB │ gzip:     1.43 kB
+[WebServer] ../server/ui-dist/assets/cypher-z2oFsVv2.js                              3.73 kB │ gzip:     1.63 kB
+[WebServer] ../server/ui-dist/assets/arc-D5D5GoGh.js                                 3.75 kB │ gzip:     1.62 kB
+[WebServer] ../server/ui-dist/assets/sparql-LAJYmgfk.js                              3.77 kB │ gzip:     1.76 kB
+[WebServer] ../server/ui-dist/assets/d-Dkt6y7AQ.js                                   3.97 kB │ gzip:     1.82 kB
+[WebServer] ../server/ui-dist/assets/coffeescript-CXYzYf-Y.js                        4.09 kB │ gzip:     1.81 kB
+[WebServer] ../server/ui-dist/assets/vb-BO8UacKu.js                                  4.15 kB │ gzip:     1.93 kB
+[WebServer] ../server/ui-dist/assets/asn1-CfPVWRYE.js                                4.20 kB │ gzip:     2.08 kB
+[WebServer] ../server/ui-dist/assets/swift-BD82LMDK.js                               4.22 kB │ gzip:     1.93 kB
+[WebServer] ../server/ui-dist/assets/livescript-DSHsJPcD.js                          4.22 kB │ gzip:     1.70 kB
+[WebServer] ../server/ui-dist/assets/dylan-3pmV5wzs.js                               4.23 kB │ gzip:     1.75 kB
+[WebServer] ../server/ui-dist/assets/q-Cooe-Nh8.js                                   4.31 kB │ gzip:     1.84 kB
+[WebServer] ../server/ui-dist/assets/ttcn-cfg-B8qhhp6o.js                            4.31 kB │ gzip:     1.84 kB
+[WebServer] ../server/ui-dist/assets/haskell-CHSpCNOy.js                             4.38 kB │ gzip:     2.03 kB
+[WebServer] ../server/ui-dist/assets/diagram-Z3DM3KII-CIksfp6V.js                    4.44 kB │ gzip:     1.94 kB
+[WebServer] ../server/ui-dist/assets/groovy-ByXGF8cx.js                              4.47 kB │ gzip:     1.94 kB
+[WebServer] ../server/ui-dist/assets/ConfigureBuiltInAgentModal-C6K3Uhar.js          4.47 kB │ gzip:     2.05 kB
+[WebServer] ../server/ui-dist/assets/asterisk-CJ4OeA7Y.js                            4.58 kB │ gzip:     1.85 kB
+[WebServer] ../server/ui-dist/assets/model-DL5biheO.js                               4.74 kB │ gzip:     2.19 kB
+[WebServer] ../server/ui-dist/assets/gas-ByO0qYMr.js                                 4.74 kB │ gzip:     1.39 kB
+[WebServer] ../server/ui-dist/assets/fortran-DHJe28ev.js                             4.80 kB │ gzip:     2.12 kB
+[WebServer] ../server/ui-dist/assets/agent-retirement-Db08y_bc.js                    4.88 kB │ gzip:     2.27 kB
+[WebServer] ../server/ui-dist/assets/mllike-DuNQsEw8.js                              5.02 kB │ gzip:     1.67 kB
+[WebServer] ../server/ui-dist/assets/ttcn-7vlxVTUK.js                                5.09 kB │ gzip:     2.26 kB
+[WebServer] ../server/ui-dist/assets/dist-B3dt9U3A.js                                5.14 kB │ gzip:     2.46 kB
+[WebServer] ../server/ui-dist/assets/defaultLocale-C2Bpu8Ih.js                       5.21 kB │ gzip:     2.42 kB
+[WebServer] ../server/ui-dist/assets/linear-DtHXVOn7.js                              5.25 kB │ gzip:     2.23 kB
+[WebServer] ../server/ui-dist/assets/dist-D4eDFHwN.js                                5.28 kB │ gzip:     1.84 kB
+[WebServer] ../server/ui-dist/assets/ecl-BIv3PrZb.js                                 5.38 kB │ gzip:     2.44 kB
+[WebServer] ../server/ui-dist/assets/crystal-BlJXQDvy.js                             5.42 kB │ gzip:     2.22 kB
+[WebServer] ../server/ui-dist/assets/ruby-bGx9eo-K.js                                5.50 kB │ gzip:     2.32 kB
+[WebServer] ../server/ui-dist/assets/experience-CYA8bAqq.js                          5.58 kB │ gzip:     2.38 kB
+[WebServer] ../server/ui-dist/assets/CustomerSupport-EnmUEUV7.js                     5.66 kB │ gzip:     2.08 kB
+[WebServer] ../server/ui-dist/assets/julia-KVJvUu_F.js                               5.69 kB │ gzip:     2.30 kB
+[WebServer] ../server/ui-dist/assets/ExperienceProjectDraft-Gxw3AD71.js              5.84 kB │ gzip:     2.20 kB
+[WebServer] ../server/ui-dist/assets/ExperienceTaskDraft-D_mvxKqI.js                 5.86 kB │ gzip:     2.25 kB
+[WebServer] ../server/ui-dist/assets/SecurityEvents-CCaLQNGh.js                      5.89 kB │ gzip:     2.41 kB
+[WebServer] ../server/ui-dist/assets/companySkills-Ucqc5LpE.js                       5.94 kB │ gzip:     1.15 kB
+[WebServer] ../server/ui-dist/assets/vbscript-DWLru3lT.js                            6.03 kB │ gzip:     2.71 kB
+[WebServer] ../server/ui-dist/assets/mirc-BGWbO906.js                                6.11 kB │ gzip:     2.82 kB
+[WebServer] ../server/ui-dist/assets/MyFeedback-DiOym62w.js                          6.17 kB │ gzip:     2.62 kB
+[WebServer] ../server/ui-dist/assets/diagram-UQ7AKVKN-nvtgcthN.js                    6.32 kB │ gzip:     2.71 kB
+[WebServer] ../server/ui-dist/assets/cobol-Bo8Zw9gB.js                               6.38 kB │ gzip:     3.08 kB
+[WebServer] ../server/ui-dist/assets/chunk-PWAF6VOD-BGM5wFL6.js                      6.44 kB │ gzip:     3.00 kB
+[WebServer] ../server/ui-dist/assets/pieDiagram-E7YTZNPT-DHc9I3yo.js                 6.54 kB │ gzip:     2.77 kB
+[WebServer] ../server/ui-dist/assets/scheme-DcjG9bAf.js                              6.67 kB │ gzip:     2.55 kB
+[WebServer] ../server/ui-dist/assets/AgentAvatar-DIfyI4Gx.js                         6.68 kB │ gzip:     2.84 kB
+[WebServer] ../server/ui-dist/assets/AgentPause-D4Vb4clx.js                          6.72 kB │ gzip:     2.56 kB
+[WebServer] ../server/ui-dist/assets/python-C2DOnsac.js                              6.84 kB │ gzip:     2.91 kB
+[WebServer] ../server/ui-dist/assets/AgentRetirement-mGT70W1_.js                     7.01 kB │ gzip:     2.53 kB
+[WebServer] ../server/ui-dist/assets/nsis-KFC6hioG.js                                7.06 kB │ gzip:     3.08 kB
+[WebServer] ../server/ui-dist/assets/xquery-BKN7qEbU.js                              7.07 kB │ gzip:     2.80 kB
+[WebServer] ../server/ui-dist/assets/customer-support-BBdvNPZU.js                    7.10 kB │ gzip:     2.95 kB
+[WebServer] ../server/ui-dist/assets/queryClient-CAXh8Mmt.js                         7.16 kB │ gzip:     2.25 kB
+[WebServer] ../server/ui-dist/assets/textile-C-BY_OGF.js                             7.29 kB │ gzip:     2.63 kB
+[WebServer] ../server/ui-dist/assets/pug-C20tNwmy.js                                 7.53 kB │ gzip:     2.34 kB
+[WebServer] ../server/ui-dist/assets/nginx-DXVlpyCz.js                               7.56 kB │ gzip:     2.84 kB
+[WebServer] ../server/ui-dist/assets/AgentMonitor-Cx-xN_2x.js                        7.62 kB │ gzip:     2.68 kB
+[WebServer] ../server/ui-dist/assets/StatusIcon-BLmFfYNC.js                          8.04 kB │ gzip:     3.45 kB
+[WebServer] ../server/ui-dist/assets/MemoryMaintenanceHistory-SWfaOdV2.js            8.06 kB │ gzip:     2.97 kB
+[WebServer] ../server/ui-dist/assets/MaintenanceHistory-B3qmh9Nv.js                  8.17 kB │ gzip:     2.80 kB
+[WebServer] ../server/ui-dist/assets/powershell-BAu6x78A.js                          8.18 kB │ gzip:     3.48 kB
+[WebServer] ../server/ui-dist/assets/v7-feature-flags-D0ZihWlv.js                    8.22 kB │ gzip:     2.83 kB
+[WebServer] ../server/ui-dist/assets/ExperienceMeasures-RHnfbcYC.js                  8.30 kB │ gzip:     3.25 kB
+[WebServer] ../server/ui-dist/assets/diagram-S7CK7UJ4-9JWjQKpE.js                    8.57 kB │ gzip:     3.81 kB
+[WebServer] ../server/ui-dist/assets/erlang-CuhOC2I8.js                              8.57 kB │ gzip:     3.16 kB
+[WebServer] ../server/ui-dist/assets/status-colors-C6gjYtMb.js                       8.59 kB │ gzip:     1.82 kB
+[WebServer] ../server/ui-dist/assets/haxe-P2jh68ck.js                                8.80 kB │ gzip:     3.38 kB
+[WebServer] ../server/ui-dist/assets/verilog-BVYlmXGg.js                             8.82 kB │ gzip:     3.74 kB
+[WebServer] ../server/ui-dist/assets/dist-BXoB5t8y.js                                8.97 kB │ gzip:     3.90 kB
+[WebServer] ../server/ui-dist/assets/sas-Drou_EQ9.js                                 9.46 kB │ gzip:     4.19 kB
+[WebServer] ../server/ui-dist/assets/src-B1u6nYN5.js                                 9.55 kB │ gzip:     4.00 kB
+[WebServer] ../server/ui-dist/assets/chunk-L3NEJ4N5-BlnI5Qnk.js                      9.88 kB │ gzip:     2.69 kB
+[WebServer] ../server/ui-dist/assets/perl-CI8WIWBi.js                                9.97 kB │ gzip:     3.63 kB
+[WebServer] ../server/ui-dist/assets/gherkin-CwOmHL5K.js                            10.26 kB │ gzip:     5.17 kB
+[WebServer] ../server/ui-dist/assets/cynefinDiagram-5FMLGOSQ-BRGn8IJv.js            10.41 kB │ gzip:     3.73 kB
+[WebServer] ../server/ui-dist/assets/RolePacks-D59t1pVI.js                          10.41 kB │ gzip:     2.86 kB
+[WebServer] ../server/ui-dist/assets/OrgChart.production-C27umf5X.js                10.46 kB │ gzip:     3.94 kB
+[WebServer] ../server/ui-dist/assets/stateDiagram-D77RDMKH-Cl9jhkD2.js              10.81 kB │ gzip:     3.83 kB
+[WebServer] ../server/ui-dist/assets/clojure-DFaIEz5O.js                            11.00 kB │ gzip:     4.19 kB
+[WebServer] ../server/ui-dist/assets/dagre-GXQ25YYZ-ZffGxP4-.js                     11.08 kB │ gzip:     4.23 kB
+[WebServer] ../server/ui-dist/assets/diagram-VSXAHHWV-B4z6_ZmO.js                   11.59 kB │ gzip:     4.34 kB
+[WebServer] ../server/ui-dist/assets/idl-DTVVj6r5.js                                11.75 kB │ gzip:     4.73 kB
+[WebServer] ../server/ui-dist/assets/dist-BhITMUB9.js                               12.33 kB │ gzip:     4.52 kB
+[WebServer] ../server/ui-dist/assets/dist-DZgNtG8a.js                               12.83 kB │ gzip:     5.74 kB
+[WebServer] ../server/ui-dist/assets/CompanyActivity.production-CMrE94ka.js         13.17 kB │ gzip:     4.45 kB
+[WebServer] ../server/ui-dist/assets/Portfolio-CnsVm-bA.js                          13.95 kB │ gzip:     3.89 kB
+[WebServer] ../server/ui-dist/assets/createLucideIcon-BqxdEa8D.js                   14.19 kB │ gzip:     5.29 kB
+[WebServer] ../server/ui-dist/assets/dist-CXeuJs-w.js                               15.00 kB │ gzip:     6.12 kB
+[WebServer] ../server/ui-dist/assets/Playbooks-qAQ2_2aa.js                          15.18 kB │ gzip:     4.01 kB
+[WebServer] ../server/ui-dist/assets/chunk-SVP7TREG-kVsw3kT6.js                     15.90 kB │ gzip:     4.49 kB
+[WebServer] ../server/ui-dist/assets/dist-C9_V7e_t.js                               16.37 kB │ gzip:     7.55 kB
+[WebServer] ../server/ui-dist/assets/diagram-VX7I27RA-Cvn2EHQe.js                   16.84 kB │ gzip:     6.03 kB
+[WebServer] ../server/ui-dist/assets/ishikawaDiagram-5VMMS53U-Cn0xb2u-.js           17.94 kB │ gzip:     6.82 kB
+[WebServer] ../server/ui-dist/assets/mermaid-parser.core-M--q8VDe.js                18.53 kB │ gzip:     4.20 kB
+[WebServer] ../server/ui-dist/assets/javascript-Cblpdx44.js                         19.01 kB │ gzip:     6.65 kB
+[WebServer] ../server/ui-dist/assets/Enterprise-CcXcs0_D.js                         19.03 kB │ gzip:     4.98 kB
+[WebServer] ../server/ui-dist/assets/kanban-definition-UXKFOSKX-tC74CHXt.js         20.88 kB │ gzip:     7.43 kB
+[WebServer] ../server/ui-dist/assets/dist-DPrdcOq2.js                               21.07 kB │ gzip:     9.55 kB
+[WebServer] ../server/ui-dist/assets/dist-D4dnwuVi.js                               21.16 kB │ gzip:     7.26 kB
+[WebServer] ../server/ui-dist/assets/NewAgent-CtZuKerV.js                           21.29 kB │ gzip:     7.37 kB
+[WebServer] ../server/ui-dist/assets/dist-ZLgJfnCn.js                               21.34 kB │ gzip:     9.89 kB
+[WebServer] ../server/ui-dist/assets/ManagementReviews-Cj4ATGcR.js                  21.85 kB │ gzip:     6.37 kB
+[WebServer] ../server/ui-dist/assets/SkillGovernance-DpT7hxrt.js                    22.55 kB │ gzip:     5.65 kB
+[WebServer] ../server/ui-dist/assets/dist-DZGpgg3X.js                               23.21 kB │ gzip:    10.53 kB
+[WebServer] ../server/ui-dist/assets/clike-CIx9nZSv.js                              23.27 kB │ gzip:     8.28 kB
+[WebServer] ../server/ui-dist/assets/AgentRuntimeFabric-C0anTG8e.js                 23.95 kB │ gzip:     6.19 kB
+[WebServer] ../server/ui-dist/assets/CustomerSupportCases-DweZOrl9.js               24.06 kB │ gzip:     6.66 kB
+[WebServer] ../server/ui-dist/assets/mindmap-definition-YA3MSWOX-C3Xne1H1.js        24.09 kB │ gzip:     8.24 kB
+[WebServer] ../server/ui-dist/assets/journeyDiagram-3NMN7TZE-BzvP99a7.js            24.11 kB │ gzip:     8.50 kB
+[WebServer] ../server/ui-dist/assets/sankeyDiagram-P5KCCOFB-CbSQ6zc1.js             24.78 kB │ gzip:     9.20 kB
+[WebServer] ../server/ui-dist/assets/character-CguPM7IG.js                          24.98 kB │ gzip:     2.50 kB
+[WebServer] ../server/ui-dist/assets/StrategyExecution-VlCYUT4K.js                  25.67 kB │ gzip:     7.19 kB
+[WebServer] ../server/ui-dist/assets/wardleyDiagram-VM6X3IG4-CpkHmm8t.js            26.03 kB │ gzip:     6.96 kB
+[WebServer] ../server/ui-dist/assets/CustomAgent-BY1L5U_V.js                        26.04 kB │ gzip:     6.57 kB
+[WebServer] ../server/ui-dist/assets/tooltip-DF3Y58z0.js                            26.21 kB │ gzip:     7.31 kB
+[WebServer] ../server/ui-dist/assets/stylus-BS-Ienrc.js                             26.36 kB │ gzip:     8.97 kB
+[WebServer] ../server/ui-dist/assets/CompanyExport-jEAit4zw.js                      26.37 kB │ gzip:     9.30 kB
+[WebServer] ../server/ui-dist/assets/dist-Bs8B1orN.js                               26.49 kB │ gzip:     8.96 kB
+[WebServer] ../server/ui-dist/assets/graphlib-DHhK3saS.js                           26.69 kB │ gzip:     9.56 kB
+[WebServer] ../server/ui-dist/assets/css-DEZwfVpY.js                                27.41 kB │ gzip:     8.70 kB
+[WebServer] ../server/ui-dist/assets/AgentPackages-LAzdl87O.js                      28.37 kB │ gzip:     9.54 kB
+[WebServer] ../server/ui-dist/assets/rough.esm-DnC5Tr1g.js                          28.63 kB │ gzip:     9.68 kB
+[WebServer] ../server/ui-dist/assets/dist-DAStEcd8.js                               28.69 kB │ gzip:    13.08 kB
+[WebServer] ../server/ui-dist/assets/dist-Xc3I6gtU.js                               29.22 kB │ gzip:    11.99 kB
+[WebServer] ../server/ui-dist/assets/agent-authoring-DbKfRPjB.js                    29.23 kB │ gzip:     7.92 kB
+[WebServer] ../server/ui-dist/assets/FeedbackTriage-B_E8vytd.js                     29.59 kB │ gzip:     7.46 kB
+[WebServer] ../server/ui-dist/assets/gitGraphDiagram-WWUBYQGX-D39A7WW4.js           29.62 kB │ gzip:     8.81 kB
+[WebServer] ../server/ui-dist/assets/Routines.production-JYNgkxlp.js                30.29 kB │ gzip:     8.76 kB
+[WebServer] ../server/ui-dist/assets/CrossProjectPlanning-B1R4mDXo.js               30.79 kB │ gzip:     8.47 kB
+[WebServer] ../server/ui-dist/assets/dist-BX-OCtve.js                               30.98 kB │ gzip:    12.88 kB
+[WebServer] ../server/ui-dist/assets/erDiagram-RLTQ6QDP-CzOzNGfL.js                 31.54 kB │ gzip:    10.94 kB
+[WebServer] ../server/ui-dist/assets/timeline-definition-24CTP7MA-BP3dQ7dF.js       31.56 kB │ gzip:    10.47 kB
+[WebServer] ../server/ui-dist/assets/requirementDiagram-BXWQKSXE-u1iUF269.js        31.72 kB │ gzip:    10.06 kB
+[WebServer] ../server/ui-dist/assets/dist-C2jegCUe.js                               33.11 kB │ gzip:    13.53 kB
+[WebServer] ../server/ui-dist/assets/BusinessForecasts-CT-esDfd.js                  33.52 kB │ gzip:     8.83 kB
+[WebServer] ../server/ui-dist/assets/chunk-75Z2AOVW-D-ticuPf.js                     33.99 kB │ gzip:     9.38 kB
+[WebServer] ../server/ui-dist/assets/quadrantDiagram-AXDQQJYC-DEWaQ1xw.js           34.86 kB │ gzip:    10.15 kB
+[WebServer] ../server/ui-dist/assets/BusinessMetrics-CxzPggOp.js                    36.33 kB │ gzip:     9.38 kB
+[WebServer] ../server/ui-dist/assets/chunk-OSK3NFVY-Q7YbRApv.js                     37.16 kB │ gzip:     8.18 kB
+[WebServer] ../server/ui-dist/assets/sql-C3kWxFGw.js                                37.23 kB │ gzip:    11.10 kB
+[WebServer] ../server/ui-dist/assets/ProcessIntelligence-D7ns8Glw.js                38.12 kB │ gzip:     9.90 kB
+[WebServer] ../server/ui-dist/assets/chunk-IMKFNOWR-CbwMaL2C.js                     38.64 kB │ gzip:    12.73 kB
+[WebServer] ../server/ui-dist/assets/dist-xQwUswee.js                               40.84 kB │ gzip:    17.02 kB
+[WebServer] ../server/ui-dist/assets/dagre-nskkcaRw.js                              41.50 kB │ gzip:    15.41 kB
+[WebServer] ../server/ui-dist/assets/CausalClaims-LioxpoON.js                       42.67 kB │ gzip:    11.51 kB
+[WebServer] ../server/ui-dist/assets/blockDiagram-I7D4REHJ-CUt9wiNg.js              42.89 kB │ gzip:    13.89 kB
+[WebServer] ../server/ui-dist/assets/label-D6jsbveH.js                              43.15 kB │ gzip:    15.17 kB
+[WebServer] ../server/ui-dist/assets/vennDiagram-4TSXK5OY-Dd7D0nA7.js               43.76 kB │ gzip:    16.51 kB
+[WebServer] ../server/ui-dist/assets/HireAgent-CUq_cKO1.js                          44.58 kB │ gzip:    10.37 kB
+[WebServer] ../server/ui-dist/assets/dist-DyyIM2uF.js                               45.51 kB │ gzip:    19.64 kB
+[WebServer] ../server/ui-dist/assets/RoutineDetail.production-CjrhePyw.js           45.51 kB │ gzip:    12.53 kB
+[WebServer] ../server/ui-dist/assets/Activation-Ty7A22nC.js                         45.61 kB │ gzip:    11.13 kB
+[WebServer] ../server/ui-dist/assets/dist-D34s4cqQ.js                               45.80 kB │ gzip:    16.14 kB
+[WebServer] ../server/ui-dist/assets/xychartDiagram-S5SC5T6Z-Eqc7YgOP.js            46.13 kB │ gzip:    12.88 kB
+[WebServer] ../server/ui-dist/assets/BusinessExperiments-PtaTDllh.js                48.65 kB │ gzip:    12.53 kB
+[WebServer] ../server/ui-dist/assets/chunk-TICWLB2K-COMTxAKk.js                     49.71 kB │ gzip:    16.12 kB
+[WebServer] ../server/ui-dist/assets/chunk-GMAD6QVW-C3C-mfPp.js                     53.50 kB │ gzip:    17.54 kB
+[WebServer] ../server/ui-dist/assets/AgentDraftReview-O7Ga88b1.js                   53.52 kB │ gzip:    12.33 kB
+[WebServer] ../server/ui-dist/assets/chunk-SHT3W25Y-DFATYY09.js                     62.23 kB │ gzip:    20.28 kB
+[WebServer] ../server/ui-dist/assets/BusinessScenarios-BEOir7H1.js                  63.25 kB │ gzip:    15.18 kB
+[WebServer] ../server/ui-dist/assets/c4Diagram-7LVT6UL2-CI3EZU_A.js                 66.11 kB │ gzip:    19.12 kB
+[WebServer] ../server/ui-dist/assets/dist-DpmnjHX9.js                               70.94 kB │ gzip:    26.19 kB
+[WebServer] ../server/ui-dist/assets/zap-D2NwbaHj.js                                71.13 kB │ gzip:    25.77 kB
+[WebServer] ../server/ui-dist/assets/ganttDiagram-EL5Y4UJY-BCY_wkDA.js              73.96 kB │ gzip:    24.94 kB
+[WebServer] ../server/ui-dist/assets/cose-bilkent-JH36ORCC-C1HnfV46.js              84.25 kB │ gzip:    23.24 kB
+[WebServer] ../server/ui-dist/assets/dist-DnGQm3hk.js                               85.29 kB │ gzip:    34.05 kB
+[WebServer] ../server/ui-dist/assets/router-D7nQ8VIX.js                             89.27 kB │ gzip:    30.79 kB
+[WebServer] ../server/ui-dist/assets/dist-BFg8nVHP.js                               98.47 kB │ gzip:    28.95 kB
+[WebServer] ../server/ui-dist/assets/mention-chips-JLxRgT1b.js                     102.56 kB │ gzip:    31.56 kB
+[WebServer] ../server/ui-dist/assets/dist-DsLYqWnM.js                              104.05 kB │ gzip:    34.85 kB
+[WebServer] ../server/ui-dist/assets/mermaid.core-Dc5YYyRl.js                      107.65 kB │ gzip:    35.72 kB
+[WebServer] ../server/ui-dist/assets/chunk-4HAMMTFA-BICvyIyW.js                    108.75 kB │ gzip:    27.01 kB
+[WebServer] ../server/ui-dist/assets/sequenceDiagram-WJ2MYXX4-CgsCPRfr.js          117.84 kB │ gzip:    31.55 kB
+[WebServer] ../server/ui-dist/assets/swimlanes-42K2YHIH-DzBEtfE8.js                121.01 kB │ gzip:    43.80 kB
+[WebServer] ../server/ui-dist/assets/architectureDiagram-5GKGNRK7-CebPO7VY.js      155.17 kB │ gzip:    44.38 kB
+[WebServer] ../server/ui-dist/assets/AgentDetail-BKXaoSTm.js                       212.72 kB │ gzip:    56.24 kB
+[WebServer] ../server/ui-dist/assets/chunk-DU6HZSFF-bEd3US_W.js                    243.21 kB │ gzip:    41.17 kB
+[WebServer] ../server/ui-dist/assets/katex-Du_FPwxl.js                             264.40 kB │ gzip:    79.45 kB
+[WebServer] ../server/ui-dist/assets/dist-DCJXgQu0.js                              329.12 kB │ gzip:   109.72 kB
+[WebServer] ../server/ui-dist/assets/cytoscape.esm-D2PgO6ED.js                     465.71 kB │ gzip:   149.65 kB
+[WebServer] ../server/ui-dist/assets/prod-urX1rBL9.js                              493.71 kB │ gzip:   166.56 kB
+[WebServer] ../server/ui-dist/assets/runtime-IAg0vdY9.js                           578.56 kB │ gzip:   151.24 kB
+[WebServer] ../server/ui-dist/assets/chunk-FOHPRMQF-7Ogwfo6e.js                    703.85 kB │ gzip:   154.33 kB
+[WebServer] ../server/ui-dist/assets/dist-B1cqYVKS.js                              772.70 kB │ gzip:   237.35 kB
+[WebServer] ../server/ui-dist/assets/MarkdownEditor-XSsJiwsD.js                    790.35 kB │ gzip:   259.16 kB
+[WebServer] ../server/ui-dist/assets/index-Cjcgl1ml.js                           8,084.38 kB │ gzip: 2,150.66 kB
+[WebServer] 
+[WebServer] [plugin builtin:vite-reporter] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[WebServer] ✓ built in 7.77s
+[WebServer] (node:1298556) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] 
+[WebServer] ██████╗  █████╗ ██████╗ ███████╗██████╗  ██████╗██╗     ██╗██████╗ 
+[WebServer] ██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔════╝██║     ██║██╔══██╗
+[WebServer] ██████╔╝███████║██████╔╝█████╗  ██████╔╝██║     ██║     ██║██████╔╝
+[WebServer] ██╔═══╝ ██╔══██║██╔═══╝ ██╔══╝  ██╔══██╗██║     ██║     ██║██╔═══╝ 
+[WebServer] ██║     ██║  ██║██║     ███████╗██║  ██║╚██████╗███████╗██║██║     
+[WebServer] ╚═╝     ╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝╚═╝     
+[WebServer]   ───────────────────────────────────────────────────────
+[WebServer]   The app people use to manage AI agents for work
+[WebServer] 
+[WebServer] ┌   paperclipai onboard 
+[WebServer] │
+[WebServer] │  Local home: /tmp/paperclip-e2e-home-6KNt1I | instance: playwright-e2e | config: /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/config.json
+[WebServer] │
+[WebServer] │  `--yes` enabled: using Quickstart defaults with bind=loopback.
+[WebServer] │
+[WebServer] ◇  Quickstart
+[WebServer] │
+[WebServer] │  Using quickstart defaults with bind=loopback.
+[WebServer] │
+[WebServer] │  Environment-aware defaults active (6 env var(s) detected).
+[WebServer] │
+[WebServer] ●  Using existing PAPERCLIP_AGENT_JWT_SECRET from environment
+[WebServer] │
+[WebServer] ◆  Created local secrets key file at /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/secrets/master.key
+[WebServer] │
+[WebServer] ◇  Configuration saved ──────────────────────────────────────────╮
+[WebServer] │                                                                │
+[WebServer] │  Database: embedded-postgres                                   │
+[WebServer] │  LLM: not configured                                           │
+[WebServer] │  Logging: file ->                                              │
+[WebServer] │  /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/logs  │
+[WebServer] │  Server: local_trusted/private @ loopback (127.0.0.1):3199     │
+[WebServer] │  Allowed hosts: 127.0.0.1                                      │
+[WebServer] │  Auth URL mode: auto                                           │
+[WebServer] │  Storage: local_disk                                           │
+[WebServer] │  Secrets: local_encrypted (strict mode off)                    │
+[WebServer] │  Agent auth: PAPERCLIP_AGENT_JWT_SECRET configured             │
+[WebServer] │                                                                │
+[WebServer] ├────────────────────────────────────────────────────────────────╯
+[WebServer] │
+[WebServer] ◇  Next commands ────────────────────────────╮
+[WebServer] │                                            │
+[WebServer] │  Run: paperclipai run                      │
+[WebServer] │  Reconfigure later: paperclipai configure  │
+[WebServer] │  Diagnose setup: paperclipai doctor        │
+[WebServer] │                                            │
+[WebServer] ├────────────────────────────────────────────╯
+[WebServer] │
+[WebServer] │  Background service not installed. Use `paperclipai onboard --install-service` or `paperclipai service install` to opt in.
+[WebServer] (node:1298567) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] ┌   paperclipai run 
+[WebServer] │
+[WebServer] │  Home: /tmp/paperclip-e2e-home-6KNt1I
+[WebServer] │
+[WebServer] │  Instance: playwright-e2e
+[WebServer] │
+[WebServer] │  Config: /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/config.json
+[WebServer] │
+[WebServer] ◇  Running doctor checks...
+[WebServer] 
+[WebServer] ██████╗  █████╗ ██████╗ ███████╗██████╗  ██████╗██╗     ██╗██████╗ 
+[WebServer] ██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔════╝██║     ██║██╔══██╗
+[WebServer] ██████╔╝███████║██████╔╝█████╗  ██████╔╝██║     ██║     ██║██████╔╝
+[WebServer] ██╔═══╝ ██╔══██║██╔═══╝ ██╔══╝  ██╔══██╗██║     ██║     ██║██╔═══╝ 
+[WebServer] ██║     ██║  ██║██║     ███████╗██║  ██║╚██████╗███████╗██║██║     
+[WebServer] ╚═╝     ╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝╚═╝     
+[WebServer]   ───────────────────────────────────────────────────────
+[WebServer]   The app people use to manage AI agents for work
+[WebServer] 
+[WebServer] ┌   paperclip doctor 
+[WebServer] │
+[WebServer] │  ✓ Config file: Valid config at /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/config.json
+[WebServer] │
+[WebServer] │  ✓ Deployment/auth mode: local_trusted mode is configured for loopback-only access
+[WebServer] │
+[WebServer] │  ✓ Agent JWT secret: PAPERCLIP_AGENT_JWT_SECRET is set in environment
+[WebServer] │
+[WebServer] │  ✓ Secrets adapter: Local encrypted provider configured with key file /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/secrets/master.key
+[WebServer] │
+[WebServer] │  ✓ Storage: Local disk storage is writable: /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/data/storage
+[WebServer] │
+[WebServer] │  ✓ Database: Embedded PostgreSQL configured at /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/db (port 54329)
+[WebServer] │
+[WebServer] │  ✓ LLM provider: No LLM provider configured (optional)
+[WebServer] │
+[WebServer] │  ✓ Log directory: Log directory is writable: /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/logs
+[WebServer] │
+[WebServer] │  ✓ Server port: Port 3199 is available
+[WebServer] │
+[WebServer] │  ✓ Node.js runtime: Node.js 24.19.0
+[WebServer] │
+[WebServer] │  ✓ Managed install: Not present (optional for npx, global npm, and source-checkout usage)
+[WebServer] │
+[WebServer] │  ✓ Background service: No usable systemd user manager was detected (common in containers and WSL1). Use paperclipai run instead.
+[WebServer] │
+[WebServer] ◇  Summary ───╮
+[WebServer] │             │
+[WebServer] │  12 passed  │
+[WebServer] │             │
+[WebServer] ├─────────────╯
+[WebServer] │
+[WebServer] └  All checks passed!
+[WebServer] 
+[WebServer] │
+[WebServer] ◇  Starting Paperclip server...
+[WebServer] (node:1298567) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [13:47:55] INFO: Using embedded PostgreSQL because no DATABASE_URL set (dataDir=/tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/db, port=54329)
+[WebServer] [13:47:56] INFO: Created embedded PostgreSQL database: paperclip
+[WebServer] [13:47:56] INFO: Detected first-run embedded PostgreSQL setup; applying pending migrations automatically
+[WebServer] [13:47:56] INFO: Applying 548 pending migrations for Embedded PostgreSQL {"pendingMigrations":["0000_mature_masked_marvel.sql","0001_fast_northstar.sql","0002_big_zaladane.sql","0003_shallow_quentin_quire.sql","0004_issue_identifiers.sql","0005_chief_luke_cage.sql","0006_overjoyed_mister_sinister.sql","0007_new_quentin_quire.sql","0008_amused_zzzax.sql","0009_fast_jackal.sql","0010_stale_justin_hammer.sql","0011_windy_corsair.sql","0012_perpetual_ser_duncan.sql","0013_dashing_wasp.sql","0014_many_mikhail_rasputin.sql","0015_project_color_archived.sql","0016_agent_icon.sql","0017_tiresome_gabe_jones.sql","0018_flat_sleepwalker.sql","0019_public_victor_mancha.sql","0020_white_anita_blake.sql","0021_chief_vindicator.sql","0022_company_brand_color.sql","0023_fair_lethal_legion.sql","0024_far_beast.sql","0025_nasty_salo.sql","0026_lying_pete_wisdom.sql","0027_tranquil_tenebrous.sql","0028_harsh_goliath.sql","0029_plugin_tables.sql","0030_rich_magneto.sql","0031_zippy_magma.sql","0032_pretty_doctor_octopus.sql","0033_shiny_black_tarantula.sql","0034_fat_dormammu.sql","0035_marvelous_satana.sql","0036_cheerful_nitro.sql","0037_friendly_eddie_brock.sql","0038_careless_iron_monger.sql","0039_fat_magneto.sql","0040_eager_shotgun.sql","0041_curly_maria_hill.sql","0042_spotty_the_renegades.sql","0043_reflective_captain_universe.sql","0044_illegal_toad.sql","0045_workable_shockwave.sql","0046_smooth_sentinels.sql","0047_overjoyed_groot.sql","0048_flashy_marrow.sql","0049_flawless_abomination.sql","0050_stiff_luckman.sql","0051_young_korg.sql","0052_mushy_trauma.sql","0053_sharp_wild_child.sql","0054_draft_routines.sql","0055_kind_weapon_omega.sql","0056_spooky_ultragirl.sql","0057_tidy_join_requests.sql","0058_wealthy_starbolt.sql","0059_plugin_database_namespaces.sql","0060_orange_annihilus.sql","0061_lively_thor_girl.sql","0062_routine_run_dispatch_fingerprint.sql","0063_issue_thread_interactions.sql","0064_issue_thread_interaction_idempotency.sql","0065_environments.sql","0066_issue_tree_holds.sql","0067_agent_default_environment.sql","0068_environment_local_driver_unique.sql","0069_liveness_recovery_dedupe.sql","0070_active_run_output_watchdog.sql","0071_default_hire_approval_off.sql","0072_large_sandman.sql","0073_shiny_salo.sql","0074_striped_genesis.sql","0075_cultured_sebastian_shaw.sql","0076_useful_elektra.sql","0077_unusual_karnak.sql","0078_white_darwin.sql","0079_company_search_document_indexes.sql","0080_company_search_fuzzystrmatch.sql","0081_optimal_dormammu.sql","0082_dry_vision.sql","0083_company_secret_provider_configs.sql","0084_issue_recovery_actions.sql","0085_tranquil_the_executioner.sql","0086_routine_env_runtime_contract.sql","0087_backfill_environment_manage_human_defaults.sql","0088_backfill_principal_access_compatibility.sql","0089_cloud_upstreams.sql","0090_resource_memberships.sql","0091_old_swarm.sql","0092_mighty_puma.sql","0093_giant_green_goblin.sql","0094_backfill_archived_company_agent_pauses.sql","0095_issue_comment_tombstones.sql","0096_document_annotation_issue_comment_links.sql","0097_low_trust_source_trust.sql","0098_project_icon.sql","0099_skills_store_foundation.sql","0100_skill_install_count_backfill.sql","0101_plugin_company_id_tenant_isolation.sql","0102_managed_sandbox_dedup_index.sql","0103_agent_error_reason.sql","0104_issue_watchdogs.sql","0105_instance_scoped_environments.sql","0106_external_object_references.sql","0107_external_object_display_metadata.sql","0108_workspace_operations_issue_id.sql","0109_routine_description_annotations.sql","0110_document_company_cascade.sql","0111_backfill_skill_create_human_defaults.sql","0112_rename_skill_create_permission_key.sql","0113_pipeline_foundation.sql","0114_pipeline_case_issue_unlinked_event.sql","0115_pipeline_routine_origin.sql","0116_pipeline_upstream_drift_event.sql","0117_pipeline_transition_forced_event.sql","0118_pipeline_case_agent_fanout.sql","0119_pipeline_drift_acknowledged_event.sql","0120_pipeline_stage_working_primitives.sql","0121_pipeline_automation_retry_effects.sql","0122_pipeline_case_documents.sql","0123_document_annotation_source_trust.sql","0124_agent_api_key_scope_config.sql","0125_environment_custom_image_templates.sql","0127_environment_custom_images_instance_scoped.sql","0128_user_specific_secrets.sql","0129_agent_api_key_responsible_user.sql","0131_repair_run_responsible_user_context_refs.sql","0132_issue_comment_derived_attribution_fast.sql","0133_resource_membership_stars.sql","0134_run_responsible_user_invariant.sql","0135_repair_run_responsible_user_updated_at_sweep.sql","0136_acpx_default_engine_migration.sql","0137_skill_studio_server_foundation.sql","0138_skill_studio_run_retention.sql","0139_skill_studio_run_templates.sql","0140_built_in_managed_resources.sql","0141_heartbeat_runs_company_created_at_index.sql","0142_company_search_sort_indexes.sql","0143_cases_foundation.sql","0144_case_document_annotations.sql","0145_inbox_dismissal_snooze_kind.sql","0146_routine_activity_gate.sql","0147_cost_event_status.sql","0148_tool_access_mcp_connections.sql","0149_agent_access_phase2_contracts.sql","0150_tool_invocation_catalog_snapshots.sql","0151_tool_gateway_sessions.sql","0152_tool_connection_application_no_cascade.sql","0153_tool_stdio_command_templates.sql","0154_tool_oauth_states.sql","0155_tool_oauth_state_actor_binding.sql","0156_tool_oauth_state_session_binding.sql","0157_tool_profile_new_tools_review.sql","0158_tool_invocation_connected_mcp_metadata.sql","0159_named_mcp_gateways.sql","0160_mcp_gateway_contract_expansion.sql","0161_environment_custom_image_company_scope_repair.sql","0162_tool_runtime_metric_counters.sql","0163_secret_binding_projection_class.sql","0164_plugin_config_company_scope.sql","0165_connection_token_issuances.sql","0166_smoke_lab_results.sql","0167_environment_custom_image_instance_scope_cleanup.sql","0168_tool_connection_installs.sql","0169_tool_gateway_protocol_rate_limit_counters.sql","0170_company_skill_policies.sql","0171_issue_create_idempotency_keys.sql","0172_inbox_archive_agent_policies.sql","0173_inbox_policy_agent_cleanup.sql","0174_folders.sql","0175_nested_skill_folders.sql","0176_issue_create_idempotency_key_expiry.sql","0177_activity_log_responsible_user.sql","0178_summary_slots.sql","0179_summary_slot_failure_reason.sql","0180_decision_training_examples.sql","0181_decision_training_retention_policy.sql","0182_connections_v3_schema_core.sql","0183_connection_user_authorization_state.sql","0184_routable_blocked.sql","0185_status_cards.sql","0186_status_card_compile_provenance.sql","0187_status_card_pending_change_hash.sql","0188_status_card_generation_issue_index.sql","0189_status_card_agent.sql","0190_status_card_single_prompt.sql","0191_status_card_mentioned_issue_ids.sql","0192_task_watchdog_stop_snapshots.sql","0193_document_memberships.sql","0194_company_skill_releases.sql","0195_built_in_agent_unique_marker.sql","0196_drop_cloud_upstream_tables.sql","0197_decisions_v1.sql","0198_decision_queues_and_triage.sql","0199_decision_queue_composite_key.sql","0200_yellow_maria_hill.sql","0201_concerned_captain_midlands.sql","0202_eminent_marvel_zombies.sql","0203_interaction_resolver_governance.sql","0204_interaction_addressee.sql","0205_narrow_shiva.sql","0206_review_path_recovery_idempotency_index.sql","0207_moaning_amazoness.sql","0208_keen_sharon_carter.sql","0209_heartbeat_context_snapshot_indexes.sql","0210_heartbeat_context_taskkey_index.sql","0211_bright_morg.sql","0212_onboarding_first_task_unique.sql","0213_complete_mystique.sql","0214_lively_lord_tyger.sql","0215_flat_daimon_hellstrom.sql","0216_company_onboarding_seeds.sql","0217_yielding_starbolt.sql","0218_mushy_jack_murdock.sql","0219_runtime_service_exposure.sql","0220_execution_workspace_runtime_leases.sql","0221_swift_justin_hammer.sql","0222_orphan_cleanup_env_reference_survives_delete.sql","0223_robust_zaladane.sql","0224_unified_adapter_auth_sessions.sql","0225_drop_claude_setup_token_sessions.sql","0226_tan_colossus.sql","0227_modern_pandemic.sql","0228_nasty_grim_reaper.sql","0229_drop_company_brand_color_and_attachment_max_bytes.sql","0230_better_auth_account_issuer.sql","0231_remove_app_connection_wide_includes.sql","0232_fixed_hannibal_king.sql","0233_living_dreaming_celestial.sql","0234_provider_trace_records.sql","0235_heartbeat_run_event_sequence_uniqueness.sql","0236_remove_cheap_model_profiles.sql","0237_clammy_colonel_america.sql","0238_graceful_infant_terrible.sql","0239_sturdy_santa_claus.sql","0240_pink_fantastic_four.sql","0241_conscious_adam_destine.sql","0242_wide_lightspeed.sql","0243_sleepy_metal_master.sql","0244_organic_meltdown.sql","0245_misty_nightshade.sql","0246_nostalgic_medusa.sql","0247_even_moon_knight.sql","0248_small_manta.sql","0249_fast_silverclaw.sql","0250_exotic_dakota_north.sql","0251_narrow_mastermind.sql","0252_friendly_kate_bishop.sql","0253_real_firebrand.sql","0254_military_calypso.sql","0255_previous_captain_america.sql","0256_married_king_cobra.sql","0257_bizarre_the_hunter.sql","0258_typical_sauron.sql","0259_tan_chat.sql","0260_chat_interaction_wakeup_idempotency.sql","0261_faulty_iceman.sql","0262_lying_avengers.sql","0263_nebulous_iron_lad.sql","0264_cynical_hellcat.sql","0265_chat_interaction_wakeup_provenance.sql","0266_brave_living_mummy.sql","0267_warm_wild_child.sql","0268_lively_runaways.sql","0269_fearless_young_avengers.sql","0270_harsh_queen_noir.sql","0271_woozy_silver_surfer.sql","0272_light_kate_bishop.sql","0273_aromatic_moondragon.sql","0274_agent_chat.sql","0275_easy_dragon_man.sql","0276_hard_mandroid.sql","0277_uneven_lady_deathstrike.sql","0278_nappy_colonel_america.sql","0279_tired_deathstrike.sql","0280_unique_genesis.sql","0281_true_boom_boom.sql","0282_colossal_shocker.sql","0283_jittery_psynapse.sql","0284_petite_genesis.sql","0285_august_works_foundation.sql","0286_foundation_permission_defaults.sql","0287_foundation_section_search_indexes.sql","0288_context_manifests.sql","0289_august_works_workflows.sql","0290_workflow_revision_invariants.sql","0291_workflow_revision_db_guards.sql","0292_workflow_revision_delete_guard.sql","0293_workflow_runs_executor_v1.sql","0294_workflow_waits.sql","0295_routine_execution_targets.sql","0296_pipeline_automation_targets.sql","0297_workflow_external_agent_wait.sql","0298_workflow_run_retry_lineage.sql","0299_august_works_memory_core.sql","0300_memory_retention_superseded.sql","0301_memory_jobs.sql","0302_automation_artifacts.sql","0303_workflow_optimizer_suggestions.sql","0304_wet_wilson_fisk.sql","0305_premium_joystick.sql","0306_small_shriek.sql","0307_safe_turbo.sql","0308_square_ser_duncan.sql","0309_equal_fallen_one.sql","0310_red_network.sql","0311_flippant_jamie_braddock.sql","0312_giant_katie_power.sql","0313_short_orphan.sql","0314_fast_ronan.sql","0315_eager_caretaker.sql","0316_sparkling_triathlon.sql","0317_perfect_jimmy_woo.sql","0318_aspiring_gideon.sql","0319_workflow_memory_child_erasure.sql","0320_mysterious_terrax.sql","0321_broken_northstar.sql","0322_wet_mad_thinker.sql","0323_clammy_hairball.sql","0324_wild_the_fury.sql","0325_violet_echo.sql","0326_colorful_aaron_stack.sql","0327_true_slipstream.sql","0328_round_thunderbolt.sql","0329_grey_kitty_pryde.sql","0330_woozy_whiplash.sql","0331_bumpy_forge.sql","0332_tiny_gauntlet.sql","0333_parallel_radioactive_man.sql","0334_silent_black_bolt.sql","0335_amusing_silver_centurion.sql","0336_colossal_xavin.sql","0337_tough_kinsey_walden.sql","0338_tiny_bloodscream.sql","0339_overconfident_pyro.sql","0340_thick_gertrude_yorkes.sql","0341_black_karma.sql","0342_glorious_proteus.sql","0343_odd_the_call.sql","0344_dark_morlocks.sql","0345_odd_tarantula.sql","0346_strange_jocasta.sql","0347_flippant_kitty_pryde.sql","0348_gifted_karnak.sql","0349_whole_tombstone.sql","0350_faulty_young_avengers.sql","0351_lazy_kingpin.sql","0352_burly_yellowjacket.sql","0353_confused_mephistopheles.sql","0354_quick_apocalypse.sql","0355_burly_hemingway.sql","0356_colossal_wasp.sql","0357_chemical_korvac.sql","0358_worried_longshot.sql","0359_modern_zodiak.sql","0360_striped_demogoblin.sql","0361_handy_speedball.sql","0362_wet_the_fury.sql","0363_petite_wraith.sql","0364_lazy_squadron_sinister.sql","0365_polite_cargill.sql","0366_concerned_hex.sql","0367_sleepy_blindfold.sql","0368_bizarre_obadiah_stane.sql","0369_mushy_the_stranger.sql","0370_medical_korg.sql","0371_amused_wilson_fisk.sql","0372_shiny_dust.sql","0373_safe_human_cannonball.sql","0374_specialist_release_qualification.sql","0375_futuristic_kronos.sql","0376_regular_shen.sql","0377_fine_lady_vermin.sql","0378_v7_sandbox_source_invalidation.sql","0379_v7_model_reservations.sql","0380_slow_doorman.sql","0381_flat_pepper_potts.sql","0382_v7_draft_conformance_reservations.sql","0383_ambitious_madame_web.sql","0384_gigantic_screwball.sql","0385_graceful_kang.sql","0386_conscious_cerebro.sql","0387_amusing_thena.sql","0388_keen_randall.sql","0389_high_bug.sql","0390_nebulous_doomsday.sql","0391_first_redwing.sql","0392_regular_pepper_potts.sql","0393_mute_butterfly.sql","0394_demonic_dexter_bennett.sql","0395_melted_tarantula.sql","0396_glossy_lionheart.sql","0397_faithful_the_spike.sql","0398_faulty_steve_rogers.sql","0399_outgoing_swordsman.sql","0400_futuristic_the_hunter.sql","0401_cultured_sunset_bain.sql","0402_volatile_princess_powerful.sql","0403_bizarre_bloodaxe.sql","0404_long_union_jack.sql","0405_spooky_salo.sql","0406_youthful_hairball.sql","0407_large_betty_brant.sql","0408_minor_ulik.sql","0409_cynical_silk_fever.sql","0410_rapid_stellaris.sql","0411_lively_kingpin.sql","0412_woozy_scrambler.sql","0413_modern_gamora.sql","0414_adorable_changeling.sql","0415_nice_marrow.sql","0416_equal_grandmaster.sql","0417_native_provider_source_erasure.sql","0418_native_conversation_source_scope.sql","0419_red_skrulls.sql","0420_learning_analytical_source_privacy.sql","0421_learning_runtime_source_erasure.sql","0422_fat_timeslip.sql","0423_decision_review_learning_owner.sql","0424_optimizer_workflow_source_inheritance.sql","0425_artifact_native_learning_inheritance.sql","0426_analytical_native_task_source_retention.sql","0427_execution_manifest_source_erasure.sql","0428_playbook_learning_source_erasure.sql","0429_skill_version_file_erasure.sql","0430_native_runtime_asset_erasure.sql","0431_native_skill_source_run_erasure.sql","0432_native_skill_harness_source_erasure.sql","0433_native_orchestration_source_payload_erasure.sql","0434_native_artifact_workspace_source_erasure.sql","0435_native_workflow_artifact_copy_owner.sql","0436_native_learning_verified_source_current.sql","0437_native_optimizer_observation_source_owner.sql","0438_native_learning_current_memory_clock.sql","0439_native_workflow_origin_source_erasure.sql","0440_sour_shiver_man.sql","0441_brief_the_leader.sql","0442_native_experiment_volume_checks.sql","0443_complete_rick_jones.sql","0444_native_statistical_forecast.sql","0445_learning_project_proposal_erasure.sql","0446_spooky_joseph.sql","0447_native_experiment_statement_admission.sql","0448_gigantic_ricochet.sql","0449_mysterious_tigra.sql","0450_native_backfill_legacy_metadata_erasure.sql","0451_light_silver_fox.sql","0452_native_experiment_source_transport.sql","0453_reflective_red_skull.sql","0454_nosy_zarek.sql","0455_handy_beast.sql","0456_silly_obadiah_stane.sql","0457_gray_young_avengers.sql","0458_bouncy_kylun.sql","0459_sparkling_the_watchers.sql","0460_sudden_paibok.sql","0461_cuddly_bucky.sql","0462_wandering_human_torch.sql","0463_workflow_test_run_source.sql","0464_short_talon.sql","0465_skinny_the_fury.sql","0466_next_night_thrasher.sql","0467_free_marvel_apes.sql","0468_pink_echo.sql","0469_amused_tattoo.sql","0470_mysterious_random.sql","0471_activation_completion_original_evidence.sql","0472_silly_phalanx.sql","0473_far_umar.sql","0474_open_cammi.sql","0475_dizzy_miss_america.sql","0476_lean_wind_dancer.sql","0477_aromatic_gauntlet.sql","0478_condemned_bloodstorm.sql","0479_lethal_stellaris.sql","0480_gray_wrecker.sql","0481_aw_v9_authored_publication_guards.sql","0482_aw_v9_hire_safe_test_admission.sql","0483_aw_v9_playbook_runtime_source_erasure.sql","0484_aw_v9_knowledge_runtime_source_erasure.sql","0485_daffy_fenris.sql","0486_awesome_logan.sql","0487_famous_gambit.sql","0488_exotic_sentinels.sql","0489_glossy_manta.sql","0490_shiny_prodigy.sql","0491_graceful_lorna_dane.sql","0492_bitter_star_brand.sql","0493_tidy_kat_farrell.sql","0494_goofy_lionheart.sql","0495_artifact_workflow_sources.sql","0496_workflow_copy_identity.sql","0497_artifact_replay_sources.sql","0498_artifact_copy_source_index.sql","0499_native_human_task_sources.sql","0500_bound_notification_channels.sql","0501_vengeful_grey_gargoyle.sql","0502_swift_maria_hill.sql","0503_furry_norman_osborn.sql","0504_conscious_sleepwalker.sql","0505_flippant_wendell_vaughn.sql","0506_wild_thanos.sql","0507_lethal_star_brand.sql","0508_deep_black_cat.sql","0509_nebulous_wong.sql","0510_hard_colonel_america.sql","0511_native_run_input_source_binding.sql","0512_flimsy_satana.sql","0513_soft_risque.sql","0514_abandoned_hex.sql","0515_happy_screwball.sql","0516_memory_payload_binding_order.sql","0517_native_payload_erasure.sql","0518_safe_hiroim.sql","0519_native_authenticator_lifetime.sql","0520_native_challenge_lifetime.sql","0521_opposite_garia.sql","0522_native_challenge_generation.sql","0523_crazy_lake.sql","0524_mute_doctor_octopus.sql","0525_routine_source_identity.sql","0526_flimsy_bulldozer.sql","0527_retain_uncertain_import_history.sql","0528_lying_black_bolt.sql","0529_left_wilson_fisk.sql","0530_curious_lockjaw.sql","0531_regular_bug.sql","0532_company_purpose_model_budgets.sql","0533_native_run_input_source_dispatch_receipts.sql","0534_first_party_support_package_pin.sql","0535_giant_adam_warlock.sql","0536_yellow_nemesis.sql","0537_sandbox_admission_claim.sql","0538_durable_plugin_lifecycle.sql","0539_jev_decision_settings.sql","0540_little_kabuki.sql","0541_wet_spectrum.sql","0542_bored_payback.sql","0543_lumpy_azazel.sql","0544_watery_dazzler.sql","0545_native_attachment_stage_dispatch_binding.sql","0546_human_memory_evidence_snapshot_seal.sql","0547_native_conversation_model_reservations.sql","0548_native_conversation_dispatch_sources.sql","0549_native_plugin_routine_source_binding.sql"]}
+[WebServer] [13:48:01] INFO: Embedded PostgreSQL ready
+[WebServer] [13:48:03] INFO: Authenticated mode auth origin configuration {"authBaseUrlMode":"auto","authPublicBaseUrl":"http://127.0.0.1:3199","trustedOrigins":["https://127.0.0.1","http://127.0.0.1","https://127.0.0.1:3199","http://127.0.0.1:3199"],"trustedOriginsSource":{"derived":4,"env":0}}
+[WebServer] [13:48:03] WARN: Native authentication provider event {"component":"native-authentication"}
+[WebServer] [13:48:03] INFO: Setup-token login confidential transport startup assessment {"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_direct_tls_only","deploymentMode":"authenticated"}
+[WebServer] [13:48:03] INFO: plugin job coordinator started — listening to lifecycle events {"service":"plugin-job-coordinator"}
+[WebServer] [13:48:03] INFO: plugin job scheduler started {"service":"plugin-job-scheduler","tickIntervalMs":30000,"maxConcurrentJobs":10}
+[WebServer] [13:48:03] INFO: initializing plugin tool dispatcher {"service":"plugin-tool-dispatcher"}
+[WebServer] [13:48:03] INFO: plugin-dev-watcher: initialized {"service":"plugin-dev-watcher","resolvesInstalledPlugins":true}
+[WebServer] [13:48:03] INFO: Server listener bound on 127.0.0.1:3199; startup recovery in progress
+[WebServer] [13:48:03] INFO: bundled plugin bundle not present; skipping auto-install {"pluginKey":"paperclip.kubernetes-sandbox-provider","pluginPath":"/app/packages/plugins/sandbox-providers/kubernetes"}
+[WebServer] [13:48:03] INFO: plugin-loader: loading all ready plugins {"service":"plugin-loader"}
+[WebServer] [13:48:03] INFO: loaded tools from ready plugins {"service":"plugin-tool-dispatcher","readyPlugins":0,"registeredTools":0}
+[WebServer] [13:48:03] DEBUG: subscribed to lifecycle events {"service":"plugin-tool-dispatcher"}
+[WebServer] [13:48:03] INFO: plugin tool dispatcher initialized {"service":"plugin-tool-dispatcher","totalTools":0}
+[WebServer] [13:48:03] INFO: plugin-loader: no ready plugins to load {"service":"plugin-loader"}
+[WebServer] [13:48:03] INFO: worktree run-execution cutoff state {"state":"disarmed","cutoff":null}
+[WebServer] [13:48:03] INFO: startup reap of orphaned heartbeat runs complete {"reaped":0,"runIds":[]}
+[WebServer] 
+[WebServer] ██████╗  █████╗ ██████╗ ███████╗██████╗  ██████╗██╗     ██╗██████╗ 
+[WebServer] ██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔════╝██║     ██║██╔══██╗
+[WebServer] ██████╔╝███████║██████╔╝█████╗  ██████╔╝██║     ██║     ██║██████╔╝
+[WebServer] ██╔═══╝ ██╔══██║██╔═══╝ ██╔══╝  ██╔══██╗██║     ██║     ██║██╔═══╝ 
+[WebServer] ██║     ██║  ██║██║     ███████╗██║  ██║╚██████╗███████╗██║██║     
+[WebServer] ╚═╝     ╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝╚═╝     
+[WebServer]   ───────────────────────────────────────────────────────
+[WebServer] Mode             embedded-postgres  |  static-ui
+[WebServer] Deploy           authenticated (private)
+[WebServer] Bind             loopback (127.0.0.1)
+[WebServer] Auth             ready
+[WebServer] Server           3199
+[WebServer] API              http://127.0.0.1:3199/api (health: http://127.0.0.1:3199/api/health)
+[WebServer] UI               http://127.0.0.1:3199
+[WebServer] Database         /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/db (pg:54329)
+[WebServer] Migrations       applied (pending migrations)
+[WebServer] Agent JWT        set
+[WebServer] Heartbeat        enabled (30000ms)
+[WebServer] DB Backup        enabled (every 60m, keep 30d)
+[WebServer] Backup Dir       /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/data/backups
+[WebServer] Config           /tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/config.json
+[WebServer]   ───────────────────────────────────────────────────────
+[WebServer] 
+[WebServer] [13:48:03] INFO: Automatic database backups enabled {"intervalMinutes":60,"retentionSource":"instance-settings-db","backupDir":"/tmp/paperclip-e2e-home-6KNt1I/instances/playwright-e2e/data/backups"}
+[WebServer] [13:48:03] INFO: Server startup recovery complete on 127.0.0.1:3199
+
+Running 1 test using 1 worker
+
+(node:1298824) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [13:48:08] WARN: Native authentication provider event {"component":"native-authentication"}
+[WebServer] [13:48:08] WARN: POST /api/auth/:operation 401 {"reqBody":"[REDACTED]"}
+[WebServer] [13:48:08] INFO: POST /api/auth/:operation 200
+[WebServer] [13:48:11] INFO: POST /invites/:token/accept 202
+[WebServer] [13:48:11] INFO: POST / 201
+[WebServer] [13:48:11] INFO: GET /instance/settings/experimental 200
+[WebServer] [13:48:11] INFO: PATCH /instance/settings/experimental 200
+[WebServer] [13:48:11] INFO: POST /companies/96d088f3-9dab-475b-b215-8178c750b1dd/agents 201
+[WebServer] [13:48:11] INFO: POST /companies/96d088f3-9dab-475b-b215-8178c750b1dd/agents 201
+[WebServer] [13:48:11] INFO: POST /companies/96d088f3-9dab-475b-b215-8178c750b1dd/agents 201
+[WebServer] [13:48:12] INFO: POST /companies/96d088f3-9dab-475b-b215-8178c750b1dd/agents 201
+[WebServer] [13:48:12] INFO: POST /companies/96d088f3-9dab-475b-b215-8178c750b1dd/agents 201
+[WebServer] [13:48:12] INFO: POST /companies/96d088f3-9dab-475b-b215-8178c750b1dd/agents 201
+[WebServer] [13:48:12] INFO: GET /AGE/dashboard 200
+[WebServer] [13:48:12] INFO: GET /zap-D2NwbaHj.js 200
+[WebServer] [13:48:12] INFO: GET /folder-CtwObi66.js 200
+[WebServer] [13:48:12] INFO: GET /rolldown-runtime-D6McoBPk.js 200
+[WebServer] [13:48:12] INFO: GET /createLucideIcon-BqxdEa8D.js 200
+[WebServer] [13:48:12] INFO: GET /dist-B1cqYVKS.js 200
+[WebServer] [13:48:12] INFO: GET /status-colors-C6gjYtMb.js 200
+[WebServer] [13:48:12] INFO: GET /StatusGlyph-CCYRTPEE.js 200
+[WebServer] [13:48:12] INFO: GET /router-D7nQ8VIX.js 200
+[WebServer] [13:48:12] INFO: GET /index-BObSrivU.css 200
+[WebServer] [13:48:12] INFO: GET /iso-B3-tzSvQ.js 200
+[WebServer] [13:48:12] INFO: GET /workflow-CPbuW54w.js 200
+[WebServer] [13:48:12] INFO: GET /customer-support-BBdvNPZU.js 200
+[WebServer] [13:48:12] INFO: GET /v5-feature-flags-DE9-Ob2d.js 200
+[WebServer] [13:48:12] INFO: GET /partial-DQfgxqNJ.js 200
+[WebServer] [13:48:12] INFO: GET /v7-feature-flags-D0ZihWlv.js 200
+[WebServer] [13:48:12] INFO: GET /experience-CYA8bAqq.js 200
+[WebServer] [13:48:12] INFO: GET /v9-feature-flags-D5PJ9HcQ.js 200
+[WebServer] [13:48:12] INFO: GET /mention-chips-JLxRgT1b.js 200
+[WebServer] [13:48:12] INFO: GET /AgentAvatar-DIfyI4Gx.js 200
+[WebServer] [13:48:12] INFO: GET /bot-BndT6Sfc.js 200
+[WebServer] [13:48:12] INFO: GET /dist-BhITMUB9.js 200
+[WebServer] [13:48:12] INFO: GET /dist-D4dnwuVi.js 200
+[WebServer] [13:48:12] INFO: GET /useIsFetching-DZbFZRZE.js 200
+[WebServer] [13:48:12] INFO: GET /queryClient-CAXh8Mmt.js 200
+[WebServer] [13:48:12] INFO: GET /readiness-B0YjF5qf.js 200
+[WebServer] [13:48:12] INFO: GET /index-Cjcgl1ml.js 200
+[WebServer] [13:48:12] INFO: GET /x-nQFUOEgT.js 200
+[WebServer] [13:48:12] INFO: GET /dist-D4eDFHwN.js 200
+[WebServer] [13:48:12] INFO: GET /preload-helper-Bq-5Tx7W.js 200
+[WebServer] [13:48:12] INFO: GET /companySkills-Ucqc5LpE.js 200
+[WebServer] [13:48:12] INFO: GET /dist-DCJXgQu0.js 200
+[WebServer] [13:48:12] INFO: GET /check-a-idIyBc.js 200
+[WebServer] [13:48:12] INFO: GET /tooltip-DF3Y58z0.js 200
+[WebServer] [13:48:12] INFO: GET /button-CCVgGbBn.js 200
+[WebServer] [13:48:12] INFO: GET /chevron-right-nMNghapi.js 200
+[WebServer] [13:48:12] INFO: GET /MarkdownEditor-XSsJiwsD.js 200
+[WebServer] [13:48:12] INFO: GET /dialog-DSVnY8m2.js 200
+[WebServer] [13:48:12] INFO: GET /label-D6jsbveH.js 200
+[WebServer] [13:48:12] INFO: GET /clock-Ckcoyl1Q.js 200
+[WebServer] [13:48:12] INFO: GET /loader-circle-CBIugiuu.js 200
+[WebServer] [13:48:12] INFO: GET /clipboard-Dp1lCbIk.js 200
+[WebServer] [13:48:12] INFO: GET /octagon-alert-BXE9UtbC.js 200
+[WebServer] [13:48:12] INFO: GET /StatusIcon-BLmFfYNC.js 200
+[WebServer] [13:48:12] INFO: GET /chevron-down-BQkv_Jzg.js 200
+[WebServer] [13:48:12] INFO: GET /instanceSettings-Dq572614.js 200
+[WebServer] [13:48:12] INFO: GET /useV9CurrentAccount-B0N4B2mj.js 200
+[WebServer] [13:48:12] INFO: GET /external-link-DIB46n2V.js 200
+[WebServer] [13:48:13] INFO: GET /fonts/InterVariable.woff2 200
+[WebServer] [13:48:13] WARN: GET /saas/capabilities 404
+[WebServer] [13:48:13] INFO: GET /api/auth/:operation 200
+[WebServer] [13:48:13] INFO: GET /instance/settings/experimental 200
+[WebServer] [13:48:13] INFO: GET /adapters 200
+[WebServer] [13:48:13] INFO: GET /favicon.svg 200
+[WebServer] [13:48:13] INFO: GET /cli-auth/me 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/routines 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/resource-memberships/me 200
+[WebServer] [13:48:13] INFO: GET /plugins/ui-contributions 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/sidebar-preferences/preferred-coworker/me 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/agents 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/approvals 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/inbox-dismissals 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/join-requests 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/heartbeat-runs 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/live-runs 200
+[WebServer] [13:48:13] INFO: GET /api/auth/:operation 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/dashboard 200
+[WebServer] [13:48:13] INFO: GET /api/companies/:companyId/projects/:operation 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/user-directory 200
+[WebServer] [13:48:13] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/sidebar-preferences/me 200
+[WebServer] [13:48:14] INFO: GET /announcements/current 200
+[WebServer] [13:48:14] INFO: GET /instance/settings/experimental 200
+[WebServer] [13:48:14] WARN: GET /saas/capabilities 404
+[WebServer] [13:48:14] INFO: GET /adapters 200
+[WebServer] [13:48:14] INFO: GET /cli-auth/me 200
+[WebServer] [13:48:14] INFO: GET /api/companies/:companyId/projects/:operation 200
+[WebServer] [13:48:14] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/issues 200
+[WebServer] [13:48:14] DEBUG: safe authenticated GET observed {"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"96d088f3-9dab-475b-b215-8178c750b1dd","actorType":"board","actorIdentityHash":"R2KETKM0BTKyoutw","clientHash":"YpwVX08n9J9Dekik","cacheKeyHash":"0-y2XR9ehTHPC6wf","queryKeys":["excludeRoutineExecutions","inboxArchivedByUserId","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset","status","touchedByUserId"],"requestCount":1,"durationMs":532,"statusCode":200,"responseBytes":2,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":"/AGE/dashboard","visibilityHint":"focused"}
+[WebServer] [13:48:14] INFO: GET /sidebar-preferences/me 200
+[WebServer] [13:48:14] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/live-runs 200
+[WebServer] [13:48:14] INFO: GET /instance/settings/general 200
+[WebServer] [13:48:14] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/issues 200
+[WebServer] [13:48:14] DEBUG: safe authenticated GET observed {"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"96d088f3-9dab-475b-b215-8178c750b1dd","actorType":"board","actorIdentityHash":"R2KETKM0BTKyoutw","clientHash":"YpwVX08n9J9Dekik","cacheKeyHash":"_PnhEQq5yrOWgRKL","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":520,"statusCode":200,"responseBytes":2,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":"/AGE/dashboard","visibilityHint":"focused"}
+[WebServer] [13:48:14] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/skills 200
+[WebServer] [13:48:14] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/activity 200
+[WebServer] [13:48:34] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/chats/b4d16170-ea30-49d4-81d0-375d233f1b8d 200
+[WebServer] [13:48:34] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/issues 200
+[WebServer] [13:48:34] DEBUG: safe authenticated GET observed {"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"96d088f3-9dab-475b-b215-8178c750b1dd","actorType":"board","actorIdentityHash":"R2KETKM0BTKyoutw","clientHash":"YpwVX08n9J9Dekik","cacheKeyHash":"_PnhEQq5yrOWgRKL","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":176,"statusCode":200,"responseBytes":2,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}
+[WebServer] [13:48:34] INFO: GET /api/companies/:companyId/projects/:operation 200
+[WebServer] [13:48:34] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/heartbeat-runs 200
+[WebServer] [13:48:34] INFO: GET /companies/96d088f3-9dab-475b-b215-8178c750b1dd/live-runs 200
+[WebServer] [13:48:34] INFO: PATCH /instance/settings/experimental 200
+  ✘  1 [chromium] › tests/e2e/agent-chat-sessions.spec.ts:388:1 › sidebar discovery, stars, recent agents, configuration links, and drafts survive switching (26.9s)
+[WebServer] [13:48:35] INFO: graceful heartbeat run drain complete {"signal":"SIGTERM","drain":{"interrupted":0,"interruptedRunIds":[],"retryRunIds":[],"restartSuspendedRunIds":[]}}
+[WebServer] [13:48:35] INFO: plugin job scheduler stopped {"service":"plugin-job-scheduler","activeJobCount":0}
+[WebServer] [13:48:35] INFO: plugin job coordinator stopped {"service":"plugin-job-coordinator"}
+[WebServer] [13:48:35] INFO: Stopping embedded PostgreSQL {"signal":"SIGTERM"}
+
+
+  1) [chromium] › tests/e2e/agent-chat-sessions.spec.ts:388:1 › sidebar discovery, stars, recent agents, configuration links, and drafts survive switching 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: 'Choose a Co-worker to ask', exact: true }).getByRole('option')
+    Expected: 6
+    Received: 13
+    Timeout:  20000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 20000ms
+      - waiting for getByRole('dialog', { name: 'Choose a Co-worker to ask', exact: true }).getByRole('option')
+        43 × locator resolved to 13 elements
+           - unexpected value "13"
+
+
+      400 |     await compose.click();
+      401 |     const picker = page.getByRole("dialog", { name: "Choose a Co-worker to ask", exact: true });
+    > 402 |     await expect(picker.getByRole("option")).toHaveCount(6);
+          |                                              ^
+      403 |     await picker.getByRole("combobox").fill("Beta");
+      404 |     await picker.getByRole("combobox").press("Enter");
+      405 |     await expect(picker).not.toBeVisible();
+        at /workspace/v10-dep-qualification/tests/e2e/agent-chat-sessions.spec.ts:402:46
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../v10-preparation/native-chat-sessions-remaining-attempt-050-2026-10-26-playwright-output/agent-chat-sessions-sideba-26761-nd-drafts-survive-switching-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../v10-preparation/native-chat-sessions-remaining-attempt-050-2026-10-26-playwright-output/agent-chat-sessions-sideba-26761-nd-drafts-survive-switching-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../v10-preparation/native-chat-sessions-remaining-attempt-050-2026-10-26-playwright-output/agent-chat-sessions-sideba-26761-nd-drafts-survive-switching-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace ../v10-preparation/native-chat-sessions-remaining-attempt-050-2026-10-26-playwright-output/agent-chat-sessions-sideba-26761-nd-drafts-survive-switching-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › tests/e2e/agent-chat-sessions.spec.ts:388:1 › sidebar discovery, stars, recent agents, configuration links, and drafts survive switching 

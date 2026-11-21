@@ -1,9 +1,9 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { normalizePaperclipRunnerAdapterConfig } from "@paperclipai/adapter-utils/server-utils";
 import { agentConfigurationRuntimeCandidates, agentRuntimeCandidateConformanceRequests, agentPresenceRuntimeBindings,
-  agents, heartbeatRuns, orchestrationModelReservations, type Db } from "@paperclipai/db";
-import { agentRuntimeCandidateCatalogSchema, agentRuntimeCandidateCreateSchema, agentRuntimeCandidateViewSchema } from "@paperclipai/shared";
+  agents, heartbeatRuns, orchestrationModelReservations, workflowRevisions, workflows, type Db } from "@paperclipai/db";
+import { agentRuntimeCandidateCatalogSchema, agentRuntimeCandidateCreateSchema, agentRuntimeCandidateViewSchema, type ModelLifecycleMetadata } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
 import { agentAuthoringService } from "./authoring-drafts.js";
@@ -14,6 +14,7 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 import { discoverNativeCapabilities } from "../native-provider-conformance.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../provider-capabilities.js";
 import { assertWorkerModelProfileCurrent, selectWorkerModelProfile, type WorkerModelProfile } from "../orchestration/worker-model-profiles.js";
+import { assertModelMigrationCompatible } from "../orchestration/read-only-model-profiles.js";
 import { quoteModelReservation } from "../orchestration/model-reservations.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
@@ -73,14 +74,27 @@ export function agentRuntimeCandidateService(db: Db, options: Options) {
       state.binding.provider.isolationMode !== "isolated_per_presence" || state.binding.runtime.providerProfileRef.startsWith("aw:cell:"))
       throw conflict("This candidate requires its own Original isolated text runtime setup");
     const p = selectWorkerModelProfile(options.profiles, { companyId, agentId: state.agent.id, profileId: modelProfileId,
-      sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin });
+      sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin, purpose: "candidate_evaluation" });
+    const incumbentSelection = resolvePaperclipRunnerProviderProfile(state.agent.adapterConfig);
+    let incumbentProfile: WorkerModelProfile | null = null;
+    if (incumbentSelection.provider === "aw_text_only" && incumbentSelection.workerModelProfileId !== p.id && (p.lifecycle || options.profiles.some(profile =>
+      profile.id === incumbentSelection.workerModelProfileId && profile.companyId === companyId && profile.workerAgentId === state.agent!.id && profile.lifecycle))) {
+      const incumbent = options.profiles.find(profile => profile.id === incumbentSelection.workerModelProfileId &&
+        profile.companyId === companyId && profile.workerAgentId === state.agent!.id);
+      if (!incumbent || incumbent.tariff.model !== incumbentSelection.model ||
+        incumbent.lifecycle?.status === "migration_required" && incumbent.lifecycle.replacementProfileId !== p.id)
+        throw conflict("The incumbent model lifecycle or selected replacement is unavailable");
+      try { assertModelMigrationCompatible(incumbent, p); }
+      catch { throw conflict("Model migration needs matching owner-declared region, data-use, capabilities, rate limits, budget, and context limits"); }
+      incumbentProfile = incumbent;
+    }
     if (p.providerBindingId !== state.binding.provider.id || p.providerProfileRef !== state.binding.runtime.providerProfileRef)
       throw forbidden("The candidate qualification belongs to another runtime");
     const proposed = deriveRuntimeCandidateConfiguration(state.agent, p);
     const snapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId,
       adapterType: state.agent.adapterType, config: proposed.configuration }));
     if (snapshot.hash !== p.providerSnapshotHash) throw conflict("The candidate's fixed transport capability contract changed");
-    return { ...state, p, ...proposed, snapshot };
+    return { ...state, p, incumbentProfile, ...proposed, snapshot };
   }
   function view(row: Candidate, qualificationCurrent = false) {
     return agentRuntimeCandidateViewSchema.parse({ id: row.id, companyId: row.companyId, draftId: row.draftId,
@@ -158,9 +172,32 @@ export function agentRuntimeCandidateService(db: Db, options: Options) {
       const tx = rawTx as unknown as Db; await lockMemoryPrivacy(tx, companyId);
       const initial = await owner(tx, actor, companyId, draftId);
       const choices = [];
+      let lifecycleInventory = { profileId: null as string | null, model: null as string | null,
+        status: "untracked" as "untracked" | ModelLifecycleMetadata["status"], owner: null as string | null,
+        retirementAt: null as string | null, replacementProfileId: null as string | null,
+        regionOrRoutingProfile: null as string | null, dataUseProfile: null as string | null,
+        unresolvedProfileReference: false, publishedWorkflows: [] as Array<{ workflowId: string; revisionId: string; name: string }> };
+      if (initial.agent) {
+        const adapterConfig = initial.agent.adapterConfig as Record<string, unknown>;
+        if (adapterConfig.provider === "aw_text_only") {
+          const profileId = typeof adapterConfig.workerModelProfileId === "string" ? adapterConfig.workerModelProfileId : null;
+          const installed = profileId ? options.profiles.find(p => p.id === profileId && p.companyId === companyId && p.workerAgentId === initial.agent!.id) : undefined;
+          lifecycleInventory = { profileId, model: typeof adapterConfig.model === "string" ? adapterConfig.model : null,
+            status: installed?.lifecycle?.status ?? "untracked", owner: installed?.lifecycle?.owner ?? null,
+            retirementAt: installed?.lifecycle?.retirementAt ?? null, replacementProfileId: installed?.lifecycle?.replacementProfileId ?? null,
+            regionOrRoutingProfile: installed?.lifecycle?.regionOrRoutingProfile ?? null,
+            dataUseProfile: installed?.lifecycle?.dataUseProfile ?? null, unresolvedProfileReference: !installed, publishedWorkflows: [] };
+        }
+        const graphBinding = sql`${workflowRevisions.graph}->'nodes' @> jsonb_build_array(jsonb_build_object('config', jsonb_build_object('agentId', ${initial.agent.id}::text)))`;
+        lifecycleInventory.publishedWorkflows = await tx.select({ workflowId: workflows.id, revisionId: workflowRevisions.id, name: workflows.name })
+          .from(workflows).innerJoin(workflowRevisions, and(eq(workflowRevisions.companyId, workflows.companyId),
+            eq(workflowRevisions.workflowId, workflows.id), eq(workflowRevisions.id, workflows.publishedRevisionId)))
+          .where(and(eq(workflows.companyId, companyId), isNull(workflows.archivedAt), eq(workflowRevisions.state, "published"), graphBinding))
+          .limit(500);
+      }
       if (initial.agent) for (const p of options.profiles.filter(p => p.companyId === companyId && p.workerAgentId === initial.agent!.id)) {
         // Expired/source-mismatched price metadata is not a selectable quote.
-        try { assertWorkerModelProfileCurrent(p, options.sourceSha, options.protectedEvidenceOrigin); }
+        try { assertWorkerModelProfileCurrent(p, options.sourceSha, options.protectedEvidenceOrigin, "candidate_evaluation"); }
         catch { continue; }
         let candidate: Awaited<ReturnType<typeof configured>>;
         try { candidate = await configured(tx, actor, companyId, draftId, p.id); }
@@ -176,7 +213,7 @@ export function agentRuntimeCandidateService(db: Db, options: Options) {
         nativeSha256(current.agent?.adapterConfig ?? null) !== nativeSha256(initial.agent?.adapterConfig ?? null))
         throw conflict("The candidate context changed; reload");
       return agentRuntimeCandidateCatalogSchema.parse({ companyId, draftId, version: initial.draft.version,
-        agentId: initial.agent?.id ?? null, identityId: initial.agent?.agentIdentityId ?? null, choices });
+        agentId: initial.agent?.id ?? null, identityId: initial.agent?.agentIdentityId ?? null, lifecycleInventory, choices });
     }),
     create: async (actor: AuthorizationActor, companyId: string, draftId: string, raw: z.infer<typeof agentRuntimeCandidateCreateSchema>) => {
       const input = agentRuntimeCandidateCreateSchema.parse(raw), userId = v5HumanActorId(actor);

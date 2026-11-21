@@ -1,0 +1,3 @@
+# R58 private recovery checkpoint
+
+Recovery only. This checkpoint references R57 as its base and adds frozen Host, installed broker profile, Native capacity/fixture, R102/C7, SDK, aggregate runner, continuation-note and small storage-receipt evidence. Active/unqualified candidates, dependencies/build/PG/provider archives, raw logs and secrets are excluded. Source pins and archive members were verified. The final aggregate runner is prepared but has not been executed. Host3/actual Host acceptance, full Native9/Sandbox9, Project2, Learning42, C7 acceptance, final aggregate execution and CI remain pending.

@@ -7,6 +7,10 @@ import { expect, test, type APIResponse } from "@playwright/test";
 import { agents, authUsers, companyMemberships, createDb, closeRegisteredClients, principalPermissionGrants, issues, workflowRuns, heartbeatRuns, toolApplications, toolConnections, toolCatalogEntries, toolInvocations, toolActionRequests } from "../../packages/db/src/index.ts";
 import { workflowRoutes } from "../../server/src/routes/workflows.ts";
 import { errorHandler } from "../../server/src/middleware/error-handler.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
+
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 const serverRequire = createRequire(new URL("../../server/package.json", import.meta.url));
 const express = serverRequire("express"), { eq } = serverRequire("drizzle-orm");
@@ -87,7 +91,7 @@ for (const edit of ["wait", "condition"] as const) test(`guided Native ${edit} e
       await page.getByRole("spinbutton", { name: "Compare with", exact: true }).fill("");
       await page.getByRole("button", { name: "Save draft changes", exact: true }).click();
       await expect(page.locator('#draft-step-value')).toHaveAttribute("aria-invalid", "true");
-      await expect(page.getByRole("alert")).toBeFocused(); expect(posts).toBe(0);
+      await expect(page.locator('main [role="alert"][tabindex="-1"]')).toBeFocused(); expect(posts).toBe(0);
       expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
       await page.locator('#draft-step-value').fill("10000");
     }
@@ -118,7 +122,7 @@ for (const edit of ["wait", "condition"] as const) test(`guided Native ${edit} e
     for (const release of draftReads.splice(0)) release();
     await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
     await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {});
-    await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await deleteCompany(request, company.id).catch(() => {});
     await db.delete(authUsers).where(eq(authUsers.id, userId)); await closeRegisteredClients(databaseUrl);
   }
 });
@@ -185,7 +189,7 @@ test("guided empty Native flow composes explicit steps and recovers its exact lo
     expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
   } finally {
     await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
-    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await deleteCompany(request, company.id).catch(() => {});
     await db.delete(authUsers).where(eq(authUsers.id, userId)); await closeRegisteredClients(databaseUrl);
   }
 });
@@ -249,7 +253,7 @@ test("guided Native flow appends a named Agent task and recovers its only lost s
     expect(posts).toBe(1); expect(receipts).toBeGreaterThanOrEqual(1); expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
   } finally {
     await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
-    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await deleteCompany(request, company.id).catch(() => {});
     await db.delete(authUsers).where(eq(authUsers.id, userId)); await closeRegisteredClients(databaseUrl);
   }
 });
@@ -346,7 +350,7 @@ test("guided Native flow appends a scalar connected operation and recovers its o
     expect(posts).toBe(1); expect(receipts).toBeGreaterThanOrEqual(1); expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
   } finally {
     await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
-    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await deleteCompany(request, company.id).catch(() => {});
     await db.delete(authUsers).where(eq(authUsers.id, userId)); await closeRegisteredClients(databaseUrl);
   }
 });
@@ -409,7 +413,7 @@ test("guided Native connected step edits explicit values and recovers its only l
     await page.getByRole("spinbutton", { name: "Antal", exact: true }).fill("11");
     await page.getByRole("button", { name: "Gem kladdeændringer", exact: true }).click();
     await expect(page.locator("#draft-step-tool_count")).toHaveAttribute("aria-invalid", "true");
-    await expect(page.getByRole("alert")).toBeFocused(); expect(posts).toBe(0);
+    await expect(page.locator('main [role="alert"][tabindex="-1"]')).toBeFocused(); expect(posts).toBe(0);
     expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
     await page.getByRole("checkbox", { name: "Medtag Antal", exact: true }).uncheck();
     await page.getByRole("combobox", { name: "Medtag inaktive", exact: true }).selectOption("false");
@@ -438,7 +442,7 @@ test("guided Native connected step edits explicit values and recovers its only l
     expect(posts).toBe(1); expect(receipts).toBeGreaterThanOrEqual(1); expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
   } finally {
     await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
-    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await deleteCompany(request, company.id).catch(() => {});
     await db.delete(authUsers).where(eq(authUsers.id, userId)); await closeRegisteredClients(databaseUrl);
   }
 });

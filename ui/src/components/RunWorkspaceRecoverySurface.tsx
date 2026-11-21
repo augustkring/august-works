@@ -1,12 +1,17 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { HeartbeatRun } from "@paperclipai/shared";
+import { hasWorkspaceRestoreFailure, requiresExecutionReconciliation, type HeartbeatRun } from "@paperclipai/shared";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "@/lib/router";
 import { issuesApi } from "../api/issues";
 import { executionWorkspacesApi } from "../api/execution-workspaces";
 import { accessApi } from "../api/access";
 import { queryKeys } from "../lib/queryKeys";
 import { useToastActions } from "../context/ToastContext";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import type { WorkspaceReconstructionDescriptor } from "../api/issues";
 import {
   IssueRecoveryActionCard,
   type RecoveryReissueRequest,
@@ -42,6 +47,120 @@ function readRunIssueId(run: HeartbeatRun): string | null {
   return asNonEmptyString(context.issueId);
 }
 
+function runHasWorkspaceRestoreFailure(run: HeartbeatRun): boolean {
+  return hasWorkspaceRestoreFailure(asRecord(run.resultJson));
+}
+
+function WorkspaceReconstructionPanel(props: {
+  descriptor: WorkspaceReconstructionDescriptor | null | undefined;
+  loading?: boolean;
+  runId: string;
+  actionId: string;
+  pending: boolean;
+  canReconcileMixed: boolean;
+  onSubmit: (input: { actionOutcome: "completed" | "not_performed" | "mixed"; outcomeEvidence: string; sourceIds: string[] }) => void;
+}) {
+  const { t } = useTranslation("experience");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [outcome, setOutcome] = useState<"completed" | "not_performed" | "mixed">("not_performed");
+  const [evidence, setEvidence] = useState("");
+  const [confirmedNext, setConfirmedNext] = useState(false);
+  const [confirmedProviderStopped, setConfirmedProviderStopped] = useState(false);
+  const descriptor = props.descriptor;
+  if (!descriptor) return (
+    <section className="space-y-2 rounded-md border bg-background/60 p-3" data-testid="workspace-reconstruction-panel">
+      <h3 className="text-sm font-semibold">{t("workspaceReconstruction.title")}</h3>
+      <p role="status" className="text-xs text-muted-foreground">{props.loading
+        ? t("workspaceReconstruction.checking")
+        : t("workspaceReconstruction.descriptorUnavailable")}</p>
+      <p className="text-xs text-muted-foreground">{t("workspaceReconstruction.noActionWithoutProof")}</p>
+    </section>
+  );
+  const provenDestroyed = descriptor.destruction.state === "confirmed" && Boolean(descriptor.destruction.receiptHash);
+  const eligible = descriptor.state === "available" && descriptor.sourceRunId === props.runId && provenDestroyed
+    && descriptor.continuation.available && descriptor.continuation.mode === "fresh_bounded"
+    && descriptor.sources.length > 0;
+  const selectedSources = descriptor.sources.filter(source => selected.includes(source.attachmentId));
+  const selectedByteSize = selectedSources.reduce((total, source) => total + source.byteSize, 0);
+  const selectedOverSizeLimit = selectedByteSize > 64 * 1024 * 1024;
+  const selectedOverCountLimit = selectedSources.length > 32;
+  const valid = eligible && selectedSources.length > 0 && evidence.trim().length >= 20
+    && !selectedOverSizeLimit && !selectedOverCountLimit && confirmedNext && confirmedProviderStopped && (outcome !== "mixed" || props.canReconcileMixed);
+  const reason = descriptor.reason ?? descriptor.continuation.reason;
+
+  return (
+    <section className="space-y-3 rounded-md border bg-background/60 p-3" data-testid="workspace-reconstruction-panel">
+      <div>
+        <h3 className="text-sm font-semibold">{t("workspaceReconstruction.title")}</h3>
+        <p className="mt-1 text-xs text-muted-foreground">{t("workspaceReconstruction.explanation")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("workspaceReconstruction.stagingScope")}</p>
+      </div>
+      <div role="status" data-testid="workspace-destruction-proof" className="rounded border px-2.5 py-2 text-xs">
+        {provenDestroyed
+          ? t("workspaceReconstruction.destroyedConfirmed")
+          : t("workspaceReconstruction.destroyedUnknown")}
+      </div>
+      {!provenDestroyed ? <p className="text-xs text-muted-foreground">{t("workspaceReconstruction.noActionWithoutProof")}</p> : null}
+      {!eligible ? (
+        <p className="text-xs text-muted-foreground" data-testid="workspace-reconstruction-unavailable">
+          {reason ? t(`workspaceReconstruction.reasons.${reason}`, { defaultValue: t("workspaceReconstruction.unavailable") }) : t("workspaceReconstruction.unavailable")}
+        </p>
+      ) : null}
+      {eligible ? (
+        <>
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-medium">{t("workspaceReconstruction.sourceTitle")}</legend>
+            {descriptor.sources.map(source => (
+              <label key={source.attachmentId} className="flex items-start gap-2 rounded border p-2 text-xs">
+                <Checkbox
+                  checked={selected.includes(source.attachmentId)}
+                  onCheckedChange={(checked) => setSelected(current => checked
+                    ? [...new Set([...current, source.attachmentId])]
+                    : current.filter(id => id !== source.attachmentId))}
+                  aria-label={t("workspaceReconstruction.selectSource", { filename: source.filename })}
+                />
+                <span className="min-w-0 flex-1"><span className="block break-all font-medium">{source.filename}</span>
+                  <span className="text-muted-foreground">{t("workspaceReconstruction.fileMetadata", { size: source.byteSize, type: source.contentType })}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          {selectedOverSizeLimit ? <p role="alert" className="text-xs text-destructive">{t("workspaceReconstruction.aggregateLimit")}</p> : null}
+          {selectedOverCountLimit ? <p role="alert" className="text-xs text-destructive">{t("workspaceReconstruction.sourceCountLimit")}</p> : null}
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-medium">{t("workspaceReconstruction.effectTitle")}</legend>
+            {(["completed", "not_performed", "mixed"] as const).map(value => (
+              <label key={value} className="flex items-start gap-2 text-xs">
+                <input type="radio" name={`workspace-effect-${props.actionId}`} value={value} checked={outcome === value}
+                  disabled={value === "mixed" && !props.canReconcileMixed} onChange={() => setOutcome(value)} />
+                <span>{t(`workspaceReconstruction.effects.${value}`)}</span>
+              </label>
+            ))}
+          </fieldset>
+          <label className="block space-y-1 text-xs">
+            <span className="font-medium">{t("workspaceReconstruction.evidenceLabel")}</span>
+            <Textarea value={evidence} onChange={event => setEvidence(event.target.value)} maxLength={12000} rows={3}
+              placeholder={t("workspaceReconstruction.evidencePlaceholder")} />
+          </label>
+          <label className="flex items-start gap-2 text-xs">
+            <Checkbox checked={confirmedNext} onCheckedChange={value => setConfirmedNext(value === true)} />
+            <span>{t("workspaceReconstruction.nextStepConsent")}</span>
+          </label>
+          <label className="flex items-start gap-2 text-xs">
+            <Checkbox checked={confirmedProviderStopped} onCheckedChange={value => setConfirmedProviderStopped(value === true)} />
+            <span>{t("workspaceReconstruction.providerStoppedConsent")}</span>
+          </label>
+          <p className="text-xs text-muted-foreground">{t("workspaceReconstruction.noProviderCalls")}</p>
+          <Button type="button" size="sm" disabled={!valid || props.pending} data-testid="workspace-reconstruction-submit"
+            onClick={() => props.onSubmit({ actionOutcome: outcome, outcomeEvidence: evidence.trim(), sourceIds: selectedSources.map(source => source.attachmentId) })}>
+            {props.pending ? t("workspaceReconstruction.submitting") : t("workspaceReconstruction.submit")}
+          </Button>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 /**
  * Run-page recovery surface. When a run *failed* with workspace-validation evidence, this fetches
  * the source issue's active recovery action and renders the same `IssueRecoveryActionCard`
@@ -52,28 +171,41 @@ function readRunIssueId(run: HeartbeatRun): string | null {
  * a live `workspace_validation` recovery action.
  */
 export function RunWorkspaceRecoverySurface({ run }: { run: HeartbeatRun }) {
+  const { t } = useTranslation("experience");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { pushToast } = useToastActions();
 
   const isWorkspaceValidationFailure =
     run.status === "failed" && run.errorCode === WORKSPACE_VALIDATION_RUN_ERROR_CODE;
+  const isLostWorkspaceFailure = run.status === "failed" && runHasWorkspaceRestoreFailure(run);
   const issueId = readRunIssueId(run);
 
   const { data: issue } = useQuery({
     queryKey: queryKeys.issues.detail(issueId ?? "__none__"),
     queryFn: () => issuesApi.get(issueId!),
-    enabled: Boolean(isWorkspaceValidationFailure && issueId),
+    enabled: Boolean((isWorkspaceValidationFailure || isLostWorkspaceFailure) && issueId),
   });
+
+  const recoveryActionsQuery = useQuery({
+    queryKey: queryKeys.issues.recoveryActions(issueId ?? "__none__"),
+    queryFn: () => issuesApi.getRecoveryActions(issueId!),
+    enabled: Boolean(isLostWorkspaceFailure && issueId),
+    retry: false,
+  });
+  const recoveryActions = recoveryActionsQuery.data;
 
   const { data: boardAccess } = useQuery({
     queryKey: queryKeys.access.currentBoardAccess,
     queryFn: () => accessApi.getCurrentBoardAccess(),
-    enabled: Boolean(isWorkspaceValidationFailure && issueId),
+    enabled: Boolean((isWorkspaceValidationFailure || isLostWorkspaceFailure) && issueId),
     retry: false,
   });
 
   const recoveryAction = issue?.activeRecoveryAction ?? null;
+  // A cached success must not keep filenames, hashes, or the confirmed-destruction
+  // affordance visible after a current-ACL refresh fails.
+  const descriptor = recoveryActionsQuery.isError ? null : recoveryActions?.workspaceReconstruction ?? null;
   const canManageBoardRuntime = canBoardManageRuntime(run.companyId, boardAccess);
   // Prefer the workspace pinned by the recovery action's evidence (the workspace that actually
   // diverged) over the page-level id, which can drift after a re-issue rebinds the issue.
@@ -201,6 +333,35 @@ export function RunWorkspaceRecoverySurface({ run }: { run: HeartbeatRun }) {
     },
   });
 
+  const reconstruct = useMutation({
+    mutationFn: (input: { actionOutcome: "completed" | "not_performed" | "mixed"; outcomeEvidence: string; sourceIds: string[] }) => {
+      if (!issueId || !recoveryAction || !descriptor?.destruction.receiptHash) throw new Error(t("workspaceReconstruction.unavailable"));
+      return issuesApi.resolveRecoveryAction(issueId, {
+        actionId: recoveryAction.id,
+        outcome: "restored",
+        sourceIssueStatus: "todo",
+        executionReconciliation: {
+          runId: descriptor.sourceRunId!,
+          providerStopped: true,
+          actionOutcome: input.actionOutcome,
+          outcomeEvidence: input.outcomeEvidence,
+          workspaceReconstruction: {
+            confirmed: true,
+            destructionReceiptHash: descriptor.destruction.receiptHash,
+            selectedSources: descriptor.sources.filter(source => input.sourceIds.includes(source.attachmentId))
+              .map(source => ({ attachmentId: source.attachmentId, sha256: source.sha256 })),
+          },
+        },
+      });
+    },
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.issues.recoveryActions(issueId ?? "__none__") });
+      pushToast({ title: t("workspaceReconstruction.successTitle"), body: t("workspaceReconstruction.successBody"), tone: "success" });
+    },
+    onError: error => pushToast({ title: t("workspaceReconstruction.errorTitle"), body: error instanceof Error ? error.message : t("workspaceReconstruction.errorBody"), tone: "error" }),
+  });
+
   const handleReconcileForward = useCallback(() => {
     if (!reconcileWorkspaceId) return;
     void reconcile.mutateAsync({ workspaceId: reconcileWorkspaceId, mode: "forward" });
@@ -249,8 +410,10 @@ export function RunWorkspaceRecoverySurface({ run }: { run: HeartbeatRun }) {
     [resolve],
   );
 
-  if (!isWorkspaceValidationFailure || !issueId) return null;
-  if (!recoveryAction || recoveryAction.kind !== "workspace_validation") return null;
+  if ((!isWorkspaceValidationFailure && !isLostWorkspaceFailure) || !issueId) return null;
+  if (!recoveryAction) return null;
+  const showLostWorkspaceReconstruction = isLostWorkspaceFailure && requiresExecutionReconciliation(recoveryAction.cause);
+  if (!showLostWorkspaceReconstruction && (!isWorkspaceValidationFailure || recoveryAction.kind !== "workspace_validation")) return null;
 
   return (
     <div className="space-y-2" data-testid="run-workspace-recovery-surface">
@@ -269,7 +432,13 @@ export function RunWorkspaceRecoverySurface({ run }: { run: HeartbeatRun }) {
           </a>
         ) : null}
       </div>
-      <IssueRecoveryActionCard
+      {showLostWorkspaceReconstruction ? (
+        <WorkspaceReconstructionPanel descriptor={descriptor} runId={run.id} actionId={recoveryAction.id}
+          loading={recoveryActionsQuery.isPending} pending={reconstruct.isPending} canReconcileMixed={boardAccess?.isInstanceAdmin === true}
+          key={`${run.id}:${recoveryAction.id}:${descriptor?.destruction.receiptHash ?? "unknown"}:${descriptor?.sources.map(source => `${source.attachmentId}:${source.sha256}`).join(",") ?? "none"}`}
+          onSubmit={input => reconstruct.mutate(input)} />
+      ) : null}
+      {isWorkspaceValidationFailure ? <IssueRecoveryActionCard
         action={recoveryAction}
         variant="compact"
         onResolve={handleResolve}
@@ -281,7 +450,7 @@ export function RunWorkspaceRecoverySurface({ run }: { run: HeartbeatRun }) {
         quarantineRestorePending={reconcile.isPending}
         reconcilePending={reconcile.isPending}
         canBreakGlass={canManageBoardRuntime}
-      />
+      /> : null}
     </div>
   );
 }

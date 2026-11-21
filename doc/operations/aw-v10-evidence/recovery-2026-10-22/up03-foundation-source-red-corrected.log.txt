@@ -1,0 +1,119 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts (4 tests | 3 failed) 12364ms
+     × admits canonical same-company Foundation permission only inside the native transaction callback 360ms
+     × requires both current grants, actual Human existence, and native key scope instead of actor hints 136ms
+     × holds every positive Agent/Human/grant/key/run fact through the outer commit 164ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > admits canonical same-company Foundation permission only inside the native transaction callback
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:44:44
+     42|     const s = await seed();
+     43|     expect((await authorizationService(db).decide(input(s))).allowed).…
+     44|     expect.soft((await scoped(s)).allowed).toBe(true);
+       |                                            ^
+     45|     expect.soft((await scoped(s, s.human)).allowed).toBe(true);
+     46|     expect((await authorizationService(db).withReadSources(s.companyId…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > admits canonical same-company Foundation permission only inside the native transaction callback
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:45:53
+     43|     expect((await authorizationService(db).decide(input(s))).allowed).…
+     44|     expect.soft((await scoped(s)).allowed).toBe(true);
+     45|     expect.soft((await scoped(s, s.human)).allowed).toBe(true);
+       |                                                     ^
+     46|     expect((await authorizationService(db).withReadSources(s.companyId…
+     47|     let escaped!: Parameters<Parameters<ReturnType<typeof authorizatio…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > requires both current grants, actual Human existence, and native key scope instead of actor hints
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:56:68
+     54|   });
+     55|   it("requires both current grants, actual Human existence, and native…
+     56|     const s = await seed(); expect.soft((await scoped(s)).allowed).toB…
+       |                                                                    ^
+     57|     await db.delete(principalPermissionGrants).where(and(eq(principalP…
+     58|     expect((await scoped(s)).allowed).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+AssertionError: expected undefined to be '55P03' // Object.is equality
+
+- Expected:
+"55P03"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:83:36
+     81|       for (const query of probes) {
+     82|         let error: unknown; try { await db.transaction(tx => tx.execut…
+     83|         expect.soft(pgCode(error)).toBe("55P03");
+       |                                    ^
+     84|       }
+     85|     } finally { release.resolve(); }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:86:35
+     84|       }
+     85|     } finally { release.resolve(); }
+     86|     expect((await outer).allowed).toBe(true);
+       |                                   ^
+     87|     await db.transaction(tx => tx.execute(sql`select id from principal…
+     88|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  00:48:19
+   Duration  26.15s (transform 7.41s, setup 286ms, import 12.84s, tests 12.36s, environment 0ms)
+

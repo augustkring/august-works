@@ -1,0 +1,137 @@
+{
+  "head": "fdd850d9afc2d1289a7d1eef4259bd67fefe5d68",
+  "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "files": [
+    {
+      "path": ".github/workflows/aw-v9-coverage.yml",
+      "sha256": "cbb704614d028790dc69ec327d8129b5634a6257e4abb5e4f2bf72c2c982451b",
+      "bytes": 8366,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "25f4ae783a8a583c7ec3657ebea63d2d345aeb9b3c3bfc99f4bc9fa436d25785"
+      }
+    },
+    {
+      "path": "scripts/ci-install-native-sandbox.sh",
+      "sha256": "6e552c92761b2ac34e1508bff4656abe0058dbae9f3351223000442cfa60f31f",
+      "bytes": 2068,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "59fb9487dc1eb7aa4f2ac5675177ddfb6928e634a4c5cb38b9d26a5714147d51"
+      }
+    },
+    {
+      "path": "scripts/ci-install-native-sandbox.test.mjs",
+      "sha256": "9d642dd33128fb9b8ce67f68a564f6b628070be0fc82c7c190a15edf08624499",
+      "bytes": 2939,
+      "worktreeState": "untracked",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "scripts/platform-skill-migration-register.mjs",
+      "sha256": "fd4b65965c221d572c11a77d12846948300eac1e93d00df586ca0aec455fd127",
+      "bytes": 20780,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "scripts/platform-skill-migration-register.test.mjs",
+      "sha256": "3860c48e1d6c4d3bfaeda37a812ee2fbfb6e1a6d4f76849655d7dfdee5d891df",
+      "bytes": 3744,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
+      "sha256": "a51eee559ffb881daeecb2efce11dd2957708cde955443454ebb761350736fb8",
+      "bytes": 82241,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+      "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b",
+      "bytes": 138576,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "0b269adbae7f611db238677bcd199793054eb4f03833cf3f518af9eb338fb705"
+      }
+    },
+    {
+      "path": "server/src/modules/wake-queue/adapters/postgres.test.ts",
+      "sha256": "59e63fb9725bcb2a9b9ea84511dab36fa64669cfac1f89cb3649111fe2c33ab9",
+      "bytes": 84522,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "bd30a752922fb60a8f49e7a81efcd40e6fe00051b3d19bf452b94f30714b21f0"
+      }
+    },
+    {
+      "path": "server/src/services/native-direct-input.ts",
+      "sha256": "70e652c90580dbd094d8fed2b62b1306604dba3381ecd5a9c17cac638240f1ca",
+      "bytes": 616486,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
+      "sha256": "3e23ffa933a3f96a70c099f7f558df59103d5cb51e397cdbe05ed9df524a3360",
+      "bytes": 188297,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
+      "sha256": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1",
+      "bytes": 25229,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "sha256": "f3fe8f2a1a60ef4482b8cbe15937093d88cde575feff98f5aa296f46de0f3459",
+      "bytes": 138175,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "server/src/services/tool-gateway.ts",
+      "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
+      "bytes": 586044,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "186dc3e025648c757ada83ea3013b5894a0eb61e78a4a08474c8a40a2ebc77de"
+      }
+    }
+  ],
+  "sourceWritesAfterFreezePermitted": false
+}

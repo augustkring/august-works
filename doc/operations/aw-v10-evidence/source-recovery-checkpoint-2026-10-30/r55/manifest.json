@@ -1,0 +1,935 @@
+{
+  "purpose": "RECOVERY ONLY; not a qualification, activation, merge, or release claim",
+  "capturedAtUtc": "2026-11-01T10:56:44.220241+00:00",
+  "repo": "/workspace/blentera-v10",
+  "head": "c8ce5b98db6bc5aa8e9ce87cdeb4c8efab996fae",
+  "trackedWorkingDiff": {
+    "bytes": 1955703,
+    "sha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+    "gzipSha256": "5938a5db481c5c23bc69bf9541dd39a3c15aa5524744bc801849c128697d1de4",
+    "gzipBytes": 329069
+  },
+  "untrackedSourceFiles": [],
+  "untrackedSourceCount": 0,
+  "untrackedSourceArchiveSha256": "b8d4b242b68b5a2525b276a18a81a0c95833ef7824321485248f0a878c2fea60",
+  "untrackedSourceArchiveBytes": 45,
+  "privateCandidateFiles": [
+    {
+      "archivePath": "preparation/host-r14.38.2/source-pins.json",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/source-pins.json",
+      "bytes": 2836,
+      "sha256": "70facdea755d851e3002f61d8a5e92d9497f4d8f5246d6e078133a5b239c44f5",
+      "mode": 384,
+      "mtimeNs": 1793529728383080899
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/deploy/v6/host-agent/openshell.mjs",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/deploy/v6/host-agent/openshell.mjs",
+      "bytes": 204121,
+      "sha256": "d6b698c8ce39d622bd84e41b9cf519c797f4e1d8bdda648d664eec8ed625d93e",
+      "mode": 384,
+      "mtimeNs": 1793529637224597099
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/deploy/v6/host-agent/openshell.test.mjs",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/deploy/v6/host-agent/openshell.test.mjs",
+      "bytes": 152159,
+      "sha256": "52ee56557fed1c39d84ad40c87b75cf9da08196cfd0878ac4c51e69d8115619a",
+      "mode": 384,
+      "mtimeNs": 1793529637228245839
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/deploy/v6/host-agent/relay.mjs",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/deploy/v6/host-agent/relay.mjs",
+      "bytes": 7924,
+      "sha256": "2bcbf0bad8d0826e61ec2366005b7a593a4b8e43dd1ceeed2ac09c7b26c12a2f",
+      "mode": 384,
+      "mtimeNs": 1793529637232099708
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/packages/adapter-utils/src/command-managed-runtime.ts",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/packages/adapter-utils/src/command-managed-runtime.ts",
+      "bytes": 33067,
+      "sha256": "1392bc738bf752cabfa89e3e843a07afb6fa6eb86afe05af227f3196f69fafc9",
+      "mode": 384,
+      "mtimeNs": 1793529637235657320
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/packages/shared/src/runtime-relay-contracts.ts",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/packages/shared/src/runtime-relay-contracts.ts",
+      "bytes": 6673,
+      "sha256": "4896aeb1531b69732fd64e2c90a841817ff31440ec7f01573549f9ef86b3f260",
+      "mode": 384,
+      "mtimeNs": 1793529637239955450
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/server/src/services/environment-runtime.ts",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/server/src/services/environment-runtime.ts",
+      "bytes": 195331,
+      "sha256": "ca12e4d183547b9493ef15ad279eebbc3ca926ae845f19580ccd5dd6a7c190e3",
+      "mode": 384,
+      "mtimeNs": 1793529637244593414
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/server/src/services/native-runtime/native-session-executor.test.ts",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/server/src/services/native-runtime/native-session-executor.test.ts",
+      "bytes": 424046,
+      "sha256": "90c2b4ed2bf4eebb39f5bb0ea1fcfbfd3afbd637ea141dcfa4688d1ca593ccf9",
+      "mode": 384,
+      "mtimeNs": 1793529716401721258
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/server/src/services/native-runtime/native-session-executor.ts",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/server/src/services/native-runtime/native-session-executor.ts",
+      "bytes": 717006,
+      "sha256": "dd01d5bfd669d6a37b16cb56f8c40a2bee3570bf0639c40af6f8615e363fb298",
+      "mode": 384,
+      "mtimeNs": 1793529716400657624
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/server/src/services/runtime/control.ts",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/server/src/services/runtime/control.ts",
+      "bytes": 260173,
+      "sha256": "3b64826628041ef1343092bc66137769ff88acaf8178dbf6d8d10080e69c1ed4",
+      "mode": 384,
+      "mtimeNs": 1793529637248305379
+    },
+    {
+      "archivePath": "preparation/host-r14.38.2/sources/server/src/services/runtime/gateway-relay.ts",
+      "source": "/workspace/v10-preparation/v10-149-r14.38.2-session-model-credential-private/files/server/src/services/runtime/gateway-relay.ts",
+      "bytes": 14806,
+      "sha256": "2a1d843ef2800fccda0a11f8c277ef89591b4b7931ac52cc49f659dc2c5c7ccc",
+      "mode": 384,
+      "mtimeNs": 1793529637252086122
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/README.base.md",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/README.base.md",
+      "bytes": 4685,
+      "sha256": "32e91d963d28221916c09b4f2f5140cd98ff964885fb46cf2682faa64edd38df",
+      "mode": 384,
+      "mtimeNs": 1793527138122214920
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/README.md",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/README.md",
+      "bytes": 7125,
+      "sha256": "c3b2da929a95309a882e907ae04dad1c7bb33945ba847c942284ccd149706e2b",
+      "mode": 384,
+      "mtimeNs": 1793527343852442355
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/SHA256SUMS",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/SHA256SUMS",
+      "bytes": 1004,
+      "sha256": "6fa197582e03cdb344542c3b4b5fe73eeab3451824dd24ec524b7c2e0c029ea7",
+      "mode": 384,
+      "mtimeNs": 1793527367458549458
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/candidate-manifest.json",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/candidate-manifest.json",
+      "bytes": 2622,
+      "sha256": "22f91dcef686c5d28d7a04b7b7ac0fb9e3d921101dd3b0ded1213a6f3e6c5c54",
+      "mode": 384,
+      "mtimeNs": 1793527367457724962
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/migration-source-pins.json",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/migration-source-pins.json",
+      "bytes": 3284,
+      "sha256": "5b765fba9c85f6f518d3da90985af954af9b6b545232b9d29e1cbfda3684054b",
+      "mode": 384,
+      "mtimeNs": 1793527198771032191
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/phase-matrix.base.json",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/phase-matrix.base.json",
+      "bytes": 94044,
+      "sha256": "e6beb820c72c1deb3680889fd608bc1198f1e514caaaf081dbe4c7818d821ccb",
+      "mode": 384,
+      "mtimeNs": 1793527138120965415
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/phase-matrix.json",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/phase-matrix.json",
+      "bytes": 107834,
+      "sha256": "4f0b83f5a1c0c9b9fa0ae5770d7acb944f0a01565f3b2d604700bd3fc5f93fd2",
+      "mode": 384,
+      "mtimeNs": 1793527343851352547
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/phase-matrix.patch",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/phase-matrix.patch",
+      "bytes": 30417,
+      "sha256": "9029924da395842043d9512aebc2dd16b25e871b06160dde9d8f3944306bd9e5",
+      "mode": 384,
+      "mtimeNs": 1793527367452508579
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/private-delta.patch",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/private-delta.patch",
+      "bytes": 44235,
+      "sha256": "bb86c0c459d5c42d67ff6bf5c80698fbe7bb4c6044e414bc0751dfb344e6ddaf",
+      "mode": 384,
+      "mtimeNs": 1793527367457269654
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/stage-list.base.txt",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/stage-list.base.txt",
+      "bytes": 2004,
+      "sha256": "81a3189ae34a45c5d364d9cc45fec1bb2266ea3d77ecbf2efe9f99c7835be885",
+      "mode": 384,
+      "mtimeNs": 1793527138123368290
+    },
+    {
+      "archivePath": "preparation/migration-phases-0567-0568-nov01/stage-list.txt",
+      "source": "/workspace/v10-preparation/migration-phases-0567-0568-nov01/stage-list.txt",
+      "bytes": 2918,
+      "sha256": "0237162b53b7bf36c2e549d2e430296fccadfa89b660223cc43062b68c4b88f5",
+      "mode": 384,
+      "mtimeNs": 1793527179476865875
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/actual-managed-mcp-config-guard.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/actual-managed-mcp-config-guard.diff",
+      "bytes": 1061,
+      "sha256": "1edf3a495ed8a05300b0ea85695bc25c76f9f6d6e71d47f558fda8822c9da3ca",
+      "mode": 384,
+      "mtimeNs": 1793519033248603879
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/audit-other-cleanup-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/audit-other-cleanup-only.diff",
+      "bytes": 17104,
+      "sha256": "4bb5fa3f9810da3c51ab334c4150ac3d1834d3329bd76e801e5d89f576ca9f81",
+      "mode": 384,
+      "mtimeNs": 1793529604677209256
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/diagnostic-cleanup-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/diagnostic-cleanup-only.diff",
+      "bytes": 72787,
+      "sha256": "5b222db6ca4c6bf7af0bdd2ffee977283b236dac627fe0dcdf563f39cf32ae5c",
+      "mode": 384,
+      "mtimeNs": 1793518743526520737
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/managed-mcp-envelope-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/managed-mcp-envelope-only.diff",
+      "bytes": 2290,
+      "sha256": "7724b699d4b0926d0dc170060e74be248e9bad5d0702fcfe625bdd06353f325c",
+      "mode": 384,
+      "mtimeNs": 1793518781118157038
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/manifest.json",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/manifest.json",
+      "bytes": 3834,
+      "sha256": "1fa189345578826eff9fda72f7d472146e52dbcfd3c801372aba2e3a94e6bce9",
+      "mode": 384,
+      "mtimeNs": 1793529837968596723
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/published-model-deadline-rebase.json",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/published-model-deadline-rebase.json",
+      "bytes": 1092,
+      "sha256": "29c795c7c3f7c1707a384ef67e7d9c841242a6e79c2fc82bdc5e0e8063ded41b",
+      "mode": 384,
+      "mtimeNs": 1793529182861016457
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r76-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r76-only.diff",
+      "bytes": 1523,
+      "sha256": "652253ae5188ef9a6a9df98cd8c097001af581ae958e7798da14325a74aa1955",
+      "mode": 384,
+      "mtimeNs": 1793516964095104728
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r77-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r77-only.diff",
+      "bytes": 1088,
+      "sha256": "e0ffeb3da901acaf377b4f6cf114ecd79792f1ef36181456d956058d1ffe3d10",
+      "mode": 384,
+      "mtimeNs": 1793518142066103860
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r78-capacity-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r78-capacity-only.diff",
+      "bytes": 5516,
+      "sha256": "02c3c19d65ea596dfcd7a1266f0224d590cfe663bfe9d6f95c91d9955665be5a",
+      "mode": 384,
+      "mtimeNs": 1793518589287177052
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r78-max-work-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r78-max-work-only.diff",
+      "bytes": 1441,
+      "sha256": "8f85b663ba007462c7d2a84af5f3441e73685f59d9f5ee60ab95aea522ccf140",
+      "mode": 384,
+      "mtimeNs": 1793518566999261100
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r80-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r80-only.diff",
+      "bytes": 1261,
+      "sha256": "574b9ea0da306ee57b9ba2133afde70fc5f926abb80656e7c4e99f8d3ae9c8bc",
+      "mode": 384,
+      "mtimeNs": 1793519883363116180
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r81-capacity-fixture-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r81-capacity-fixture-only.diff",
+      "bytes": 1616,
+      "sha256": "985fe72dbe3fb70f05d5db0b8e750f59bfe205ce400f0a2c002c4a067a5acaed",
+      "mode": 384,
+      "mtimeNs": 1793520621441752113
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r81-live-source-version.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r81-live-source-version.diff",
+      "bytes": 3068,
+      "sha256": "b4ee0e4b7619b1b77d46320596115a0c239bdfbe9a0714339eee81120aefcb37",
+      "mode": 384,
+      "mtimeNs": 1793520712559611989
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r81-managed-headroom-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r81-managed-headroom-only.diff",
+      "bytes": 3189,
+      "sha256": "7b38c0cb11219cc431641100b8d4e5ae289e7772af93ece678628e1ddd22f75f",
+      "mode": 384,
+      "mtimeNs": 1793520655748438683
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r81-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r81-only.diff",
+      "bytes": 1450,
+      "sha256": "c12e0cf19c1c231bc84a9cc6a572296592917ff9a17b89decaf683ecb70b92aa",
+      "mode": 384,
+      "mtimeNs": 1793520473366953694
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r82-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r82-only.diff",
+      "bytes": 1602,
+      "sha256": "b2ea23c083fb3b01530725305c5f1584c2312ad0ba8af66c2a026e3f59ee25bc",
+      "mode": 384,
+      "mtimeNs": 1793522062439712230
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r83-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r83-only.diff",
+      "bytes": 484,
+      "sha256": "705484b9c11ec937afe5bfeab2abf0e40dc795ca7355fab0c0656db94d5d786f",
+      "mode": 384,
+      "mtimeNs": 1793523545547253745
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r84-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r84-only.diff",
+      "bytes": 3439,
+      "sha256": "3da623b5775fd65a23ce98efcf2af2e069877090e3bc2bf6c2d1972c96ea8b43",
+      "mode": 384,
+      "mtimeNs": 1793524677567894000
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r85-runtime-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r85-runtime-only.diff",
+      "bytes": 3627,
+      "sha256": "3fab051212a4c71e1c83065fdec3922347728c494aa71a1763d3062a98614a72",
+      "mode": 384,
+      "mtimeNs": 1793526629520965453
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r86-checkpoint-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r86-checkpoint-only.diff",
+      "bytes": 8874,
+      "sha256": "2d7de5f199fbafe56d5ff1b2ab6f0fa597ec6efb26677a31b9c2fdf743f863dc",
+      "mode": 384,
+      "mtimeNs": 1793527802573214608
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r86-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r86-only.diff",
+      "bytes": 3701,
+      "sha256": "a4b370075dc616b5f0f735b0ac512a5f0ceb32fb1cbd5d3aabc55af4f06f2053",
+      "mode": 384,
+      "mtimeNs": 1793527162937441884
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/r87-native-skill-callsite-only.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/r87-native-skill-callsite-only.diff",
+      "bytes": 3932,
+      "sha256": "764f48004a522fae5198ed5fe17468fa4e1484ca4a0a354f2b6379d2df3e638b",
+      "mode": 384,
+      "mtimeNs": 1793528506112590473
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/rejected-old-executor-baseline.diff",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/rejected-old-executor-baseline.diff",
+      "bytes": 10718,
+      "sha256": "33319a623090e01d54f91c010325da95228af0338b68236998495519f04613c1",
+      "mode": 384,
+      "mtimeNs": 1793529598386053898
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/packages/db/src/test-embedded-postgres.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/packages/db/src/test-embedded-postgres.ts",
+      "bytes": 12712,
+      "sha256": "9f989d24cc239759f144bb82fd65409013f1d4f54ccab3e0a4a3a427f405a1f2",
+      "mode": 384,
+      "mtimeNs": 1793527802569844023
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
+      "bytes": 68659,
+      "sha256": "4643900473cfeedf1394f33499d03040266570dcb0a0356e3792eaa9ccdc2b38",
+      "mode": 384,
+      "mtimeNs": 1793520655741087754
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
+      "bytes": 102654,
+      "sha256": "4bcf1613cc0218f7b442e4e4a6c26be966b5c757fd98a31cb382472244062e5a",
+      "mode": 384,
+      "mtimeNs": 1793520655737228583
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "bytes": 209815,
+      "sha256": "d0bac44ac43eaf973e9858b63b15b7dc3e71578ffae94d7aa5513b802c7a855c",
+      "mode": 384,
+      "mtimeNs": 1793524677562713565
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "bytes": 74904,
+      "sha256": "dfa2aa71af205730086b326a665dcae83e03de4d0ed841fec61ada4db3852282",
+      "mode": 384,
+      "mtimeNs": 1793528152592853074
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/__tests__/retained-runtime-skill-source.integration.test.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/__tests__/retained-runtime-skill-source.integration.test.ts",
+      "bytes": 18261,
+      "sha256": "7331c7b070bca0a75f1d1252719ebf29dc3af6daf6c3e81dcef6b399df375046",
+      "mode": 384,
+      "mtimeNs": 1793529624625114585
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/authorization.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/authorization.ts",
+      "bytes": 298867,
+      "sha256": "44c2969fcc1dd11e162a9980aad380afdc4611e0a5b1e7a31163defcceb23eca",
+      "mode": 384,
+      "mtimeNs": 1793518737829286875
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/company-skills.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/company-skills.ts",
+      "bytes": 309716,
+      "sha256": "f2fc3b3c0a72bfb1718802515a204f265ba1a8bff74474ba69ac5e1e9e0b4fa8",
+      "mode": 384,
+      "mtimeNs": 1793528139767145497
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/context/context-engine.test.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/context/context-engine.test.ts",
+      "bytes": 14946,
+      "sha256": "b8c7cc408916009dd3fb5c962d8aaa414c227e502edfd2c87e1c06bb0f66b237",
+      "mode": 384,
+      "mtimeNs": 1793516964056427584
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/context/context-engine.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/context/context-engine.ts",
+      "bytes": 43006,
+      "sha256": "9bdb22f04e57c63120efa4401ef1833216d7ddd841f62d507eb63921c2b73a90",
+      "mode": 384,
+      "mtimeNs": 1793518737829968572
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/context/context-manifest.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/context/context-manifest.ts",
+      "bytes": 59396,
+      "sha256": "58344aa478c91414e97e9491cb5c0f63d3fdaffb5421a0aec5dd01a7d1cfd569",
+      "mode": 384,
+      "mtimeNs": 1793518737828287148
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/learning/learning-assets.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/learning/learning-assets.ts",
+      "bytes": 21649,
+      "sha256": "a1bc879f5aaf020f9248619df5f83b5b553523ee1d042e3e7bdd689f209a7033",
+      "mode": 384,
+      "mtimeNs": 1793529025295404787
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/memory/memory-privacy.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/memory/memory-privacy.ts",
+      "bytes": 106525,
+      "sha256": "aef38e88cbfb991c400a3bb519613f8a39eba6e81ab6886fe9cff2bf2db085f1",
+      "mode": 384,
+      "mtimeNs": 1793518737827044615
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/native-direct-input.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/native-direct-input.ts",
+      "bytes": 386276,
+      "sha256": "baf9e8758918b7f044ee4aa3fb71b9abb1a428fbe578fed59e97b83feb3fe4d5",
+      "mode": 384,
+      "mtimeNs": 1793528506104273517
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "bytes": 157800,
+      "sha256": "eee8d9a45767f8ccc45fcb3c3bb707aa1cd75185fb68a685b9eea4b54b44cfa2",
+      "mode": 384,
+      "mtimeNs": 1793523545543936136
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/sources/server/src/services/skill-resolver.ts",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/server/src/services/skill-resolver.ts",
+      "bytes": 14508,
+      "sha256": "b3a4099151c00ca500875eab7471a13b9c1c8ae7dd5bb2a7e3ca757153fb0101",
+      "mode": 384,
+      "mtimeNs": 1793528273947530315
+    },
+    {
+      "archivePath": "preparation/native-retained-skill-r87-candidate/syntax-pins.json",
+      "source": "/workspace/v10-preparation/native-retained-skill-r87-candidate/syntax-pins.json",
+      "bytes": 622,
+      "sha256": "3a749e0256ed9c9dba496aa736e69d531cf10bf966b4e1c0e8691572b9bc3ed6",
+      "mode": 384,
+      "mtimeNs": 1793516964097967396
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/README.md",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/README.md",
+      "bytes": 1087,
+      "sha256": "dd583600533c2f2cdc4675760c6fef9ec2f2d7fe45b156a8386cf3119b304c5d",
+      "mode": 384,
+      "mtimeNs": 1793529336887555994
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapter-utils/src/paid-model-probe.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapter-utils/src/paid-model-probe.ts",
+      "bytes": 667,
+      "sha256": "642b04ad602b39435301df061360a212dc687c3b493e4a22a78757d29d5e0d9f",
+      "mode": 384,
+      "mtimeNs": 1793527408555407360
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapters/claude-local/src/server/acp.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapters/claude-local/src/server/acp.ts",
+      "bytes": 40680,
+      "sha256": "2054693f296971797672ce27dadc0a1257e074e75724f21fa5843370812557ce",
+      "mode": 384,
+      "mtimeNs": 1793527826692730490
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapters/claude-local/src/server/test.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapters/claude-local/src/server/test.ts",
+      "bytes": 20480,
+      "sha256": "2712e2d148f746bb1600611f139bb5f66377637ea84a0cf75939f31bf3a6290b",
+      "mode": 384,
+      "mtimeNs": 1793527408580615942
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapters/codex-local/src/server/test.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapters/codex-local/src/server/test.ts",
+      "bytes": 21411,
+      "sha256": "f1fb79c011638834e954a5eef8d981669638a5bab30a63b941c767b987deb8b9",
+      "mode": 384,
+      "mtimeNs": 1793527408581647721
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapters/cursor-local/src/server/test.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapters/cursor-local/src/server/test.ts",
+      "bytes": 13823,
+      "sha256": "a829c81ee1411a5fe90fc98e0f7c21b71f3062b1ee3d517858992f5ddfacf8bf",
+      "mode": 384,
+      "mtimeNs": 1793527417917643247
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapters/gemini-local/src/server/test.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapters/gemini-local/src/server/test.ts",
+      "bytes": 11035,
+      "sha256": "073f047002a538bb41d12638115814bd57d12b614afd0936ba6939fc86b1ed5d",
+      "mode": 384,
+      "mtimeNs": 1793527408584310955
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapters/grok-local/src/server/test.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapters/grok-local/src/server/test.ts",
+      "bytes": 15159,
+      "sha256": "23013e9ccd51b91a43a0ecaf4607a12002f1f1a76ee098c03984a9ddef99ae3f",
+      "mode": 384,
+      "mtimeNs": 1793527417916110075
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapters/kimi-local/src/server/test.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapters/kimi-local/src/server/test.ts",
+      "bytes": 12105,
+      "sha256": "eac90f251fef89894724952b7fa74b3bcb253a0f0066636c45254d9dd8b1d1b5",
+      "mode": 384,
+      "mtimeNs": 1793527408583445177
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapters/opencode-local/src/server/test.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapters/opencode-local/src/server/test.ts",
+      "bytes": 17890,
+      "sha256": "a23fb8e7453ae60bd15a229ac49a949e0f78eb5cc90a9c2b36ac8ff43e3ac2e1",
+      "mode": 384,
+      "mtimeNs": 1793527408582692980
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/packages/adapters/pi-local/src/server/test.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/packages/adapters/pi-local/src/server/test.ts",
+      "bytes": 11758,
+      "sha256": "9def4ad5e4e85a4404e59c709078147d3d6ab106931674fe100fdb0e105cc6b2",
+      "mode": 384,
+      "mtimeNs": 1793527417916933412
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/files/server/src/routes/agents.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/files/server/src/routes/agents.ts",
+      "bytes": 322015,
+      "sha256": "4bfe202f6143f0d14d166784680919352cecbca3af933da7fe7217ffe28bc3ad",
+      "mode": 384,
+      "mtimeNs": 1793527417920781912
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/paid-setup-admission.patch",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/paid-setup-admission.patch",
+      "bytes": 7549,
+      "sha256": "477bd08456de8b7e42b495e8a02f698a730f9f261bed9872f5383a35eefe847d",
+      "mode": 384,
+      "mtimeNs": 1793529145588132435
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/source-pins.json",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/source-pins.json",
+      "bytes": 2989,
+      "sha256": "83fa32fcb3b90515e5c0b611323d2a1539f73050993dad8f1b785394ebc30188",
+      "mode": 384,
+      "mtimeNs": 1793529145590181256
+    },
+    {
+      "archivePath": "preparation/paid-setup-admission-nov01/tests/paid-cli-environment-entry.test.ts",
+      "source": "/workspace/v10-preparation/paid-setup-admission-nov01/tests/paid-cli-environment-entry.test.ts",
+      "bytes": 4221,
+      "sha256": "9f3ffb0960777e1a324bb57fc4fed1fefc2b77ea71d00e948b969f06d23102c4",
+      "mode": 384,
+      "mtimeNs": 1793527826693169422
+    },
+    {
+      "archivePath": "preparation/publish-parsed-source.cjs",
+      "source": "/workspace/v10-preparation/publish-parsed-source.cjs",
+      "bytes": 1152,
+      "sha256": "08091f29cb7f4137077cc778b4a6cb9deaaea0c34e04fdac7e89f4af8bc48652",
+      "mode": 384,
+      "mtimeNs": 1793320770349754877
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/REVIEW.md",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/REVIEW.md",
+      "bytes": 2455,
+      "sha256": "525ac7f77d59ab28b2f86b52f68e9c92ba2ea3d9641d98436da48ca7a7beb31d",
+      "mode": 384,
+      "mtimeNs": 1793529385011031288
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/manifest.json",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/manifest.json",
+      "bytes": 892,
+      "sha256": "e050e0bafe07913914670ab69a8a2ec05cf131b0ba06bc314dd694e3bb82b737",
+      "mode": 384,
+      "mtimeNs": 1793529794134208354
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/pg-r6-source-pins.json",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/pg-r6-source-pins.json",
+      "bytes": 958,
+      "sha256": "ddf9001d1de885ec74cc4c6181b68b82fe60585d22edba6f043da6fefa3de76b",
+      "mode": 384,
+      "mtimeNs": 1793529624631033283
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/pg-r6.exit",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/pg-r6.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "mode": 384,
+      "mtimeNs": 1793529740023517338
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/qualification-receipt.json",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/qualification-receipt.json",
+      "bytes": 2382,
+      "sha256": "0026f789ea2b46b6bbef1652d370ef5a0dd6cf3ee81a3c5a33ed80fa9271ec31",
+      "mode": 384,
+      "mtimeNs": 1793530531410303216
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/retained-runtime-skill-reader.patch",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/retained-runtime-skill-reader.patch",
+      "bytes": 31903,
+      "sha256": "3d36ca2b88a48239a70817ce2f7ff46451297d669c9c658992461d77fa666975",
+      "mode": 384,
+      "mtimeNs": 1793529794134257378
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/sources/server/src/__tests__/retained-runtime-skill-source.integration.test.ts",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/files/server/src/__tests__/retained-runtime-skill-source.integration.test.ts",
+      "bytes": 18261,
+      "sha256": "7331c7b070bca0a75f1d1252719ebf29dc3af6daf6c3e81dcef6b399df375046",
+      "mode": 384,
+      "mtimeNs": 1793529624625114585
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/sources/server/src/services/company-skills.ts",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/files/server/src/services/company-skills.ts",
+      "bytes": 309716,
+      "sha256": "f2fc3b3c0a72bfb1718802515a204f265ba1a8bff74474ba69ac5e1e9e0b4fa8",
+      "mode": 384,
+      "mtimeNs": 1793528139767145497
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/sources/server/src/services/learning/learning-assets.ts",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/files/server/src/services/learning/learning-assets.ts",
+      "bytes": 21649,
+      "sha256": "a1bc879f5aaf020f9248619df5f83b5b553523ee1d042e3e7bdd689f209a7033",
+      "mode": 384,
+      "mtimeNs": 1793529025295404787
+    },
+    {
+      "archivePath": "preparation/retained-runtime-skill-reader-nov01/sources/server/src/services/skill-resolver.ts",
+      "source": "/workspace/v10-preparation/retained-runtime-skill-reader-nov01/files/server/src/services/skill-resolver.ts",
+      "bytes": 14508,
+      "sha256": "b3a4099151c00ca500875eab7471a13b9c1c8ae7dd5bb2a7e3ca757153fb0101",
+      "mode": 384,
+      "mtimeNs": 1793528273947530315
+    },
+    {
+      "archivePath": "preparation/root-continuation-20261101-current.md",
+      "source": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+      "bytes": 25708,
+      "sha256": "eb0daf8f232ccee4f91ee3641225a0eb2edf90af1c507a6033c66d4027cd5dc2",
+      "mode": 384,
+      "mtimeNs": 1793527767498292571
+    },
+    {
+      "archivePath": "preparation/root-continuation-latest.md",
+      "source": "/workspace/v10-preparation/root-continuation-latest.md",
+      "bytes": 65,
+      "sha256": "c4bf14bc424c1c7bc380b27c76b758015ad23a2ad5808521b5b52b79d8e81900",
+      "mode": 384,
+      "mtimeNs": 1793518221936868244
+    },
+    {
+      "archivePath": "preparation/run-final-workspace-aggregate-20261101.sh",
+      "source": "/workspace/v10-preparation/run-final-workspace-aggregate-20261101.sh",
+      "bytes": 14563,
+      "sha256": "3998eeea2b2264097d9035215a534bad57ad13202cbb1de2ef9a8f4486ebcd08",
+      "mode": 448,
+      "mtimeNs": 1793519412771916307
+    },
+    {
+      "archivePath": "preparation/runtime-unavailable-help-nov01/manifest.json",
+      "source": "/workspace/v10-preparation/runtime-unavailable-help-nov01/manifest.json",
+      "bytes": 838,
+      "sha256": "717e65456fe949bdffe64e62245952c3c8eb539b79585fc4bba9f72157251372",
+      "mode": 384,
+      "mtimeNs": 1793528165013480556
+    },
+    {
+      "archivePath": "preparation/runtime-unavailable-help-nov01/sources/docs/da/guides/board-operator/managing-agents.md",
+      "source": "/workspace/v10-preparation/runtime-unavailable-help-nov01/files/docs/da/guides/board-operator/managing-agents.md",
+      "bytes": 4961,
+      "sha256": "454161b8a4b6102acdd10ac9350d5bf72e509655c96cce0a937b755bd4f5c762",
+      "mode": 384,
+      "mtimeNs": 1793528165013300575
+    },
+    {
+      "archivePath": "preparation/runtime-unavailable-help-nov01/sources/docs/guides/board-operator/managing-agents.md",
+      "source": "/workspace/v10-preparation/runtime-unavailable-help-nov01/files/docs/guides/board-operator/managing-agents.md",
+      "bytes": 4554,
+      "sha256": "e3ba22ba1a9f9eb595a1c3f8c04c94ea06e7d359595c6ba22397635a66f8d2d0",
+      "mode": 384,
+      "mtimeNs": 1793528165013110588
+    },
+    {
+      "archivePath": "preparation/tool-inference-admission-nov01/README.md",
+      "source": "/workspace/v10-preparation/tool-inference-admission-nov01/README.md",
+      "bytes": 1819,
+      "sha256": "3e3c81e82c6a96ea6909520eec99e955fa0b8fabb4275238db5537a9aa11df95",
+      "mode": 384,
+      "mtimeNs": 1793529336888936790
+    },
+    {
+      "archivePath": "preparation/tool-inference-admission-nov01/files/server/src/__tests__/plugin-paid-admission-route.test.ts",
+      "source": "/workspace/v10-preparation/tool-inference-admission-nov01/files/server/src/__tests__/plugin-paid-admission-route.test.ts",
+      "bytes": 5126,
+      "sha256": "efe5a374200cd1c58f92ff9479222ccfba73425a1edbaf9cd6a9e863cea1ec2b",
+      "mode": 384,
+      "mtimeNs": 1793529242981702512
+    },
+    {
+      "archivePath": "preparation/tool-inference-admission-nov01/files/server/src/__tests__/tool-internal-inference-admission.integration.test.ts",
+      "source": "/workspace/v10-preparation/tool-inference-admission-nov01/files/server/src/__tests__/tool-internal-inference-admission.integration.test.ts",
+      "bytes": 7925,
+      "sha256": "e99410a72ce8576e481929e8533c5baee76a0256ae1ed3a41a494f9e22ebd43c",
+      "mode": 384,
+      "mtimeNs": 1793529427546743801
+    },
+    {
+      "archivePath": "preparation/tool-inference-admission-nov01/files/server/src/routes/plugins.ts",
+      "source": "/workspace/v10-preparation/tool-inference-admission-nov01/files/server/src/routes/plugins.ts",
+      "bytes": 107087,
+      "sha256": "aa30e25282ad7ccf990c0455b8319d862fc8ff410b0b4443aa05ad6006651dbc",
+      "mode": 384,
+      "mtimeNs": 1793529189662470302
+    },
+    {
+      "archivePath": "preparation/tool-inference-admission-nov01/files/server/src/services/cognee-connection.ts",
+      "source": "/workspace/v10-preparation/tool-inference-admission-nov01/files/server/src/services/cognee-connection.ts",
+      "bytes": 6261,
+      "sha256": "3dd6dfef58585545677eab01bc04d760ca273f67ad319371358c712a472075fa",
+      "mode": 384,
+      "mtimeNs": 1793529083012148470
+    },
+    {
+      "archivePath": "preparation/tool-inference-admission-nov01/files/server/src/services/native-runtime/runner-api-policy.ts",
+      "source": "/workspace/v10-preparation/tool-inference-admission-nov01/files/server/src/services/native-runtime/runner-api-policy.ts",
+      "bytes": 3144,
+      "sha256": "4bc55384b5fefb2cd12bfce10299e4bc685d14b645ad7c00aa7c7e8c2734ef13",
+      "mode": 384,
+      "mtimeNs": 1793529015048661286
+    },
+    {
+      "archivePath": "preparation/tool-inference-admission-nov01/files/server/src/services/tool-gateway.ts",
+      "source": "/workspace/v10-preparation/tool-inference-admission-nov01/files/server/src/services/tool-gateway.ts",
+      "bytes": 542616,
+      "sha256": "6dc662b8be4db1e158a07afd46b97db4c061080382d41540a6d7b708938ca3e9",
+      "mode": 384,
+      "mtimeNs": 1793529189661658373
+    },
+    {
+      "archivePath": "preparation/tool-inference-admission-nov01/source-pins.json",
+      "source": "/workspace/v10-preparation/tool-inference-admission-nov01/source-pins.json",
+      "bytes": 1634,
+      "sha256": "402a63f6bd0d4d372d0edd556f7e6f21ca3b351a0b7fc3e8678a279ff3fc438a",
+      "mode": 384,
+      "mtimeNs": 1793529427652493556
+    },
+    {
+      "archivePath": "preparation/tool-inference-admission-nov01/tool-inference-admission.patch",
+      "source": "/workspace/v10-preparation/tool-inference-admission-nov01/tool-inference-admission.patch",
+      "bytes": 19981,
+      "sha256": "8c6cd67c762c6e2639901da915f9a4517971d8a333d8e6b3495e681fa068906d",
+      "mode": 384,
+      "mtimeNs": 1793529427650310388
+    },
+    {
+      "archivePath": "preparation/tool-profile-admission-nov01/current-paid-admission-pins.json",
+      "source": "/workspace/v10-preparation/tool-profile-admission-nov01/current-paid-admission-pins.json",
+      "bytes": 9840,
+      "sha256": "133a8fc27cc2bcdc30f8fb2215488511b314c36a19c295fa45c3dc750aa68acc",
+      "mode": 384,
+      "mtimeNs": 1793529980678648037
+    },
+    {
+      "archivePath": "preparation/tool-profile-admission-nov01/current-paid-admission.patch",
+      "source": "/workspace/v10-preparation/tool-profile-admission-nov01/current-paid-admission.patch",
+      "bytes": 88441,
+      "sha256": "3d6025401d2c3d0537067936e92eeaa019d02c8c32d72c5700ee8cb055f7b74a",
+      "mode": 384,
+      "mtimeNs": 1793529980675644586
+    },
+    {
+      "archivePath": "preparation/tool-profile-admission-nov01/files/server/src/__tests__/plugin-paid-admission-route.test.ts",
+      "source": "/workspace/v10-preparation/tool-profile-admission-nov01/files/server/src/__tests__/plugin-paid-admission-route.test.ts",
+      "bytes": 5727,
+      "sha256": "9f1585637b50535759b960a2bee429a0c196c23fef77652090ffd55dd52b967f",
+      "mode": 384,
+      "mtimeNs": 1793529559801983102
+    },
+    {
+      "archivePath": "preparation/tool-profile-admission-nov01/files/server/src/__tests__/tool-internal-inference-admission.integration.test.ts",
+      "source": "/workspace/v10-preparation/tool-profile-admission-nov01/files/server/src/__tests__/tool-internal-inference-admission.integration.test.ts",
+      "bytes": 10124,
+      "sha256": "5e9ebc00c16792c833bb29942ee9817e5c1182c7a7a4396976bc59ebc636aa32",
+      "mode": 384,
+      "mtimeNs": 1793529559801913387
+    },
+    {
+      "archivePath": "preparation/tool-profile-admission-nov01/files/server/src/routes/plugins.ts",
+      "source": "/workspace/v10-preparation/tool-profile-admission-nov01/files/server/src/routes/plugins.ts",
+      "bytes": 108863,
+      "sha256": "2db0e88d7e22fe01747db28f716d91a2db2a8d6999d0c5801ac2e29cb581a9ef",
+      "mode": 384,
+      "mtimeNs": 1793529756618786464
+    },
+    {
+      "archivePath": "preparation/tool-profile-admission-nov01/files/server/src/services/tool-gateway.ts",
+      "source": "/workspace/v10-preparation/tool-profile-admission-nov01/files/server/src/services/tool-gateway.ts",
+      "bytes": 544904,
+      "sha256": "8db6fa85dce8dd3519e1618b1eab5c2fe805796535e5b3cedb03625eb95d6768",
+      "mode": 384,
+      "mtimeNs": 1793529529339009730
+    },
+    {
+      "archivePath": "preparation/tool-profile-admission-nov01/source-pins.json",
+      "source": "/workspace/v10-preparation/tool-profile-admission-nov01/source-pins.json",
+      "bytes": 1441,
+      "sha256": "40e546582cd3ff2545dff13f21879580032a8015cdd2d53ffb18c45cedc0879a",
+      "mode": 384,
+      "mtimeNs": 1793529756714781426
+    },
+    {
+      "archivePath": "preparation/tool-profile-admission-nov01/tool-profile-admission.patch",
+      "source": "/workspace/v10-preparation/tool-profile-admission-nov01/tool-profile-admission.patch",
+      "bytes": 13194,
+      "sha256": "ba395ede3fe99f7e2239e6597a7845d01a71cc3587b36f3250b27fd52c6e169b",
+      "mode": 384,
+      "mtimeNs": 1793529756712572001
+    }
+  ],
+  "privateCandidateCount": 111,
+  "privateCandidateSourceBytes": 6808890,
+  "privateCandidateArchiveSha256": "aa7c8a526bed2677b736a713ae93b29b83875bcd4fc681dcbabf25a90c6f7077",
+  "privateCandidateArchiveBytes": 1414560,
+  "coherence": "Every captured source was hashed and statted before and after archive construction; tracked patch, HEAD, and untracked path inventory were repeated and matched.",
+  "candidateStatus": {
+    "nativeRetainedSkillR87": "source recovery only; manifest pin 1fa189... verified",
+    "retainedRuntimeSkillReader": "source recovery only; manifest pin e050e0... verified; includes final PG receipt, no logs/raw PG data",
+    "hostR14_38_2": "frozen ten-source candidate; UNQUALIFIED; same-expiration and own-claim issues remain flagged",
+    "currentPaidAdmission": "patch SHA 3d602540...; 33 pins preserved; HEAD c8ce...; executor parent e231... recorded",
+    "paidSetupAdmission": "11-source candidate preserved; no qualification claim",
+    "toolInferenceAndToolProfile": "private source deltas/pins preserved; no qualification claim",
+    "runtimeUnavailableHelp": "source and manifest preserved",
+    "migration0567_0568": "candidate and pins preserved; no qualification claim"
+  },
+  "excluded": [
+    "node_modules",
+    "symlink-followed content",
+    "raw embedded PostgreSQL data",
+    "provider packs",
+    "environment/secrets",
+    "active/growing logs",
+    "qualification/runtime build output"
+  ],
+  "archives": {
+    "working-source.patch.gz": "5938a5db481c5c23bc69bf9541dd39a3c15aa5524744bc801849c128697d1de4",
+    "untracked-source.tar.gz": "b8d4b242b68b5a2525b276a18a81a0c95833ef7824321485248f0a878c2fea60",
+    "private-candidates.tar.gz": "aa7c8a526bed2677b736a713ae93b29b83875bcd4fc681dcbabf25a90c6f7077"
+  }
+}

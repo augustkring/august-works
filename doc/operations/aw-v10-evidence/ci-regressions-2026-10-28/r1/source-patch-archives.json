@@ -1,0 +1,23 @@
+[
+  {
+    "originalPath": "relay-process-marker-provenance-20261028-r3/relay-process-marker-provenance-20261028-r3-source-pins.source.patch",
+    "archivePath": "relay-process-marker-provenance-20261028-r3/relay-process-marker-provenance-20261028-r3-source-pins.source.patch.gz",
+    "originalSha256": "b3dfbecbe776cbab9b4127062f988ffb5f12dd99dc1ebdf02cbb4e2bc2336866",
+    "archiveSha256": "62fcf3f608e3caad93e6b0836a1050e5da5ff56c79152c7eaaea97380841ad96",
+    "reconstructionLimit": "See source-reconstruction-correction.json; original raw patch bytes are preserved by gzip, not qualified as a complete source reconstruction."
+  },
+  {
+    "originalPath": "root-historical-replay-schema-r1-20261028/root-historical-replay-schema-r1-20261028-source-pins.source.patch",
+    "archivePath": "root-historical-replay-schema-r1-20261028/root-historical-replay-schema-r1-20261028-source-pins.source.patch.gz",
+    "originalSha256": "b56f46ea20f8bd6b1f7e8e1e21ad6a7caf4d808055b85e29e63f2e1df8af32d0",
+    "archiveSha256": "9cfc3dac428d161b1d3803ea7d2df853a5328c5b87369afad43b35adf841bfe2",
+    "reconstructionLimit": "See source-reconstruction-correction.json; original raw patch bytes are preserved by gzip, not qualified as a complete source reconstruction."
+  },
+  {
+    "originalPath": "root-v6-cost-generation-r1-20261028/root-v6-cost-generation-r1-20261028-source-pins.source.patch",
+    "archivePath": "root-v6-cost-generation-r1-20261028/root-v6-cost-generation-r1-20261028-source-pins.source.patch.gz",
+    "originalSha256": "b3dfbecbe776cbab9b4127062f988ffb5f12dd99dc1ebdf02cbb4e2bc2336866",
+    "archiveSha256": "62fcf3f608e3caad93e6b0836a1050e5da5ff56c79152c7eaaea97380841ad96",
+    "reconstructionLimit": "See source-reconstruction-correction.json; original raw patch bytes are preserved by gzip, not qualified as a complete source reconstruction."
+  }
+]

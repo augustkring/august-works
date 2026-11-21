@@ -1,0 +1,7 @@
+{
+  "purpose": "Remove spaces from one blank source line; exact qualified original stays in the R6 archive",
+  "oldSha256": "792f451a52cffd83550105c371e281c999c699ffaf792076d6756f13a3bc0daf",
+  "newSha256": "d72811195989411af8b1c5f37d73f962c696b05f3000ce7a5c5823515909b06a",
+  "emittedJavaScriptIdentical": true,
+  "emittedJavaScriptSha256": "146e47bff2d2aab9df6081e6b41996349b07b2d26672c255d15be6e7da0204b0"
+}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "@/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PEOPLE_DOMAINS,
@@ -27,12 +28,12 @@ const lines = (value: string) =>
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
-const emptyPurpose = (): UseCasePurpose => ({
+const emptyPurpose = (prohibitedUse = "Employee scoring, emotion inference and automatic person decisions"): UseCasePurpose => ({
   name: "",
   description: "",
   intendedPurpose: "",
   prohibitedUses: [
-    "Employee scoring, emotion inference and automatic person decisions",
+    prohibitedUse,
   ],
   affectedPersonCategories: [],
   dataCategories: [],
@@ -90,28 +91,29 @@ function Field({
   );
 }
 export function AIGovernance() {
+  const { t } = useTranslation("experience");
   const identity = useAccountIdentity();
   const userId = identity.userId ?? undefined;
   const { selectedCompanyId: companyId } = useCompany(),
     cache = useQueryClient(),
     { setBreadcrumbs } = useBreadcrumbs();
   const [selectedId, setSelectedId] = useState(""),
-    [draft, setDraft] = useState(emptyPurpose),
+    [draft, setDraft] = useState(() => emptyPurpose(t("aiGovernance.defaultProhibitedUse"))),
     [key, setKey] = useState(""),
     [rationale, setRationale] = useState(""),
     [review, setReview] = useState(emptyReview),
     [issueId, setIssueId] = useState("");
   useEffect(() => {
-    setBreadcrumbs([{ label: "AI Governance" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("aiGovernance.title") }]);
+  }, [setBreadcrumbs, t]);
   useEffect(() => {
     setSelectedId("");
-    setDraft(emptyPurpose());
+    setDraft(emptyPurpose(t("aiGovernance.defaultProhibitedUse")));
     setKey("");
     setRationale("");
     setReview(emptyReview());
     setIssueId("");
-  }, [companyId, userId]);
+  }, [companyId, userId, t]);
   const settings = useQuery({
     queryKey: queryKeys.instance.experimentalSettings,
     queryFn: () => instanceSettingsApi.getExperimental(),
@@ -191,7 +193,7 @@ export function AIGovernance() {
       | "foreseeableMisuse"
       | "providerInstructionsRefs",
   ) => (
-    <Field label={`${label} (one per line)`}>
+    <Field label={label}>
       <Textarea
         value={draft[field].join("\n")}
         onChange={(event) => set(field, lines(event.target.value))}
@@ -199,22 +201,20 @@ export function AIGovernance() {
     </Field>
   );
   if (!identity.settled || !userId)
-    return <p>Sign in to review AI governance.</p>;
-  if (!companyId) return <p>Select a company to review its AI use cases.</p>;
+    return <p>{t("aiGovernance.signInRequired")}</p>;
+  if (!companyId) return <p>{t("aiGovernance.selectCompany")}</p>;
   return (
     <main className="space-y-6">
-      <h1 className="text-xl font-semibold">AI Governance</h1>
+      <h1 className="text-xl font-semibold">{t("aiGovernance.title")}</h1>
       <p className="text-muted-foreground">
-        Record intended purpose, accountable review and human oversight.
-        Approval reviews a purpose; deployment still needs current permissions,
-        verification and runtime qualification.
+        {t("aiGovernance.intro")}
       </p>
       {(cases.error || profiles.error || mutation.error) && (
         <p role="alert">
           {(cases.error ?? profiles.error ?? mutation.error)?.message}
         </p>
       )}
-      <Field label="Use case">
+      <Field label={t("aiGovernance.useCase")}>
         <select
           className="rounded-md border bg-background p-2"
           value={selectedId}
@@ -222,46 +222,46 @@ export function AIGovernance() {
             setSelectedId(event.target.value);
             setRationale("");
             setReview(emptyReview());
-            if (!event.target.value) setDraft(emptyPurpose());
+            if (!event.target.value) setDraft(emptyPurpose(t("aiGovernance.defaultProhibitedUse")));
           }}
         >
-          <option value="">Register a new use case</option>
+          <option value="">{t("aiGovernance.newUseCase")}</option>
           {cases.data?.map((row) => (
             <option key={row.id} value={row.id}>
-              {row.purpose.name} · {row.status}
+              {row.purpose.name} · {t(`aiGovernance.enums.useCaseStatus.${row.status}`, { defaultValue: row.status })}
             </option>
           ))}
         </select>
       </Field>
       {selected && (
         <div className="flex flex-wrap gap-2">
-          <Badge variant="outline">{selected.status}</Badge>
+          <Badge variant="outline">{t(`aiGovernance.enums.useCaseStatus.${selected.status}`, { defaultValue: selected.status })}</Badge>
           <Badge variant="outline">
-            Purpose version {selected.purposeVersion}
+            {t("aiGovernance.purposeVersion", { version: selected.purposeVersion })}
           </Badge>
           <Badge variant="outline">{selected.purpose.riskClass}</Badge>
         </div>
       )}
       <section className="space-y-4 rounded-lg border p-4">
-        <h2 className="font-semibold">Intended purpose</h2>
+        <h2 className="font-semibold">{t("aiGovernance.intendedPurposeHeading")}</h2>
         {!selected && (
-          <Field label="Use-case key">
+          <Field label={t("aiGovernance.useCaseKey")}>
             <Input
               value={key}
               onChange={(event) => setKey(event.target.value)}
-              placeholder="campaign-analysis"
+              placeholder={t("aiGovernance.useCaseKeyExample")}
             />
           </Field>
         )}
-        {text("Name", "name")}
-        {text("Description", "description")}
-        {text("Allowed intended purpose", "intendedPurpose")}
-        {list("Prohibited uses", "prohibitedUses")}
-        {list("Affected person categories", "affectedPersonCategories")}
-        {list("Data categories", "dataCategories")}
-        {list("Foreseeable misuse", "foreseeableMisuse")}
-        {list("Provider instruction references", "providerInstructionsRefs")}
-        <Field label="People inference or decision domain">
+        {text(t("aiGovernance.fields.name"), "name")}
+        {text(t("aiGovernance.fields.description"), "description")}
+        {text(t("aiGovernance.fields.allowedPurpose"), "intendedPurpose")}
+        {list(t("aiGovernance.fields.prohibitedUses"), "prohibitedUses")}
+        {list(t("aiGovernance.fields.affectedPeople"), "affectedPersonCategories")}
+        {list(t("aiGovernance.fields.dataCategories"), "dataCategories")}
+        {list(t("aiGovernance.fields.foreseeableMisuse"), "foreseeableMisuse")}
+        {list(t("aiGovernance.fields.providerInstructions"), "providerInstructionsRefs")}
+        <Field label={t("aiGovernance.fields.peopleDomain")}>
           <select
             className="rounded-md border bg-background p-2"
             value={draft.peopleDomain}
@@ -274,24 +274,24 @@ export function AIGovernance() {
           >
             {PEOPLE_DOMAINS.map((value) => (
               <option key={value} value={value}>
-                {value.replaceAll("_", " ")}
+                {t(`aiGovernance.enums.peopleDomain.${value}`, { defaultValue: value.replaceAll("_", " ") })}
               </option>
             ))}
           </select>
         </Field>
         {(
           [
-            ["specialCategoryDataExpected", "Special-category data expected"],
-            ["customerFacing", "Customer-facing use"],
-            ["externalCommunication", "External communication"],
+            ["specialCategoryDataExpected", t("aiGovernance.fields.specialCategoryDataExpected")],
+            ["customerFacing", t("aiGovernance.fields.customerFacing")],
+            ["externalCommunication", t("aiGovernance.fields.externalCommunication")],
             [
               "makesRecommendationsAboutPeople",
-              "Makes recommendations about people",
+              t("aiGovernance.fields.recommendationsAboutPeople"),
             ],
-            ["makesDecisionsAboutPeople", "Makes decisions about people"],
+            ["makesDecisionsAboutPeople", t("aiGovernance.fields.decisionsAboutPeople")],
             [
               "materialLegalOrSimilarEffect",
-              "Material legal or similar effect",
+              t("aiGovernance.fields.materialEffect"),
             ],
           ] as const
         ).map(([field, label]) => (
@@ -304,7 +304,7 @@ export function AIGovernance() {
             {label}
           </label>
         ))}
-        <Field label="Risk class">
+        <Field label={t("aiGovernance.fields.riskClass")}>
           <select
             className="rounded-md border bg-background p-2"
             value={draft.riskClass}
@@ -316,11 +316,11 @@ export function AIGovernance() {
             }
           >
             {["C0", "C1", "C2", "C3", "C4"].map((value) => (
-              <option key={value}>{value}</option>
+              <option key={value} value={value}>{value}</option>
             ))}
           </select>
         </Field>
-        <Field label="System criticality">
+        <Field label={t("aiGovernance.fields.criticality")}>
           <select
             className="rounded-md border bg-background p-2"
             value={draft.criticality}
@@ -332,17 +332,17 @@ export function AIGovernance() {
             }
           >
             {["low", "medium", "high", "critical"].map((value) => (
-              <option key={value}>{value}</option>
+              <option key={value} value={value}>{t(`aiGovernance.enums.criticality.${value}`)}</option>
             ))}
           </select>
         </Field>
-        <h3 className="font-medium">Value-chain facts</h3>
+        <h3 className="font-medium">{t("aiGovernance.valueChainHeading")}</h3>
         {(
           [
-            ["madeAvailableBy", "Who makes the system available?"],
-            ["trademarkOwner", "Whose name or trademark is used?"],
-            ["purposeDefinedBy", "Who defines intended purpose?"],
-            ["integratedBy", "Who integrates or customizes it?"],
+            ["madeAvailableBy", t("aiGovernance.fields.madeAvailableBy")],
+            ["trademarkOwner", t("aiGovernance.fields.trademarkOwner")],
+            ["purposeDefinedBy", t("aiGovernance.fields.purposeDefinedBy")],
+            ["integratedBy", t("aiGovernance.fields.integratedBy")],
           ] as const
         ).map(([field, label]) => (
           <Field key={field} label={label}>
@@ -359,8 +359,8 @@ export function AIGovernance() {
         ))}
         {(
           [
-            ["rebranded", "System is rebranded"],
-            ["substantiallyModified", "System is substantially modified"],
+            ["rebranded", t("aiGovernance.fields.rebranded")],
+            ["substantiallyModified", t("aiGovernance.fields.substantiallyModified")],
           ] as const
         ).map(([field, label]) => (
           <label key={field} className="flex items-center gap-2">
@@ -377,7 +377,7 @@ export function AIGovernance() {
             {label}
           </label>
         ))}
-        <Field label="Contractual cooperation references (one per line)">
+        <Field label={t("aiGovernance.fields.cooperationRefs")}>
           <Textarea
             value={draft.providerRoleFacts.contractualCooperationRefs.join(
               "\n",
@@ -390,18 +390,18 @@ export function AIGovernance() {
             }
           />
         </Field>
-        <Field label="Human oversight profile">
+        <Field label={t("aiGovernance.fields.oversightProfile")}>
           <select
             className="rounded-md border bg-background p-2"
             value={draft.oversightProfileId}
             onChange={(event) => set("oversightProfileId", event.target.value)}
           >
-            <option value="">Choose an active profile</option>
+            <option value="">{t("aiGovernance.chooseActiveProfile")}</option>
             {profiles.data
               ?.filter((row) => row.status === "active")
               .map((row) => (
                 <option key={row.id} value={row.id}>
-                  {row.profile.name} · {row.profile.mode.replaceAll("_", " ")}
+                  {row.profile.name} · {t(`aiGovernance.enums.oversightMode.${row.profile.mode}`, { defaultValue: row.profile.mode.replaceAll("_", " ") })}
                 </option>
               ))}
           </select>
@@ -414,11 +414,11 @@ export function AIGovernance() {
               aiGovernanceApi.oversight(
                 companyId,
                 {
-                  name: "Mandatory human decisions",
+                  name: t("aiGovernance.mandatoryProfileName"),
                   riskClass: "C3",
                   mode: "mandatory_human_decision",
                   requiredReviewActions: [
-                    "Review every material action and independently verify completion",
+                    t("aiGovernance.mandatoryProfileAction"),
                   ],
                   escalationRoles: ["owner", "admin"],
                   responseDeadlineSeconds: 3600,
@@ -430,10 +430,10 @@ export function AIGovernance() {
             )
           }
         >
-          Create a mandatory human decision profile
+          {t("aiGovernance.createMandatoryProfile")}
         </Button>
-        {text("Retention purpose", "retentionPurpose")}
-        <Field label="Retention days">
+        {text(t("aiGovernance.fields.retentionPurpose"), "retentionPurpose")}
+        <Field label={t("aiGovernance.fields.retentionDays")}>
           <Input
             type="number"
             min={1}
@@ -444,7 +444,7 @@ export function AIGovernance() {
             }
           />
         </Field>
-        <Field label="Next review date (UTC)">
+        <Field label={t("aiGovernance.fields.nextReviewDate")}>
           <Input
             type="date"
             value={draft.nextReviewAt.slice(0, 10)}
@@ -454,7 +454,7 @@ export function AIGovernance() {
             }}
           />
         </Field>
-        <Field label="Reason for change or decision">
+        <Field label={t("aiGovernance.fields.changeReason")}>
           <Textarea
             value={rationale}
             onChange={(event) => setRationale(event.target.value)}
@@ -467,11 +467,11 @@ export function AIGovernance() {
             variant="outline"
             onClick={() => {
               setSelectedId("");
-              setDraft(emptyPurpose());
+              setDraft(emptyPurpose(t("aiGovernance.defaultProhibitedUse")));
               setRationale("");
             }}
           >
-            Cancel
+            {t("aiGovernance.cancel")}
           </Button>
           <Button
             disabled={
@@ -493,19 +493,17 @@ export function AIGovernance() {
               )
             }
           >
-            {selected ? "Save new purpose version" : "Register draft"}
+            {selected ? t("aiGovernance.savePurposeVersion") : t("aiGovernance.registerDraft")}
           </Button>
         </div>
       </section>
       {selected && (
         <section className="space-y-4 rounded-lg border p-4">
-          <h2 className="font-semibold">Accountable assessment</h2>
+          <h2 className="font-semibold">{t("aiGovernance.assessmentHeading")}</h2>
           <p className="text-muted-foreground">
-            Record reviewed deployment facts and external references.
-            Specialized people decisions remain unavailable in the general
-            runtime.
+            {t("aiGovernance.assessmentIntro")}
           </p>
-          <Field label="Framework">
+          <Field label={t("aiGovernance.fields.framework")}>
             <select
               className="rounded-md border bg-background p-2"
               value={review.framework}
@@ -518,12 +516,12 @@ export function AIGovernance() {
             >
               {GOVERNANCE_FRAMEWORKS.map((value) => (
                 <option key={value} value={value}>
-                  {value.replaceAll("_", " ")}
+                  {t(`aiGovernance.enums.framework.${value}`)}
                 </option>
               ))}
             </select>
           </Field>
-          <Field label="Framework version or date">
+          <Field label={t("aiGovernance.fields.frameworkVersion")}>
             <Input
               value={review.frameworkVersionOrDate}
               onChange={(event) =>
@@ -531,7 +529,7 @@ export function AIGovernance() {
               }
             />
           </Field>
-          <Field label="Classification">
+          <Field label={t("aiGovernance.fields.classification")}>
             <select
               className="rounded-md border bg-background p-2"
               value={review.classification}
@@ -551,17 +549,17 @@ export function AIGovernance() {
                 "prohibited",
               ].map((value) => (
                 <option key={value} value={value}>
-                  {value.replaceAll("_", " ")}
+                  {t(`aiGovernance.enums.classification.${value}`)}
                 </option>
               ))}
             </select>
           </Field>
           {(
             [
-              ["facts", "Actual deployment facts"],
-              ["assessmentMethod", "Assessment method"],
-              ["reviewerAttestation", "Reviewer attestation"],
-              ["friaApplicabilityReason", "FRIA applicability reasoning"],
+              ["facts", t("aiGovernance.fields.deploymentFacts")],
+              ["assessmentMethod", t("aiGovernance.fields.assessmentMethod")],
+              ["reviewerAttestation", t("aiGovernance.fields.reviewerAttestation")],
+              ["friaApplicabilityReason", t("aiGovernance.fields.friaReason")],
             ] as const
           ).map(([field, label]) => (
             <Field key={field} label={label}>
@@ -573,7 +571,7 @@ export function AIGovernance() {
               />
             </Field>
           ))}
-          <Field label="Applicable requirements (one per line)">
+          <Field label={t("aiGovernance.fields.applicableRequirements")}>
             <Textarea
               value={review.applicableRequirements.join("\n")}
               onChange={(event) =>
@@ -581,7 +579,7 @@ export function AIGovernance() {
               }
             />
           </Field>
-          <Field label="Evidence references (one per line)">
+          <Field label={t("aiGovernance.fields.evidenceRefs")}>
             <Textarea
               value={review.evidenceRefs.join("\n")}
               onChange={(event) =>
@@ -589,7 +587,7 @@ export function AIGovernance() {
               }
             />
           </Field>
-          <Field label="FRIA applicability">
+          <Field label={t("aiGovernance.fields.friaApplicability")}>
             <select
               className="rounded-md border bg-background p-2"
               value={review.friaApplicability}
@@ -602,7 +600,7 @@ export function AIGovernance() {
             >
               {["yes", "no", "uncertain", "review_required"].map((value) => (
                 <option key={value} value={value}>
-                  {value.replaceAll("_", " ")}
+                  {t(`aiGovernance.enums.friaApplicability.${value}`)}
                 </option>
               ))}
             </select>
@@ -615,7 +613,7 @@ export function AIGovernance() {
                 reviewSet("reviewRequired", event.target.checked)
               }
             />
-            Further accountable review required
+            {t("aiGovernance.furtherReviewRequired")}
           </label>
           <Button
             disabled={
@@ -628,7 +626,7 @@ export function AIGovernance() {
               )
             }
           >
-            Record assessment for this purpose version
+            {t("aiGovernance.recordAssessment")}
           </Button>
           <div className="flex flex-wrap gap-2">
             {(["approve", "suspend", "retire"] as const).map((action) => (
@@ -647,10 +645,10 @@ export function AIGovernance() {
                 }
               >
                 {action === "approve"
-                  ? "Approve reviewed purpose"
+                  ? t("aiGovernance.actions.approve")
                   : action === "suspend"
-                    ? "Suspend use case"
-                    : "Retire use case"}
+                    ? t("aiGovernance.actions.suspend")
+                    : t("aiGovernance.actions.retire")}
               </Button>
             ))}
           </div>
@@ -658,19 +656,17 @@ export function AIGovernance() {
       )}
       {selected && (
         <section className="space-y-4 rounded-lg border p-4">
-          <h2 className="font-semibold">Deployment and evidence</h2>
+          <h2 className="font-semibold">{t("aiGovernance.deploymentHeading")}</h2>
           <p className="text-muted-foreground">
-            C2 and C3 work needs a matching orchestration plan with independent
-            verification. A revised or suspended deployment cannot reuse its old
-            approval.
+            {t("aiGovernance.deploymentIntro")}
           </p>
-          <Field label="Owned native Task">
+          <Field label={t("aiGovernance.fields.ownedTask")}>
             <select
               className="rounded-md border bg-background p-2"
               value={issueId}
               onChange={(event) => setIssueId(event.target.value)}
             >
-              <option value="">Choose an assigned Task</option>
+              <option value="">{t("aiGovernance.chooseAssignedTask")}</option>
               {tasks.data
                 ?.filter((task) => !!task.assigneeAgentId)
                 .map((task) => (
@@ -697,7 +693,7 @@ export function AIGovernance() {
                 );
             }}
           >
-            Bind current purpose to Task
+              {t("aiGovernance.bindPurpose")}
           </Button>
           {evidenceEnabled && (
             <Button
@@ -726,15 +722,15 @@ export function AIGovernance() {
                 })
               }
             >
-              Export current evidence pack
+              {t("aiGovernance.exportEvidence")}
             </Button>
           )}
           {detail.error && <p role="alert">{detail.error.message}</p>}
           {detail.data?.assessments.map((record) => (
             <p key={record.id}>
-              {record.assessment.framework.replaceAll("_", " ")} ·{" "}
-              {record.assessment.classification.replaceAll("_", " ")} · purpose
-              version {record.purposeVersion}
+              {t(`aiGovernance.enums.framework.${record.assessment.framework}`)} ·{" "}
+              {t(`aiGovernance.enums.classification.${record.assessment.classification}`)} ·{" "}
+              {t("aiGovernance.purposeVersion", { version: record.purposeVersion })}
             </p>
           ))}
           {detail.data?.deployments.map((deployment) => (
@@ -743,19 +739,18 @@ export function AIGovernance() {
                 className="text-primary underline"
                 to={`/issues/${deployment.issueId}`}
               >
-                Open governed Task
+                {t("aiGovernance.openGovernedTask")}
               </Link>{" "}
-              · {deployment.status.replaceAll("_", " ")} · purpose version{" "}
-              {deployment.purposeVersion}
+              · {t(`aiGovernance.enums.deploymentStatus.${deployment.status}`, { defaultValue: deployment.status.replaceAll("_", " ") })} · {t("aiGovernance.purposeVersion", { version: deployment.purposeVersion })}
             </p>
           ))}
           {detail.data?.stopRequests.map((request) => (
             <p key={request.id}>
               {request.status === "delivered"
-                ? "Stop request delivered to the runtime controller"
+                ? t("aiGovernance.stopDelivered")
                 : request.attempts >= 5
-                  ? "Stop delivery needs operator attention"
-                  : "Stop request queued"}
+                  ? t("aiGovernance.stopNeedsAttention")
+                  : t("aiGovernance.stopQueued")}
             </p>
           ))}
         </section>

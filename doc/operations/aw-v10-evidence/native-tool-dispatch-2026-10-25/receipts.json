@@ -1,0 +1,79 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "d01093d5619bc07a2edef8f8ee84619098d41d3d",
+  "meaning": "Backend tool-call turn ID uniquely linked to acknowledged native input intent; partial identity fact only, no complete source/output qualification. Actual PG30PASS and focused document callback2PASS.",
+  "logs": [
+    {
+      "name": "native-tool-dispatch-pg-final",
+      "exitCode": 0,
+      "rawSha256": "383226dfee0b2742df39dabfb616c2f6384e71f99b20d5555d698bc21b04ed24",
+      "sanitizedSha256": "383226dfee0b2742df39dabfb616c2f6384e71f99b20d5555d698bc21b04ed24",
+      "archiveSha256": "1c8d9b40a73ee84189a4c351c779370487c74bd04b8761afbf9eff6671391227",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  29 passed (29)",
+        "Duration  24.72s (transform 11.61s, setup 73ms, import 15.59s, tests 8.91s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-tool-dispatch-pg-reviewed",
+      "exitCode": 0,
+      "rawSha256": "40a4e52363e443687ff3c0fb3b037c8fde41864a21091f4a9c09476908d00a42",
+      "sanitizedSha256": "40a4e52363e443687ff3c0fb3b037c8fde41864a21091f4a9c09476908d00a42",
+      "archiveSha256": "a8f57fdb463300699e57cb097cb82b0f2aeeeda5f5acd34079d20f05da2a88d4",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  30 passed (30)",
+        "Duration  23.32s (transform 10.65s, setup 111ms, import 14.48s, tests 8.60s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-tool-dispatch-executor-final",
+      "exitCode": 0,
+      "rawSha256": "104ef7eb6aad9c49b893e5242bea7ed4ff3852dd4af84f3571e77d9033b58514",
+      "sanitizedSha256": "104ef7eb6aad9c49b893e5242bea7ed4ff3852dd4af84f3571e77d9033b58514",
+      "archiveSha256": "2decb2ef9206f8b5af52b0eb5915d6c57c42add31079ca5cd6f07aae13757f02",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 471 skipped (473)",
+        "Duration  14.93s (transform 11.18s, setup 70ms, import 14.61s, tests 116ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-tool-dispatch-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

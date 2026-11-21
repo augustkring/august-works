@@ -1,0 +1,75 @@
+{
+  "record": "workspace-a-2 UI product identity expectation repair",
+  "sourceHead": "78b63d76df13d9208f9560c4fdf77cb6ff0e9952",
+  "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "sourcePins": "/workspace/v10-preparation/workspace-a2-product-copy-13-r2-20261029/source-pins.json",
+  "sourcePatch": "/workspace/v10-preparation/workspace-a2-product-copy-13-r2-20261029/source-pins.source.patch",
+  "syntaxCheck": {
+    "path": "/workspace/v10-preparation/workspace-a2-product-copy-13-r2-20261029/syntax.log",
+    "status": "passed",
+    "parser": "Vitest Vite/Oxc",
+    "checked": 866
+  },
+  "focusedSuite": {
+    "path": "/workspace/v10-preparation/workspace-a2-product-copy-13-r2-20261029/test.log",
+    "exitPath": "/workspace/v10-preparation/workspace-a2-product-copy-13-r2-20261029/test.exit",
+    "status": "passed",
+    "files": 13,
+    "tests": 511
+  },
+  "preliminaryRun": {
+    "path": "/workspace/v10-preparation/workspace-a2-product-copy-13-r1-20261029/test.log",
+    "exitPath": "/workspace/v10-preparation/workspace-a2-product-copy-13-r1-20261029/test.exit",
+    "result": "12 files / 510 tests passed; one real spacing defect exposed in ChatIdentityConfirm; corrected before final run"
+  },
+  "tokenGates": {
+    "status": "passed",
+    "sourceHead": "78b63d76df13d9208f9560c4fdf77cb6ff0e9952",
+    "sourcePins": "/workspace/v10-preparation/workspace-a2-product-copy-token-gates-r1-20261029/source-pins.json",
+    "log": "/workspace/v10-preparation/workspace-a2-product-copy-token-gates-r1-20261029/token-gates.log",
+    "exitPath": "/workspace/v10-preparation/workspace-a2-product-copy-token-gates-r1-20261029/token-gates.exit",
+    "summary": "Gates 1\u20134 clean; agent palette token sync clean; ClipLab character sync clean"
+  },
+  "changes": {
+    "expectations": "Tests now use PRODUCT_IDENTITY.productName for rendered product names. The TrustPresetSection check now asserts current policy-copy and verifies the obsolete EE upsell is absent. Existing Paperclip company/provider/app fixture values remain unchanged.",
+    "productionDefect": "ChatIdentityConfirm JSX previously omitted a whitespace node between \u201ccurrent\u201d and PRODUCT_IDENTITY.productName, rendering \u201ccurrentBlentera\u201d. Added an explicit space; the expected test now verifies rendered \u201ccurrent Blentera permissions\u201d."
+  },
+  "privateArtifactOnly": false,
+  "modifiedTests": [
+    "ui/src/components/IssueThreadInteractionCard.test.tsx",
+    "ui/src/components/OnboardingWizard.test.tsx",
+    "ui/src/components/TrustPresetSection.test.tsx",
+    "ui/src/components/access/InvitesSection.test.tsx",
+    "ui/src/components/task-chat/transcript-adapter.test.ts",
+    "ui/src/pages/apps/AppsConnect.test.tsx",
+    "ui/src/pages/apps/Browse.test.tsx",
+    "ui/src/pages/apps/PaperclipCloudOAuthHandoff.test.tsx",
+    "ui/src/pages/apps/generic-mcp-connect.test.ts",
+    "ui/src/pages/secrets/ImportFromVaultDialog.test.tsx",
+    "ui/src/pages/apps/chat/ChatIdentityConfirm.test.tsx",
+    "ui/src/pages/apps/chat/GitHubSetupPrompt.test.tsx",
+    "ui/src/pages/apps/chat/github-private-key-file.test.ts"
+  ],
+  "productionFiles": [
+    "ui/src/pages/apps/chat/ChatIdentityConfirm.tsx"
+  ],
+  "testRawLogSha256": "b52a56576b9c37613b7bbdaa0ff55aeecd4fb2bc5c3eb550c5cec24768f4c6ae",
+  "token-gatesRawLogSha256": "5609ccb2b627181638cd10b012c061febd3b467eecba6340081880d4b0cc03dc",
+  "sourceSha256": {
+    "ui/src/components/IssueThreadInteractionCard.test.tsx": "4ae8fd9da45d0b814d59cbbd538e3b8bb877cae4e93484eb03541830aa684989",
+    "ui/src/components/OnboardingWizard.test.tsx": "166f12e4f158ee9968455d473b7db426ab64864e729c100c85ca8c63f6c229e3",
+    "ui/src/components/TrustPresetSection.test.tsx": "79c33e1a374195effda29a507cb36c9de29f7ff86accd1bb3fe84208cc293795",
+    "ui/src/components/access/InvitesSection.test.tsx": "895087816ad0bc9d578fe2b497ebb45367b495d1cc4dbf187ec9a052b9126e7f",
+    "ui/src/components/task-chat/transcript-adapter.test.ts": "f72a9a2883f172a7c2bd3fb1a06df674a2f16e0cee5b8d87c19c188a41c7f6bc",
+    "ui/src/pages/apps/AppsConnect.test.tsx": "3f592130e0b6d935835775e6f977e83bf3ca261c7bc18c152904649e72b3fdb1",
+    "ui/src/pages/apps/Browse.test.tsx": "961cb4c3017687d65fa9c2579a96b05d56f66430f7ada6d1bfa3ce80db309d72",
+    "ui/src/pages/apps/PaperclipCloudOAuthHandoff.test.tsx": "4600ee4ffb6b27a21cc1fb45c21c1ce243455938a0fab92a232a1ce4b22369ac",
+    "ui/src/pages/apps/generic-mcp-connect.test.ts": "3b640740e5d52bb0d4ddc1db4e739653585c8cb7ceb0f004fa95a465054c7a4d",
+    "ui/src/pages/secrets/ImportFromVaultDialog.test.tsx": "e04f1e2078c921b1d471a7ac86cc1e25f5364d93176cd89a1b01acd5ae8ef9c9",
+    "ui/src/pages/apps/chat/ChatIdentityConfirm.test.tsx": "084064823916fd46af830c65a71aa887aa00081d1abe5b4eb98500b1bd156f29",
+    "ui/src/pages/apps/chat/GitHubSetupPrompt.test.tsx": "66f5c33962abff5698967c9d32f2084f80846cb946ee09fe96037ae1a9e995a3",
+    "ui/src/pages/apps/chat/github-private-key-file.test.ts": "a416485a0cfe2ae866a6c7fecab05c821d0f0e9d3c0d0cbfdb00b5b4f8f7a5f0",
+    "ui/src/pages/apps/chat/ChatIdentityConfirm.tsx": "8728cc02956e2ea047772de191131a81d299636ec13d7c85e2bd2f93be184957"
+  },
+  "helpReview": "No source mapping exists for ChatIdentityConfirm in docs/help/change-review.json; spacing-only repair requires no article change."
+}

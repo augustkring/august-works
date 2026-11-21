@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { agents, heartbeatRuns, issues, type Db } from "@paperclipai/db";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
+import type { NativePayloadSourceInput } from "@paperclipai/shared";
 import {
   authorizeChatConversationForBoundRun,
   isExternalChatWaitAuthorizationContention,
@@ -18,10 +19,12 @@ export async function materializeExternalChatQuestionResponseInput(input: {
   db: Db;
   binding: ChatReuseBinding;
   contextSnapshot: Record<string, unknown>;
+  onSourceCapture?: (source: Extract<NativePayloadSourceInput, { kind: "interaction" }>) => void;
 }): Promise<NativeInteractionResponseEnvelope[]> {
   const { binding } = input;
   const attempt = () =>
     input.db.transaction(async (transaction) => {
+      const sources: Array<Extract<NativePayloadSourceInput, { kind: "interaction" }>> = [];
       const tx = transaction as unknown as Db;
       const [issue] = await tx
         .select()
@@ -91,6 +94,7 @@ export async function materializeExternalChatQuestionResponseInput(input: {
         runId: binding.runId,
         agentId: binding.agentId,
         interactionIds: answer.interactionIds,
+        onSourceCapture: input.onSourceCapture ? (source) => { sources.push(source); } : undefined,
       });
       if (
         responses.length !== answer.interactionIds.length ||
@@ -103,15 +107,22 @@ export async function materializeExternalChatQuestionResponseInput(input: {
       ) {
         throw new Error("external_chat_question_response_chain_incomplete");
       }
-      return responses.sort(
-        (left, right) =>
-          answer.interactionIds.indexOf(left.interactionId) -
-          answer.interactionIds.indexOf(right.interactionId),
-      );
+      return {
+        sources,
+        responses: responses.sort(
+          (left, right) =>
+            answer.interactionIds.indexOf(left.interactionId) -
+            answer.interactionIds.indexOf(right.interactionId),
+        ),
+      };
     });
   for (let index = 0; index < 51; index += 1) {
     try {
-      return await attempt();
+      const selected = await attempt();
+      // Only a successfully committed authorized snapshot reaches the caller;
+      // contention retries must not retain captures from aborted attempts.
+      for (const source of selected.sources) input.onSourceCapture?.(source);
+      return selected.responses;
     } catch (error) {
       if (!isExternalChatWaitAuthorizationContention(error)) throw error;
     }

@@ -1,0 +1,26 @@
+{
+  "status": "scoped_software_tests_passed",
+  "baseCommit": "3d3ac21d7ee37d6446c4e00ea7ce3322efb79d8d",
+  "verifiedCodeAndConfigFiles": 5925,
+  "baseManifestSha256": "5b7a32e6417869fe09180b10cfc37001cff198fbae651d24109cf8b33d0d9adb",
+  "overrides": [
+    {
+      "file": "server/src/services/saas/company-purge.ts",
+      "sha256": "88aa6add695f03b5ceea70ed2d9a755e633ace3882cbc9fe6df2992878e31630",
+      "patchArchive": "artifact-purge-worker-tested-override.patch.gz"
+    }
+  ],
+  "container": "blentera-v10-learning-diagnostics",
+  "uid": 20001,
+  "nodeVersion": "24.22.1",
+  "heapMiB": 2048,
+  "network": "none",
+  "outerNamespaceRestrictionsRelaxed": true,
+  "applicationSandboxControlsUnchanged": true,
+  "results": {
+    "scenarioTests": 16,
+    "passed": 16,
+    "failed": 0
+  },
+  "limits": "Exact base plus one tested owner patch, not final unchanged-source workspace acceptance. Original tar metadata/permission warnings and failed first run are retained; actual code/config files were independently hash verified before the one owner override. A later equivalent pending-set condition simplification is not part of this tested patch. No production host/provider qualification."
+}

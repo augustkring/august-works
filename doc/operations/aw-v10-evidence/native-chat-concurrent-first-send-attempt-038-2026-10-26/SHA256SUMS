@@ -1,0 +1,16 @@
+1b486dfff38655049f639b3ca7f3fc5888e2bc80783c60fbe524dd75a51624d0  ./README.md
+333edbd715be9798ef26f1c5a66d9fb4f688aad1471d45ea4d3f3d4792a26350  ./db-prune.log
+b1bda880cb573d694d6e0b7f060e3d9e183656625c33925528768de7554d687b  ./list.log
+53bcbca92d97721cbdb1b045fbfae4419386807216a5ca7557e54a06bc30fe48  ./playwright-output/.last-run.json
+75a744281004bca7cc2b2c0855a184722c903e9d56a90ad47789822d868af8cc  ./playwright-output/agent-chat-sessions-chat-f-a7983--and-retries-share-one-task-chromium/error-context.md
+81aa612917b368a856eb014294d50a3811c1fb3506d355b15fd1035a519b16cf  ./playwright-output/agent-chat-sessions-chat-f-a7983--and-retries-share-one-task-chromium/test-failed-1.png
+cb1c9e33f85f5dd8e5515d807c74dccee575f4828d48e72fdefa53c3d38062e0  ./playwright-output/agent-chat-sessions-chat-f-a7983--and-retries-share-one-task-chromium/test-failed-2.png
+f82562a66d632ca16e66fddf755157ebd1088d96053e1f088d47b234e6f3df74  ./playwright-output/agent-chat-sessions-chat-f-a7983--and-retries-share-one-task-chromium/trace.zip
+faeb3c6c24d21e6ab5c364babeffe3c038887bb2cda522b1c200a07573597a0d  ./playwright-output/native-chat-provider-events.ndjson
+51a34c6d1cebb1e4d40e2d29fe9d852694ce1b2b6630105a728f0d0fb64d4685  ./playwright.log
+e6be7232d344ed7f7948bbbeb3a7c86355f15e9eef4a012eba2cfdee81e02b6d  ./resource-check.log
+ee9b834ec6cac3ef0fe2289b574278e3c8d9a137004e5b9518fa5528ef242283  ./snapshot.log
+6ab7189f059c45be14bef23eedcc7a466ed30241e6922f63a383c06e4ed56ec3  ./socket-cleanup.log
+ff32520fdb207588a251bc10d597c706959905864280e899cdb5609e283e8f97  ./source-pins.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./syntax.log
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  ./test-exit.txt

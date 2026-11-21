@@ -9,6 +9,7 @@ import type {
   PrpTerminalState,
 } from "../protocol/replay-contract.js";
 import type {
+  HarnessConfirmedRunBinding,
   HarnessRuntimeRequest,
   HarnessRuntimeRequestHandoff,
   HarnessRuntimeRequestResolution,
@@ -71,10 +72,18 @@ export interface PersistedNativeSession {
   lineage?: HarnessThreadLineageEntry[];
 }
 
+export type NativeConfirmedRunBinding = HarnessConfirmedRunBinding;
+
 export interface NativeSessionRecoveryResult {
   recovered: boolean;
   session?: NativeSession;
   reason?: string;
+  /**
+   * Run, session, runner instance and lease confirmed by the runner after it
+   * authenticated, taken from the transport (never from the snapshot passed
+   * in). Callers that use it must compare every field with their own records.
+   */
+  binding?: NativeConfirmedRunBinding;
 }
 
 /**
@@ -141,6 +150,15 @@ export interface NativeSession {
   identity(): NativeRunIdentity;
   capabilities(): Promise<NativeSessionCapabilities>;
   attachRun?(input: { identity: NativeRunIdentity }): Promise<void>;
+  /**
+   * Adopt `identity` on a recovered session whose runner-confirmed binding
+   * (from the same recovery) names exactly this Run and session. No
+   * `run.attach` is sent and no route is registered. One use per recovery.
+   */
+  adoptConfirmedRun?(input: {
+    identity: NativeRunIdentity;
+    binding: NativeConfirmedRunBinding;
+  }): void;
   /** Relinquish controller authority without suspending provider execution. */
   detachControllerForRestart?(): Promise<void>;
   events(input?: { afterCursor?: string | null }): AsyncIterable<PrpEvent>;
@@ -152,6 +170,10 @@ export interface NativeSession {
   }): Promise<{
     turnId: string;
     effectiveCollaborationMode?: "default" | "plan";
+    /** Release provider work only after the runtime has durably acknowledged
+     * the exact input/turn binding. Stateless controllers use this before any
+     * paid request can pass their source receipt gate. */
+    releaseAfterInputAcknowledgement?: () => void | Promise<void>;
   }>;
   steer?(input: {
     turnId: string;

@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-22T21:06:19.590893+00:00",
+  "scope": "UP03 ordinary Memory retained producer/source authority checkpoint",
+  "sourcePinsVerifiedBeforeFinalCaptureCompletedAndBeforeCheckpoint": {
+    "server/src/services/memory/memory-privacy.ts": "0888370c91031fdd927d684e5b49d203ddfabb69139dcefb9ce35cb2e88cce17",
+    "server/src/services/memory/memory-service.ts": "a4e17108cefac9f2f1343b6700d80c0a5f78443759bb29ae9a171fcb181649a7",
+    "server/src/services/memory/memory-resolution.ts": "6963c20f058fa99cf6011538ab7ba311cf4f828d54276e3b157aa059f24d1012",
+    "server/src/services/memory/memory-maintenance.ts": "d094f4775874bca9e362fe31324bcf097b298c658b29f0ff56fb10094e8de11d",
+    "server/src/services/memory/derived-memory.ts": "9b66ddfc28794796363627849aa22daeca08bed3bb3d638f3a1f0dc6e1872b26",
+    "server/src/services/analytical-context-privacy.ts": "ed2461e0d3fc455350447cc2bd10cdb62a0a65e8ff45a8f7740c09294c933a9b",
+    "server/src/services/context/context-manifest.ts": "0f9001b2d777ec3614056c17d4f18c46d6a2ab3b752bca77d9e2cb1f87334c0d",
+    "server/src/__tests__/v10-private-payload.integration.test.ts": "620bd277c8d0b895669d4668c6e59bb8c6cc666984de5f6b2aec50968e786d04",
+    "server/src/services/memory/memory-maintenance.test.ts": "d3ecbf73c265996c36c8e84e243758eb4e74c2f5b2488bc92a592423900cb2e1",
+    "server/src/services/authorization.ts": "26b105a8ed3b4f7a32c98d8547fb81c625ae9d3617e0a34559421aa450c45d12",
+    "packages/db/src/migrations/0504_conscious_sleepwalker.sql": "5a9e21fac154e2ff5bfb3dd8be9c5d200b7e2eca48e3f67924d5377bf38f6b6a"
+  },
+  "runs": [
+    {
+      "log": "up03-memory-limit-red.log.txt",
+      "sha256": "99d6f2821823701eab39f58ba8e0161f81d22d4dd8911bd0dbe3786b2fe8abb2",
+      "exitCode": 1,
+      "result": "Actual PostgreSQL: readable row suppressed by unreadable rows before result limit; expected readable UUID, got []. One failed,15 deselected."
+    },
+    {
+      "log": "up03-memory-expanded-green-attempt.log.txt",
+      "sha256": "db40d3414ed13d1ac402bf2cfee8476ebb899ffb29c0a0214378ad477d785a0a",
+      "exitCode": 0,
+      "result": "Actual PostgreSQL:34 tests passed across private payload, original Context manifest, and native maintenance suites. Includes direct Memory cycle/diamond, actual account deletion, paused reader, per-Human same-Agent isolation, source revocation, list limits, compaction/reflection erasure, and atomic receipt faults."
+    }
+  ],
+  "command": "GOMEMLIMIT=1GiB GOMAXPROCS=2 node --max-old-space-size=2048 node_modules/vitest/vitest.mjs run server/src/__tests__/v10-private-payload.integration.test.ts server/src/services/context/context-manifest.test.ts server/src/services/memory/memory-maintenance.test.ts --maxWorkers=1",
+  "changes": [
+    "Only actual accountable producer/run and persisted Context stamp retained source IDs; citation metadata grants nothing. Unknown historical Memory is withheld.",
+    "Original Memory source owner intersects all current Task/Project/run/Memory/Foundation roots, with bounded cycle/deadline review; revocation/deletion retained.",
+    "Mutations and operation replays require current source access before source payloads; maintenance records actual selected parent IDs and erasure follows those roots.",
+    "Eligible/reviewable/resolution result bounds apply to source-readable rows, using stable database batches.",
+    "Existing native maintenance fixture now seeds actual user account and explicitly source-free qualified software rows; assertion semantics preserved."
+  ],
+  "limits": [
+    "Source complete/full UP03/V10/PR readiness NOT earned.",
+    "No downstream current server typecheck yet; prior ordinary typecheck failed integration fields owned by task/import owners.",
+    "True cross Learning/Foundation/Memory cycle qualification pending A; direct Memory cycle/diamond passed only.",
+    "Whole effect-lifetime membership pinning, final source checks across provider transport, Context-derived ordinary payloads, every list/cache/realtime/export surface, mixed-writer/rollback and historical qualification remain open.",
+    "List pagination currently lacks Memory transaction snapshot/lock and final complete source recheck; follow-up required for concurrent writers.",
+    "No inferred historical public backfill, publication release contract, deployed/private admission, physical runtime or paid provider acceptance."
+  ]
+}

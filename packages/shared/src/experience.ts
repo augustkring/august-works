@@ -80,6 +80,8 @@ export const canonicalExperienceSourceSchema = z
       "agent_package_installation",
       "runtime_cell",
       "memory_job",
+      "routine",
+      "company_responsibility",
       "company_skill",
       "playbook",
     ]),
@@ -197,6 +199,8 @@ export const experienceDependencySchema = z
         "denied",
         "failure",
         "source_stale",
+        "source_unavailable",
+        "overflow",
         "more_items_available",
       ])
       .nullable(),

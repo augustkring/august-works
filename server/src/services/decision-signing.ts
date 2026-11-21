@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmodSync, linkSync, lstatSync, mkdirSync, readFileSync, type Stats, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -133,6 +134,25 @@ export function resolveDecisionSigningSecret(): string {
   return loadOrCreateGeneratedSecret();
 }
 
+const operationSigningKey = new AsyncLocalStorage<{ secret: string }>();
+
+/**
+ * Run one bounded signing operation, for example a single experiment capture or
+ * replay transaction that signs or verifies tens of thousands of receipts, with
+ * the key resolved and permission-checked once at its start. Outside such a
+ * scope every signature still resolves the key itself, and every new operation
+ * resolves it again, so a rotated or re-permissioned key takes effect at the
+ * next operation. Nested scopes reuse the outer key.
+ */
+export async function withDecisionSigningKey<T>(operation: () => Promise<T>): Promise<T> {
+  if (operationSigningKey.getStore()) return operation();
+  return operationSigningKey.run({ secret: resolveDecisionSigningSecret() }, operation);
+}
+
+function currentDecisionSigningSecret(): string {
+  return operationSigningKey.getStore()?.secret ?? resolveDecisionSigningSecret();
+}
+
 /**
  * Startup guard: resolves the signing secret once so an invalid explicit
  * PAPERCLIP_DECISION_SIGNING_SECRET fails fast and the generated key file is
@@ -153,7 +173,7 @@ function canonical(value: unknown): string {
 }
 
 export function signDecisionSpec(value: unknown) {
-  return `${VERSION}.${createHmac("sha256", resolveDecisionSigningSecret()).update(`${VERSION}:${canonical(value)}`).digest("hex")}`;
+  return `${VERSION}.${createHmac("sha256", currentDecisionSigningSecret()).update(`${VERSION}:${canonical(value)}`).digest("hex")}`;
 }
 
 export function verifyDecisionSpec(value: unknown, signature: string) {

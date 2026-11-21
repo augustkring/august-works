@@ -4,6 +4,10 @@ import {
   activationViewSchema,
   initialActivationState,
 } from "../../packages/shared/src/activation.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
+
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(
@@ -63,7 +67,7 @@ test("change setup recovers a missing acknowledgement through a current read and
     await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
     await page.reload();
     const heading = page.getByRole("heading", { level: 1,
-      name: "What would you like August Works to help with first?", exact: true });
+      name: /^What would you like .+ to help with first\?$/ });
     await expect(heading).toBeVisible(); await expect(heading).toBeFocused();
     await expect(page.getByRole("textbox", { name: "First outcome/goal", exact: true }))
       .toHaveValue("PRIVATE saved research goal");
@@ -81,7 +85,7 @@ test("change setup recovers a missing acknowledgement through a current read and
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("v9-change-setup-mobile.png"), fullPage: true });
   } finally {
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(request, company.id));
   }
 });
 

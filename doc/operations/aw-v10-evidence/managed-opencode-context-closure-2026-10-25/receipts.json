@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-25",
+  "status": "open_actual_binary_acceptance",
+  "acceptance": {
+    "actualPinnedBinaryRunGreen": false,
+    "privateRMemorySelected": true,
+    "aBeforeRAndBAfterRProved": false,
+    "finishAndCurrentReaderProved": false
+  },
+  "ownerSuite": {
+    "log": "context-owner-cancel-revocation.log",
+    "exit": 0,
+    "passed": 3,
+    "skipped": 6,
+    "sourcePins": "context-owner-source-pins.json"
+  },
+  "actualRuns": [
+    {
+      "log": "actual-e2e-startup-failure.log",
+      "exit": 1,
+      "result": "opencode-ai postinstall was missing"
+    },
+    {
+      "log": "actual-e2e-pre-dedupe-failure.log",
+      "exit": 1,
+      "result": "Context manifest stage exceeded existing runtime deadline"
+    },
+    {
+      "log": "actual-e2e-witness-failure.log",
+      "exit": 1,
+      "result": "Native Context read witness unavailable; no successful read_context capture"
+    },
+    {
+      "log": "actual-e2e-rselected-gateway-length-failure-2026-10-26.log",
+      "exit": 1,
+      "sourcePins": "actual-e2e-rselected-gateway-length-failure-source-pins-2026-10-26.json",
+      "binarySha256": "actual-e2e-rselected-gateway-length-failure-binary-sha256-2026-10-26",
+      "result": "DB-backed facts prove private R Memory selected in a two-input Task+Context set; gateway's total-input length-one guard rejected it"
+    },
+    {
+      "log": "actual-e2e-corrected-postread-55p03-failure-2026-10-26.log",
+      "exit": 1,
+      "sourcePins": "actual-e2e-corrected-postread-55p03-failure-source-pins-2026-10-26.json",
+      "binarySha256": "actual-e2e-corrected-postread-55p03-failure-binary-sha256-2026-10-26",
+      "result": "read_context succeeded and capture persisted; runner hit its existing 90-second session deadline before model request 4; failure-persistence SELECT heartbeat_runs FOR UPDATE then raised SQLSTATE 55P03; A/R/B plus finish/current-reader not proved"
+    },
+    {
+      "log": "actual-e2e-postcapture-stall-diagnostic-2026-10-26.log",
+      "exit": 1,
+      "sourcePins": "actual-e2e-postcapture-stall-diagnostic-source-pins-2026-10-26.json",
+      "binarySha256": "actual-e2e-postcapture-stall-diagnostic-binary-sha256-2026-10-26",
+      "result": "read_context capture persisted; after-capture 15-second probe remained at provider fetch 3 with no PG blockers; test-only timings show 182 successful analytical-context access checks (latest 63 median 204 ms); existing 90-second runner deadline expired before request 4, so complete A/R/B and finish/current-reader are not proved"
+    },
+    {
+      "log": "actual-e2e-batched-source-timeout-2026-10-26.log",
+      "exit": 1,
+      "sourcePins": "actual-e2e-batched-source-timeout-source-pins-2026-10-26.json",
+      "binarySha256": "actual-e2e-batched-source-timeout-binary-sha256-2026-10-26",
+      "result": "batched Context-source run still timed out at unchanged 90-second deadline before provider request 4; read_context capture persisted; 15-second post-capture probe stayed at fetch count 3 without persistent blocker; failure-only spy counted 179 exported analytical access calls, showing the batched path did not remove the hot loop; acceptance incomplete"
+    },
+    {
+      "log": "actual-e2e-caller-attribution-timeout-2026-10-26.log",
+      "exit": 1,
+      "sourcePins": "actual-e2e-caller-attribution-source-pins-2026-10-26.json",
+      "binarySha256": "actual-e2e-caller-attribution-binary-sha256-2026-10-26",
+      "result": "bounded caller attribution: read_context captured; unchanged 90-second deadline expired before provider request 4; no persistent PG blocker; 163 of 184 analytical checks came from native-direct-input.ts:1594 in the per-Task loop of assertNativeDocumentRevisionCurrentSourceAccessInScope; latest 63 calls median 185 ms; acceptance incomplete"
+    },
+    {
+      "log": "actual-temporal-owner-fixture-failure-2026-10-26.log",
+      "exit": 1,
+      "sourcePins": "actual-temporal-owner-fixture-failure-source-pins-2026-10-26.json",
+      "binarySha256": "actual-temporal-owner-fixture-failure-binary-sha256-2026-10-26",
+      "result": "filtered temporal suite setup ran managed OpenCode fixture and exited before the selected owner assertion; after two provider responses a subsequent request was denied for missing original qualified tool invocation receipt; not acceptance evidence"
+    }
+  ],
+  "postinstall": {
+    "log": "opencode-postinstall.log",
+    "exit": 0,
+    "path": "opencode-postinstall.path",
+    "sha256": "opencode-postinstall.sha256",
+    "sameAsPinned": "opencode-postinstall.same-as-pinned"
+  }
+}

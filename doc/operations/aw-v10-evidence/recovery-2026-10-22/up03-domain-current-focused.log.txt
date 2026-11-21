@@ -1,0 +1,57 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-list-assignee-filter-routes.test.ts (0 test)
+ ❯ |@paperclipai/server| src/__tests__/company-search-extract-service.test.ts (8 tests | 1 failed | 7 skipped) 18163ms
+     × omits private extraction sources before the page window and hasMore 532ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-list-assignee-filter-routes.test.ts [ server/src/__tests__/issue-list-assignee-filter-routes.test.ts ]
+TypeError: Cannot read properties of undefined (reading 'pick')
+ ❯ src/services/company-portability.ts:213:72
+    211| // restrictions. Legacy task/project copies require current source pro…
+    212| const BUNDLE_SCHEMA_VERSION = 8;
+    213| const portableIssuePrivacySchema = portabilityIssueManifestEntrySchema…
+       |                                                                        ^
+    214|   visibility: true, privacyRootIssueId: true, privacyParentIssueId: tr…
+    215|   responsibleUserId: true, createdByUserId: true });
+ ❯ src/services/index.ts:150:1
+ ❯ src/routes/issues.ts:157:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-search-extract-service.test.ts > companySearchExtractService > omits private extraction sources before the page window and hasMore
+Error: Failed query: insert into "issues" ("id", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at") values ($1, $2, default, default, default, default, default, default, default, default, default, default, default, default, default, $3, $4, $5, default, default, default, default, $6, default, default, default, default, default, default, default, default, default, default, default, $7, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, $8)
+params: 24dd20a4-144b-43c0-bc92-55c20426e3c9,18961051-a1ba-4351-8cd1-c1fa05805e52,Public needle,,in_progress,medium,EXT-1,2026-10-21T00:00:00.000Z
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ createIssue src/__tests__/company-search-extract-service.test.ts:97:5
+     95|   async function createIssue(companyId: string, values: Partial<typeof…
+     96|     const id = values.id ?? randomUUID();
+     97|     await db.insert(issues).values({
+       |     ^
+     98|       id,
+     99|       companyId,
+ ❯ src/__tests__/company-search-extract-service.test.ts:156:21
+
+Caused by: PostgresError: duplicate key value violates unique constraint "issues_identifier_idx"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23505', detail: 'Key (identifier)=(EXT-1) already exists.', schema_name: 'public', table_name: 'issues', constraint_name: 'issues_identifier_idx', file: 'nbtinsert.c', routine: '_bt_check_unique', query: 'insert into "issues" ("id", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at") values ($1, $2, default, default, default, default, default, default, default, default, default, default, default, default, default, $3, $4, $5, default, default, default, default, $6, default, default, default, default, default, default, default, default, default, default, default, $7, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, $8)', parameters: [ '24dd20a4-144b-43c0-bc92-55c20426e3c9', '18961051-a1ba-4351-8cd1-c1fa05805e52', 'Public needle', null, 'in_progress', 'medium', 'EXT-1', '2026-10-21T00:00:00.000Z' ], args: [ '24dd20a4-144b-43c0-bc92-55c20426e3c9', '18961051-a1ba-4351-8cd1-c1fa05805e52', 'Public needle', null, 'in_progress', 'medium', 'EXT-1', '2026-10-21T00:00:00.000Z' ], types: [ 2950, 2950, 25, 25, 25, 25, 25, 1184 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  1 failed | 5 passed | 161 skipped (167)
+   Start at  21:32:12
+   Duration  168.03s (transform 52.99s, setup 720ms, import 85.11s, tests 52.44s, environment 1ms)
+

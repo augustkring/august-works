@@ -1,0 +1,18 @@
+{
+  "server/src/__tests__/authenticator-lifetime.integration.test.ts": "7c5c847d773a9976c176c04a2b9e6dce6b1caf6bdaa94e86a06d80d198079f87",
+  "server/src/__tests__/v6-commercial-runtime.integration.test.ts": "f36d2f65649df24f00e12aff8f39068fca38e23618fd9bcb7d8effdc7fba4c1c",
+  "server/src/__tests__/v6-saas-domains.integration.test.ts": "b1327d87fad863dc801e55d7851c46bf21407c69ad0896fcdeff5d5ece6a2094",
+  "server/src/__tests__/v7-enterprise-scim.integration.test.ts": "5f71ffcdc293f12e2f9719c7327bd786440f59ac5512e267078769500a2bfa81",
+  "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts": "c7af31de70f94e14d3f2bbe68709a6743f17f7a3dc5b03d70286a1a3f9da4aab",
+  "server/src/__tests__/v7-sandbox.integration.test.ts": "b62511c6beffff3871e5bcb8cc327f63aa70033176a4f00c7ebdf7dd37a7a4b5",
+  "server/src/__tests__/v9-customer-support.integration.test.ts": "f530e0786f030c4270f7ed4dfab46726632b8643c22ed662efbbb45bf05060a2",
+  "server/src/auth/authenticator-assurance.ts": "e7f0b4221142a34190aa43f9b7dfd9d3252577c646e18e570579f429969b966e",
+  "server/src/routes/instance-settings.ts": "6687c5d8c496bd5569d2d7a470e924fa53fae2f74d9d0de629c76795a34e1fae",
+  "server/src/routes/saas.ts": "9d1e26d5d1e0dfc4dc0f41902445c4777312babcb08823f2fe8fee2be8b8ae81",
+  "server/src/services/enterprise/identity-policy.ts": "c501c14f3af4f9d3b200200cc2fd1e48dd74f7b3c7ae340782ee874e09608032",
+  "server/src/services/execution-sandbox/sandbox-service.ts": "83d52d4055e7ef03c79e8d68b60f421cb5d010c18db4a377dd0a8d48b1bcaab5",
+  "server/src/services/instance-settings.ts": "fb6bd0778135e18b8c987ba481bd64a505b9ff90c612c1456064e437e495847e",
+  "server/src/services/saas/support.ts": "08ab5f2b158f2fb8d8a70de8f8f8897b061e2047ebd56b554cd7c225c0d4834b",
+  "server/src/__tests__/helpers/native-authentication-fixtures.ts": "7becd158b1bb04e3e80f60fcddab8ecd40d006a8e7016dd5fe2e16bd0d4a0f07",
+  "server/src/__tests__/instance-settings-operator.integration.test.ts": "5b13ed84fdcf40713c697966ccb2813504990fb4284d08936acb109e776ed9bd"
+}

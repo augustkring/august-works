@@ -16,7 +16,7 @@ packages:
 # Keep in sync with package.json#pnpm.patchedDependencies. Newer pnpm
 # versions read patch configuration only from the workspace manifest.
 patchedDependencies:
-  "@better-auth/scim@1.7.2": patches/@better-auth__scim@1.7.2.patch
+  "@better-auth/scim@1.7.7": patches/@better-auth__scim@1.7.7.patch
   postgres@3.4.9: patches/postgres@3.4.9.patch
   embedded-postgres@18.1.0-beta.16: patches/embedded-postgres@18.1.0-beta.16.patch
   acpx@0.12.0: patches/acpx@0.12.0.patch
@@ -56,5 +56,15 @@ overrides:
   "fast-uri@>=3.0.0 <3.1.8": "3.1.8"
   "brace-expansion@>=2.0.0 <2.1.7": "2.1.7"
   "source-map-js@>=1.0.0 <1.2.2": "1.2.2"
-  "undici@>=8.0.0 <8.10.2": "8.10.2"
-  "@modelcontextprotocol/sdk@>=1.12.0 <1.31.0": "1.31.0"
+  "undici@>=8.0.0 <8.12.2": "8.12.3"
+  "undici@>=6.23.0 <6.29.1": "6.29.1"
+  "vite@>=8.2.0 <8.2.4": "8.3.5"
+  "body-parser@>=2.0.0 <2.4.0": "2.4.0"
+  "@modelcontextprotocol/sdk@>=1.12.0 <1.32.0": "1.32.0"
+  "dompurify@>=3.0.0 <3.4.17": "3.4.17"
+  "follow-redirects@>=1.16.0 <1.16.1": "1.16.1"
+  "zod@>=4.0.0 <4.6.6": "4.6.6"
+  # Cursor SDK schemas are exercised against Zod 4 by the adapter checks.
+  "@cursor/sdk>zod": "4.6.6"
+  # Teams uses client-credential and managed-identity APIs preserved in MSAL 7.
+  "@microsoft/teams.apps>@azure/msal-node": "7.1.0"

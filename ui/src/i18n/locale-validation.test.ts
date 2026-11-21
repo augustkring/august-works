@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { t } from ".";
+import { i18n, t } from ".";
 import en from "./locales/en.json";
 import { localeMessages } from "./locales";
 import { validateLocaleMessages } from "./locale-validation";
@@ -9,6 +9,35 @@ describe("locale validation", () => {
     expect(t("app.noCompanies.title")).toBe(en.app.noCompanies.title);
     expect(t("app.missing", { defaultValue: "Fallback" })).toBe("Fallback");
     expect(t("app.missing")).toBe("app.missing");
+  });
+
+  it("interpolates the shared product name in experience copy and English native fallback", () => {
+    const keys = [
+      "feedback.description",
+      "feedback.questions.IDEA",
+      "activation.screen3",
+      "activation.connectionConsent.explanation.noBusinessChanges",
+      "activation.connectionConsent.explanation.noConsequentialAuthority",
+      "hireDeclared.provider.paperclip_native",
+      "agentPublication.scope",
+      "insightObservations.authority.aw_native",
+      "insightForecasts.nativeModel",
+      "notificationChannels.destinationUnavailable",
+      "errorRecovery.app",
+    ];
+
+    for (const lng of ["en", "da"]) {
+      for (const key of keys) {
+        const message = t(key, { ns: "experience", lng });
+        expect(message, `${lng}:${key}`).toContain("Blentera");
+        expect(message, `${lng}:${key}`).not.toMatch(/\{\{\s*productName\s*\}\}/);
+      }
+    }
+
+    expect(
+      t("insightForecasts.nativeModel", { ns: "experience", lng: "fr" }),
+    ).toBe("Blentera native baseline calculation. No prediction interval is available.");
+    expect(i18n.options.interpolation?.defaultVariables).toMatchObject({ productName: "Blentera" });
   });
 
   it("accepts registered locale files", () => {

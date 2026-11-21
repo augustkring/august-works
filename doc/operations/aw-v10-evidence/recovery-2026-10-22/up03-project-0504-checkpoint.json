@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-22T20:47:35.692832+00:00",
+  "requirement": "UP03 bounded Project retained-source privacy closure; joint0504 storage generation",
+  "sourceHashesVerifiedUnchangedBeforeAndAfterCoreAndRestoredGreen": {
+    "packages/db/src/schema/projects.ts": "3ab9ce78c835b3fd0bc0127dab5ab9231cb4e935e832cfdf8502e1f79068cc00",
+    "packages/db/src/schema/memory.ts": "93f70411a294f323b66fc413a9882e834eec208b6b210a631be7365f77d8d51a",
+    "server/src/services/authorization.ts": "867221c54f77dfede4065d7ae80b8ccc877172293c59f64e9769f9cc3541c355",
+    "server/src/__tests__/authorization-service.test.ts": "959923e0c5db763b8b6c9b273f291032dce1460b75b988083a88f7ede9fecd17",
+    "packages/db/src/migrations/0504_conscious_sleepwalker.sql": "5a9e21fac154e2ff5bfb3dd8be9c5d200b7e2eca48e3f67924d5377bf38f6b6a",
+    "packages/db/src/migrations/meta/0504_snapshot.json": "06c54936aeb74354445afb12387444c1310eba1ba9af5bbe57a2aeaddcc0a5bf",
+    "packages/db/src/migrations/meta/_journal.json": "91231e736165e1e9d5b75586c714506b0b59f0b3ec457d0d2081bb43e6e05b96"
+  },
+  "changes": [
+    "Original projects owner stores server-qualified retained sourceIssueIds; historical/raw writers default unqualified.",
+    "Original Project UPDATE trigger retains the union of every old/new source UUID, without source foreign keys; missing/foreign/deleted sources deny.",
+    "Canonical native Task/Project bounded source graph checks every retained source; cycles/unknown qualification/overflow deny.",
+    "Known source-free software fixtures explicitly qualify themselves; no historical project backfill or production-public qualification."
+  ],
+  "runs": [
+    {
+      "log": "up03-joint-0504-db-generate.log.txt",
+      "sha256": "37784de68a22516a5fbabebf9ca40859e5b028534bf84eb4aea2c763a4c92542",
+      "exitCode": 0,
+      "result": "normal joint schema generation"
+    },
+    {
+      "log": "up03-joint-0504-migration-check.log.txt",
+      "sha256": "142d22a4401bbc5f65ffe90cd630da9032e3baf2bebe7b288d9c6eba1b5d1532",
+      "exitCode": 0,
+      "result": "normal migration numbering/safety check; 20 historical baseline findings, 1 stale baseline ignored"
+    },
+    {
+      "log": "up03-project-0504-core-green.log.txt",
+      "sha256": "8f4fb1b6f69163ee63ceeef64a92cd30b3255655030d53efa624dbaa282eb7d4",
+      "exitCode": 0,
+      "result": "actual PostgreSQL: 80 passed; full existing authorization owner"
+    },
+    {
+      "log": "up03-project-0504-old-source-red.log.txt",
+      "sha256": "b94c208e5c18316762769ef8fe2c0c2481089f6288f30040022766ce79bffcc3",
+      "exitCode": 1,
+      "result": "actual PostgreSQL: 1 failed/79 skipped; committed0503 authorization exposed derived public project despite unreadable private task root"
+    },
+    {
+      "log": "up03-project-0504-auth-restoration.log.txt",
+      "sha256": "a6aabc3272d8601a662554da6e33931142d17648cd2422bdd71baffbb859873e",
+      "exitCode": 0,
+      "result": "exact auth/test/0504 hashes restored"
+    },
+    {
+      "log": "up03-project-0504-restored-green.log.txt",
+      "sha256": "d0c546462bb6b1dc1bfded4b55d76d9f14cfa0fb8038cb5120284781c4fedbab",
+      "exitCode": 0,
+      "result": "actual PostgreSQL: 1 passed/79 skipped after exact restoration"
+    }
+  ],
+  "commands": {
+    "generation": "NODE_OPTIONS=--max-old-space-size=3072 pnpm db:generate",
+    "migrationCheck": "pnpm --filter @paperclipai/db check:migrations",
+    "core": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/authorization-service.test.ts --maxWorkers=1",
+    "selected": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/authorization-service.test.ts --maxWorkers=1 -t 'project source privacy preserves all actual roots'"
+  },
+  "oldSourceCapture": {
+    "onlyReplaced": "server/src/services/authorization.ts",
+    "baselineCommit": "0a8b09b5a",
+    "fixtureAndSchema": "current frozen0504; no schema swap",
+    "meaningfulFailure": "reader source privacy expected false, actual true at authorization-service.test.ts:2957",
+    "restoration": "backup plus EXIT/INT/TERM trap; all recorded hashes verified exact; final current selected test passed"
+  },
+  "generationNotes": [
+    "Normal generator completed TS compile, Drizzle generation and ordinary snapshot pruning. All41 unrelated tracked historical snapshot deletions restored exactly from HEAD.",
+    "Migration0504 is joint ownership: generated Memory schema columns plus Root-authored erasure-aware Memory retention trigger; A source qualification claims cover Project/core tests only."
+  ],
+  "limits": [
+    "Not a whole-UP03, V10, UI, mixed-writer, rollback or deployment readiness claim.",
+    "Memory payload16-case proof belongs to Root; maintenance/capture-wait/share payload review findings require separate fixes and regression evidence.",
+    "Normal downstream server/shared/UI/CLI type checks and broad derivative privacy integration remain parent-coordinated work.",
+    "No physical/provider certification or large-tenant migration performance claim."
+  ],
+  "cleanupObserved": {
+    "activeOwnedAuthorizationPostgresProcesses": []
+  }
+}

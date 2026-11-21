@@ -1,0 +1,26 @@
+[
+  {
+    "original": "scope-queued-comments-current-r3-20261026-source-pins.json",
+    "stored": "source-pins.json",
+    "originalSha256": "3546a494acfb63dbedb5df30053c433f51c4b915f274c378bbb69158deb323f1",
+    "storedSha256": "3546a494acfb63dbedb5df30053c433f51c4b915f274c378bbb69158deb323f1"
+  },
+  {
+    "original": "scope-queued-comments-current-r3-20261026-snapshot.exit",
+    "stored": "snapshot.exit",
+    "originalSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "original": "scope-queued-comments-current-r3-20261026-test.log",
+    "stored": "test.log.gz",
+    "originalSha256": "667a9c19cae5d1a680c6131ecb49f03d246290482228b53aadec5833564b1ede",
+    "storedSha256": "f718f55efb25e757836941b710317ebdbfae9da1211c52e7d97a58d1c9855e71"
+  },
+  {
+    "original": "scope-queued-comments-current-r3-20261026-test.exit",
+    "stored": "test.exit",
+    "originalSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  }
+]

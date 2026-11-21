@@ -1,11 +1,11 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentAssignments, businessExperimentCompletions, businessExperimentExecutions, businessExperimentExposures, businessExperimentVersions, businessExperimentTransitions, type Db } from "@paperclipai/db";
+import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentAnalyses, businessExperimentAssignments, businessExperimentCompletions, businessExperimentExecutions, businessExperimentExposures, businessExperimentOutcomes, businessExperimentVersions, businessExperimentTransitions, type Db } from "@paperclipai/db";
 import { ISSUE_STATUSES, PROJECT_STATUSES, type BusinessExperimentAssignmentView, type BusinessExperimentExposureView, type BusinessExperimentUnitSnapshot } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
-import { resolveDecisionSigningSecret, signDecisionSpec, verifyDecisionSpec } from "../decision-signing.js";
-import { nativeSha256 } from "../native-runtime/canonical.js";
+import { resolveDecisionSigningSecret, signDecisionSpec, verifyDecisionSpec, withDecisionSigningKey } from "../decision-signing.js";
+import { canonicalNativeJson, nativeSha256 } from "../native-runtime/canonical.js";
 import { authorizeStrategyNativePopulation, authorizeStrategyReference } from "../strategy-execution/references.js";
 import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
 import { assertAnalyticalSourcesNotErased } from "../analytical-privacy.js";
@@ -20,6 +20,43 @@ export type ExperimentCompletion = typeof businessExperimentCompletions.$inferSe
 export type ExperimentEdge = Pick<typeof analyticalLineageEdges.$inferInsert, "inputType" | "inputRef" | "inputHash" | "relationship">;
 export const EXPERIMENT_OWNER_ENGINE = "aw-native-business-experiment-owner-v1";
 export function experimentBudget(deadline: number) { if (performance.now() > deadline) throw unprocessable("Experiment receipt source budget exceeded"); }
+/** PERF-01 declared target for the operations whose work grows with the
+ * outcome population: final analysis, and replay of the signed receipts
+ * (receipt reads and the human interpretation).
+ * The V8 per-operation receipt bound (30 s) stays the floor, so no operation
+ * gets less than 30 s; each outcome adds 0.5 ms, so the
+ * declared maximum (4,000 units x 17 metrics = 68,000 outcomes) gets 64 s;
+ * 90 s is the hard ceiling. Every other experiment operation keeps 30 s. */
+export const EXPERIMENT_OPERATION_BUDGET_FLOOR_MS = 30_000;
+export const EXPERIMENT_OPERATION_BUDGET_CEILING_MS = 90_000;
+export const EXPERIMENT_OPERATION_BUDGET_MS_PER_OUTCOME = 0.5;
+export function experimentOperationBudgetMs(outcomeCount: number) {
+  const outcomes = outcomeCount > 0 ? outcomeCount : 0; // NaN and negatives count as none
+  return Math.min(EXPERIMENT_OPERATION_BUDGET_CEILING_MS,
+    Math.max(EXPERIMENT_OPERATION_BUDGET_FLOOR_MS, EXPERIMENT_OPERATION_BUDGET_FLOOR_MS + EXPERIMENT_OPERATION_BUDGET_MS_PER_OUTCOME * outcomes));
+}
+/** Sizes the budget only. The count is never returned to a caller and grants
+ * nothing: the operation still inspects, verifies and locks every receipt.
+ * Final analysis: the outcomes it will capture (assignments x non-invariant
+ * metric pins). Replay: the outcomes the version's analysis stored. */
+export async function experimentOperationOutcomeCount(tx: Db, companyId: string, experimentId: string, versionId: string, operation: "final_analysis" | "replay") {
+  if (operation === "replay") {
+    const [analysis] = await tx.select({ id: businessExperimentAnalyses.id }).from(businessExperimentAnalyses)
+      .where(and(eq(businessExperimentAnalyses.companyId, companyId), eq(businessExperimentAnalyses.experimentId, experimentId), eq(businessExperimentAnalyses.versionId, versionId))).limit(1);
+    if (!analysis) return 0;
+    const [row] = await tx.select({ count: sql<number>`count(*)::int` }).from(businessExperimentOutcomes)
+      .where(and(eq(businessExperimentOutcomes.companyId, companyId), eq(businessExperimentOutcomes.analysisId, analysis.id)));
+    return Number(row?.count ?? 0);
+  }
+  const [version] = await tx.select({ metricPins: businessExperimentVersions.metricPins }).from(businessExperimentVersions)
+    .where(and(eq(businessExperimentVersions.companyId, companyId), eq(businessExperimentVersions.experimentId, experimentId), eq(businessExperimentVersions.id, versionId))).limit(1);
+  if (!version) return 0;
+  const metrics = (Array.isArray(version.metricPins) ? version.metricPins : []).filter(pin => pin?.role !== "invariant").length;
+  if (metrics === 0) return 0;
+  const [row] = await tx.select({ count: sql<number>`count(*)::int` }).from(businessExperimentAssignments)
+    .where(and(eq(businessExperimentAssignments.companyId, companyId), eq(businessExperimentAssignments.experimentId, experimentId), eq(businessExperimentAssignments.versionId, versionId)));
+  return Number(row?.count ?? 0) * metrics;
+}
 export function experimentEdges(edges: ExperimentEdge[]) {
   const result = new Map<string, ExperimentEdge>();
   for (const edge of edges) {
@@ -58,6 +95,14 @@ export function experimentAssignmentKey(companyId: string, versionId: string) {
 export function signedExperimentReceipt(domain: string, material: Record<string, unknown>) {
   const receiptHash = nativeSha256(material);
   return { receiptHash, signature: signDecisionSpec({ domain: `aw-business-experiment:${domain}:v1`, receiptHash }) };
+}
+/** Hash the exact canonical experiment source material while reusing the
+ * already canonicalized immutable snapshot shared by sibling metric outcomes. */
+export function experimentOutcomeSourceHashFromCanonicalSnapshot(snapshotCanonical: string, metricHash: string, inputHash: string, value: number) {
+  return createHash("sha256").update(`{"inputHash":${JSON.stringify(inputHash)},"metricHash":${JSON.stringify(metricHash)},"snapshot":${snapshotCanonical},"value":${value}}`, "utf8").digest("hex");
+}
+export function experimentOutcomeSourceHash(snapshot: unknown, metricHash: string, inputHash: string, value: number) {
+  return experimentOutcomeSourceHashFromCanonicalSnapshot(canonicalNativeJson(snapshot), metricHash, inputHash, value);
 }
 export function verifyExperimentReceipt(domain: string, material: Record<string, unknown>, row: { receiptHash: string; signature: string }) {
   if (nativeSha256(material) !== row.receiptHash || !verifyDecisionSpec({ domain: `aw-business-experiment:${domain}:v1`, receiptHash: row.receiptHash }, row.signature)) throw notFound("Experiment native receipt integrity is unavailable");
@@ -117,6 +162,11 @@ export function nativeExperimentUnit(tx:Db,companyId:string,actor:AuthorizationA
 /** Registry and recording consumers must authorize every enrolled source before
  * returning any protocol/receipt/aggregate. No recursive registry admission. */
 export async function inspectBusinessExperimentReceipts(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, deadline: number) {
+  // Every receipt and outcome of this one read verifies against the same key,
+  // resolved once instead of once per receipt.
+  return withDecisionSigningKey(() => inspectBusinessExperimentReceiptsWithKey(tx, companyId, actor, version, deadline));
+}
+async function inspectBusinessExperimentReceiptsWithKey(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, deadline: number) {
   const currentUnits = new Map<string, Awaited<ReturnType<typeof nativeExperimentUnit>>>();
   const where = and(eq(businessExperimentExecutions.companyId, companyId), eq(businessExperimentExecutions.experimentId, version.experimentId), eq(businessExperimentExecutions.versionId, version.id));
   const [execution] = await tx.select().from(businessExperimentExecutions).where(where).for("share");
@@ -139,12 +189,11 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
   }
   const nativeSources = await authorizeStrategyNativePopulation(tx, companyId, actor, version.definition.population.randomizationUnit,
     assignments.map(assignment => assignment.unitId), version.definition.sensitivity, deadline);
-  // Bound and pipeline transport only: each unit and its complete ancestry
-  // still enter the original native owner independently. Drain every in-flight
-  // admission before throwing so none can outlive this transaction's locks.
+  // Bound deadline checks across the exact locked population. Every row's
+  // native admission and complete ancestry are still independently verified.
   for (let offset = 0; offset < assignments.length; offset += 32) {
     experimentBudget(deadline);
-    const inspected = await Promise.allSettled(assignments.slice(offset, offset + 32).map(async assignment => {
+    for (const assignment of assignments.slice(offset, offset + 32)) {
       experimentBudget(deadline);
       const admitted = nativeSources.get(assignment.unitId);
       if (!admitted) throw notFound("Experiment native source population is unavailable");
@@ -153,19 +202,22 @@ export async function inspectBusinessExperimentReceipts(tx: Db, companyId: strin
       for(const edge of current.edges)admittedObjectSourceKeys.add(`${edge.inputType}:${edge.inputRef}`);
       if (current.snapshot.createdAt !== assignment.sourceSnapshot.createdAt) throw conflict("Experiment enrolled unit identity was corrected");
       const manifest = lineage.manifests.get(assignment.lineageManifestId), edges = lineage.edges.get(assignment.lineageManifestId) ?? [];
+      const unitHash=nativeSha256({type:assignment.unitType,id:assignment.unitId});
       const expectedEdges = experimentEdges([...versionEdges,
-        { inputType: assignment.unitType, inputRef: assignment.unitId, inputHash: nativeSha256({ type: assignment.unitType, id: assignment.unitId }), relationship: "source" },
+        { inputType: assignment.unitType, inputRef: assignment.unitId, inputHash: unitHash, relationship: "source" },
         ...(assignment.sourceSnapshot.projectId ? [{ inputType: "project" as const, inputRef: assignment.sourceSnapshot.projectId, inputHash: nativeSha256({ type: "project", id: assignment.sourceSnapshot.projectId }), relationship: "source" as const }] : []),
       ]);
       if (!manifest || manifest.expiresAt <= new Date() || manifest.engineVersion !== EXPERIMENT_OWNER_ENGINE || manifest.analysisType !== "experiment_assignment" || manifest.analysisRef !== assignment.id
         || manifest.definitionHash !== version.contentHash || manifest.inputHash !== assignment.sourceHash || manifest.parameters.receiptHash !== assignment.receiptHash
-        || manifest.sourceCount !== edges.length || manifest.parameters.lineageHash !== nativeSha256(experimentEdges(edges)) || nativeSha256(experimentEdges(edges)) !== nativeSha256(expectedEdges)
+        || manifest.sourceCount !== edges.length
         || manifest.createdAt.getTime() !== assignment.assignedAt.getTime() || manifest.expiresAt.getTime() !== version.expiresAt.getTime()
-        || !edges.some(edge => edge.inputType === assignment.unitType && edge.inputRef === assignment.unitId && edge.inputHash === nativeSha256({ type: assignment.unitType, id: assignment.unitId }))) throw notFound("Experiment enrolled source lineage is erased or unavailable");
+      ) throw notFound("Experiment enrolled source lineage is erased or unavailable");
+      const actualEdgesHash=nativeSha256(experimentEdges(edges));
+      if (manifest.parameters.lineageHash !== actualEdgesHash || actualEdgesHash !== nativeSha256(expectedEdges)
+        || !edges.some(edge => edge.inputType === assignment.unitType && edge.inputRef === assignment.unitId && edge.inputHash === unitHash)) throw notFound("Experiment enrolled source lineage is erased or unavailable");
       for (const edge of edges) { const key = `${edge.inputType}:${edge.inputRef}`, prior = authorityEdges.get(key); if (prior && prior.inputHash !== edge.inputHash) throw conflict("Experiment enrolled Source pins disagree"); authorityEdges.set(key, edge); }
       experimentBudget(deadline);
-    }));
-    for (const result of inspected) if (result.status === "rejected") throw result.reason;
+    }
   }
   // Batch only the marker lookup, after every actual current native object
   // was admitted. The company → Memory locks prevent erasure between reads.

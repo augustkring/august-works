@@ -1,0 +1,97 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/memory-revocation-source-binding.integration.test.ts (3 tests | 2 failed) 11334ms
+     × clears the snapshot on first revocation and preserves it on an idempotent repeat 367ms
+     × invalidates a duplicate claim when a different native Context Memory root is attached 1049ms
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (27 tests | 1 failed | 26 skipped) 7843ms
+     × invalidates a retained Attachment before deleting its native Comment binding 251ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-revocation-source-binding.integration.test.ts > Memory revocation preserves only a still-valid body snapshot > clears the snapshot on first revocation and preserves it on an idempotent repeat
+Error: Failed query: update "memory_records" set "revoked_at" = $1, "revoked_by_actor_type" = $2, "revoked_by_actor_id" = $3, "revocation_reason" = $4, "updated_at" = $5 where ("memory_records"."company_id" = $6 and "memory_records"."id" = $7 and "memory_records"."revoked_at" is null) returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "binding_id", "provider_key", "memory_type", "scope_type", "scope_id", "subject_type", "subject_id", "owner_agent_id", "title", "content", "summary", "review_state", "verification_state", "sensitivity_label", "importance", "confidence_score", "valid_from", "valid_until", "observed_at", "retention_policy", "expires_at", "retention_state", "supersedes_record_id", "superseded_by_record_id", "revoked_at", "revoked_by_actor_type", "revoked_by_actor_id", "revocation_reason", "created_by_actor_type", "created_by_actor_id", "created_by_operation_id", "source_provenance_qualified", "private_owner_user_id", "source_run_ids", "source_issue_ids", "source_project_ids", "source_memory_ids", "source_foundation_revision_ids", "metadata", "created_at", "updated_at", "deleted_at"
+params: 2026-10-23T22:46:05.825Z,user,140f6663-9514-419b-9798-fcb0f1238a96,New reviewed reason,2026-10-23T22:46:05.825Z,0e089b32-8fdc-4e62-81d7-f782d420a2c6,34c18d4a-2450-4261-9779-df3ca759db4e
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ src/services/memory/memory-service.ts:1902:27
+    1900|         const identity = actorIdentity(actor);
+    1901|         const now = new Date();
+    1902|         const [updated] = await txDb
+       |                           ^
+    1903|           .update(memoryRecords)
+    1904|           .set({
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.revoke src/services/memory/memory-service.ts:1877:23
+ ❯ src/__tests__/memory-revocation-source-binding.integration.test.ts:88:27
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "memory_records" set "revoked_at" = $1, "revoked_by_actor_type" = $2, "revoked_by_actor_id" = $3, "revocation_reason" = $4, "updated_at" = $5 where ("memory_records"."company_id" = $6 and "memory_records"."id" = $7 and "memory_records"."revoked_at" is null) returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "binding_id", "provider_key", "memory_type", "scope_type", "scope_id", "subject_type", "subject_id", "owner_agent_id", "title", "content", "summary", "review_state", "verification_state", "sensitivity_label", "importance", "confidence_score", "valid_from", "valid_until", "observed_at", "retention_policy", "expires_at", "retention_state", "supersedes_record_id", "superseded_by_record_id", "revoked_at", "revoked_by_actor_type", "revoked_by_actor_id", "revocation_reason", "created_by_actor_type", "created_by_actor_id", "created_by_operation_id", "source_provenance_qualified", "private_owner_user_id", "source_run_ids", "source_issue_ids", "source_project_ids", "source_memory_ids", "source_foundation_revision_ids", "metadata", "created_at", "updated_at", "deleted_at"', parameters: [ '2026-10-23T22:46:05.825Z', 'user', '140f6663-9514-419b-9798-fcb0f1238a96', 'New reviewed reason', '2026-10-23T22:46:05.825Z', '0e089b32-8fdc-4e62-81d7-f782d420a2c6', '34c18d4a-2450-4261-9779-df3ca759db4e' ], args: [ '2026-10-23T22:46:05.825Z', 'user', '140f6663-9514-419b-9798-fcb0f1238a96', 'New reviewed reason', '2026-10-23T22:46:05.825Z', '0e089b32-8fdc-4e62-81d7-f782d420a2c6', '34c18d4a-2450-4261-9779-df3ca759db4e' ], types: [ 1184, 25, 25, 25, 1184, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-revocation-source-binding.integration.test.ts > Memory revocation preserves only a still-valid body snapshot > invalidates a duplicate claim when a different native Context Memory root is attached
+Error: Failed query: update "memory_records" set "source_provenance_qualified" = $1, "source_run_ids" = $2, "source_issue_ids" = $3, "source_project_ids" = $4, "source_memory_ids" = $5, "source_foundation_revision_ids" = $6, "updated_at" = $7 where ("memory_records"."company_id" = $8 and "memory_records"."id" = $9)
+params: true,{"e1e9756d-5f6e-4a20-bad5-ced769d8dcb2"},{},{},{"2b0cbb74-105e-4caa-b76b-72958e162e8c"},{},2026-10-23T22:46:06.890Z,f83b0ca5-d69b-457b-8759-03073e53b510,ea36907a-7530-4408-8744-ae1e8b652467
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ inspect src/services/memory/memory-service.ts:767:70
+    765|           const sourceChanges=target.sourceProvenanceQualified!==(targ…
+    766|             || sourceKeys.some(key=>provenance[key].some(id=>!target[k…
+    767|           if(resolution.metadata.kind!=="duplicate" || sourceChanges)a…
+       |                                                                      ^
+    768|             sourceProvenanceQualified:target.sourceProvenanceQualified…
+    769|             sourceRunIds:[...new Set([...target.sourceRunIds,...proven…
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ runCandidate src/services/memory/memory-service.ts:666:23
+ ❯ Object.createCandidate src/services/memory/memory-service.ts:1628:21
+ ❯ src/__tests__/memory-revocation-source-binding.integration.test.ts:129:20
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "memory_records" set "source_provenance_qualified" = $1, "source_run_ids" = $2, "source_issue_ids" = $3, "source_project_ids" = $4, "source_memory_ids" = $5, "source_foundation_revision_ids" = $6, "updated_at" = $7 where ("memory_records"."company_id" = $8 and "memory_records"."id" = $9)', parameters: [ 't', '{"e1e9756d-5f6e-4a20-bad5-ced769d8dcb2"}', '{}', '{}', '{"2b0cbb74-105e-4caa-b76b-72958e162e8c"}', '{}', '2026-10-23T22:46:06.890Z', 'f83b0ca5-d69b-457b-8759-03073e53b510', 'ea36907a-7530-4408-8744-ae1e8b652467' ], args: [ true, '{"e1e9756d-5f6e-4a20-bad5-ced769d8dcb2"}', '{}', '{}', '{"2b0cbb74-105e-4caa-b76b-72958e162e8c"}', '{}', '2026-10-23T22:46:06.890Z', 'f83b0ca5-d69b-457b-8759-03073e53b510', 'ea36907a-7530-4408-8744-ae1e8b652467' ], types: [ 16, 2951, 2951, 2951, 2951, 2951, 1184, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > invalidates a retained Attachment before deleting its native Comment binding
+Error: Failed query: delete from "issue_comments" where "issue_comments"."id" = $1 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "issue_id", "author_agent_id", "author_user_id", "on_behalf_of_user_id", "author_type", "created_by_run_id", "derived_author_agent_id", "derived_created_by_run_id", "derived_author_source", "client_request_id", "conversation_session_generation", "body", "presentation", "metadata", "deleted_at", "deleted_by_type", "deleted_by_agent_id", "deleted_by_user_id", "deleted_by_run_id", "source_trust", "created_at", "updated_at"
+params: 52689485-7bba-4d9c-8262-7f0dd7949955
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ src/services/issues.ts:12526:27
+    12524|
+    12525|       return db.transaction(async (tx) => {
+    12526|         const [comment] = await tx
+       |                           ^
+    12527|           .delete(issueComments)
+    12528|           .where(eq(issueComments.id, commentId))
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:487:13
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE\nSQL statement "UPDATE ONLY "public"."issue_attachments" SET "issue_comment_id" = NULL WHERE $1 OPERATOR(pg_catalog.=) "issue_comment_id""', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'delete from "issue_comments" where "issue_comments"."id" = $1 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "issue_id", "author_agent_id", "author_user_id", "on_behalf_of_user_id", "author_type", "created_by_run_id", "derived_author_agent_id", "derived_created_by_run_id", "derived_author_source", "client_request_id", "conversation_session_generation", "body", "presentation", "metadata", "deleted_at", "deleted_by_type", "deleted_by_agent_id", "deleted_by_user_id", "deleted_by_run_id", "source_trust", "created_at", "updated_at"', parameters: [ '52689485-7bba-4d9c-8262-7f0dd7949955' ], args: [ '52689485-7bba-4d9c-8262-7f0dd7949955' ], types: [ 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 1 passed | 26 skipped (30)
+   Start at  22:45:22
+   Duration  62.23s (transform 23.63s, setup 397ms, import 41.69s, tests 19.18s, environment 0ms)
+

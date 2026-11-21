@@ -1,10 +1,11 @@
 {
   "name": "paperclipai",
   "version": "0.3.1",
-  "description": "Paperclip CLI — orchestrate AI agent teams to run a business",
+  "description": "Blentera CLI \u2014 setup, diagnose, and configure your instance",
   "type": "module",
   "bin": {
-    "paperclipai": "./dist/index.js"
+    "blentera": "./dist/index.js",
+    "paperclipai": "./bin/paperclipai.mjs"
   },
   "keywords": [
     "paperclip",
@@ -16,15 +17,16 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/paperclipai/paperclip",
+    "url": "https://github.com/augustkring/august-works",
     "directory": "cli"
   },
-  "homepage": "https://github.com/paperclipai/paperclip",
+  "homepage": "https://blentera.com",
   "bugs": {
-    "url": "https://github.com/paperclipai/paperclip/issues"
+    "url": "https://github.com/augustkring/august-works/issues"
   },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "publishConfig": {
     "access": "public"

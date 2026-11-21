@@ -1,0 +1,155 @@
+{
+  "root": "/workspace/blentera-v10",
+  "head": "fd9ce5e36d6bdf778b909305040cc13fa6f8ff90",
+  "statusPorcelain": "M doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/SHA256SUMS\n M doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/phase-matrix.json\n M doc/operations/aw-v6-runtime.md\n M docs/da/help/export-and-delete.md\n M docs/help/change-review.json\n M docs/help/export-and-delete.md\n M packages/shared/src/saas-contracts.ts\n M packages/shared/src/saas-types.ts\n M server/src/__tests__/openapi-routes.test.ts\n M server/src/__tests__/v6-company-purge.integration.test.ts\n M server/src/routes/openapi.ts\n M server/src/routes/saas.ts\n M server/src/routes/v6-api-paths.ts\n M server/src/services/company-search-help.generated.ts\n M server/src/services/saas/offboarding.ts\n M server/src/services/saas/platform.ts\n M ui/src/api/saas.ts\n M ui/src/i18n/experience/da.json\n M ui/src/i18n/experience/en.json\n M ui/src/pages/SaasDeletion.test.tsx\n M ui/src/pages/SaasDeletion.tsx",
+  "files": {
+    ".nvmrc": {
+      "sha256": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+      "bytes": 8,
+      "mtimeNs": 1794226789204376584
+    },
+    "package.json": {
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "bytes": 14972,
+      "mtimeNs": 1794226790631675063
+    },
+    "packages/shared/src/saas-contracts.ts": {
+      "sha256": "cdb983c9d7285273f752f5f5da39b78eca88abcf31d66c0312979958ef7e1f6c",
+      "bytes": 9805,
+      "mtimeNs": 1794435109089300004
+    },
+    "packages/shared/src/saas-types.ts": {
+      "sha256": "88a6c052c1c3e98a40fb0785d6897ed09a501987b5b8e4d81d66e56d41eb68d8",
+      "bytes": 3897,
+      "mtimeNs": 1794436262719051536
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "bytes": 634978,
+      "mtimeNs": 1794226790807960284
+    },
+    "server/package.json": {
+      "sha256": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "bytes": 6179,
+      "mtimeNs": 1794226790837478863
+    },
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": {
+      "sha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb",
+      "bytes": 210079,
+      "mtimeNs": 1794350044778605461
+    },
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": {
+      "sha256": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+      "bytes": 27192,
+      "mtimeNs": 1794332547705166850
+    },
+    "server/src/__tests__/openapi-routes.test.ts": {
+      "sha256": "6093928228bda46b0900833a5a3b641abcaac3f531a9ef4194e7ae4a0ffbd772",
+      "bytes": 84056,
+      "mtimeNs": 1794435637505452558
+    },
+    "server/src/__tests__/v6-company-purge.integration.test.ts": {
+      "sha256": "381ca5f88e7f158386254a72dbb1f445102b92fc7175fe2fe6acfd50dffd5506",
+      "bytes": 27261,
+      "mtimeNs": 1794436294655543385
+    },
+    "server/src/routes/openapi.ts": {
+      "sha256": "cdb1131148f802dccfdf83974ada556d38eae8d1dd9c4126fa390e53ace34e17",
+      "bytes": 453869,
+      "mtimeNs": 1794435908961573437
+    },
+    "server/src/routes/saas.ts": {
+      "sha256": "0d10be6c640663a8be5ca9cfef901a0c837507074389dc0180c9ee521a5ac053",
+      "bytes": 54810,
+      "mtimeNs": 1794436263251059687
+    },
+    "server/src/routes/v6-api-paths.ts": {
+      "sha256": "b00000d1914f22200b7de0d2ca0614ea114df3a1aa0a2e204dd448cc21fa32bb",
+      "bytes": 24975,
+      "mtimeNs": 1794436263743067225
+    },
+    "server/src/services/company-search-help.generated.ts": {
+      "sha256": "f99cd20b72451fc36b0df1ac05b44075e79e97ccbe37e146bd5b19b75ba317c6",
+      "bytes": 121528,
+      "mtimeNs": 1794436126204927961
+    },
+    "server/src/services/heartbeat.ts": {
+      "sha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
+      "bytes": 1280634,
+      "mtimeNs": 1794423047710368700
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "70e652c90580dbd094d8fed2b62b1306604dba3381ecd5a9c17cac638240f1ca",
+      "bytes": 616486,
+      "mtimeNs": 1794408609892268669
+    },
+    "server/src/services/native-runtime/native-execution-input.test.ts": {
+      "sha256": "18ad2db8f88d675dac8cc3a4854fd6928b3c79e733e878e51f4cb03e308ad3b0",
+      "bytes": 136739,
+      "mtimeNs": 1794342776160333730
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "sha256": "38208e432d22845713799fcd71c109e23f5f3c9651acca14ee1fa7925fd60296",
+      "bytes": 132857,
+      "mtimeNs": 1794380779668481402
+    },
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": {
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+      "bytes": 14778,
+      "mtimeNs": 1794233716228964467
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "bytes": 9673,
+      "mtimeNs": 1794234187638120900
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": {
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "bytes": 8437,
+      "mtimeNs": 1794229120874977950
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "bytes": 12734,
+      "mtimeNs": 1794228810066234987
+    },
+    "server/src/services/saas/offboarding.ts": {
+      "sha256": "f14b60703ce7801a7baed34d2c7b6496f14d0fc1c698eca691dfce1f6c7e8aa1",
+      "bytes": 24925,
+      "mtimeNs": 1794435109597307737
+    },
+    "server/src/services/saas/platform.ts": {
+      "sha256": "129877cf13d924cbd89c9658fb017968d8be1fb35ce31de93302b0fd3c2263c8",
+      "bytes": 21358,
+      "mtimeNs": 1794434796568983000
+    },
+    "server/vitest.config.ts": {
+      "sha256": "1c32f3f46cb9206de3cdbb1745d43abf17bd2b5c385183675835ba928c2d31b3",
+      "bytes": 1883,
+      "mtimeNs": 1794226791073414900
+    }
+  },
+  "qualificationInputPaths": [
+    "server/src/services/heartbeat.ts",
+    "server/src/services/native-direct-input.ts",
+    "server/src/services/native-runtime/native-execution-input.ts",
+    "server/src/services/native-runtime/native-project-repository-source.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
+    "server/src/services/native-runtime/native-execution-input.test.ts",
+    "server/src/services/native-runtime/native-project-repository-source.test.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+    "server/vitest.config.ts",
+    "server/package.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    ".nvmrc",
+    "server/src/__tests__/v6-company-purge.integration.test.ts",
+    "server/src/__tests__/openapi-routes.test.ts"
+  ],
+  "scope": "exact involved production/tests and tool configuration plus dirty server/package files; HEAD identifies unchanged repository bytes, not a loaded-module trace",
+  "fixturePoolMax": null,
+  "fixturePoolScope": "Read actual fixture createDb options; not inferred by this harness",
+  "sourceWritesByThisHarness": false
+}

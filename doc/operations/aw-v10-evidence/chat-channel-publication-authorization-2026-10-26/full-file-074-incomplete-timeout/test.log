@@ -1,0 +1,841 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[16:57:47] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"b8527105-65a1-4a0a-a706-b627815211cd"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:05] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"8c6cc22b-46a0-4aec-8152-9fe7ab8cc238"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:06] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"403cfceb-57b1-43ed-9627-0cae18e55a18"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:07] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"b72f8fd9-fb4f-48e3-a05b-0de5b0d18ac7"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:08] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"47b9a7be-6905-48da-a6fd-0aace822c296"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:10] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"c8e68ec8-25d6-408a-b809-3b6928bdff60"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:12] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"8bfb154e-e477-4ef6-8f68-8a2b3acda737"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:24] [33mWARN[39m: [36mGitHub setup secret rotated but completion audit failed[39m [90m{"endpointId":"821721f8-450b-47f7-8bfb-9b180421b3e7","rotationId":"4a88c65d-f3c2-4760-b027-736a2a998fd6"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:36] [33mWARN[39m: [36mdurable GitHub webhook processing deferred[39m [90m{"actionId":"cac0069a-8c23-4733-9765-a33de37067e1","endpointId":"b85e8b0d-3458-4d67-a0ae-8536e6a0b523"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:37] [33mWARN[39m: [36mdurable GitHub webhook processing deferred[39m [90m{"actionId":"c9ef288d-66f7-4b73-81c1-94f996f6d10e","endpointId":"142610af-fc98-44f0-8e95-847a9054ace4"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:40] [33mWARN[39m: [36mdurable GitHub webhook processing deferred[39m [90m{"actionId":"99007175-fbf3-4ed1-ace6-1579c02a9ba4","endpointId":"37820098-3985-4c07-ab8c-e165b8305104"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:47] [33mWARN[39m: [36mGitHub webhook recovery deferred[39m [90m{"endpointId":"250dd529-a621-488e-be2a-52de6f9ac61b"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:49] [33mWARN[39m: [36mGitHub webhook recovery deferred[39m [90m{"endpointId":"4285237d-99a5-4f0a-a7fb-6d23b57a831a"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:52] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"b85e8b0d-3458-4d67-a0ae-8536e6a0b523","deliveryId":"be9f076a-b20e-455f-9f36-346a9c93837c"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:52] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"142610af-fc98-44f0-8e95-847a9054ace4","deliveryId":"bb3de728-50f6-4d5b-a1b4-db1e89aeb0f2"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:52] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"37820098-3985-4c07-ab8c-e165b8305104","deliveryId":"4ccec5e4-52c8-443a-9127-2da8f43a4805"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:57] [33mWARN[39m: [36mlost Discord Gateway ownership; stopping the local listener[39m [90m{"endpointId":"7ea6f55a-c080-45b5-9cd9-25d351c90112"}[39m
+[16:58:59] [33mWARN[39m: [36mDiscord root thread creation will be retried from the durable receipt[39m [90m{"endpointId":"7df2fc8d-35d1-44f6-b38d-651ba69262e8","providerEventId":"discord:1457808928258658549:333333333333333333:555555555555555555:555555555555555555"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:58:59] [33mWARN[39m: [36mDiscord root thread creation will be retried from the durable receipt[39m [90m{"endpointId":"7df2fc8d-35d1-44f6-b38d-651ba69262e8","providerEventId":"discord:1457808928258658549:333333333333333333:555555555555555556:555555555555555556"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:02] [33mWARN[39m: [36mTelegram maintenance was deferred[39m [90m{"endpointId":"5f29987f-b125-4354-af4a-aeff6baa48c4","operation":"register_commands","retryAt":"2026-10-26T17:59:02.432Z"}[39m
+[16:59:02] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"b85e8b0d-3458-4d67-a0ae-8536e6a0b523","deliveryId":"be9f076a-b20e-455f-9f36-346a9c93837c"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:02] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"142610af-fc98-44f0-8e95-847a9054ace4","deliveryId":"bb3de728-50f6-4d5b-a1b4-db1e89aeb0f2"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:02] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"37820098-3985-4c07-ab8c-e165b8305104","deliveryId":"4ccec5e4-52c8-443a-9127-2da8f43a4805"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:02] [33mWARN[39m: [36mTelegram maintenance was deferred[39m [90m{"endpointId":"5f29987f-b125-4354-af4a-aeff6baa48c4","operation":"remove_endpoint","retryAt":"2026-10-26T18:59:02.580Z"}[39m
+[16:59:02] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"b85e8b0d-3458-4d67-a0ae-8536e6a0b523","deliveryId":"be9f076a-b20e-455f-9f36-346a9c93837c"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:02] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"142610af-fc98-44f0-8e95-847a9054ace4","deliveryId":"bb3de728-50f6-4d5b-a1b4-db1e89aeb0f2"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:02] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"37820098-3985-4c07-ab8c-e165b8305104","deliveryId":"4ccec5e4-52c8-443a-9127-2da8f43a4805"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:02] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"b85e8b0d-3458-4d67-a0ae-8536e6a0b523","deliveryId":"be9f076a-b20e-455f-9f36-346a9c93837c"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:02] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"142610af-fc98-44f0-8e95-847a9054ace4","deliveryId":"bb3de728-50f6-4d5b-a1b4-db1e89aeb0f2"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:02] [33mWARN[39m: [36mchat provider lifecycle retry failed[39m [90m{"endpointId":"37820098-3985-4c07-ab8c-e165b8305104","deliveryId":"4ccec5e4-52c8-443a-9127-2da8f43a4805"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:15] [33mWARN[39m: [36mSlack session stop cancellation deferred[39m [90m{"actionId":"585645df-f749-4e0f-9bf9-ee66a62d1d51","endpointId":"d3742dc1-14ed-456d-b274-b2ffc3636e8b","attempts":1}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:19] [33mWARN[39m: [36mcould not renew external chat conversation lease[39m [90m{"endpointId":"0da8046c-d06a-40de-abec-467def16bb17"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:28] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"b63a4cae-8a3c-4cfb-be3c-40788eb4000c","publicationId":"f047065c-f013-4e2c-9120-168d6139aa29","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:33] [33mWARN[39m: [36mexternal chat delivery will retry in receipt order[39m [90m{"endpointId":"e4fe58a3-485d-4e12-badd-b1b6ee22fc3b","deliveryId":"8fded3e4-4cbc-481c-88a1-d1dff387961c"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:40] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"b4013b32-d777-4fa2-9e44-176397687df5","publicationId":"8d3b424a-7dfe-4345-9588-325d89904347","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:57] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"c6b6f280-182b-4cac-9590-526ce9c5228a","publicationId":"44422238-23d3-4c29-96b8-ba73b47b0e16","disposition":"failed"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:59:59] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"d1702359-0c9e-47ed-ae1f-2be4c1d17887","publicationId":"dc952208-4038-4285-a643-3403c7644df9","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:00] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"400f8557-df94-41eb-ab22-ecfe3c5c5ab5","publicationId":"3ed43479-232f-4512-b8ac-a7ffe1f79f6d","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:03] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"95285aab-b1ff-4392-bf1f-7f28851b9d9e","issueId":"ad38325a-a808-4ec6-b289-90a131771e0e","attachmentName":"inline.png"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:10] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"58a3c63c-e8ab-4347-afe9-eabb119ba245","issueId":"38695585-9d52-4f4d-aff2-f271f44a4672","deliveryId":"50b88958-b012-4536-918e-67f52c79baee","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"public-proof.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:12] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"328bf189-75bf-4f0e-a310-631c82a5b30d","issueId":"0da0f676-1439-41ef-b55f-f9ceb8094539","deliveryId":"e35cb3a0-716e-4e8c-b741-b0e6aa8aefd6","attachmentDiagnosticCode":"github_attachment_download_failed","attachmentName":"public-proof.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:12] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"328bf189-75bf-4f0e-a310-631c82a5b30d","issueId":"0da0f676-1439-41ef-b55f-f9ceb8094539","deliveryId":"e35cb3a0-716e-4e8c-b741-b0e6aa8aefd6","attachmentDiagnosticCode":"github_attachment_download_failed","attachmentName":"proof-1.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:12] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"328bf189-75bf-4f0e-a310-631c82a5b30d","issueId":"0da0f676-1439-41ef-b55f-f9ceb8094539","deliveryId":"e35cb3a0-716e-4e8c-b741-b0e6aa8aefd6","attachmentDiagnosticCode":"github_attachment_download_failed","attachmentName":"proof-2.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:13] [33mWARN[39m: [36mexternal chat delivery will retry in receipt order[39m [90m{"endpointId":"813c1245-beca-4f7b-a827-db4d751c81a8","deliveryId":"d1075a38-988b-456a-b8ec-b2168429b5b6"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:13] [33mWARN[39m: [36mexternal chat delivery will retry in receipt order[39m [90m{"endpointId":"19ceecbb-afa2-4c69-bb3e-a663cd0698e2","deliveryId":"b8cdd67d-b07b-48ac-8c1f-aa0f7183139a"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:13] [33mWARN[39m: [36mexternal chat delivery will retry in receipt order[39m [90m{"endpointId":"a4c47a45-8eb4-4ad5-b8dc-c93658a54dda","deliveryId":"3c42e383-a258-4e27-b50c-9909730b0a19"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:14] [33mWARN[39m: [36mexternal chat delivery will retry in receipt order[39m [90m{"endpointId":"32a398d5-d27b-4da6-90ab-d03c4038f7ab","deliveryId":"06ba1c1a-005c-45fb-a36a-e766d0db174a"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:15] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"1595ef05-8d18-49aa-9357-01d027026525","issueId":"de179e12-1ce5-42ba-af89-b10bda0b5e15","deliveryId":"d453f411-6847-47e3-952e-bb8185b0f4e2","attachmentDiagnosticCode":"github_attachment_canonical_mapping_ambiguous","attachmentName":"github-attachment-11111111-2222-3333-4444-555555555555"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:16] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"f199b9fd-add7-4ac9-a8f7-7e7c73fc4bd1"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 21958,
+        "column": 19
+      }
+    }
+[17:00:16] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"e18756e0-4b47-4d79-8f80-860f343e80b3"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:16] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"23573b43-9e65-4e35-b80a-36522a4be70a"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 22060,
+        "column": 17
+      }
+    }
+[17:00:16] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"d156def0-35ff-48a5-a58e-2600c8e19a74"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:18] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"2f7efd19-44cc-4d38-b405-a5cbb2731c30","deliveryId":"0853176f-d993-449a-972c-b1f2a0927009","attempts":1,"disposition":"failed","operation":"add","retryAt":null}[39m
+[17:00:35] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"5ed59b93-e7f1-482b-a47c-3ae06c5839ad","deliveryId":"a4f6d5b8-60d1-468c-a8ce-047d960afc05","attempts":1,"disposition":"retry","operation":"remove","retryAt":"2026-10-26T17:01:35.376Z"}[39m
+[17:00:35] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"01c86178-0a76-43c6-87b6-150142d3dd8a","deliveryId":"ee63d79e-2cba-4e0a-85e1-1fb0fae246d7","attempts":1,"disposition":"delivery_unknown","operation":"remove","retryAt":"2026-10-26T17:00:36.054Z"}[39m
+[17:00:36] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"e75173d7-cb27-4f53-89ad-885ed05a61e1","deliveryId":"60126241-71ac-4e13-a4f4-c901072507d4","attempts":1,"disposition":"delivery_unknown","operation":"remove","retryAt":"2026-10-26T17:00:36.601Z"}[39m
+[17:00:37] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"3440b87c-ac77-4bc5-8c53-f216e546357c","deliveryId":"71bcc54a-a919-4724-8038-afc95a0cb3f4","attempts":1,"disposition":"delivery_unknown","operation":"remove","retryAt":"2026-10-26T17:00:37.330Z"}[39m
+[17:00:37] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"ecd081e1-e485-4e68-9cbf-47868e0feb51","deliveryId":"b71160a7-cf18-4e79-a2d2-c500dcb7a57b","attempts":1,"disposition":"endpoint_attention","operation":"add","retryAt":null}[39m
+[17:00:38] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"a474d092-0229-483e-b71f-d6303eb0293e","deliveryId":"d46e2125-20cb-474a-8544-57cf39b7dd7e","attempts":1,"disposition":"retry","operation":"add","retryAt":"2026-10-26T17:00:38.322Z"}[39m
+[17:00:38] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"7cd0a61b-dd1a-4e32-9086-b4781d444662","deliveryId":"f49a9466-5417-417b-ac85-92ee6d018d18","attempts":1,"disposition":"delivery_unknown","operation":"add","retryAt":"2026-10-26T17:00:38.942Z"}[39m
+[17:00:38] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"7cd0a61b-dd1a-4e32-9086-b4781d444662","deliveryId":"f49a9466-5417-417b-ac85-92ee6d018d18","attempts":2,"disposition":"delivery_unknown","operation":"add","retryAt":"2026-10-26T17:00:39.061Z"}[39m
+[17:00:41] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"57596f06-2e1e-495d-a430-4cbfe4be1882","deliveryId":"b199bddb-b597-44a3-8b32-ca2896f03a22","attempts":1,"disposition":"retry","operation":"add","retryAt":"2026-10-26T17:01:41.845Z"}[39m
+[17:00:42] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"61cec442-d231-4e34-9fd0-03aed510451b","deliveryId":"aa0f2ea7-ba07-4894-bd5b-2316af356391","attempts":1,"disposition":"delivery_unknown","operation":"add","retryAt":"2026-10-26T17:00:42.276Z"}[39m
+[17:00:44] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"1770e3ac-ddcf-43da-b0c2-7cc85abcc986","deliveryId":"cc4bb024-373e-439a-9c73-9b3dbc229782","attempts":1,"disposition":"delivery_unknown","operation":"add","retryAt":"2026-10-26T17:00:44.568Z"}[39m
+[17:00:44] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"d647610d-d110-43c6-9fb5-5c8b1b53ba78","deliveryId":"66a86b71-c7e6-48d7-9e2a-52d63a44c09f","attempts":1,"disposition":"delivery_unknown","operation":"add","retryAt":"2026-10-26T17:00:44.960Z"}[39m
+[17:00:47] [33mWARN[39m: [36mA notification channel delivery could not be confirmed[39m [90m{"code":"notification_channel_delivery_unconfirmed"}[39m
+[17:00:51] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"3d66af6c-edbc-44d9-a66f-2dab3383d4e4","agentId":"39379b81-1980-4f46-8f24-9bf2bffb651f","runId":"a7bd6a2b-cecc-40b4-842c-31934d295b10"}[39m
+[17:00:52] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"3d66af6c-edbc-44d9-a66f-2dab3383d4e4","agentId":"39379b81-1980-4f46-8f24-9bf2bffb651f","runId":"10d26c78-9cfb-444e-af28-fac82bd70968"}[39m
+[17:00:53] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"bade95e6-bedf-42b7-bd2e-b9119deffefb","publicationId":"d7aae353-eab8-4a96-b09a-c14b6cd1c3f0","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:55] [33mWARN[39m: [36mchat provider effect reconciliation failed[39m [90m{"endpointId":"2fc4c77e-57e3-4630-8e6f-56557289beac","actionId":"e7e4bfce-00b9-4556-a9c9-f4014121dcf1"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:00:58] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"d33d700d-5f58-42e8-b198-fddc5af72271","publicationId":"7838af8b-ea4d-431c-bc17-7e9f20a32aa4","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:06] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"b9f5ff75-1010-4c05-95c8-e5f7397937f4","publicationId":"40ca4775-f725-4d05-b006-ee294edc010e","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:07] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"d649a92b-289a-447e-8b58-83f2020ba35d","publicationId":"87b97cee-e087-4c53-9daa-b17c803a6a13","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:11] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"d40232c7-6ca8-467c-ad26-f06c45946d23","publicationId":"1710e345-b8c5-4c1f-a33d-7ea1a2f43ed5","disposition":"failed"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:11] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"2ef2a0aa-fd95-45fb-87b1-1722fd88de24","publicationId":"8d53331c-8a8b-4c92-ab05-5e2911f8381c","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:21] [33mWARN[39m: [36mSlack session status update did not complete; message delivery is unchanged[39m [90m{"endpointId":"eb2068a5-57bf-48f6-8549-46ddd0b4723b","actionId":"0cd3d1cd-908a-482b-a1f3-ea003143ad26","retryable":true}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:21] [33mWARN[39m: [36mSlack session status update did not complete; message delivery is unchanged[39m [90m{"endpointId":"eb2068a5-57bf-48f6-8549-46ddd0b4723b","actionId":"0cd3d1cd-908a-482b-a1f3-ea003143ad26","retryable":false}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:31] [31mERROR[39m: [36mcould not durably finalize chat publication failure[39m [90m{"endpointId":"04ca2dac-8052-473d-bcd9-f4be2f901820","publicationId":"b784d87a-5998-494f-a0dc-c6bdaebc5f9c"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:51] [31mERROR[39m: [36mcould not durably finalize chat publication failure[39m [90m{"endpointId":"1cf278ad-7464-4c38-84e4-3cf138db6cf5","publicationId":"8df9a7de-c511-456e-ba30-7fccfbbb9c52"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:33] [33mWARN[39m: [36mlost chat credential mutation lease ownership[39m [90m{"endpointId":"b0e5e374-1f0e-4a61-abcd-332e422c2883"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:33] [33mWARN[39m: [36mlost chat credential mutation lease ownership[39m [90m{"endpointId":"b0e5e374-1f0e-4a61-abcd-332e422c2883"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:33] [33mWARN[39m: [36mTelegram maintenance was deferred[39m [90m{"endpointId":"b0e5e374-1f0e-4a61-abcd-332e422c2883","operation":"register_commands","retryAt":"2026-10-26T17:01:35.588Z"}[39m
+[17:01:33] [33mWARN[39m: [36mlost chat credential mutation lease ownership[39m [90m{"endpointId":"8288d37c-ddc5-4bf2-856c-106317da7c9e"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:33] [33mWARN[39m: [36mlost chat credential mutation lease ownership[39m [90m{"endpointId":"8288d37c-ddc5-4bf2-856c-106317da7c9e"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:33] [33mWARN[39m: [36mTelegram maintenance was deferred[39m [90m{"endpointId":"8288d37c-ddc5-4bf2-856c-106317da7c9e","operation":"remove_endpoint","retryAt":"2026-10-26T17:01:34.741Z"}[39m
+[17:01:33] [33mWARN[39m: [36mlost chat credential mutation lease ownership[39m [90m{"endpointId":"8bf9cbae-6e05-4fbf-80ff-0a6db425945e"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:34] [33mWARN[39m: [36mSlack task start will retry or await explicit resolution[39m [90m{"actionId":"4a10449d-e3b0-4f14-821d-8089d856414d"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:34] [33mWARN[39m: [36mSlack task start will retry or await explicit resolution[39m [90m{"actionId":"6b1dd48d-f5c5-4265-80ff-587dc41427e0"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:34] [33mWARN[39m: [36mSlack task start will retry or await explicit resolution[39m [90m{"actionId":"83fbb49f-f42e-465f-8c2d-ba06c885c3b4"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:35] [31mERROR[39m: [36mcould not durably finalize chat publication failure[39m [90m{"endpointId":"d7885988-d84c-4310-a574-4bc09468efef","publicationId":"ae0d2598-f5fd-4761-9dd6-3be119efce46"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:36] [31mERROR[39m: [36mcould not durably finalize chat publication failure[39m [90m{"endpointId":"d0fc0571-0dd4-40ab-9b62-b9b2fb619851","publicationId":"827c06e1-01da-48de-a144-5f85bd915209"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:40] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"bf6594b8-11a2-41f0-a531-4f0529cc40bd","deliveryId":"8efea145-f8eb-4132-8938-03d1f5a16397","attempts":1,"disposition":"retry","operation":"add","retryAt":"2026-10-26T17:02:40.631Z"}[39m
+[17:01:40] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"bf6594b8-11a2-41f0-a531-4f0529cc40bd","deliveryId":"8efea145-f8eb-4132-8938-03d1f5a16397","attempts":1,"disposition":"delivery_unknown","operation":"remove","retryAt":"2026-10-26T17:01:40.913Z"}[39m
+[17:01:41] [33mWARN[39m: [36mexternal chat question resolved but post-commit follow-up failed[39m [90m{"endpointId":"25e5b9ae-18a7-430d-8330-34caa198d8d2","interactionId":"1eb7aa8a-f4d4-4ac7-a71a-c1fa5501c1bb"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:43] [33mWARN[39m: [36mDiscord correction draft cleanup will be retried[39m [90m{"endpointId":"bcd97cc2-1a6c-42d4-9686-2e014a0d1e67","code":"discord_question_correction_cleanup_failed"}[39m
+[17:01:44] [33mWARN[39m: [36mDiscord correction draft cleanup will be retried[39m [90m{"endpointId":"575b064f-b59f-4c8a-9646-1ac81b60fd1c","code":"discord_question_correction_cleanup_failed"}[39m
+[17:01:45] [33mWARN[39m: [36mcould not reconcile Discord Gateway runtime[39m [90m{"endpointId":"44e834a1-7117-42ac-ac5c-ac7dbdb577f3"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:45] [33mWARN[39m: [36mcould not reconcile Discord Gateway runtime[39m [90m{"endpointId":"69469ade-76de-403b-8c9a-866c3af562c3"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:45] [33mWARN[39m: [36mDiscord command registration remains unconfirmed[39m [90m{"endpointId":"a18b68e9-f4c8-4977-9e84-103ab005db31"}[39m
+[17:01:47] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"ef94bf89-24b4-4c1d-a8c6-130f095606d0","publicationId":"f0b1b45f-1010-4925-9c4c-16c5ef92cf13","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:47] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"ef94bf89-24b4-4c1d-a8c6-130f095606d0","publicationId":"53de7188-6de8-4edd-8745-b49a59f37a9d","disposition":"failed"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:48] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"ef94bf89-24b4-4c1d-a8c6-130f095606d0","publicationId":"8fbb8d76-8d74-4fa1-a259-d077d47da66d","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:48] [33mWARN[39m: [36mchat publication preparation failed[39m [90m{"endpointId":"aba91901-c32b-4935-8f2b-62ec761ea534","publicationId":"fa15961f-b47f-47bb-a6b0-8384596cbc5b","terminal":true}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:48] [33mWARN[39m: [36mchat publication preparation failed[39m [90m{"endpointId":"aba91901-c32b-4935-8f2b-62ec761ea534","publicationId":"b3d48e3b-d31f-4976-9600-6a414bf1f2b4","terminal":false}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:52] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"950a2892-2bf2-4a79-86ed-380e7ff39a85","publicationId":"421b24da-b2aa-4f93-84c6-e0e5716ac80b","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:53] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"189f6471-b5db-4cb3-a90f-0a75f899c071","publicationId":"aeb7c25b-aa82-4085-8045-dee098f3b2f2","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:54] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"1bf520ac-f6c3-4772-96e3-03610ed9c522","publicationId":"a87cff9c-e5a1-4a1e-b2c4-662ab205a214","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:55] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"000d1e54-3069-40d5-b75b-22e5cf4e8cc1","publicationId":"1d597827-7f3b-4b54-b7e5-76782bbe9fe7","disposition":"endpoint_attention"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:56] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"577a8f95-ce0d-4384-b699-2fb5de4b92fc","publicationId":"ea25d393-8e1e-40e8-b329-ce3157822fc6","disposition":"resource_unavailable"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:57] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"e8acdc43-2b49-4102-be96-e9c983271eb7","publicationId":"f8d01df8-bf0e-40ca-8b1c-0f761e46e5ad","disposition":"resource_unavailable"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:58] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"41aed93d-e5d1-4cc5-beec-4067f10a2d39","publicationId":"1d5bc155-6a56-4c19-a502-9510140066da","disposition":"failed"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:01:59] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"f051f35f-6e69-4b8a-a6a7-2a6487458f96","publicationId":"35155c3f-1ae4-486d-b0bf-51d57a9b636f","disposition":"failed"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:00] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"949e0166-b0b4-4567-834e-4ad2f3974dd4","publicationId":"45d58f5a-2395-4242-995a-d0b57b63f47e","disposition":"resource_unavailable"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:01] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"0341e81f-a0fc-41d3-8462-ccdc70392fca","publicationId":"3375b866-4266-4bd8-b5ff-c736e8146c7e","disposition":"endpoint_attention"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:01] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"f045b6be-6c3e-4322-8318-bea73a39eeee","publicationId":"8ae9c6d3-9510-4a08-8b17-fc37c161023d","disposition":"resource_unavailable"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:02] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"8b7be314-08c4-42e7-b1bf-28658e0207e6","publicationId":"f3bc4dcc-be4a-4f49-9aee-f0dcfc01da47","disposition":"endpoint_attention"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:09] [33mWARN[39m: [36mcould not record denied external chat action[39m [90m{"endpointId":"0e8e0a8e-318c-46a1-987d-03a5fe6d6554","provider":"telegram"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:14] [33mWARN[39m: [36mfailed to queue external interaction continuation wake[39m [90m{"endpointId":"9f26f51d-e487-4215-9dbf-66b7d1afefbd","interactionId":"02a51ca2-8fd5-43db-8a06-987df45b89c5","attemptCount":1}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:14] [33mWARN[39m: [36mfailed to queue external interaction continuation wake[39m [90m{"endpointId":"9f26f51d-e487-4215-9dbf-66b7d1afefbd","interactionId":"02a51ca2-8fd5-43db-8a06-987df45b89c5","attemptCount":2}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:14] [33mWARN[39m: [36mfailed to queue external interaction continuation wake[39m [90m{"endpointId":"9f26f51d-e487-4215-9dbf-66b7d1afefbd","interactionId":"02a51ca2-8fd5-43db-8a06-987df45b89c5","attemptCount":3}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:14] [33mWARN[39m: [36mfailed to queue external interaction continuation wake[39m [90m{"endpointId":"9f26f51d-e487-4215-9dbf-66b7d1afefbd","interactionId":"02a51ca2-8fd5-43db-8a06-987df45b89c5","attemptCount":4}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:14] [33mWARN[39m: [36mfailed to queue external interaction continuation wake[39m [90m{"endpointId":"9f26f51d-e487-4215-9dbf-66b7d1afefbd","interactionId":"02a51ca2-8fd5-43db-8a06-987df45b89c5","attemptCount":5}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:14] [33mWARN[39m: [36mfailed to queue external interaction continuation wake[39m [90m{"endpointId":"9f26f51d-e487-4215-9dbf-66b7d1afefbd","interactionId":"02a51ca2-8fd5-43db-8a06-987df45b89c5","attemptCount":6}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:20] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"7ce414c1-da16-48ad-ab11-e9adb9935722","publicationId":"6c114583-f4d6-416f-8a26-7eaaccd1b07e","disposition":"failed"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:25] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"312b72c9-b905-47ce-8931-bc3e621d1362","publicationId":"dc5b9104-df35-4c31-853b-f541f31c7780","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:35] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"7c0bd834-6f10-4ca2-a0ce-9c7a787c4946","publicationId":"24a88b6e-8782-467f-b05f-046a6341540e","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:36] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"5427757a-7cb3-486c-bcca-e8f21c77de26","publicationId":"ef967981-69ed-4d85-88a3-e3af6367f82e","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:43] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"089bb920-bf23-4a4f-9d8c-c59be654ccb9","publicationId":"16d89670-9e82-43f3-abcf-a5e701e84710","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:39] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"ef4645d7-7644-46b1-b262-9f2b43db8488","publicationId":"c4fa295d-6164-4d0f-b74d-50615ff3ac70","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:41] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"bce2efec-d39d-47c2-b9e2-f9221c47fbae","publicationId":"3a78b618-c5f3-410a-bc99-0131b36b55f7","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:42] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"e47368c3-0a31-441d-85ce-d49c5bb1a8e8","publicationId":"73ffcf52-7d20-4e86-96fc-5adf66d5871f","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:45] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"0c808f46-6636-406d-89f1-e159572f525c","publicationId":"7f719bef-15f0-4527-b035-ffd3e002182e","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:45] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"0c808f46-6636-406d-89f1-e159572f525c","publicationId":"7f719bef-15f0-4527-b035-ffd3e002182e","disposition":"failed"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:02:56] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"f330685b-8965-4bf6-bb04-737a0d5ded32","publicationId":"1b886001-ebe7-47f5-be37-429223e4dd8e","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:04] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"988425c1-6ae6-45be-9eb0-c11675fcde4d","publicationId":"d9a69572-bb44-49a4-afb7-dd84f3d23e9d","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:05] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"542946bd-66c4-4099-b5a0-e6403c0abfde"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:08] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"a07b0b56-fceb-448d-a2db-1810589a8558"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 41,
+        "column": 15
+      },
+      "cause": {
+        "type": "DatabaseError",
+        "sqlState": "55P03",
+        "location": {
+          "line": 819,
+          "column": 30
+        }
+      }
+    }
+[17:03:08] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"497440d2-44d6-4aaf-b94e-86f631555ca2"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:09] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"01e73286-e102-4837-8be5-56551d2aa78f"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 41,
+        "column": 15
+      },
+      "cause": {
+        "type": "DatabaseError",
+        "sqlState": "55P03",
+        "location": {
+          "line": 819,
+          "column": 30
+        }
+      }
+    }
+[17:03:09] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"dcad6687-b979-4428-a0fa-6f48be94d696"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:13] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"d2c1b37b-76a4-4b4f-8906-cec7ebec3b7b"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 41,
+        "column": 15
+      },
+      "cause": {
+        "type": "DatabaseError",
+        "sqlState": "55P03",
+        "location": {
+          "line": 819,
+          "column": 30
+        }
+      }
+    }
+[17:03:13] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"ec4f1b1a-083a-4fed-ab8f-a2ce3a5cf297"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:14] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"0fadab25-c02e-456b-8162-7c4a0406ebd2"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 41,
+        "column": 15
+      },
+      "cause": {
+        "type": "DatabaseError",
+        "sqlState": "55P03",
+        "location": {
+          "line": 819,
+          "column": 30
+        }
+      }
+    }
+[17:03:14] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"fb8f8d3a-4f31-4796-9c96-797ad8be8f97"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:15] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"57dfc04d-07d9-4fbc-8690-0f5116c3b394"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:20] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"0424ccde-49ee-4efb-9e52-13ffc788335c"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 41,
+        "column": 15
+      },
+      "cause": {
+        "type": "DatabaseError",
+        "sqlState": "55P03",
+        "location": {
+          "line": 819,
+          "column": 30
+        }
+      }
+    }
+[17:03:20] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"242357b7-d460-4a4e-b2c9-f78335067af5"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:35] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"a977da94-9070-4756-8f54-237426a19082"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 41,
+        "column": 15
+      },
+      "cause": {
+        "type": "DatabaseError",
+        "sqlState": "55P03",
+        "location": {
+          "line": 819,
+          "column": 30
+        }
+      }
+    }
+[17:03:35] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"51c56eca-76e6-4298-8ce1-70d6b4688bf6"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:36] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"0f9af8e2-08e0-4fda-ae35-9c37298a6ae2"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 41,
+        "column": 15
+      },
+      "cause": {
+        "type": "DatabaseError",
+        "sqlState": "55P03",
+        "location": {
+          "line": 819,
+          "column": 30
+        }
+      }
+    }
+[17:03:36] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"145463bd-0409-4142-b5e3-8c5f8d39b63e"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:39] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"6402d863-699b-4335-bed9-db88c62c1c42"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 41,
+        "column": 15
+      },
+      "cause": {
+        "type": "DatabaseError",
+        "sqlState": "55P03",
+        "location": {
+          "line": 819,
+          "column": 30
+        }
+      }
+    }
+[17:03:39] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"2a1e098b-b2bc-422b-a920-9a9f9bf0c436"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:47] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"b6c3ceb8-1f9c-4c62-bd6e-7b32937e98bc"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 41,
+        "column": 15
+      },
+      "cause": {
+        "type": "DatabaseError",
+        "sqlState": "55P03",
+        "location": {
+          "line": 819,
+          "column": 30
+        }
+      }
+    }
+[17:03:47] [33mWARN[39m: [36maccepted inbound chat wakeup will retry[39m [90m{"deliveryId":"3dc8d650-2ccf-4ba2-969a-372b7b6920fa"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:55] [33mWARN[39m: [36mSlack task start will retry or await explicit resolution[39m [90m{"actionId":"b55b9002-fa33-42fb-82b4-9ec6ef1d40d9"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:03:56] [31mERROR[39m: [36mdeferred external chat message processing failed[39m 
+    error: {
+      "type": "Error"
+    }
+[17:04:35] [33mWARN[39m: [36mexternal chat delivery will retry in receipt order[39m [90m{"endpointId":"2cbe6516-15d9-4525-b5e8-17317b89d3db","deliveryId":"1a0d0945-4271-42c3-9f85-d48a00b48317"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:04:50] [33mWARN[39m: [36mchat recovery retry dispatch deferred to durable worker[39m [90m{"retryActionId":"f65132aa-7b68-44a1-971c-38f2d5509d92"}[39m
+[17:04:52] [33mWARN[39m: [36mchat recovery retry dispatch deferred to durable worker[39m [90m{"retryActionId":"6486c343-bbc8-4097-9c08-f224e10b44aa"}[39m
+[17:05:17] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"4db81c84-bd02-45ca-aa48-ad695ddd7ca1","publicationId":"0623a230-348c-445b-8476-c0ab670bd726","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:29] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"e35f02f3-4196-4392-9647-9241cb3e4247","issueId":"3b502c37-54fc-400f-9705-641cfa809538","attachmentName":"unavailable.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:29] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"d3ccbc60-ae1c-4e43-857d-1de7dfe9c07a","issueId":"25cbcec3-ae9c-488f-b9d8-fca77036a3ec","attachmentName":"request.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:30] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"b56dd399-797a-43a0-90e9-8a4d7282c996","issueId":"35470761-4129-4e40-9447-3bd8dca6f5fe","attachmentName":"request.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:34] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"6e3ee512-8e02-4061-9ff2-b8b873d92e93","deliveryId":"8902bcd7-fd40-420e-b10a-a92e451be5fc","attempts":1,"disposition":"retry","operation":"remove","retryAt":"2026-10-26T17:07:34.943Z"}[39m
+[17:06:35] [33mWARN[39m: [36mexternal chat receipt reaction deferred[39m [90m{"endpointId":"3937a4e6-d041-4b43-abd0-b98c3869fdf1","deliveryId":"81456115-8db4-473a-82c5-7262116bd3fa","attempts":1,"disposition":"retry","operation":"add","retryAt":"2026-10-26T18:06:35.184Z"}[39m
+[17:06:35] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"0ea4c085-aa08-4f3d-b8b4-400653ee44ba","publicationId":"9b1827ba-f49f-44f1-9467-5e5f8205586f","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:35] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"0ea4c085-aa08-4f3d-b8b4-400653ee44ba","publicationId":"9b1827ba-f49f-44f1-9467-5e5f8205586f","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:36] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"fb9fee8e-a785-4c93-a1a1-154501d7343a","publicationId":"af9acbd6-1f9b-417f-9afb-29aad8ed764c","disposition":"endpoint_attention"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:43] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"f2d0e1f7-36d0-45be-8f8d-99e15431fd14","issueId":"09e17d98-c6ae-4859-8661-c49af1a3b0c7","deliveryId":"7d2cf9e2-4a87-42ec-930c-c2d4ed62335d","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:44] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"0a205cb2-e893-4319-a0a6-4cdc89962611","issueId":"231b0a99-bd73-403b-be00-8677c91ef733","deliveryId":"92d3ddb8-4f7c-4ffc-8088-ff5ddf371977","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:45] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"13247137-5b27-4df7-aad8-2aadb20e25dc","issueId":"352a62c3-32af-4649-9351-972365f0b883","deliveryId":"87e60977-85a8-4484-aa72-d56a76feec09","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:45] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"5d8ada9f-719d-404f-91a0-ea93ecd027bf","issueId":"6b2f030e-d5b8-4ed7-99b4-21b5db24e23f","deliveryId":"c14e4e58-1133-4d4b-99a3-9ff0aba66e16","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:46] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"929c7817-3b60-49fc-aa98-01d74a76f31a","issueId":"af6f218d-9938-4f99-a00b-4c264204d013","deliveryId":"9e0363dc-2f39-4d9e-bdc0-49717a0abdb2","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:47] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"0873a1c2-49ee-4b2e-8eec-333796347141","issueId":"9525409f-3b6e-4107-9501-5a847115bf2a","deliveryId":"95068a48-dba2-496a-952d-bbeece9d456f","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:48] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"771a83da-ac29-48a6-ab93-cb9a5e9bc619","issueId":"acdcb499-3f49-4cd6-8fcf-2cd2d314a2f1","deliveryId":"dd1b38b0-57d7-4b03-a0e3-41027642e027","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:48] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"771a83da-ac29-48a6-ab93-cb9a5e9bc619","publicationId":"44f6980b-b2d5-4e33-a6a2-0f65cc79a132","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:48] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"e514943b-d63e-4449-9c9b-12be7b30d9e5","issueId":"2bafdb81-e126-4dd1-96d3-5dfaaf5136c7","deliveryId":"d0f5b625-0a3f-4567-a863-c01a70da41fd","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:49] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"e514943b-d63e-4449-9c9b-12be7b30d9e5","publicationId":"82461064-d043-4912-8e19-679de90bc2bf","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:51] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"03a7cbf8-3e80-491a-9263-09d33f77166f","issueId":"db6d040b-85b4-462a-bf65-8822926caf7e","deliveryId":"101a2495-a75e-4e6d-b8f4-023ba7fc4197","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:51] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"16814f8e-d469-48c8-b057-d3f8d44ecdfb","issueId":"1991b6f9-e58c-4f0a-a41c-6ae6a40e7f91","deliveryId":"316f4ba8-3bc4-4d92-a3ec-b5bab0881d1f","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:52] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"2f0a8a13-0f21-493f-8402-bf6fb6eaced9","issueId":"8097681d-89b1-496f-a541-d225100e8da4","deliveryId":"4122a4bb-27c8-4b57-acb0-30722ab2cd6d","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:53] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"59143f9c-55a5-49ec-b54f-144805f164ad","issueId":"c3de4e31-728a-45a2-9141-88075c70659d","deliveryId":"308f045a-e503-4782-a240-302c33091891","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:54] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"639295df-bcca-4cbc-a8ff-d82dc2f09c5c","issueId":"acadcd6a-c952-4f8c-b772-fda5f0088dfa","deliveryId":"eea90a30-bfdb-4b5c-a03f-f047cd559878","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:54] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"a56a26d3-fa8b-47be-ad05-3108b7fe8958","issueId":"64776d8f-a146-4459-978b-31b2c1ab2b51","deliveryId":"5f35278a-7ac9-4439-bbc8-a284f8d7be9f","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:55] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"8e4365e7-e411-42f7-ad0e-29bf8d91754f","issueId":"67d9db30-4680-4c2f-8645-d4bda3189578","deliveryId":"e68ae3e2-fdd8-49f9-bfe0-79054fb29a65","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:56] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"763123ea-5629-4cea-9938-30da459eae4a","issueId":"bd3fa8d9-5684-4ad1-b1d5-0044142102f8","deliveryId":"30139038-ea18-440a-9ff8-57898b18feed","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:57] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"a57e5e65-0a4c-42d1-a7b1-0f9d56431fb2","issueId":"0a4a66c9-74c7-45c5-bf2a-238dfbd183eb","deliveryId":"1c14d1b0-3ad9-44c5-808b-8a002a20474a","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:57] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"a57e5e65-0a4c-42d1-a7b1-0f9d56431fb2","publicationId":"e1f0eb51-f14a-4aa8-bb21-de02580d71dd","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:58] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"e960ce27-2e18-4df2-89c7-6ebd04be70d5","issueId":"9d287ca0-0f87-487b-b4ae-d392e3c08ff2","deliveryId":"c9bfbb4d-67d0-4fed-bac6-798fa687a285","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:58] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"e960ce27-2e18-4df2-89c7-6ebd04be70d5","publicationId":"5de9f8d3-2ee3-4596-b891-5f155655350b","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:59] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"c2340f79-8cde-4d5d-a6b6-4eb2342d5866","issueId":"41293654-50ba-4d0d-bd22-7e324a97a0ac","deliveryId":"6658c80a-02b7-4aa7-a534-fb76ebfb3545","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:06:59] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"c2340f79-8cde-4d5d-a6b6-4eb2342d5866","publicationId":"5f63162b-46ca-4122-a9f1-00c539432647","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:00] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"80f47ac9-04b7-4e4f-a4e2-40d24ff0c57c","issueId":"b7c4b641-bd72-4717-8014-d5ae63481ac7","deliveryId":"5c41998e-1dd5-4190-a96b-267824f68110","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:00] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"80f47ac9-04b7-4e4f-a4e2-40d24ff0c57c","publicationId":"a0c66591-e950-4df4-8290-95f0f5d6a6c9","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:00] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"e12aeeb3-38ce-4c7e-8e5b-9c93d77da967","issueId":"afddd91b-2ebf-4e85-9bdb-63a1037bfc7d","deliveryId":"1bd1215a-c315-41f5-ac60-2110736bc20b","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:01] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"e12aeeb3-38ce-4c7e-8e5b-9c93d77da967","publicationId":"0be6ddb3-4dda-4e27-b2b0-3f99f361c0d7","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:01] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"2ff4f269-44c3-498a-ab18-900f4067bca2","issueId":"b0491d3e-742d-4d81-967d-a26399bd0d0a","deliveryId":"244b185d-e466-4966-bb45-9ebecd94a284","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:02] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"2ff4f269-44c3-498a-ab18-900f4067bca2","publicationId":"7a26819b-6ca9-46c7-9156-bc6d2a8607de","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:02] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"429a951c-5796-4fb3-8e0c-d4954033ebe8","issueId":"bc3d3d48-4f28-466c-8ede-a636b0a115d4","deliveryId":"1183fff7-613f-4743-bb3e-2ff345313b0b","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:03] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"429a951c-5796-4fb3-8e0c-d4954033ebe8","publicationId":"c55fc92c-cf23-431c-bf9d-d371f25f0287","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:03] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"b060e57a-3c5d-449d-a818-f5153265b806","issueId":"e2b90e17-5a62-4c81-ae6e-dc62542c8066","deliveryId":"79a6346d-2da1-4ba4-97d6-7c946faeab2a","attachmentDiagnosticCode":"github_attachment_canonical_response_unavailable","attachmentName":"private-current.txt"}[39m
+    error: {
+      "type": "Error"
+    }
+[17:07:04] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"b060e57a-3c5d-449d-a818-f5153265b806","publicationId":"f77edcbb-00a4-43ea-ad0c-09913e6d8ef1","disposition":"retry"}[39m
+    error: {
+      "type": "Error"
+    }

@@ -52,6 +52,9 @@ export function publishPluginDomainEvent(event: PluginEvent): void {
 }
 
 export interface LogActivityInput {
+  /** A caller-chosen row id, only for an activity a same-transaction source
+   * transform binds to (MS1f stop 5). Defaults to a generated id. */
+  id?: string;
   companyId: string;
   actorType: "agent" | "user" | "system" | "plugin";
   actorId: string;
@@ -161,6 +164,7 @@ export async function persistActivity(db: Db, input: LogActivityInput) {
   const redactedDetails = await redactActivityDetails(db, input.details ?? null);
   const responsibleUserId = await resolveResponsibleUserIdForActivity(db, input);
   const [activity] = await db.insert(activityLog).values({
+    ...(input.id ? { id: input.id } : {}),
     companyId: input.companyId,
     actorType: input.actorType,
     actorId: input.actorId,

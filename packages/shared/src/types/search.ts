@@ -1,6 +1,6 @@
 import type { IssuePriority, IssueStatus } from "../constants.js";
 
-export const COMPANY_SEARCH_SCOPES = ["all", "issues", "comments", "documents", "artifacts", "agents", "projects"] as const;
+export const COMPANY_SEARCH_SCOPES = ["all", "issues", "comments", "documents", "artifacts", "agents", "projects", "help"] as const;
 export type CompanySearchScope = (typeof COMPANY_SEARCH_SCOPES)[number];
 
 export const COMPANY_SEARCH_SORTS = ["relevance", "updated", "created", "priority"] as const;
@@ -9,8 +9,50 @@ export type CompanySearchSort = (typeof COMPANY_SEARCH_SORTS)[number];
 export const COMPANY_SEARCH_UPDATED_WITHIN_OPTIONS = ["24h", "7d", "30d", "90d"] as const;
 export type CompanySearchUpdatedWithinOption = (typeof COMPANY_SEARCH_UPDATED_WITHIN_OPTIONS)[number];
 
-export type CompanySearchResultType = "issue" | "artifact" | "agent" | "project";
+export type CompanySearchResultType = "issue" | "artifact" | "agent" | "project" | "help";
 export type CompanySearchCountType = CompanySearchResultType | "comment" | "document";
+
+/** Results projected from the original owner of each Universal Find domain. */
+export type CompanySearchFederatedDomain =
+  | "routines"
+  | "workflows"
+  | "skills"
+  | "packages"
+  | "knowledge"
+  | "people"
+  | "notices"
+  | "insights"
+  | "apps"
+  | "settings"
+  | "navigation";
+
+export interface CompanySearchFederatedResult {
+  id: string;
+  domain: CompanySearchFederatedDomain;
+  type: string;
+  title: string;
+  summary: string | null;
+  breadcrumb: string | null;
+  canonicalRef: string;
+  href: string;
+  updatedAt: string | null;
+  score: number;
+  whyMatched: string[];
+  action: { kind: "navigate"; href: string } | { kind: "open_external"; href: string };
+}
+
+export interface CompanySearchFederatedDomainCoverage {
+  domain: CompanySearchFederatedDomain;
+  status: "complete" | "partial" | "unavailable";
+  message: string | null;
+}
+
+export interface CompanySearchFederation {
+  results: CompanySearchFederatedResult[];
+  countsByDomain: Partial<Record<CompanySearchFederatedDomain, number>>;
+  coverage: CompanySearchFederatedDomainCoverage[];
+  complete: boolean;
+}
 export type CompanySearchIssueFilterKey =
   | "status"
   | "assigneeAgentId"
@@ -70,6 +112,15 @@ export interface CompanySearchResult {
   snippets: CompanySearchSnippet[];
   issue?: CompanySearchIssueSummary;
   artifact?: CompanySearchArtifactSummary;
+  helpArticle?: {
+    articleId: string;
+    audience: string;
+    maturity: "preview" | "ga";
+    applicableProductVersions: string[];
+    locale: string;
+    lastVerifiedAt: string;
+    source: "mintlify";
+  };
   updatedAt: string | null;
   previewImageUrl: string | null;
 }
@@ -104,6 +155,8 @@ export interface CompanySearchResponse {
   limit: number;
   offset: number;
   results: CompanySearchResult[];
+  /** Present on federated `all` searches; legacy scoped searches omit it. */
+  federation?: CompanySearchFederation;
   countsByType: Record<CompanySearchCountType, number>;
   filterOptionCounts: CompanySearchFilterOptionCounts;
   zeroResults: CompanySearchZeroResults | null;

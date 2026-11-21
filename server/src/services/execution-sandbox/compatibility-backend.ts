@@ -22,6 +22,6 @@ export function existingCellContainerBackend(port: {
     inspectWorkload: async identity => { const result = await inspect(identity); return { state: result.state, policyHash: null, imageDigest: result.imageDigest, generation: result.generation, controlsHealthy: false }; },
     stopWorkload: async input => { await inspect(input); return port.stop(input, input.idempotencyKey); },
     destroySandbox: async input => { await inspect(input); return port.destroy(input, input.idempotencyKey); },
-    probeBoundary: async () => ({ verdict: "unsupported", observationHash: null }),
+    probeBoundary: async ({ test }) => ({ verdict: "unsupported", observationHash: null, contractHash: test.contractHash }),
   };
 }

@@ -1,9 +1,11 @@
-import { ChangeEvent, useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   type InteractionResolverGovernance,
   type IssueThreadInteractionKind,
+  type CompanyResponsibilityContacts,
 } from "@paperclipai/shared";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
@@ -13,6 +15,8 @@ import { resolveCompanyArchiveDeparture } from "../lib/company-selection";
 import { cloudPortfolioManageUrl } from "../lib/cloudLinks";
 import { navigateTopLevel } from "@/lib/browserNavigation";
 import { companiesApi } from "../api/companies";
+import { useV9CurrentAccount, hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { assetsApi } from "../api/assets";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
@@ -29,8 +33,25 @@ import {
   ToggleField,
 } from "../components/agent-config-primitives";
 import { InstanceGeneralSettings } from "./InstanceGeneralSettings";
+import { JevSkillSuggestionSettings } from "../components/JevSkillSuggestionSettings";
+
+type ResponsibilityContactsEnvelope = {
+  value: CompanyResponsibilityContacts;
+  companyId: string;
+  principalId: string;
+  sessionId: string;
+  authorityEpoch: number;
+  scopeEpoch: number;
+};
+
+type ResponsibilityContactsDraft = {
+  scopeKey: string;
+  securityContactUserId: string;
+  supportIncidentContactUserId: string;
+};
 
 export function CompanySettings() {
+  const { t } = useTranslation("experience");
   const {
     companies,
     selectedCompany,
@@ -39,6 +60,9 @@ export function CompanySettings() {
   } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
+  const account = useV9CurrentAccount();
+  const principalId = account.localImplicit ? "local-board" : account.userId ?? "";
+  const authority = useV9PrivateReadAuthority(principalId, true);
   const navigate = useNavigate();
   const toastActions = useOptionalToastActions();
   const cloud = useCloudInstance();
@@ -48,28 +72,135 @@ export function CompanySettings() {
   // General settings local state
   const [companyName, setCompanyName] = useState("");
   const [description, setDescription] = useState("");
+  const [locale, setLocale] = useState<"en" | "da">("en");
+  const [timezone, setTimezone] = useState("UTC");
   const [logoUrl, setLogoUrl] = useState("");
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [governance, setGovernance] = useState<InteractionResolverGovernance>({});
+  const [contactsDraft, setContactsDraft] = useState<ResponsibilityContactsDraft | null>(null);
+  const sessionId = account.sessionId;
+  const contactsReadReady = Boolean(selectedCompanyId && account.settled && principalId && sessionId &&
+    authority.readReady && authority.canRead() && hasCurrentV9Session(queryClient, principalId, sessionId, true));
+  const contactsScopeRef = useRef({ companyId: selectedCompanyId, principalId, sessionId,
+    localImplicit: account.localImplicit, authorityEpoch: authority.epoch, epoch: 0 });
+  if (contactsScopeRef.current.companyId !== selectedCompanyId || contactsScopeRef.current.principalId !== principalId ||
+    contactsScopeRef.current.sessionId !== sessionId || contactsScopeRef.current.localImplicit !== account.localImplicit ||
+    contactsScopeRef.current.authorityEpoch !== authority.epoch) {
+    contactsScopeRef.current = { companyId: selectedCompanyId, principalId, sessionId,
+      localImplicit: account.localImplicit, authorityEpoch: authority.epoch, epoch: contactsScopeRef.current.epoch + 1 };
+  }
+  const captureContactsScope = () => {
+    const captured = contactsScopeRef.current;
+    return { ...captured, isCurrent: () => contactsScopeRef.current.epoch === captured.epoch && authority.canRead() &&
+      hasCurrentV9Session(queryClient, captured.principalId, captured.sessionId ?? "", true) };
+  };
+  const contactsScopeEpoch = contactsScopeRef.current.epoch;
+  const contactsScopeKey = JSON.stringify([selectedCompanyId ?? "", principalId, sessionId ?? "", authority.epoch, contactsScopeEpoch]);
+  const contactsQueryKey = ["company-responsibility-contacts", selectedCompanyId ?? "", principalId,
+    sessionId ?? "", authority.epoch, contactsScopeEpoch] as const;
+  const responsibilityContactsQuery = useQuery<ResponsibilityContactsEnvelope>({
+    queryKey: contactsQueryKey,
+    queryFn: async ({ signal }) => {
+      if (!selectedCompanyId || !principalId || !sessionId || !account.settled || !authority.canRead() ||
+        !hasCurrentV9Session(queryClient, principalId, sessionId, true))
+        throw new Error("Current Human settings access is unavailable");
+      const receipt = captureContactsScope();
+      if (!receipt.companyId || !receipt.sessionId || !receipt.isCurrent())
+        throw new Error("Current Human settings access changed");
+      const value = await authority.read(() => companiesApi.responsibilityContacts(receipt.companyId!, receipt.principalId,
+        receipt.localImplicit ? null : receipt.sessionId, { signal }));
+      signal.throwIfAborted();
+      if (!receipt.isCurrent()) throw new Error("Current Human settings access changed");
+      return { value, companyId: receipt.companyId, principalId: receipt.principalId, sessionId: receipt.sessionId,
+        authorityEpoch: receipt.authorityEpoch, scopeEpoch: receipt.epoch };
+    },
+    enabled: Boolean(selectedCompanyId && account.settled && principalId && sessionId && authority.readReady &&
+      hasCurrentV9Session(queryClient, principalId, sessionId, true)),
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+  const contactsEnvelope = responsibilityContactsQuery.data;
+  const contactsSourceReady = contactsReadReady && responsibilityContactsQuery.isSuccess &&
+    responsibilityContactsQuery.fetchStatus === "idle" && !queryClient.getQueryState(contactsQueryKey)?.isInvalidated;
+  const responsibilityContacts = contactsSourceReady && contactsEnvelope &&
+    contactsEnvelope.companyId === selectedCompanyId && contactsEnvelope.principalId === principalId &&
+    contactsEnvelope.sessionId === sessionId && contactsEnvelope.authorityEpoch === authority.epoch &&
+    contactsEnvelope.scopeEpoch === contactsScopeRef.current.epoch
+    ? contactsEnvelope.value : undefined;
+  const contactsLoaded = Boolean(responsibilityContacts);
+  const contactsError = contactsReadReady ? responsibilityContactsQuery.error : null;
+  const contactsBaseline = responsibilityContacts;
+  const scopedDraft = contactsSourceReady && contactsDraft?.scopeKey === contactsScopeKey ? contactsDraft : null;
+  const securityContactUserId = scopedDraft?.securityContactUserId ?? contactsBaseline?.securityContactUserId ?? "";
+  const supportIncidentContactUserId = scopedDraft?.supportIncidentContactUserId ?? contactsBaseline?.supportIncidentContactUserId ?? "";
+  const updateContactsField = (field: "securityContactUserId" | "supportIncidentContactUserId", value: string) => {
+    setContactsDraft({
+      scopeKey: contactsScopeKey,
+      securityContactUserId: field === "securityContactUserId" ? value : securityContactUserId,
+      supportIncidentContactUserId: field === "supportIncidentContactUserId" ? value : supportIncidentContactUserId,
+    });
+  };
+  useEffect(() => { setContactsDraft(null); }, [contactsScopeKey]);
+  useEffect(() => { if (!contactsSourceReady) setContactsDraft(null); }, [contactsScopeKey, contactsSourceReady]);
+  useEffect(() => {
+    if (!responsibilityContacts) return;
+    setContactsDraft(previous => previous?.scopeKey === contactsScopeKey ? previous : {
+      scopeKey: contactsScopeKey,
+      securityContactUserId: responsibilityContacts.securityContactUserId ?? "",
+      supportIncidentContactUserId: responsibilityContacts.supportIncidentContactUserId ?? "",
+    });
+  }, [contactsScopeKey, responsibilityContacts]);
 
   // Sync local state from selected company
   useEffect(() => {
     if (!selectedCompany) return;
     setCompanyName(selectedCompany.name);
     setDescription(selectedCompany.description ?? "");
+    setLocale(selectedCompany.locale ?? "en");
+    setTimezone(selectedCompany.timezone ?? "UTC");
     setLogoUrl(selectedCompany.logoUrl ?? "");
     setGovernance(selectedCompany.interactionResolverGovernance ?? {});
   }, [selectedCompany]);
+  const contactsMutation = useMutation({
+    mutationFn: async (input: { companyId: string; principalId: string; sessionId: string; authorityEpoch: number;
+      scopeEpoch: number; localImplicit: boolean; securityContactUserId: string; supportIncidentContactUserId: string }) => {
+      const receipt = captureContactsScope();
+      if (!receipt.isCurrent() || receipt.epoch !== input.scopeEpoch || receipt.companyId !== input.companyId ||
+        receipt.principalId !== input.principalId || receipt.sessionId !== input.sessionId ||
+        receipt.localImplicit !== input.localImplicit || receipt.authorityEpoch !== input.authorityEpoch)
+        throw new Error("Current Human settings access changed");
+      return authority.write(async () => {
+        await companiesApi.updateResponsibilityContacts(input.companyId, {
+          securityContactUserId: input.securityContactUserId || null,
+          supportIncidentContactUserId: input.supportIncidentContactUserId || null,
+        }, input.principalId, input.localImplicit ? null : input.sessionId);
+        if (!receipt.isCurrent()) throw new Error("Current Human settings access changed");
+        return { input, receipt };
+      });
+    },
+    onSuccess: async (acknowledgement) => {
+      if (!authority.confirmed(acknowledgement) || !acknowledgement.receipt.isCurrent()) return;
+      const { input } = acknowledgement;
+      const queryKey = ["company-responsibility-contacts", input.companyId, input.principalId,
+        input.sessionId, input.authorityEpoch, input.scopeEpoch] as const;
+      await queryClient.invalidateQueries({ queryKey, exact: true });
+    },
+  });
 
   const generalDirty =
     !!selectedCompany &&
     (companyName !== selectedCompany.name ||
-      description !== (selectedCompany.description ?? ""));
+      description !== (selectedCompany.description ?? "") ||
+      locale !== (selectedCompany.locale ?? "en") ||
+      timezone !== (selectedCompany.timezone ?? "UTC"));
 
   const generalMutation = useMutation({
     mutationFn: (data: {
       name: string;
       description: string | null;
+      locale: "en" | "da";
+      timezone: string;
     }) => companiesApi.update(selectedCompanyId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
@@ -150,7 +281,7 @@ export function CompanySettings() {
       // still makes sense (another active company, the Cloud portfolio, or
       // the companies list), with a toast naming what happened.
       const archived = companies.find((company) => company.id === companyId);
-      const archivedName = archived?.name ?? "Organization";
+      const archivedName = archived?.name ?? t("screens.company.organization");
       const departure = resolveCompanyArchiveDeparture({
         archivedCompanyId: companyId,
         companies,
@@ -165,8 +296,8 @@ export function CompanySettings() {
       }
       if (departure.kind === "company") {
         toastActions?.pushToast({
-          title: `${archivedName} is archived`,
-          body: `Switched to ${departure.company.name}.`,
+          title: t("screens.company.archivedTitle", { name: archivedName }),
+          body: t("screens.company.archivedSwitched", { name: departure.company.name }),
           tone: "info",
           dedupeKey: `company-archive-departure:${companyId}`,
         });
@@ -174,8 +305,8 @@ export function CompanySettings() {
         navigate(`/${departure.company.issuePrefix}/dashboard`, { replace: true });
       } else {
         toastActions?.pushToast({
-          title: `${archivedName} is archived`,
-          body: "You can unarchive it from this list.",
+          title: t("screens.company.archivedTitle", { name: archivedName }),
+          body: t("screens.company.archivedUnarchive"),
           tone: "info",
           dedupeKey: `company-archive-departure:${companyId}`,
         });
@@ -192,15 +323,15 @@ export function CompanySettings() {
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: selectedCompany?.name ?? "Company", href: "/dashboard" },
-      { label: "Settings" }
+      { label: selectedCompany?.name ?? t("screens.company.company"), href: "/dashboard" },
+      { label: t("screens.company.settings") }
     ]);
-  }, [setBreadcrumbs, selectedCompany?.name]);
+  }, [setBreadcrumbs, selectedCompany?.name, t]);
 
   if (!selectedCompany) {
     return (
       <div className="text-sm text-muted-foreground">
-        No organization selected. Select an organization from the switcher above.
+        {t("screens.company.none")}
       </div>
     );
   }
@@ -208,7 +339,9 @@ export function CompanySettings() {
   function handleSaveGeneral() {
     generalMutation.mutate({
       name: companyName.trim(),
-      description: description.trim() || null
+      description: description.trim() || null,
+      locale,
+      timezone: timezone.trim(),
     });
   }
 
@@ -216,40 +349,73 @@ export function CompanySettings() {
     <div className="max-w-6xl space-y-8">
       <div className="flex items-center gap-2">
         <SlidersHorizontal className="h-5 w-5 text-muted-foreground" />
-        <h1 className="text-lg font-semibold">General</h1>
+        <h1 className="text-lg font-semibold">{t("screens.company.general")}</h1>
       </div>
 
       {/* General */}
       <div className="max-w-2xl space-y-4">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          General
+          {t("screens.company.general")}
         </div>
         <div className="space-y-3">
-          <Field label="Organization name" hint="The display name for your organization.">
+          <Field label={t("screens.company.orgName")} hint={t("screens.company.orgNameHint")}>
             <input
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
             />
             {isCloudManaged && (
               <p className="mt-1 text-xs text-muted-foreground">
-                Renaming can change this company's task ID prefix. Existing task IDs are
-                renumbered and old task links stop resolving.
+                {t("screens.company.renameHint")}
               </p>
             )}
           </Field>
           <Field
-            label="Description"
-            hint="Optional description shown in the organization profile."
+            label={t("screens.company.description")}
+            hint={t("screens.company.descriptionHint")}
           >
             <input
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               type="text"
               value={description}
-              placeholder="Optional organization description"
+              placeholder={t("screens.company.descriptionPlaceholder")}
               onChange={(e) => setDescription(e.target.value)}
             />
+          </Field>
+          <Field
+            label={t("company.generalDefaults.language")}
+            hint={t("company.generalDefaults.languageHint")}
+          >
+            <select
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
+              value={locale}
+              onChange={(event) => setLocale(event.target.value === "da" ? "da" : "en")}
+            >
+              <option value="en">English</option>
+              <option value="da">Dansk</option>
+            </select>
+          </Field>
+          <Field
+            label={t("company.generalDefaults.timezone")}
+            hint={t("company.generalDefaults.timezoneHint")}
+          >
+            <input
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
+              type="text"
+              list="company-timezone-suggestions"
+              value={timezone}
+              onChange={(event) => setTimezone(event.target.value)}
+              aria-label={t("company.generalDefaults.timezone")}
+            />
+            <datalist id="company-timezone-suggestions">
+              <option value="UTC" />
+              <option value="Europe/Copenhagen" />
+              <option value="Europe/London" />
+              <option value="America/Chicago" />
+              <option value="America/Los_Angeles" />
+              <option value="Asia/Singapore" />
+            </datalist>
           </Field>
         </div>
       </div>
@@ -257,7 +423,7 @@ export function CompanySettings() {
       {/* Appearance */}
       <div className="max-w-2xl space-y-4">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Appearance
+          {t("screens.company.appearance")}
         </div>
         <div className="space-y-3">
           <div className="flex items-start gap-4">
@@ -270,15 +436,17 @@ export function CompanySettings() {
             </div>
             <div className="flex-1 space-y-3">
               <Field
-                label="Logo"
-                hint="Upload a PNG, JPEG, WEBP, GIF, or SVG logo image."
+                label={t("screens.company.logo")}
+                hint={t("screens.company.logoHint")}
+                htmlFor="company-logo-file"
               >
                 <div className="space-y-2">
                   <input
+                    id="company-logo-file"
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
                     onChange={handleLogoFileChange}
-                    className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:py-1 file:text-xs"
+                    className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3) file:mr-4 file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:py-1 file:text-xs"
                   />
                   {logoUrl && (
                     <div className="flex items-center gap-2">
@@ -288,7 +456,7 @@ export function CompanySettings() {
                         onClick={handleClearLogo}
                         disabled={clearLogoMutation.isPending}
                       >
-                        {clearLogoMutation.isPending ? "Removing..." : "Remove logo"}
+                        {clearLogoMutation.isPending ? t("screens.company.removing") : t("screens.company.removeLogo")}
                       </Button>
                     </div>
                   )}
@@ -297,7 +465,7 @@ export function CompanySettings() {
                       {logoUploadError ??
                         (logoUploadMutation.error instanceof Error
                           ? logoUploadMutation.error.message
-                          : "Logo upload failed")}
+                          : t("screens.company.logoFailed"))}
                     </span>
                   )}
                   {clearLogoMutation.isError && (
@@ -306,7 +474,7 @@ export function CompanySettings() {
                     </span>
                   )}
                   {logoUploadMutation.isPending && (
-                    <span className="text-xs text-muted-foreground">Uploading logo...</span>
+                    <span className="text-xs text-muted-foreground">{t("screens.company.uploading")}</span>
                   )}
                 </div>
               </Field>
@@ -323,30 +491,74 @@ export function CompanySettings() {
             onClick={handleSaveGeneral}
             disabled={generalMutation.isPending || !companyName.trim()}
           >
-            {generalMutation.isPending ? "Saving..." : "Save changes"}
+            {generalMutation.isPending ? t("screens.company.saving") : t("screens.company.saveChanges")}
           </Button>
           {generalMutation.isSuccess && (
-            <span className="text-xs text-muted-foreground">Saved</span>
+            <span className="text-xs text-muted-foreground">{t("screens.company.saved")}</span>
           )}
           {generalMutation.isError && (
             <span className="text-xs text-destructive">
               {generalMutation.error instanceof Error
                   ? generalMutation.error.message
-                  : "Failed to save"}
+                  : t("screens.company.saveFailed")}
             </span>
           )}
         </div>
       )}
 
       {/* Hiring */}
+      <div className="max-w-2xl space-y-4" data-testid="company-responsibility-contacts">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("screens.company.contacts")}</div>
+        <p className="text-sm text-muted-foreground">{t("screens.company.contactsBody")}</p>
+        <Field label={t("screens.company.securityContact")} hint={t("screens.company.securityContactHint")}>
+          <select aria-label={t("screens.company.securityContact")} data-testid="security-contact-select"
+            className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm"
+            disabled={!contactsReadReady || !contactsLoaded || contactsMutation.isPending}
+            value={securityContactUserId} onChange={event => updateContactsField("securityContactUserId", event.target.value)}>
+            <option value="">{t("screens.company.noContact")}</option>
+            {securityContactUserId && !responsibilityContacts?.eligibleUsers.some(user => user.id === securityContactUserId) &&
+              <option value={securityContactUserId}>{t("screens.company.contactIneligible")}</option>}
+            {(responsibilityContacts?.eligibleUsers ?? []).map(entry =>
+              <option key={entry.id} value={entry.id}>{entry.name || entry.email || entry.id}</option>)}
+          </select>
+        </Field>
+        <Field label={t("screens.company.supportContact")} hint={t("screens.company.supportContactHint")}>
+          <select aria-label={t("screens.company.supportContact")} data-testid="support-incident-contact-select"
+            className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm"
+            disabled={!contactsReadReady || !contactsLoaded || contactsMutation.isPending}
+            value={supportIncidentContactUserId} onChange={event => updateContactsField("supportIncidentContactUserId", event.target.value)}>
+            <option value="">{t("screens.company.noContact")}</option>
+            {supportIncidentContactUserId && !responsibilityContacts?.eligibleUsers.some(user => user.id === supportIncidentContactUserId) &&
+              <option value={supportIncidentContactUserId}>{t("screens.company.contactIneligible")}</option>}
+            {(responsibilityContacts?.eligibleUsers ?? []).map(entry =>
+              <option key={entry.id} value={entry.id}>{entry.name || entry.email || entry.id}</option>)}
+          </select>
+        </Field>
+        {!contactsReadReady && <span className="text-xs text-muted-foreground">{t("screens.company.waitingAccess")}</span>}
+        {contactsError && <span className="text-xs text-destructive">{t("screens.company.contactsError")}</span>}
+        {contactsLoaded && contactsReadReady && (securityContactUserId !== (responsibilityContacts?.securityContactUserId ?? "") ||
+          supportIncidentContactUserId !== (responsibilityContacts?.supportIncidentContactUserId ?? "")) && (
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => contactsMutation.mutate({ companyId: selectedCompanyId!, principalId,
+              sessionId: sessionId!, authorityEpoch: authority.epoch, scopeEpoch: contactsScopeRef.current.epoch,
+              localImplicit: account.localImplicit, securityContactUserId, supportIncidentContactUserId })}
+              disabled={!contactsReadReady || contactsMutation.isPending}>
+              {contactsMutation.isPending ? t("screens.company.saving") : t("screens.company.saveContacts")}
+            </Button>
+            {contactsMutation.isError && contactsReadReady && <span className="text-xs text-destructive">{contactsMutation.error.message}</span>}
+          </div>
+        )}
+      </div>
+
+      {/* Hiring */}
       <div className="max-w-2xl space-y-4" data-testid="company-settings-team-section">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Hiring
+          {t("screens.company.hiring")}
         </div>
         <div>
           <ToggleField
-            label="Require board approval for new hires"
-            hint="New agent hires stay pending until approved by board."
+            label={t("screens.company.requireApproval")}
+            hint={t("screens.company.requireApprovalHint")}
             checked={!!selectedCompany.requireBoardApprovalForNewAgents}
             onChange={(v) => settingsMutation.mutate(v)}
             toggleTestId="company-settings-team-approval-toggle"
@@ -363,22 +575,23 @@ export function CompanySettings() {
           governanceMutation.isError
             ? governanceMutation.error instanceof Error
               ? governanceMutation.error.message
-              : "Failed to save interaction governance"
+              : t("screens.company.governanceFailed")
             : null
         }
       />
+
+      <JevSkillSuggestionSettings companyId={selectedCompanyId!} />
 
       <InstanceGeneralSettings embedded />
 
       {/* Danger Zone */}
       <div className="space-y-4">
         <div className="text-xs font-medium text-destructive uppercase tracking-wide">
-          Danger Zone
+          {t("screens.company.danger")}
         </div>
         <div className="space-y-3 bg-destructive/5 px-4 py-4">
           <p className="text-sm text-muted-foreground">
-            Archive this organization to hide it from the sidebar. This persists in
-            the database.
+            {t("screens.company.archiveBody")}
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -391,23 +604,23 @@ export function CompanySettings() {
               onClick={() => {
                 if (!selectedCompanyId) return;
                 const confirmed = window.confirm(
-                  `Archive organization "${selectedCompany.name}"? It will be hidden from the sidebar.`
+                  t("screens.company.archiveConfirm", { name: selectedCompany.name })
                 );
                 if (!confirmed) return;
                 archiveMutation.mutate({ companyId: selectedCompanyId });
               }}
             >
               {archiveMutation.isPending
-                ? "Archiving..."
+                ? t("screens.company.archiving")
                 : selectedCompany.status === "archived"
-                ? "Already archived"
-                : "Archive organization"}
+                ? t("screens.company.alreadyArchived")
+                : t("screens.company.archive")}
             </Button>
             {archiveMutation.isError && (
               <span className="text-xs text-destructive">
                 {archiveMutation.error instanceof Error
                   ? archiveMutation.error.message
-                  : "Failed to archive organization"}
+                  : t("screens.company.archiveFailed")}
               </span>
             )}
           </div>

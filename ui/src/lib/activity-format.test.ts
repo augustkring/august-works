@@ -1,6 +1,6 @@
 import type { Agent } from "@paperclipai/shared";
 import { describe, expect, it } from "vitest";
-import { formatActivityVerb, formatIssueActivityAction } from "./activity-format";
+import { activityReviewAwaitsPlanVerification, formatActivityVerb, formatIssueActivityAction } from "./activity-format";
 
 describe("activity formatting", () => {
   const agentMap = new Map<string, Agent>([
@@ -160,5 +160,25 @@ describe("activity formatting", () => {
     expect(formatIssueActivityAction("issue.successful_run_handoff_escalated")).toBe(
       "Run finished without a next step - recovery escalated",
     );
+  });
+  it("marks an accepted completion review that awaits its plan's verification (MS1h14)", () => {
+    const held = { interactionKind: "request_confirmation", taskCompletion: "awaiting_plan_verification", planId: "plan-1" };
+    expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_accepted", held)).toBe(true);
+    // The activity line keeps its existing wording; the note is shown beside it.
+    expect(formatIssueActivityAction("issue.thread_interaction_accepted", held)).toBe("approved the request");
+    expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_accepted", { interactionKind: "request_confirmation" }))
+      .toBe(false);
+    expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_rejected", held)).toBe(false);
+    expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_accepted", null)).toBe(false);
+  });
+  it("marks a final stage approval held for its plan's verification (MS1f)", () => {
+    const held = { source: "auto_approval_comment", assigneeAgentId: "agent-1", assigneeUserId: null,
+      taskCompletion: "awaiting_plan_verification", planId: "plan-1", _previous: { assigneeAgentId: "agent-2", assigneeUserId: null } };
+    expect(activityReviewAwaitsPlanVerification("issue.updated", held)).toBe(true);
+    // The activity line keeps its existing wording; the note is shown beside it.
+    expect(formatIssueActivityAction("issue.updated", held, { agentMap: new Map([["agent-1", { name: "Writer" }]]) as never }))
+      .toBe("made Writer responsible for the task");
+    expect(activityReviewAwaitsPlanVerification("issue.updated", { status: "done", source: "auto_approval_comment" })).toBe(false);
+    expect(activityReviewAwaitsPlanVerification("issue.comment_added", held)).toBe(false);
   });
 });

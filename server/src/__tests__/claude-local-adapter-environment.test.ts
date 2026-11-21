@@ -99,7 +99,7 @@ function createLocalSandboxRunner() {
 }
 
 describe("claude_local environment diagnostics", () => {
-  it("returns a warning (not an error) when ANTHROPIC_API_KEY is set in host environment", async () => {
+  it("retains host API-key warnings while denying unqualified inference", async () => {
     delete process.env.CLAUDE_CODE_USE_BEDROCK;
     delete process.env.ANTHROPIC_BEDROCK_BASE_URL;
     process.env.ANTHROPIC_API_KEY = "sk-test-host";
@@ -114,7 +114,7 @@ describe("claude_local environment diagnostics", () => {
       },
     });
 
-    expect(result.status).toBe("warn");
+    expect(result.status).toBe("fail");
     expect(
       result.checks.some(
         (check) =>
@@ -122,7 +122,7 @@ describe("claude_local environment diagnostics", () => {
           check.level === "warn",
       ),
     ).toBe(true);
-    expect(result.checks.some((check) => check.level === "error")).toBe(false);
+    expect(result.checks.filter((check) => check.level === "error").map((check) => check.code)).toEqual(["paid_transport_unqualified"]);
   });
 
   it("reports an explicitly configured API key as normal authentication", async () => {
@@ -143,7 +143,7 @@ describe("claude_local environment diagnostics", () => {
       },
     });
 
-    expect(result.status).toBe("pass");
+    expect(result.status).toBe("fail");
     expect(
       result.checks.some(
         (check) =>
@@ -151,7 +151,7 @@ describe("claude_local environment diagnostics", () => {
           check.level === "info",
       ),
     ).toBe(true);
-    expect(result.checks.some((check) => check.level === "error")).toBe(false);
+    expect(result.checks.filter((check) => check.level === "error").map((check) => check.code)).toEqual(["paid_transport_unqualified"]);
   });
 
   it("returns bedrock auth info when CLAUDE_CODE_USE_BEDROCK is set in host environment", async () => {
@@ -179,7 +179,7 @@ describe("claude_local environment diagnostics", () => {
         (check) => check.code === "claude_subscription_mode_possible",
       ),
     ).toBe(false);
-    expect(result.checks.some((check) => check.level === "error")).toBe(false);
+    expect(result.checks.filter((check) => check.level === "error").map((check) => check.code)).toEqual(["paid_transport_unqualified"]);
   });
 
   it("returns bedrock auth info when CLAUDE_CODE_USE_BEDROCK is set in adapter env", async () => {
@@ -210,7 +210,7 @@ describe("claude_local environment diagnostics", () => {
         (check) => check.code === "claude_subscription_mode_possible",
       ),
     ).toBe(false);
-    expect(result.checks.some((check) => check.level === "error")).toBe(false);
+    expect(result.checks.filter((check) => check.level === "error").map((check) => check.code)).toEqual(["paid_transport_unqualified"]);
   });
 
   it("bedrock auth takes precedence over missing ANTHROPIC_API_KEY", async () => {
@@ -253,7 +253,7 @@ describe("claude_local environment diagnostics", () => {
     });
 
     expect(result.checks.some((check) => check.code === "claude_cwd_valid")).toBe(true);
-    expect(result.checks.some((check) => check.level === "error")).toBe(false);
+    expect(result.checks.filter((check) => check.level === "error").map((check) => check.code)).toEqual(["paid_transport_unqualified"]);
     const stats = await fs.stat(cwd);
     expect(stats.isDirectory()).toBe(true);
     await fs.rm(path.dirname(cwd), { recursive: true, force: true });
@@ -298,7 +298,7 @@ describe("claude_local environment diagnostics", () => {
     expect(result.checks.some((check) => check.code === "claude_cwd_invalid")).toBe(false);
   });
 
-  it("uses full permission bypass for sandbox hello probes", async () => {
+  it("refuses sandbox inference before invoking the Claude binary", async () => {
     const executeCalls: Array<{ command: string; args?: string[]; env?: Record<string, string> }> = [];
 
     const result = await testEnvironment({
@@ -349,15 +349,11 @@ describe("claude_local environment diagnostics", () => {
       environmentName: "QA Cloudflare",
     });
 
-    expect(result.checks.some((check) => check.code === "claude_hello_probe_passed")).toBe(true);
-    const probeCall = executeCalls.find((call) => call.command === "claude");
-    expect(probeCall?.args).toContain("--dangerously-skip-permissions");
-    expect(probeCall?.args).not.toContain("--permission-mode");
-    expect(probeCall?.args).not.toContain("--allowedTools");
-    expect(probeCall?.env?.IS_SANDBOX).toBe("1");
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified" }));
+    expect(executeCalls.filter((call) => call.command === "claude")).toEqual([]);
   });
 
-  it("uses the managed Claude config seed for sandbox hello probes", async () => {
+  it("cannot enable sandbox inference with managed Claude config seed", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-envtest-managed-config-"));
     const sourceConfigDir = path.join(root, "host-claude");
     const remoteHome = path.join(root, "remote-home");
@@ -429,14 +425,14 @@ console.log(JSON.stringify({ type: "result", result: "hello", usage: { input_tok
       });
 
       expect(result.checks.some((check) => check.code === "claude_managed_config_dir")).toBe(true);
-      expect(result.checks.some((check) => check.code === "claude_hello_probe_passed")).toBe(true);
+      expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified" }));
       expect(result.checks.some((check) => check.code === "claude_hello_probe_failed")).toBe(false);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
 
-  it("warns and omits --effort for sandbox probes when the installed Claude CLI does not advertise it", async () => {
+  it("does not invoke paid effort discovery after the inference admission denial", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-envtest-sandbox-effort-"));
     const workspace = path.join(root, "workspace");
     const remoteWorkspace = path.join(root, "remote-workspace");
@@ -465,8 +461,8 @@ console.log(JSON.stringify({ type: "result", result: "hello", usage: { input_tok
         environmentName: "QA Daytona",
       });
 
-      expect(result.checks.some((check) => check.code === "claude_effort_flag_unsupported")).toBe(true);
-      expect(result.checks.some((check) => check.code === "claude_hello_probe_passed")).toBe(true);
+      expect(result.checks.some((check) => check.code === "claude_effort_flag_unsupported")).toBe(false);
+      expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified" }));
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

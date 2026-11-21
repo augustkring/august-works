@@ -1,0 +1,28 @@
+{
+  "parentCommit": "d95d355f85c4186751fb4028d0f241fe1fb315d3",
+  "scope": "Final reviewed source and frozen dependency/journal inputs; original invocation manifests identify the tested bytes.",
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "packages/db/src/migrations/meta/_journal.json": "a1c07a3d5293a29a66a97997b7fc75e126f838e91009826a5735ea41d35c17c3",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts": "42d16c7f33f0766051b7405aee4ed2305f32b3d7cbd81644a71ce88bebb2bc10",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "a2e6e9d5111cadab2a42fa43ec4a57bcbb7b40ee0df39a41eb40bcf7eb858159",
+    "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts": "66e47ac6dfdc102b6f6d1b92ee589d6ec9c4d721316e1c21514958a4b635e4ed",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "371bf4b4c4f161ef59c6637cea1e41c5dd8c15102d8127cfea5e0bcb47f8a26f",
+    "server/src/__tests__/v7-model-reservations.integration.test.ts": "43a35939ee3e4011014eb3780a633ad105b2d5d047a9fe6c366c16ab1877aa5f",
+    "server/src/services/context/context-engine-integration.test.ts": "0037f1d284804b418a147f36980e28a8fa535a0d3f0aadc161940119ff731d4a",
+    "server/src/services/context/context-engine.ts": "9e4b012c8b77f7d66c8d39a1976046bd72018ec9292b8a4b4faf85919d522879",
+    "server/src/services/context/context-manifest.ts": "6fae6520f135a4f828d9633b0a11f544e52e70801eb7245271797fed1c23686e",
+    "server/src/services/context/context-task-evidence.ts": "ddf02a721604f1072637daed33e821a5f21a81bc93d546f40a27b070e4cab7b5",
+    "server/src/services/execution-continuation.ts": "ff0aea8f4baef01786e0fc34b7a0838320b1d07b36f418949ffb398071bbc1ca",
+    "server/src/services/heartbeat.ts": "6f5026653246f41d0cea8ad2da7d15f76d87dcd73ea2c7184d4fed306c18c01a",
+    "server/src/services/native-direct-input.ts": "9f2982be7f8124019aae38c2f139a1aedfab9d880b86e959f04158f35dae0ee9",
+    "server/src/services/native-execution-failure-log.test.ts": "e2d96e51e22de3ac539a817a02096baae403130b5be4aef7775a2fc17c77c8ca",
+    "server/src/services/native-runtime/manual-queue-adoption.test.ts": "8b7a7d6c2cca3263922ce5a78deb40a59876460764b70c7eb4315a59ae0aad38",
+    "server/src/services/native-runtime/manual-queue-adoption.ts": "244cfb62d60372ff45ac20649ba511182b90f8cb2ad8eb5db50c45b57fecfc20",
+    "server/src/services/native-runtime/native-execution-input.ts": "24f43a5dde4e0f95ee8f24bf0881ba39e93ac0190887a9ee1f907d2c6087e690",
+    "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts": "7487de20b8401744e75a61befd6efbad639944d3f4717fc03b6cce8d09cfd19d",
+    "server/src/services/native-runtime/status-decision-committer.ts": "0e8026eafdbab49e212bacfd3d2b52d7a47e061993fb6e2528d0b7c09e0aa06a"
+  }
+}

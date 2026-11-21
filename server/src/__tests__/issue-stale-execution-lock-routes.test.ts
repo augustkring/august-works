@@ -6,12 +6,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
+  authUsers,
+  companyMemberships,
   companies,
   createDb,
   heartbeatRuns,
   issueComments,
   issueRelations,
   issues,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -19,6 +22,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -34,6 +38,7 @@ if (!embeddedPostgresSupport.supported) {
 describeEmbeddedPostgres("stale issue execution lock routes", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let currentHumanUserId: string | null = null;
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-stale-execution-lock-routes-");
@@ -47,7 +52,11 @@ describeEmbeddedPostgres("stale issue execution lock routes", () => {
     await db.delete(issues);
     await db.delete(heartbeatRuns);
     await db.delete(agents);
+    await db.delete(principalPermissionGrants);
+    await db.delete(companyMemberships);
     await db.delete(companies);
+    if (currentHumanUserId) await db.delete(authUsers).where(eq(authUsers.id, currentHumanUserId));
+    currentHumanUserId = null;
   });
 
   afterAll(async () => {
@@ -69,6 +78,8 @@ describeEmbeddedPostgres("stale issue execution lock routes", () => {
   async function seedCompanyAgentAndRuns() {
     const companyId = randomUUID();
     const agentId = randomUUID();
+    const userId = randomUUID();
+    currentHumanUserId = userId;
     const failedRunId = randomUUID();
     const currentRunId = randomUUID();
 
@@ -89,11 +100,19 @@ describeEmbeddedPostgres("stale issue execution lock routes", () => {
       runtimeConfig: {},
       permissions: {},
     });
+    await db.insert(authUsers).values({ id: userId, name: "Current task owner", email: `${userId}@fixture.invalid`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      status: "active", membershipRole: "owner" });
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map((grant) => ({
+      companyId, principalType: "user", principalId: userId, ...grant,
+    })));
     await db.insert(heartbeatRuns).values([
       {
         id: failedRunId,
         companyId,
         agentId,
+        responsibleUserId: userId,
         status: "failed",
         invocationSource: "manual",
         finishedAt: new Date(),
@@ -102,13 +121,14 @@ describeEmbeddedPostgres("stale issue execution lock routes", () => {
         id: currentRunId,
         companyId,
         agentId,
+        responsibleUserId: userId,
         status: "running",
         invocationSource: "manual",
         startedAt: new Date(),
       },
     ]);
 
-    return { companyId, agentId, failedRunId, currentRunId };
+    return { companyId, agentId, userId, failedRunId, currentRunId };
   }
 
   function agentActor(companyId: string, agentId: string, runId: string): Express.Request["actor"] {
@@ -117,6 +137,8 @@ describeEmbeddedPostgres("stale issue execution lock routes", () => {
       agentId,
       companyId,
       runId,
+      onBehalfOfUserId: currentHumanUserId ?? undefined,
+      onBehalfOfMemberships: [{ companyId, membershipRole: "owner", status: "active" }],
       source: "agent_jwt",
     };
   }
@@ -277,6 +299,7 @@ describeEmbeddedPostgres("stale issue execution lock routes", () => {
       id: timedOutRunId,
       companyId,
       agentId,
+      responsibleUserId: currentHumanUserId,
       status: "timed_out",
       invocationSource: "manual",
       finishedAt: new Date(),
@@ -324,6 +347,7 @@ describeEmbeddedPostgres("stale issue execution lock routes", () => {
       id: liveOwnerRunId,
       companyId,
       agentId,
+      responsibleUserId: currentHumanUserId,
       status: "running",
       invocationSource: "manual",
       startedAt: new Date(),
@@ -357,6 +381,7 @@ describeEmbeddedPostgres("stale issue execution lock routes", () => {
       id: contenderRunId,
       companyId,
       agentId,
+      responsibleUserId: currentHumanUserId,
       status: "running",
       invocationSource: "assignment",
       startedAt: new Date(),

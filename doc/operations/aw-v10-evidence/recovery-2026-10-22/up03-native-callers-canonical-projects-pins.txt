@@ -1,0 +1,5 @@
+8fa11fec98051da60fbb80dc46451c3a181e1740e2c15e65dd3e262b4de3a10a  server/src/services/authorization.ts
+c8578052a5cc8d28975c80eb2e46d44dac0fd5a1b63f16f278790515155eaee7  server/src/services/business-metrics/service.ts
+1277fe49730f4d3af9aec9ed73f9b1aa4ac8b8215ea0ef7331b6a9515c5991f8  server/src/services/strategy-execution/references.ts
+4eb407a761782e707a5f2d9a0caa565a45d3624364b341859df50106f7d245b3  server/src/__tests__/business-metrics.integration.test.ts
+6b48b5cb44d0431558dd206ce4abd43b15b65ae6bc06021777432f5e4b21a1aa  server/src/__tests__/strategy-execution.integration.test.ts

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { companies, projects, issues, companyMemberships, workflowRuns, workflowStepRuns, workflowWaits, automationArtifacts, businessScenarios, businessScenarioVersions, businessScenarioCalculationPins, businessScenarioRuns, analyticalLineageManifests, createDb } from "@paperclipai/db";
+import { companies, projects, issues, workflowRuns, workflowStepRuns, workflowWaits, automationArtifacts, businessScenarios, businessScenarioVersions, businessScenarioCalculationPins, businessScenarioRuns, analyticalLineageManifests, createDb } from "@paperclipai/db";
 import { businessScenarioService } from "../services/business-scenarios/service.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
@@ -23,6 +23,7 @@ import { purgeCompanyContent } from "../services/saas/company-purge.js";
 import { analyticalPurpose } from "./helpers/business-metric-fixture.js";
 import { scenarioDefinition } from "./helpers/business-scenario-fixture.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 const support = await getEmbeddedPostgresTestSupport(), suite = support.supported ? describe : describe.skip;
 const actor = { type: "board" as const, source: "local_implicit" as const }, artifactActor = { principal: { type: "system" as const, service: "local-board" } };
 const flags = { analytical_lineage_v8: true, business_metrics_v8: true, scenario_planning_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true, enableAutomationArtifactsV1: true, enableAutomationArtifactCodeExecutionV1: true };
@@ -103,7 +104,7 @@ suite("Native scenario consumption of validated Automation Artifacts", () => {
   it.each([false, true])("erases original downstream Task copies with wait=%s and fences late writes", async wait => {
     const userId = `artifact-reader-${companyId}`;
     // Software Human identity prerequisite; the original Task executor is used.
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" });
+    await seedCurrentHumanSourceActor(db, [companyId], userId);
     const workflowActor = { principal: { type: "user" as const, userId } };
     const a = await artifact(), foreign = await artifact(otherId), created = await artifactWorkflow(a, { actor: workflowActor, wait });
     const executor = workflowExecutorService(db), completed = await executor.startManualRun(companyId, created.id, { input: { factor: 7 } }, workflowActor, null);
@@ -270,7 +271,8 @@ suite("Native scenario consumption of validated Automation Artifacts", () => {
     expect(await db.select().from(businessScenarios).where(eq(businessScenarios.id, rootId))).toHaveLength(0);
   });
   it("erases dependent prose through the canonical artifact FK cascade with rollout off and paused companies", async () => {
-    const a = await artifact(), d = await published(a); const [project] = await db.insert(projects).values({ companyId, name: "Unrelated native canonical project" }).returning();
+    const a = await artifact(), d = await published(a), sourceActor = await seedCurrentHumanSourceActor(db, [companyId]);
+    const project = await createCanonicalHumanProject(db, companyId, sourceActor, "Unrelated native canonical project");
     await instanceSettingsService(db).updateExperimental({ scenario_planning_v8: false, enableAutomationArtifactsV1: false });
     await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
     await db.delete(automationArtifacts).where(eq(automationArtifacts.id, a.artifact.id));
@@ -293,7 +295,8 @@ suite("Native scenario consumption of validated Automation Artifacts", () => {
       await fs.writeFile(path.join(target, "artifact.mjs"), "Interrupted native code-copy prerequisite", { mode: 0o400 });
       await fs.chmod(target, 0o555);
     }
-    const [otherProject] = await db.insert(projects).values({ companyId: otherId, name: "Foreign canonical project" }).returning();
+    const foreignActor = await seedCurrentHumanSourceActor(db, [otherId]);
+    const otherProject = await createCanonicalHumanProject(db, otherId, foreignActor, "Foreign canonical project");
     await instanceSettingsService(db).updateExperimental({ scenario_planning_v8: false, enableAutomationArtifactsV1: false });
     await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
     await db.transaction(async raw => { const tx = raw as unknown as typeof db; await tx.execute(sql`select set_config('aw.company_purge_id',${companyId},true)`); await purgeCompanyContent(tx, companyId); });

@@ -1,0 +1,246 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/learning-deleted-memory-source.integration.test.ts (1 test | 1 failed) 16887ms
+     × cannot become public when only the private member of two actual roots is deleted 881ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-deleted-memory-source.integration.test.ts > Learning keeps the identity of a physically deleted private Memory source > cannot become public when only the private member of two actual roots is deleted
+AssertionError: expected [ Array(1) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+    "5e5147e7-ee61-494b-9bd1-dbcac1600590",
+-   "a606ecb7-1af6-46c8-a5d9-0854eb4792b3",
+  ]
+
+ ❯ src/__tests__/learning-deleted-memory-source.integration.test.ts:46:65
+     44|     expect(await db.select().from(memoryRecords).where(eq(memoryRecord…
+     45|     const retained=await db.select().from(learningEvidence).where(and(…
+     46|     expect.soft(retained.map(root=>root.memoryRecordId).sort()).toEqua…
+       |                                                                 ^
+     47|     await expect.soft(assertLearningAnalyticalSources(db,reader,cycle!…
+     48|     for(const table of [memoryObservationEvidence,memoryModelEvidence]…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-deleted-memory-source.integration.test.ts > Learning keeps the identity of a physically deleted private Memory source > cannot become public when only the private member of two actual roots is deleted
+AssertionError: promise resolved "null" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+null
+
+ ❯ src/__tests__/learning-deleted-memory-source.integration.test.ts:47:73
+     45|     const retained=await db.select().from(learningEvidence).where(and(…
+     46|     expect.soft(retained.map(root=>root.memoryRecordId).sort()).toEqua…
+     47|     await expect.soft(assertLearningAnalyticalSources(db,reader,cycle!…
+       |                                                                         ^
+     48|     for(const table of [memoryObservationEvidence,memoryModelEvidence]…
+     49|       const rows=await db.select().from(table).where(eq(table.companyI…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-deleted-memory-source.integration.test.ts > Learning keeps the identity of a physically deleted private Memory source > cannot become public when only the private member of two actual roots is deleted
+ FAIL  |@paperclipai/server| src/__tests__/learning-deleted-memory-source.integration.test.ts > Learning keeps the identity of a physically deleted private Memory source > cannot become public when only the private member of two actual roots is deleted
+AssertionError: expected [ Array(1) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+    "5e5147e7-ee61-494b-9bd1-dbcac1600590",
+-   "a606ecb7-1af6-46c8-a5d9-0854eb4792b3",
+  ]
+
+ ❯ src/__tests__/learning-deleted-memory-source.integration.test.ts:50:61
+     48|     for(const table of [memoryObservationEvidence,memoryModelEvidence]…
+     49|       const rows=await db.select().from(table).where(eq(table.companyI…
+     50|       expect.soft(rows.map(row=>row.memoryRecordId).sort()).toEqual(ro…
+       |                                                             ^
+     51|     }
+     52|     await expect.soft(observationLineage(db,reader,observation!)).reje…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-deleted-memory-source.integration.test.ts > Learning keeps the identity of a physically deleted private Memory source > cannot become public when only the private member of two actual roots is deleted
+AssertionError: promise resolved "{ evidence: [ { …(8) } ], …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "evidence": [
++     {
++       "companyId": "e28da433-19a0-46f4-a942-2100981424ec",
++       "createdAt": 2026-10-22T23:03:26.086Z,
++       "id": "2eabf864-ac88-456e-b881-ff908ab761e4",
++       "memoryRecordId": "5e5147e7-ee61-494b-9bd1-dbcac1600590",
++       "observationId": "d961fe46-e17a-4097-92c4-5f2061733dd7",
++       "relationship": "supports",
++       "rootFingerprint": "5e5147e7-ee61-494b-9bd1-dbcac1600590",
++       "sourceVersion": "2026-10-22T23:03:26.061Z",
++     },
++   ],
++   "roots": [
++     {
++       "bindingId": "ac66126c-4c8b-4f62-9610-7540de6278c1",
++       "companyId": "e28da433-19a0-46f4-a942-2100981424ec",
++       "confidenceScore": 0.5,
++       "content": "Independent public source",
++       "createdAt": 2026-10-22T23:03:26.061Z,
++       "createdByActorId": "21c909ee-e669-4e17-bd64-58f19c7a1319",
++       "createdByActorType": "user",
++       "createdByOperationId": null,
++       "deletedAt": null,
++       "expiresAt": null,
++       "id": "5e5147e7-ee61-494b-9bd1-dbcac1600590",
++       "importance": 50,
++       "memoryType": "outcome",
++       "metadata": {},
++       "observedAt": 2026-10-22T23:03:26.054Z,
++       "ownerAgentId": null,
++       "privateOwnerUserId": null,
++       "providerKey": "local",
++       "retentionPolicy": "standard",
++       "retentionState": "active",
++       "reviewState": "accepted",
++       "revocationReason": null,
++       "revokedAt": null,
++       "revokedByActorId": null,
++       "revokedByActorType": null,
++       "scopeId": null,
++       "scopeType": "company",
++       "sensitivityLabel": "internal",
++       "sourceFoundationRevisionIds": [],
++       "sourceIssueIds": [],
++       "sourceMemoryIds": [],
++       "sourceProjectIds": [],
++       "sourceProvenanceQualified": true,
++       "sourceRunIds": [],
++       "subjectId": null,
++       "subjectType": null,
++       "summary": null,
++       "supersededByRecordId": null,
++       "supersedesRecordId": null,
++       "title": null,
++       "updatedAt": 2026-10-22T23:03:26.061Z,
++       "validFrom": null,
++       "validUntil": null,
++       "verificationState": "human_verified",
++     },
++   ],
+  }
+
+ ❯ src/__tests__/learning-deleted-memory-source.integration.test.ts:52:66
+     50|       expect.soft(rows.map(row=>row.memoryRecordId).sort()).toEqual(ro…
+     51|     }
+     52|     await expect.soft(observationLineage(db,reader,observation!)).reje…
+       |                                                                  ^
+     53|     await expect.soft(modelLineage(db,reader,model!)).rejects.toMatchO…
+     54|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-deleted-memory-source.integration.test.ts > Learning keeps the identity of a physically deleted private Memory source > cannot become public when only the private member of two actual roots is deleted
+AssertionError: promise resolved "{ evidence: [ { …(10) } ], …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "evidence": [
++     {
++       "companyId": "e28da433-19a0-46f4-a942-2100981424ec",
++       "createdAt": 2026-10-22T23:03:26.111Z,
++       "id": "5d5fc7f4-dcd3-4a61-af7a-06e45cd7c1a6",
++       "memoryRecordId": "5e5147e7-ee61-494b-9bd1-dbcac1600590",
++       "modelId": "466eb3e7-82fc-4961-b03c-c7132a75b660",
++       "modelVersion": 1,
++       "observationId": null,
++       "observationVersion": null,
++       "relationship": "derived_from",
++       "sourceVersion": "2026-10-22T23:03:26.061Z",
++     },
++   ],
++   "observations": [],
++   "roots": [
++     {
++       "bindingId": "ac66126c-4c8b-4f62-9610-7540de6278c1",
++       "companyId": "e28da433-19a0-46f4-a942-2100981424ec",
++       "confidenceScore": 0.5,
++       "content": "Independent public source",
++       "createdAt": 2026-10-22T23:03:26.061Z,
++       "createdByActorId": "21c909ee-e669-4e17-bd64-58f19c7a1319",
++       "createdByActorType": "user",
++       "createdByOperationId": null,
++       "deletedAt": null,
++       "expiresAt": null,
++       "id": "5e5147e7-ee61-494b-9bd1-dbcac1600590",
++       "importance": 50,
++       "memoryType": "outcome",
++       "metadata": {},
++       "observedAt": 2026-10-22T23:03:26.054Z,
++       "ownerAgentId": null,
++       "privateOwnerUserId": null,
++       "providerKey": "local",
++       "retentionPolicy": "standard",
++       "retentionState": "active",
++       "reviewState": "accepted",
++       "revocationReason": null,
++       "revokedAt": null,
++       "revokedByActorId": null,
++       "revokedByActorType": null,
++       "scopeId": null,
++       "scopeType": "company",
++       "sensitivityLabel": "internal",
++       "sourceFoundationRevisionIds": [],
++       "sourceIssueIds": [],
++       "sourceMemoryIds": [],
++       "sourceProjectIds": [],
++       "sourceProvenanceQualified": true,
++       "sourceRunIds": [],
++       "subjectId": null,
++       "subjectType": null,
++       "summary": null,
++       "supersededByRecordId": null,
++       "supersedesRecordId": null,
++       "title": null,
++       "updatedAt": 2026-10-22T23:03:26.061Z,
++       "validFrom": null,
++       "validUntil": null,
++       "verificationState": "human_verified",
++     },
++   ],
+  }
+
+ ❯ src/__tests__/learning-deleted-memory-source.integration.test.ts:53:54
+     51|     }
+     52|     await expect.soft(observationLineage(db,reader,observation!)).reje…
+     53|     await expect.soft(modelLineage(db,reader,model!)).rejects.toMatchO…
+       |                                                      ^
+     54|   });
+     55| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  23:02:29
+   Duration  57.22s (transform 29.66s, setup 176ms, import 39.76s, tests 16.89s, environment 1ms)
+

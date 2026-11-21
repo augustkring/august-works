@@ -1,0 +1,9 @@
+{
+  "doc/plans/2026-10-22-blentera-v10-recovery.md": "49b58ad7ba69f95eb9d124a16bd504c9feb3ab73afa1c2681b48063ed05c9682",
+  "doc/plans/2026-10-23-blentera-v10-native-payload-source-contract.md": "370dc09e89f615155ef1baa40894ccaae96682518226f004ba14950e5c883f6e",
+  "packages/paperclip-runner/src/native-session-runtime.test.ts": "63834bfb030897bae1acbae782ac99bcf5131e94e87a88a9c86b53d8147078d5",
+  "packages/paperclip-runner/src/native-session-runtime.ts": "6b88a8f9fa008bfa3a403432f46a35820bc7ba9b6ed534585f2070d112709bd8",
+  "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts": "f9649e550335dd9b5c14087bdbb616aa7ec9fb5b0b52ca15ffbbe55dfe8a0d78",
+  "server/src/services/native-runtime/native-session-executor.test.ts": "9a8c15de7b93fcefe7af46abbd060e85ced0b2ec171275bd6194a0d62513bb83",
+  "server/src/services/native-runtime/native-session-executor.ts": "8b7e02f2f61861453cb04013c10df46ecf6cce181f3a9e15a98f9856c4fb768c"
+}

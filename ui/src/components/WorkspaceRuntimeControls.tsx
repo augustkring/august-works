@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import type {
   WorkspaceCommandDefinition,
   RuntimeExposureStatus,
@@ -591,7 +592,7 @@ export function WorkspaceRuntimeControls({
 
       <CommandSection
         title="Services"
-        description="Long-running commands that Paperclip can supervise for this workspace."
+        description={`Long-running commands that ${PRODUCT_IDENTITY.productName} can supervise for this workspace.`}
         items={resolvedSections.services}
         emptyMessage={resolvedServiceEmptyMessage}
         disabledHint={visibleDisabledHint}

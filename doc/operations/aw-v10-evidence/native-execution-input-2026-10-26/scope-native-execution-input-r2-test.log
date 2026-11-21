@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native bootstrap rendered-source closure > requires a nonempty Task root and exact company, renderer identity and candidate input binding 6ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native bootstrap rendered-source closure > retains only exact Role Pack version inputs and fails closed on missing or foreign-family role inputs 1ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native bootstrap rendered-source closure > admits only the exact rendered attachment owner after byte verification 1ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native bootstrap rendered-source closure > includes only interaction envelopes matched to unique exact current captures 1ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native bootstrap rendered-source closure > closes a Task-only wake or comments whose exact rendered bodies have owner captures 4ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native bootstrap rendered-source closure > adds only an exact server-minted approved Context closure bound to the native run and rendered markdown 3ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > LCA-05 explicit native work mode > title and description cannot override standard mode 4ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > LCA-05 explicit native work mode > title and description cannot override planning mode 1ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > LCA-05 explicit native work mode > title and description cannot override ask mode 1ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > LCA-05 explicit native work mode > places governed context between runtime controls and the current task 1ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > projects the authoritative selected answer into an attested native chat prompt (resumed: false) 3ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > projects the authoritative selected answer into an attested native chat prompt (resumed: true) 1ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > uses neutral framing and real question tools for authenticated overflow chat (resumed: false) 0ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > uses neutral framing and real question tools for authenticated overflow chat (resumed: true) 0ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > keeps GitHub's task-only files and service-owned recovery navigation in the closed native input (resumed: false) 1ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > keeps GitHub's task-only files and service-owned recovery navigation in the closed native input (resumed: true) 1ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > keeps question documentation in the tool on 'codex' (resumed: false) 0ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > keeps question documentation in the tool on 'codex' (resumed: true) 0ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > keeps question documentation in the tool on 'acpx' (resumed: false) 0ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > keeps question documentation in the tool on 'acpx' (resumed: true) 0ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > keeps question documentation in the tool on 'opencode' (resumed: false) 0ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > native execution input external-chat framing > keeps question documentation in the tool on 'opencode' (resumed: true) 0ms
+ ✓ src/services/native-runtime/native-execution-input.test.ts > follow-up context size > keeps old messages out of resume deltas while retaining scoped human answers 2ms
+
+ Test Files  1 passed (1)
+      Tests  23 passed (23)
+   Start at  22:16:36
+   Duration  5.41s (transform 3.45s, setup 130ms, import 5.12s, tests 36ms, environment 0ms)
+

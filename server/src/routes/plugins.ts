@@ -19,6 +19,7 @@
  * @see doc/plugins/PLUGIN_SPEC.md for the full plugin specification
  */
 
+import { ToolModelEffectAdmissionError } from "../services/native-runtime/paid-transport-admission.js";
 import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -1079,30 +1080,16 @@ export function pluginRoutes(
       return;
     }
 
-    // Verify the tool exists
-    const registeredTool = toolDeps.toolDispatcher.getTool(tool);
-    if (!registeredTool) {
-      res.status(404).json({ error: `Tool "${tool}" not found` });
-      return;
-    }
+    // The manual/test route is also a Blentera-initiated opaque invocation.
+    // No worker egress or whole-invocation model-liability contract is installed.
+    const unavailable = new ToolModelEffectAdmissionError("plugin_tool_internal_inference", {
+      companyId: runContext.companyId, agentId: runContext.agentId,
+    });
+    res.status(409).json({error: unavailable.message, reasonCode: "tool_model_effect_unqualified",
+      code: unavailable.code, ...unavailable.resultJson});
+    return;
 
-    try {
-      const result = await toolDeps.toolDispatcher.executeTool(
-        tool,
-        parameters ?? {},
-        runContext,
-      );
-      res.json(result);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
 
-      // Distinguish between "worker not running" (502) and other errors (500)
-      if (message.includes("not running") || message.includes("worker")) {
-        res.status(502).json({ error: message });
-      } else {
-        res.status(500).json({ error: message });
-      }
-    }
   });
 
   /**
@@ -1489,6 +1476,15 @@ export function pluginRoutes(
    * @see PLUGIN_SPEC.md §19.7 — Error Propagation Through The Bridge
    */
   router.post("/plugins/:pluginId/bridge/action", async (req, res) => {
+    if (req.actor.type === "agent") {
+      const unavailable = new ToolModelEffectAdmissionError("plugin_worker_effect",
+        req.actor.companyId && req.actor.agentId
+          ? { companyId: req.actor.companyId, agentId: req.actor.agentId } : undefined);
+      res.status(409).json({error: unavailable.message, code: unavailable.code,
+        reasonCode: "tool_model_effect_unqualified", ...unavailable.resultJson});
+      return;
+    }
+
     assertAuthenticated(req);
 
     if (!bridgeDeps) {
@@ -1673,6 +1669,15 @@ export function pluginRoutes(
    * @see PLUGIN_SPEC.md §19.7 — Error Propagation Through The Bridge
    */
   router.post("/plugins/:pluginId/actions/:key", async (req, res) => {
+    if (req.actor.type === "agent") {
+      const unavailable = new ToolModelEffectAdmissionError("plugin_worker_effect",
+        req.actor.companyId && req.actor.agentId
+          ? { companyId: req.actor.companyId, agentId: req.actor.agentId } : undefined);
+      res.status(409).json({error: unavailable.message, code: unavailable.code,
+        reasonCode: "tool_model_effect_unqualified", ...unavailable.resultJson});
+      return;
+    }
+
     assertAuthenticated(req);
 
     if (!bridgeDeps) {
@@ -1831,6 +1836,15 @@ export function pluginRoutes(
   });
 
   router.use("/plugins/:pluginId/api", async (req, res) => {
+    if (req.actor.type === "agent") {
+      const unavailable = new ToolModelEffectAdmissionError("plugin_worker_effect",
+        req.actor.companyId && req.actor.agentId
+          ? { companyId: req.actor.companyId, agentId: req.actor.agentId } : undefined);
+      res.status(409).json({error: unavailable.message, code: unavailable.code,
+        reasonCode: "tool_model_effect_unqualified", ...unavailable.resultJson});
+      return;
+    }
+
     if (!bridgeDeps) {
       res.status(501).json({ error: "Plugin scoped API routes are not enabled" });
       return;
@@ -2690,6 +2704,15 @@ export function pluginRoutes(
    * - 502 if the worker is unavailable or the RPC call fails
    */
   router.post("/plugins/:pluginId/webhooks/:endpointKey", async (req, res) => {
+    if (req.actor.type === "agent") {
+      const unavailable = new ToolModelEffectAdmissionError("plugin_worker_effect",
+        req.actor.companyId && req.actor.agentId
+          ? { companyId: req.actor.companyId, agentId: req.actor.agentId } : undefined);
+      res.status(409).json({error: unavailable.message, code: unavailable.code,
+        reasonCode: "tool_model_effect_unqualified", ...unavailable.resultJson});
+      return;
+    }
+
     if (!webhookDeps) {
       res.status(501).json({ error: "Webhook ingestion is not enabled" });
       return;

@@ -50,6 +50,8 @@ export const nativeRunFinalizations = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    resourceCleanupIdx: index("native_run_finalizations_resource_cleanup_idx").on(table.companyId, table.runId)
+      .where(sql`${table.leaseOwner} is not null or ${table.phase} not in ('committed','applied','terminal_failure')`),
     controlDeadlineIdx: index("native_run_finalizations_control_deadline_idx")
       .on(table.controlDeadlineAt).where(sql`${table.controlDeadlineAt} is not null`),
     issueCompanyFk: foreignKey({

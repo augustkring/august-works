@@ -202,6 +202,80 @@ export interface ToolConnection {
   grants?: ConnectionGrant[];
 }
 
+/** Read-only, normalized lifecycle facts derived from the current connection and grant. */
+export interface ToolConnectionLifecycle {
+  state: "HEALTHY" | "DEGRADED" | "REQUIRES_REAUTH" | "PERMISSION_CHANGED" | "SYNC_GAP" | "WEBHOOK_EXPIRING" | "PROVIDER_DEPRECATED" | "PAUSED" | "REVOKED" | "ERROR";
+  reason: string;
+  action: "reauthorize" | "refresh_access" | "reconnect" | "inspect_connection" | null;
+  grantStatus: ConnectionGrantStatus;
+  connectionHealth: { state: ToolConnectionHealthStatus; checkedAt: string | null };
+  scopeNames: string[];
+  scopeHash: string | null;
+  credentialExpirySource: "oauth_access_token" | "vercel_connect_issuance" | "not_reported";
+  credentialExpiresAt: string | null;
+  credentialFreshness: "current" | "expiring" | "expired" | "unknown";
+  refreshTokenExpiresAt: string | null;
+  refreshCredentialFreshness: "current" | "expiring" | "expired" | "unknown";
+  secretReferenceExpiresAt: string | null;
+  secretReferenceFreshness: "current" | "expiring" | "expired" | "unknown";
+  accessVersion: string | null;
+  lastAccessVerifiedAt: string | null;
+  lastCredentialRefreshedAt: string | null;
+  webhook: {
+    health: "pending" | "healthy" | "unhealthy";
+    lastDeliveryAt: string | null;
+    expiry: "not_applicable";
+  } | null;
+  /** Provider-owned lifecycle operations. Unknown provider behavior stays explicit. */
+  operations: {
+    credentialRefresh: "provider_dependent" | "not_applicable";
+    subscriptionRenewal: "not_reported" | "not_applicable";
+    syncReconciliation: "github_full_snapshot" | "not_reported";
+    pause: "supported";
+    revoke: "supported";
+    deprecation: "not_reported";
+  };
+  /** Expiring provider subscriptions are only projected when an owner reports one. */
+  subscription: {
+    state: "not_reported" | "not_applicable";
+    expiresAt: null;
+    renewal: "not_reported" | "not_applicable";
+  };
+  /** No provider-wide version/deprecation contract exists for this connection. */
+  providerLifecycle: "not_reported";
+  /** GitHub has a local full-snapshot revision; provider-feed completeness remains unreported. */
+  syncReconciliation: {
+    domain: "repository_access" | "not_reported";
+    state: "required" | "not_reported" | "reconciled";
+    mode: "github_repository_full_snapshot" | "not_reported";
+    requiredReason: "snapshot_missing" | "periodic_reconcile_due" | "source_event_invalidated" | "source_or_scope_mismatch" | "provider_failure" | "not_reported";
+    accessRevision: string | null;
+    accessRevisionKind: "local_access_revision" | "not_reported";
+    /** Completion time only; never a provider feed cursor or content-sync watermark. */
+    lastSuccessAt: string | null;
+    lastFullReconciledAt: string | null;
+    lastAttemptAt: string | null;
+    nextAttemptAt: string | null;
+    lastErrorCode: string | null;
+    rateLimitState: "not_reported" | "limited";
+    rateLimitRetryAt: string | null;
+    scopeHash: string | null;
+    sourceIdentityHash: string | null;
+    cursor: "not_reported";
+    watermark: "not_reported";
+    /** Opaque provider delivery IDs do not establish feed completeness. */
+    gapDetection: "not_reported";
+  };
+  /** Object GET versioning is not a feed cursor and covers known IDs only. */
+  knownObjectRefresh: {
+    domain: "github_known_issue_or_pull_request" | "not_reported";
+    mode: "conditional_canonical_get" | "not_reported";
+    versionKind: "github_updated_at_and_object_etag" | "not_reported";
+    completeness: "known_objects_only" | "not_reported";
+    cursor: "not_reported";
+  };
+}
+
 export interface ConnectionGrant {
   id: string;
   companyId: string;
@@ -248,6 +322,21 @@ export interface ConnectionGrant {
       lastAccessRefreshAt?: string;
       lastWebhookAt?: string;
       webhookHealth?: "pending" | "healthy" | "unhealthy";
+      repositoryAccessReconciliation?: {
+        state: "reconciled" | "required";
+        mode: "full";
+        requiredReason?: "snapshot_missing" | "periodic_reconcile_due" | "source_event_invalidated" | "source_or_scope_mismatch" | "provider_failure";
+        lastSuccessAt?: string;
+        lastFullReconciledAt?: string;
+        lastAttemptAt?: string;
+        nextAttemptAt?: string;
+        lastErrorCode?: string;
+        rateLimitRetryAt?: string;
+        reconcileLeaseId?: string;
+        reconcileLeaseUntil?: string;
+        scopeHash?: string;
+        sourceIdentityHash?: string;
+      };
     };
   } | null;
   credentialSecretRefs: ToolCredentialSecretRef[];
@@ -271,6 +360,7 @@ export interface ConnectionGrant {
    * creator/subject identity that the client cannot evaluate.
    */
   capabilities?: ConnectionGrantCapabilities;
+  lifecycle?: ToolConnectionLifecycle;
 }
 
 export interface ConnectionGrantCapabilities {

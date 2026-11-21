@@ -1,0 +1,7 @@
+doc/operations/aw-v10-evidence/v10-product-artifacts-b1-recovery-20261103/README.md
+doc/operations/aw-v10-evidence/v10-product-artifacts-b1-recovery-20261103/SHA256SUMS
+doc/operations/aw-v10-evidence/v10-product-artifacts-b1-recovery-20261103/qualification.tar.gz
+doc/operations/aw-v10-evidence/v10-product-artifacts-b1-recovery-20261103/stage-list.txt
+doc/operations/v10-capability-projection.json
+doc/operations/v10-safe-change-graph.json
+doc/operations/v10-safe-change-graph.source.json

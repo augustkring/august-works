@@ -61,6 +61,10 @@ describe("connect command", () => {
       token: "board-login-token",
       approvalUrl: `${API_BASE}/cli-auth/challenge-1`,
       userId: "user-1",
+      key: {
+        id: "board-key-1", name: "connect-board-token", createdAt: "2026-05-24T12:00:00.000Z",
+        lastUsedAt: null, revokedAt: null, expiresAt: null, token: "board-login-token",
+      },
     });
     vi.spyOn(console, "log").mockImplementation(() => {});
   });
@@ -113,11 +117,13 @@ describe("connect command", () => {
       apiBase: API_BASE,
       requestedAccess: "board",
       command: "paperclipai connect",
+      clientName: "paperclipai connect",
+      keyName: "connect-board-token",
+      includeKeyMetadata: true,
     }));
     expect(fetchMock.mock.calls.map((call) => [call[1]?.method ?? "GET", new URL(String(call[0])).pathname])).toEqual([
       ["GET", "/api/health"],
       ["GET", "/api/companies"],
-      ["POST", "/api/board-api-keys"],
     ]);
     expect(readContext(contextPath)).toMatchObject({
       currentProfile: "cli-board",

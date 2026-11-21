@@ -30,6 +30,8 @@ console.log(JSON.stringify({
 async function writeQuotaGeminiCommand(binDir: string): Promise<string> {
   const commandPath = path.join(binDir, "gemini");
   const script = `#!/usr/bin/env node
+const fs = require("node:fs");
+if (process.env.PAPERCLIP_TEST_ARGS_PATH) fs.writeFileSync(process.env.PAPERCLIP_TEST_ARGS_PATH, JSON.stringify(process.argv.slice(2)));
 if (process.argv.includes("--help")) {
   process.exit(0);
 }
@@ -62,13 +64,13 @@ describe("gemini_local environment diagnostics", () => {
     });
 
     expect(result.checks.some((check) => check.code === "gemini_cwd_valid")).toBe(true);
-    expect(result.checks.some((check) => check.level === "error")).toBe(false);
+    expect(result.checks.filter((check) => check.level === "error").map((check) => check.code)).toEqual(["paid_transport_unqualified"]);
     const stats = await fs.stat(cwd);
     expect(stats.isDirectory()).toBe(true);
     await fs.rm(path.dirname(cwd), { recursive: true, force: true });
   });
 
-  it("passes model and default yolo flags to the hello probe", async () => {
+  it("does not let model or API-key configuration enable an unreserved hello probe", async () => {
     const root = path.join(
       os.tmpdir(),
       `paperclip-gemini-local-probe-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -95,23 +97,22 @@ describe("gemini_local environment diagnostics", () => {
       },
     });
 
-    expect(result.status).not.toBe("fail");
-    const args = JSON.parse(await fs.readFile(argsCapturePath, "utf8")) as string[];
-    expect(args).toContain("--model");
-    expect(args).toContain("gemini-2.5-pro");
-    expect(args).toContain("--approval-mode");
-    expect(args).toContain("yolo");
-    expect(args).toContain("--prompt");
+    expect(result.status).toBe("fail");
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "gemini_command_resolvable", level: "info" }));
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "gemini_api_key_present", level: "info" }));
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified", level: "error" }));
+    await expect(fs.stat(argsCapturePath)).rejects.toMatchObject({ code: "ENOENT" });
     await fs.rm(root, { recursive: true, force: true });
   });
 
-  it("classifies quota exhaustion as a quota warning instead of a generic failure", async () => {
+  it("refuses paid invocation before the provider can report quota usage", async () => {
     const root = path.join(
       os.tmpdir(),
       `paperclip-gemini-local-quota-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     );
     const binDir = path.join(root, "bin");
     const cwd = path.join(root, "workspace");
+    const argsCapturePath = path.join(root, "args.json");
     await fs.mkdir(binDir, { recursive: true });
     await writeQuotaGeminiCommand(binDir);
 
@@ -124,17 +125,20 @@ describe("gemini_local environment diagnostics", () => {
         cwd,
         env: {
           GEMINI_API_KEY: "test-key",
+          PAPERCLIP_TEST_ARGS_PATH: argsCapturePath,
           PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`,
         },
       },
     });
 
-    expect(result.status).toBe("warn");
-    expect(result.checks.some((check) => check.code === "gemini_hello_probe_quota_exhausted")).toBe(true);
+    expect(result.status).toBe("fail");
+    expect(result.checks.some((check) => check.code === "gemini_hello_probe_quota_exhausted")).toBe(false);
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified", level: "error" }));
+    await expect(fs.stat(argsCapturePath)).rejects.toMatchObject({ code: "ENOENT" });
     await fs.rm(root, { recursive: true, force: true });
   });
 
-  it("trusts remote sandbox workspaces during the hello probe", async () => {
+  it("keeps remote sandbox discovery available but does not invoke paid Gemini", async () => {
     let probeEnv: Record<string, string> | undefined;
 
     const result = await testEnvironment({
@@ -184,7 +188,10 @@ describe("gemini_local environment diagnostics", () => {
       environmentName: "QA Cloudflare",
     });
 
-    expect(result.checks.some((check) => check.code === "gemini_hello_probe_passed")).toBe(true);
-    expect(probeEnv?.GEMINI_CLI_TRUST_WORKSPACE).toBe("true");
+    expect(result.checks.some((check) => check.code === "gemini_hello_probe_passed")).toBe(false);
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified", level: "error" }));
+    expect(probeEnv).toBeUndefined();
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "gemini_cwd_valid", level: "info" }));
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "gemini_command_resolvable", level: "info" }));
   });
 });

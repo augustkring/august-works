@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { PauseCircle, PlayCircle, Repeat, XCircle } from "lucide-react";
 import { Button } from "./ui/button";
@@ -90,7 +91,7 @@ export function TaskTreeControlDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "resume" | "cancel" | "restore";
-  scope: "leaf" | "subtree";
+  scope: "leaf" | "subtree" | "unknown";
   affectedCount: number;
   affectedAgentCount: number;
   loading: boolean;
@@ -102,15 +103,18 @@ export function TaskTreeControlDialog({
   onRetry: () => void;
   onApply: () => void;
 }) {
+  const { t } = useTranslation("experience");
   const cancel = mode === "cancel";
   const tasks = `${affectedCount} task${affectedCount === 1 ? "" : "s"}`;
   const title = cancel
     ? "Cancel subtree?"
     : mode === "restore"
       ? "Restore subtree"
-      : scope === "leaf"
-        ? "Resume work"
-        : "Resume subtree";
+      : scope === "unknown"
+        ? t("taskChatPause.reviewResume")
+        : scope === "leaf"
+          ? "Resume work"
+          : "Resume subtree";
   return (
     <Dialog
       open={open}

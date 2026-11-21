@@ -1,0 +1,9 @@
+{
+  "R619": {
+    "status": "FAILED",
+    "passed": 30,
+    "failed": 9,
+    "cause": "New shared trigger accessed NEW.operation_type while invoked on a non-Memory row; nested table branch restored before R620. No original admission guard removed.",
+    "cleanup": "normal exit1; immediate owned processes0"
+  }
+}

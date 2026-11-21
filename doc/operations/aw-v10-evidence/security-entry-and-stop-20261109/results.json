@@ -1,0 +1,323 @@
+{
+  "scope": "Pinned controlled software invocations; partitioned privacy cases do not qualify an aggregate shared-database full-file run or full current-head CI. No external provider, physical Host, PID/signal, or Human acceptance claim.",
+  "invocations": [
+    {
+      "label": "security91-01",
+      "passed": 4,
+      "skipped": 0,
+      "seconds": 25.755859195000085,
+      "ownedPeakRssBytes": 1791324160,
+      "testFiles": [
+        "server/src/__tests__/account-deletion-sso-reauth.integration.test.ts"
+      ],
+      "sourceManifest": "security91-01/source-manifest.json"
+    },
+    {
+      "label": "security91-02",
+      "passed": 29,
+      "skipped": 0,
+      "seconds": 2.709200712000893,
+      "ownedPeakRssBytes": 525778944,
+      "testFiles": [
+        "server/src/__tests__/agent-auth-jwt.test.ts"
+      ],
+      "sourceManifest": "security91-02/source-manifest.json"
+    },
+    {
+      "label": "security91-03",
+      "passed": 31,
+      "skipped": 0,
+      "seconds": 15.386722997998731,
+      "ownedPeakRssBytes": 1480552448,
+      "testFiles": [
+        "server/src/__tests__/agent-auth-middleware.test.ts"
+      ],
+      "sourceManifest": "security91-03/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-05",
+      "passed": 19,
+      "skipped": 0,
+      "seconds": 15.00954234099845,
+      "ownedPeakRssBytes": 1468874752,
+      "testFiles": [
+        "server/src/__tests__/authz-company-access.test.ts"
+      ],
+      "sourceManifest": "security91-rest-05/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-06",
+      "passed": 14,
+      "skipped": 0,
+      "seconds": 29.786132536999503,
+      "ownedPeakRssBytes": 1752059904,
+      "testFiles": [
+        "server/src/__tests__/better-auth-credential-signup.integration.test.ts"
+      ],
+      "sourceManifest": "security91-rest-06/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-07",
+      "passed": 13,
+      "skipped": 0,
+      "seconds": 22.512161874001322,
+      "ownedPeakRssBytes": 1638780928,
+      "testFiles": [
+        "server/src/__tests__/company-import-jobs.integration.test.ts"
+      ],
+      "sourceManifest": "security91-rest-07/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-08",
+      "passed": 3,
+      "skipped": 0,
+      "seconds": 78.01539469899944,
+      "ownedPeakRssBytes": 2587258880,
+      "testFiles": [
+        "server/src/__tests__/company-import-process-recovery.integration.test.ts"
+      ],
+      "sourceManifest": "security91-rest-08/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-09",
+      "passed": 9,
+      "skipped": 0,
+      "seconds": 31.649514704997273,
+      "ownedPeakRssBytes": 2155573248,
+      "testFiles": [
+        "server/src/__tests__/memory-job-read-authority.integration.test.ts"
+      ],
+      "sourceManifest": "security91-rest-09/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-10",
+      "passed": 35,
+      "skipped": 0,
+      "seconds": 6.694169694001175,
+      "ownedPeakRssBytes": 1013841920,
+      "testFiles": [
+        "server/src/__tests__/openapi-routes.test.ts"
+      ],
+      "sourceManifest": "security91-rest-10/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-11",
+      "passed": 13,
+      "skipped": 0,
+      "seconds": 15.858482604002347,
+      "ownedPeakRssBytes": 1466572800,
+      "testFiles": [
+        "server/src/__tests__/v9-agent-authoring-routes.test.ts"
+      ],
+      "sourceManifest": "security91-rest-11/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-12",
+      "passed": 15,
+      "skipped": 0,
+      "seconds": 106.54254690499874,
+      "ownedPeakRssBytes": 2560851968,
+      "testFiles": [
+        "server/src/__tests__/v9-agent-publication.integration.test.ts"
+      ],
+      "sourceManifest": "security91-rest-12/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-13",
+      "passed": 24,
+      "skipped": 0,
+      "seconds": 25.861685057003342,
+      "ownedPeakRssBytes": 2476781568,
+      "testFiles": [
+        "server/src/__tests__/v9-experience.integration.test.ts"
+      ],
+      "sourceManifest": "security91-rest-13/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-14",
+      "passed": 8,
+      "skipped": 0,
+      "seconds": 27.949376379998284,
+      "ownedPeakRssBytes": 2148388864,
+      "testFiles": [
+        "server/src/__tests__/v9-workflow-authoring-api.integration.test.ts"
+      ],
+      "sourceManifest": "security91-rest-14/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-15",
+      "passed": 24,
+      "skipped": 0,
+      "seconds": 108.58545329800108,
+      "ownedPeakRssBytes": 2669568000,
+      "testFiles": [
+        "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts"
+      ],
+      "sourceManifest": "security91-rest-15/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-16",
+      "passed": 482,
+      "skipped": 0,
+      "seconds": 25.902329444001225,
+      "ownedPeakRssBytes": 1512865792,
+      "testFiles": [
+        "server/src/services/native-runtime/native-session-executor.test.ts"
+      ],
+      "sourceManifest": "security91-rest-16/source-manifest.json"
+    },
+    {
+      "label": "security91-rest-17",
+      "passed": 40,
+      "skipped": 0,
+      "seconds": 40.07984414200109,
+      "ownedPeakRssBytes": 2424328192,
+      "testFiles": [
+        "server/src/services/native-runtime/native-session-resume.test.ts"
+      ],
+      "sourceManifest": "security91-rest-17/source-manifest.json"
+    },
+    {
+      "label": "privacy91-split-1",
+      "passed": 21,
+      "skipped": 42,
+      "seconds": 55.30572234899955,
+      "ownedPeakRssBytes": 2816794624,
+      "testFiles": [
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts"
+      ],
+      "sourceManifest": "privacy91-split-1/source-manifest.json"
+    },
+    {
+      "label": "privacy91-rest-22-24",
+      "passed": 3,
+      "skipped": 60,
+      "seconds": 44.684049309998954,
+      "ownedPeakRssBytes": 2181525504,
+      "testFiles": [
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts"
+      ],
+      "sourceManifest": "privacy91-rest-22-24/source-manifest.json"
+    },
+    {
+      "label": "privacy91-bulk-5000",
+      "passed": 1,
+      "skipped": 62,
+      "seconds": 52.85538227900179,
+      "ownedPeakRssBytes": 2059104256,
+      "testFiles": [
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts"
+      ],
+      "sourceManifest": "privacy91-bulk-5000/source-manifest.json"
+    },
+    {
+      "label": "privacy91-bulk-10000",
+      "passed": 1,
+      "skipped": 62,
+      "seconds": 104.55207520900149,
+      "ownedPeakRssBytes": 2037563392,
+      "testFiles": [
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts"
+      ],
+      "sourceManifest": "privacy91-bulk-10000/source-manifest.json"
+    },
+    {
+      "label": "privacy91-rest-27-42",
+      "passed": 16,
+      "skipped": 47,
+      "seconds": 38.96375034400262,
+      "ownedPeakRssBytes": 2563440640,
+      "testFiles": [
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts"
+      ],
+      "sourceManifest": "privacy91-rest-27-42/source-manifest.json"
+    },
+    {
+      "label": "privacy91-rest-43-63-r2",
+      "passed": 21,
+      "skipped": 42,
+      "seconds": 57.234058016001654,
+      "ownedPeakRssBytes": 3779006464,
+      "testFiles": [
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts"
+      ],
+      "sourceManifest": "privacy91-rest-43-63-r2/source-manifest.json"
+    },
+    {
+      "label": "native-stop-all-three-r5",
+      "passed": 3,
+      "skipped": 12,
+      "seconds": 35.960160743001325,
+      "ownedPeakRssBytes": 2724728832,
+      "testFiles": [
+        "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts"
+      ],
+      "sourceManifest": "native-stop-all-three-r5/source-manifest.json"
+    },
+    {
+      "label": "comment-owner-refusal-r1",
+      "passed": 2,
+      "skipped": 12,
+      "seconds": 24.694053282000823,
+      "ownedPeakRssBytes": 2164416512,
+      "testFiles": [
+        "server/src/__tests__/heartbeat-responsible-user-invariant.test.ts"
+      ],
+      "sourceManifest": "comment-owner-refusal-r1/source-manifest.json"
+    }
+  ],
+  "typecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 99.56557250900005,
+        "peakGroupRssBytes": 6215659520,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "privacyPartitionPassedCases": 63,
+  "securityOtherFilePassedCases": 763,
+  "diagnosticAttempts": [
+    {
+      "label": "privacy91-rest-43-63",
+      "failed": 1,
+      "qualified": false,
+      "failedCases": [
+        "Native analytical Context retention on PostgreSQL refuses the actual native session entry before provider startup using current PostgreSQL source authority"
+      ]
+    },
+    {
+      "label": "native-stop-rowlock-r2",
+      "failed": 1,
+      "qualified": false,
+      "failedCases": [
+        "dependency scheduling through the installed Native text draft controller cancels a real installed-controller Run at before_selection_row_lock without dispatching its model"
+      ]
+    },
+    {
+      "label": "native-stop-rowlock-r3",
+      "failed": 1,
+      "qualified": false,
+      "failedCases": [
+        "dependency scheduling through the installed Native text draft controller cancels a real installed-controller Run at before_selection_row_lock without dispatching its model"
+      ]
+    },
+    {
+      "label": "native-stop-rowlock-r4",
+      "failed": 1,
+      "qualified": false,
+      "failedCases": [
+        "dependency scheduling through the installed Native text draft controller cancels a real installed-controller Run at before_selection_row_lock without dispatching its model"
+      ]
+    }
+  ]
+}

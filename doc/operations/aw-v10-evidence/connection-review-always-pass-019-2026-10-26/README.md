@@ -1,0 +1,1 @@
+The exact always-approval journey passed 1/1, including the second later task with different arguments and no interaction prompt. The run used a fresh source snapshot, syntax gate, and stale-socket cleanup; both test and outer wrapper exits were 0. This followed the separate clean approve/continuation pass.

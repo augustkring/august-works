@@ -1,0 +1,22 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > returns a successful empty response for no remote announcement (HTTP 200)
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > returns a successful empty response for no remote announcement (HTTP 404)
+ ✓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > keeps customer release history available after optional news dismissal and requires board access 92ms
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > fails closed on required-notice projection without a current Human session
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > serves animation documents with a sandbox and network-denying CSP
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > persists across app/service restarts, browsers and companies, isolated by user
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > accepts viewers and concurrent duplicate dismissals with one audit
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > rolls back the dismissal if its audit cannot commit
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > never resurrects a dismissed ID after copy changes or rollback; a new ID appears
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > uses the local-board identity without an auth user row
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > rejects invented IDs without storing dismissals or audit entries
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > accepts offline retries for validated IDs after withdrawal and restart
+ ↓ src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > rejects anonymous/agent callers and inaccessible audit companies
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 12 skipped (13)
+   Start at  14:15:53
+   Duration  27.85s (transform 15.39s, setup 85ms, import 21.45s, tests 6.18s, environment 0ms)
+

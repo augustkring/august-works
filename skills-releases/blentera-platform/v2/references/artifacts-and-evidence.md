@@ -1,0 +1,3 @@
+# Artifacts and evidence
+
+A work product is a registered deliverable with ownership, provenance and current reader access; a comment announcing it is not the deliverable. Use the canonical artifact handoff and verify the returned receipt and remote-accessible link before saying it was sent. Do not upload twice after a lost response: inspect the existing operation first. Keep source/version lineage, uncertainty and relevant validation with the result. A test receipt proves only its recorded source, environment and scope; fixtures do not qualify a production provider or physical host. Never expose secrets or private source content in public links, evidence or diagnostic logs. Discover current artifact and result contracts.

@@ -12,6 +12,7 @@ import {
   getLocalInboxArchiveIssueIds,
 } from "../lib/inboxArchiveCache";
 import { taskCollectionPreferencesStorageKey } from "../lib/task-collection-preferences";
+import { i18n } from "../i18n";
 
 const routerMock = vi.hoisted(() => ({
   location: { pathname: "/", search: "", hash: "" },
@@ -294,6 +295,8 @@ function createFailedRun(overrides: Partial<HeartbeatRun> = {}): HeartbeatRun {
     id: "run-1",
     companyId: "company-1",
     agentId: "agent-1",
+    scopeKind: "company",
+    issueId: null,
     responsibleUserId: null,
     invocationSource: "assignment",
     triggerDetail: null,
@@ -731,7 +734,7 @@ describe("Inbox toolbar", () => {
       separator.querySelectorAll("[data-date-group-rule]").length === 2
     ))).toBe(true);
     expect(separators.every((separator) => (
-      separator.querySelector("[data-date-group-label]")?.classList.contains("text-muted-foreground/70")
+      separator.querySelector("[data-date-group-label]")?.classList.contains("text-muted-foreground")
     ))).toBe(true);
 
     act(() => root.unmount());
@@ -1393,6 +1396,36 @@ describe("FailedRunInboxRow", () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it("names the retry button Retry in English and Genforsøg in Danish", async () => {
+    const previousLocale = i18n.language;
+    try {
+      for (const [locale, name] of [["en", "Retry"], ["da", "Genforsøg"]] as const) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        const root = createRoot(container);
+        act(() => {
+          root.render(
+            <FailedRunInboxRow
+              run={createFailedRun()}
+              issueById={new Map()}
+              agentName="Agent"
+              issueLinkState={null}
+              onDismiss={() => {}}
+              onRetry={() => {}}
+              isRetrying={false}
+            />,
+          );
+        });
+        const names = Array.from(container.querySelectorAll("button")).map((button) => button.textContent?.trim());
+        expect(names).toContain(name);
+        act(() => {
+          root.unmount();
+        });
+      }
+    } finally {
+      await act(async () => { await i18n.changeLanguage(previousLocale); });
+    }
   });
 });
 

@@ -1,0 +1,45 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[14:15:50] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[14:15:50] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[14:15:50] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[14:15:50] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[14:15:50] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > requires both explicit enablement and an owned destination: {} 5ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > requires both explicit enablement and an owned destination: {"enabled":true} 0ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > requires both explicit enablement and an owned destination: {"feedUrl":"https://notices.example.test/current.json"} 0ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > applies the same opt-in gate through loadConfig (undefined, undefined) 2ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > applies the same opt-in gate through loadConfig (true, undefined) 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > applies the same opt-in gate through loadConfig (undefined, https://notices.example.test/current.json) 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > applies the same opt-in gate through loadConfig (true, https://notices.example.test/current.json) 20ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > treats a 404 as quiet empty content, drops stale ETags, and recovers after cooldown 4ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > deduplicates requests, caches for an hour, then revalidates with ETag 2ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > withdraws, updates same-ID copy and discovers new IDs after refresh 2ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > suppresses invalid/unavailable feeds and observes failure cooldown 2ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > suppresses invalid/unavailable feeds and observes failure cooldown 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > suppresses invalid/unavailable feeds and observes failure cooldown 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > suppresses invalid/unavailable feeds and observes failure cooldown 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > suppresses invalid/unavailable feeds and observes failure cooldown 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > bounds a hung fetch to three seconds 4ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > does not fetch when disabled or an operator URL is invalid 0ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > expires a cached announcement and filters version-incompatible content 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > projects current and historical release notices without reviving expired current content 3ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > keeps scoped or action-required feed entries out of the generic dismissible/search projection 2ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > distinguishes an unconfigured feed from a configured but unavailable notice source 0ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > proxies only the current content-addressed image and caches bytes 2ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > rejects image digest mismatches and cools down image retries 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > deduplicates and caches validated animations on the configured host 95ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > falls back on rejected animation assets and cools down retries 14ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > falls back on rejected animation assets and cools down retries 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > falls back on rejected animation assets and cools down retries 2ms
+ ✓ src/__tests__/announcement-feed.test.ts > announcement feed > falls back on rejected animation assets and cools down retries 1ms
+ ✓ src/__tests__/announcement-feed.test.ts > customer changelog > retains expired releases, chooses the requested translation and excludes private, future and incompatible notes 3ms
+ ✓ src/__tests__/announcement-feed.test.ts > customer changelog > reports configuration and fetch failure without inventing release history 0ms
+ ✓ src/__tests__/announcement-feed.test.ts > customer changelog > rejects duplicate translations, missing action instructions and release notes without a publication date 2ms
+
+ Test Files  1 passed (1)
+      Tests  31 passed (31)
+   Start at  14:15:46
+   Duration  3.80s (transform 1.88s, setup 79ms, import 3.41s, tests 176ms, environment 0ms)
+

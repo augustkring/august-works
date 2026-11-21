@@ -1,0 +1,9 @@
+loaded_module=/tmp/blentera-auth-family-177/@better-auth/scim/package/dist/index.mjs
+mtime=2026-10-28 07:38:44.020748835 +0000 path=/tmp/blentera-auth-family-177/@better-auth/scim/package/dist/index.mjs
+c3d06492a1851dbaae9fac861f7a232bb4a8dc38365286fce0bd293337f261c3  /tmp/blentera-scim-1.7.7.tgz
+e3541ffbb95d2a3a24249ed9df161e11bf81dab733a8732b9ecc27724140edb5  patches/@better-auth__scim@1.7.7.patch
+c016728f83f60ff9424f8dbbe6b6a8435111878189d3e728bc8cbe2c6601e85e  /tmp/blentera-auth-family-177/@better-auth/scim/package/dist/index.mjs
+independent_patch_copy=exact-match
+4226-			// Company SCIM inactivity must not revoke unrelated native memberships.
+4227:			if (!active && !options.identity?.reconcileUser) await input.auth.internalAdapter.deleteUserSessions(userId);
+4228-			return {

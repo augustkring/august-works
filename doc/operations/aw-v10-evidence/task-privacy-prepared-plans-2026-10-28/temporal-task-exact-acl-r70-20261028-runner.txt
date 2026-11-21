@@ -1,0 +1,3 @@
+timeout_seconds=300
+test_file=src/__tests__/native-memory-task-transaction-reuse.integration.test.ts
+test_pattern=matches Alice, Bob, and revoked Alice

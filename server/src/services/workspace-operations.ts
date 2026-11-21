@@ -180,6 +180,13 @@ export function resetWorkspaceRuntimeControlLocksForTests() {
   activeRuntimeControls.clear();
 }
 
+export const NATIVE_WORKSPACE_COORDINATION_PRIVATE_KEY = "nativeWorkspaceCoordinationObservation";
+
+function publicWorkspaceOperationMetadata(value: Record<string, unknown> | null) {
+  if (!value || !Object.hasOwn(value, NATIVE_WORKSPACE_COORDINATION_PRIVATE_KEY)) return value;
+  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== NATIVE_WORKSPACE_COORDINATION_PRIVATE_KEY));
+}
+
 function toWorkspaceOperation(row: WorkspaceOperationRow): WorkspaceOperation {
   return {
     id: row.id,
@@ -199,7 +206,7 @@ function toWorkspaceOperation(row: WorkspaceOperationRow): WorkspaceOperation {
     logCompressed: row.logCompressed,
     stdoutExcerpt: row.stdoutExcerpt ?? null,
     stderrExcerpt: row.stderrExcerpt ?? null,
-    metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+    metadata: publicWorkspaceOperationMetadata((row.metadata as Record<string, unknown> | null) ?? null),
     startedAt: row.startedAt,
     finishedAt: row.finishedAt ?? null,
     createdAt: row.createdAt,
@@ -248,7 +255,10 @@ export interface WorkspaceOperationRecorder {
   }): Promise<WorkspaceOperation>;
 }
 
-export function workspaceOperationService(db: Db) {
+type WorkspaceOperationTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type WorkspaceOperationDb = Pick<Db | WorkspaceOperationTransaction, "select" | "insert" | "update" | "delete" | "transaction">;
+
+export function workspaceOperationService(db: WorkspaceOperationDb) {
   const instanceSettings = instanceSettingsService(db);
   const logStore = getWorkspaceOperationLogStore();
 

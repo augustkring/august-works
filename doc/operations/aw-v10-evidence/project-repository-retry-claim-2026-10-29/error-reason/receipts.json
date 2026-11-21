@@ -1,0 +1,22 @@
+{
+  "attempt": "retry-claim-error-reason-r11-20261029",
+  "result": {
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "exit": 0
+  },
+  "sourceHead": "3ced79936119f8b760f12025b7cd2c195cd6fb4d",
+  "sourceFiles": [
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "aaeff9959e6a3dc675b111256dbf22d30b96fcdc2b67d042c8968b7c769e50cf"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-project-repositories.test.ts",
+      "sha256": "ec848d368a6c2052b0b5436ceb2b0746aa6e1330bc810d14af98e11f12a504df"
+    }
+  ],
+  "archiveSha256": "d2ab833b58db916ede0d936de71bdc5699f04a5f39f5cb4dfb0a7af95d990bf9",
+  "scope": "Correct persisted errorReason field cleared at authorized retry claim; actual adapter receives running Agent and null prior error. Complete repository provision/retry suite passes. Final workspace gates pending."
+}

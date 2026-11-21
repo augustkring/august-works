@@ -1,0 +1,31 @@
+{
+  "parentCommit": "418927deb40016024ef56c2473761933be6770a9",
+  "sourceDisposition": "30 changed source/configuration/test/inventory paths; exact hashes in source-before.json; four additional unchanged compiler inputs protected",
+  "workspaceTypecheck": {
+    "receipt": "workspace-typecheck-and-stopped-build-r525-receipt.json",
+    "step": 0,
+    "status": "passed",
+    "seconds": 298.3197430179862
+  },
+  "workspaceBuild": {
+    "receipt": "workspace-build-r526-receipt.json",
+    "status": "passed",
+    "seconds": 211.3760782299796,
+    "initialAttempt": "r525 build stopped by 6 GiB process-group RSS cap without OOM; r526 rerun with 7 GiB cap and same 2 GiB global reserve"
+  },
+  "targetedTests": {
+    "status": "passed",
+    "files": 5,
+    "passed": 64,
+    "unselected": 610,
+    "receipt": "focused-tests-r527-receipt.json",
+    "qualification": "Mixed unit tests and actual embedded-PostgreSQL owner/policy tests; no external provider, Native SDK or signed Host proof"
+  },
+  "pending": [
+    "Full workspace pnpm test:run is not green/qualified.",
+    "New Native MCP/channel/Skills SDK scenarios require actual qualified CI execution.",
+    "CI81 has unresolved Native/browser, legacy paid-positive and queue/performance failures; triage files document the evidence limits.",
+    "Approved MCP retention after steering to another Human requires an accepted-origin Source fix; private follow-up in progress."
+  ],
+  "releaseDisposition": "PR42 remains draft and unmerged; no phase, release, paid-transport, accessibility or Human qualification promotion"
+}

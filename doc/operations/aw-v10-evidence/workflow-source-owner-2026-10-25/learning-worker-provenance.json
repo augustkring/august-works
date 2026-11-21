@@ -1,0 +1,65 @@
+{
+  "kind": "scoped isolated software test worker; not production host/provider or final workspace qualification",
+  "archivedAt": "2026-10-25T07:35:14.353078+00:00",
+  "repositoryHeadAtArchive": "9239f756eb11f27e33a8d77611444e2c441d3117",
+  "imageId": "sha256:73ee09616a23e786b1fece7e2fb7169c0614384dfac1ef4632f45529d3ad71ca",
+  "workerNode": "v24.22.1",
+  "workerUid": "20001",
+  "boundary": {
+    "NetworkMode": "none",
+    "Memory": 12884901888,
+    "NanoCpus": 2000000000,
+    "PidsLimit": 512,
+    "CapDrop": [
+      "ALL"
+    ],
+    "SecurityOpt": [
+      "seccomp=unconfined",
+      "apparmor=unconfined"
+    ],
+    "Init": true
+  },
+  "sourceMeaning": "Image was copied before subsequent canonical source integration edits. Exact file hashes identify exercised bytes; current checkout is not represented as the image source snapshot. The sole test-file bind mount changes assertion diagnostics only.",
+  "sourceFiles": {
+    "server/src/__tests__/v7-learning.integration.test.ts": {
+      "workerSha256": "39454c6f6f45b4f826c0534d024aca44f24842234291cb35a3cdb57222bc7206",
+      "archiveCheckoutSha256": "39454c6f6f45b4f826c0534d024aca44f24842234291cb35a3cdb57222bc7206",
+      "sameBytes": true
+    },
+    "server/src/services/authorization.ts": {
+      "workerSha256": "99b0af5fe27085ff0098e346569004c7ebec2d7cec2358a1c4015284c4c340bd",
+      "archiveCheckoutSha256": "f7964a4fbc4c69f14d4d6ba48c29c10edb0ad29a923ce4e3d43e110629b89ea5",
+      "sameBytes": false
+    },
+    "server/src/services/optimizer/optimizer-evaluation.ts": {
+      "workerSha256": "426cee0d6de2bed07986214a62cf30766d6fd9e93c989bc7d94d0e0c48949f32",
+      "archiveCheckoutSha256": "426cee0d6de2bed07986214a62cf30766d6fd9e93c989bc7d94d0e0c48949f32",
+      "sameBytes": true
+    },
+    "server/src/services/automation-artifacts/automation-artifact-code-runtime.ts": {
+      "workerSha256": "5989e44bf78d4ea576ce83106a6b4b684db280bb8e3511bd454aa9c7450b43ab",
+      "archiveCheckoutSha256": "5989e44bf78d4ea576ce83106a6b4b684db280bb8e3511bd454aa9c7450b43ab",
+      "sameBytes": true
+    },
+    "server/src/services/memory/memory-privacy.ts": {
+      "workerSha256": "26a3946bd9e417b1823b266365edf93b1212233230d14ca9981d9857c40bdc4e",
+      "archiveCheckoutSha256": "26a3946bd9e417b1823b266365edf93b1212233230d14ca9981d9857c40bdc4e",
+      "sameBytes": true
+    },
+    "server/src/services/task-source-read-scope.ts": {
+      "workerSha256": "b98af815f504e1ae7918b39a74b3c99f9285849cd8f47043a8bf0e8c4180b7d6",
+      "archiveCheckoutSha256": "b9db3cbb7afe77048be349c9386f2968f8286c8b1b2b77b03070002a704f77ca",
+      "sameBytes": false
+    },
+    "packages/adapter-utils/src/local-process-sandbox.ts": {
+      "workerSha256": "eaedd4a1c8f10092cf72cb9fe3f18f1ea5e0f916081992924c9dd0dd8be75df7",
+      "archiveCheckoutSha256": "eaedd4a1c8f10092cf72cb9fe3f18f1ea5e0f916081992924c9dd0dd8be75df7",
+      "sameBytes": true
+    }
+  },
+  "receipts": {
+    "sandboxFull": "learning-worker-native-sandbox-full",
+    "learningCases": "learning-artifact-isolated-worker-reduced-heap"
+  },
+  "learningHeapBytes": 2147483648
+}

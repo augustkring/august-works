@@ -1,5 +1,8 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  createSupportCaseSchema, replySupportCaseSchema, deriveSupportCaseSubject,
+  SUPPORT_CASE_COPY, SUPPORT_CASE_LIMITS,
+  supportCaseDataPolicySchema,
   customerSupportHistorySchema,
   nativeSupportReviewSchema,
 } from "./customer-support.js";
@@ -158,4 +161,75 @@ it("keeps pending review metadata strict and excludes private content and access
     expect(
       nativeSupportReviewSchema.safeParse({ ...receipt, ...patch }).success,
     ).toBe(false);
+});
+
+const command = { idempotencyKey: "c18e87f2-90f2-4cde-8e17-24b6ab5b3545", expectedUserId: "actual-human", expectedPolicyRevision: "a".repeat(64) };
+describe("customer support intake policy", () => {
+  it("requires an exact processing disclosure revision for new text commands", () => {
+    const { expectedPolicyRevision: _, ...withoutRevision } = command;
+    for (const expectedPolicyRevision of [undefined, "", "old", "a".repeat(63), "g".repeat(64)]) {
+      expect(createSupportCaseSchema.safeParse({ ...withoutRevision, description: "Help", expectedPolicyRevision }).success).toBe(false);
+      expect(replySupportCaseSchema.safeParse({ ...withoutRevision, body: "More information", expectedPolicyRevision }).success).toBe(false);
+    }
+  });
+  it("accepts a description alone and preserves unanswered impact", () => {
+    const result = createSupportCaseSchema.parse({ ...command, description: "I cannot open my work" });
+    expect(result.category).toBe("other");
+    expect(result.impact).toBeNull();
+    expect(result.subject).toBeUndefined();
+    expect(result.safeContext).toBeUndefined();
+    expect(deriveSupportCaseSubject("  Work is unavailable\nMore details  ")).toBe("Work is unavailable");
+  });
+  it("preserves explicit choices and an edited subject without inferring impact", () => {
+    const result = createSupportCaseSchema.parse({ ...command, description: "Cannot connect", category: "apps_connections", subject: "My chosen subject" });
+    expect(result.category).toBe("apps_connections");
+    expect(result.subject).toBe("My chosen subject");
+    expect(result.impact).toBeNull();
+    expect(createSupportCaseSchema.parse({ ...result, impact: "blocked" }).impact).toBe("blocked");
+  });
+  it("rejects unreviewable automatic context and caller-selected authority or status", () => {
+    for (const patch of [{ status: "RESOLVED" }, { openedByUserId: "another-human" }, { providerCaseRef: "external" },
+      { safeContext: { taskBody: "private task" } }, { safeContext: { url: "https://example.test/?token=secret" } },
+      { safeContext: { errorCode: "private exception text" } }, { safeContext: { operationId: "raw log" } }]) {
+      expect(createSupportCaseSchema.safeParse({ ...command, description: "Help", ...patch }).success).toBe(false);
+    }
+    expect(createSupportCaseSchema.parse({ ...command, description: "Help", safeContext: { surface: "work", errorCode: "REQUEST_TIMEOUT" } }).safeContext)
+      .toEqual({ surface: "work", errorCode: "REQUEST_TIMEOUT" });
+  });
+  it("uses the published limits and refuses empty requests and replies", () => {
+    expect(createSupportCaseSchema.safeParse({ ...command, description: "  " }).success).toBe(false);
+    expect(createSupportCaseSchema.safeParse({ ...command, description: "x".repeat(SUPPORT_CASE_LIMITS.description + 1) }).success).toBe(false);
+    expect(replySupportCaseSchema.safeParse({ ...command, body: "  " }).success).toBe(false);
+    expect(replySupportCaseSchema.safeParse({ ...command, body: "x".repeat(SUPPORT_CASE_LIMITS.reply + 1) }).success).toBe(false);
+    expect(deriveSupportCaseSubject("x".repeat(250))).toHaveLength(SUPPORT_CASE_LIMITS.subject);
+    expect(deriveSupportCaseSubject("x".repeat(199) + "🚀")).toBe("x".repeat(199));
+  });
+  it("uses the prescribed bilingual support wording", () => {
+    expect(SUPPORT_CASE_COPY.da.statuses.WAITING_FOR_YOU).toBe("Afventer dit svar");
+    expect(SUPPORT_CASE_COPY.da.statuses.CLOSED).toBe("Afsluttet");
+    expect(SUPPORT_CASE_COPY.da.impacts.limited).toBe("Jeg kan fortsætte med begrænsninger");
+    expect(SUPPORT_CASE_COPY.en.deliveryPending).toBe("Received; delivery pending");
+  });
+});
+
+describe("operator-owned support data policy", () => {
+  const policy = {
+    schemaVersion: 1, policyVersion: "test.support.v1", recipientName: "Test support operator",
+    privacyNoticeUrl: "https://example.test/privacy", processingRegion: "test region",
+    retentionTrigger: "after_last_customer_or_support_message", retentionDays: 30,
+    backupMaxDays: 7, restoreLagDays: 2, deletionMarkerDays: 10, legalHoldPolicyId: "test.support.hold.v1",
+  };
+  it("requires explicit support configuration without borrowing feedback defaults", () => {
+    expect(supportCaseDataPolicySchema.parse(policy)).toEqual(policy);
+    expect(supportCaseDataPolicySchema.safeParse({}).success).toBe(false);
+    const { retentionDays: _retention, ...missingRetention } = policy;
+    expect(supportCaseDataPolicySchema.safeParse(missingRetention).success).toBe(false);
+    expect(supportCaseDataPolicySchema.safeParse({ ...policy, certified: true }).success).toBe(false);
+  });
+  it("rejects an insufficient restore horizon and unsafe notice destinations", () => {
+    expect(supportCaseDataPolicySchema.safeParse({ ...policy, deletionMarkerDays: 8 }).success).toBe(false);
+    for (const privacyNoticeUrl of ["not a URL", "javascript:alert(1)", "http://example.test/privacy", "https://user:secret@example.test/privacy"]) {
+      expect(supportCaseDataPolicySchema.safeParse({ ...policy, privacyNoticeUrl }).success).toBe(false);
+    }
+  });
 });

@@ -1,0 +1,19 @@
+{
+  "parentCommit": "924a297b27fca33efb53e7444ece03e618728122",
+  "files": {
+    "server/src/__tests__/agent-runtime-fabric-v5.test.ts": "be9bd5cf962092553447c1731a1ca294414eb7f480a3c18d470aee49b1d37d78",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "88578e8bf449c402e92a3946f18368d3d5a8ad02ea21b12adac4ee4bd89cdce1",
+    "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts": "1182274b41a878498b152f2aaecc14c5ccbb2e1ec763f9915b6737aadb6901e4",
+    "server/src/__tests__/helpers/connection-intent-railway-fixture.ts": "9a0ded220be5b649bb3eae0ba172349999deacd2f3adf9a8107872229d800e43",
+    "server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts": "54841bebaa9bf22fa7abbec31bd688bbf30ea541244b1fb58b96af3e6bff14d3",
+    "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts": "2757aebae9973482729ed142442821342ea34420cb0d49c5a4236256b17fe2c0",
+    "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts": "c0447085fa743cacff339c6a15c28291e50b516f841c638f8f90d2b7f5667527",
+    "server/src/services/native-draft-conformance.ts": "87e1e4f478619ffd63f33c640cb6ecdde900c87ab72398874ef6ed8716dec284",
+    "server/src/services/agent-provider-bindings.ts": "c34460f72744c70ed7068f7284895085d61b6bc4146d8c0e646f6ac0178267ad",
+    "server/src/services/orchestration/model-reservations.ts": "c1f8beb88fc3a43e615909270634c6dfc3b3aafa2b0220b5f6fc0f359ca57cd9",
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2"
+  },
+  "scope": "Final inputs for the 42 selected software cases. Per-invocation manifests retain their own exact immutable observation windows. Other SDK diagnostic changes typecheck but have no passing SDK qualification in this packet."
+}

@@ -1,0 +1,1 @@
+timeout_seconds=240ntest_file=src/__tests__/v9-feedback-images.integration.test.tsntest_pattern=blocks company object erasure on a native hold and waits for exact protected-image cleanup before company completionn

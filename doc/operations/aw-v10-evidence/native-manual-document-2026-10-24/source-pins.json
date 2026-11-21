@@ -1,0 +1,15 @@
+{
+  "server/src/services/documents.ts": "30afda5f377efdc32b3dc296faf2c6f06609f8a0d27f50a64faff1326fb99c19",
+  "server/src/services/issues.ts": "57b83ab03b26e8e70dada26e10bf320d9d738f997bcbf6d8426f5c0bf172d715",
+  "server/src/services/native-direct-input.ts": "d2f4401fbbf103fd399156d5526f1b8029f1e01f0cf0d1a1f265267f32077491",
+  "server/src/routes/issues.ts": "8998ff9bd516cf92b1eeefdda4b01512d2fe96ef8e3f6f026bc39ef81e65edc7",
+  "server/src/__tests__/manual-document-payload-source.integration.test.ts": "a200f8703d89a4a19e0dc016ee9efe2f16182815d8ff923fee302cb12489de99",
+  "server/src/__tests__/documents.test.ts": "25edec56c05762eb796cf19a6b970c872e40e833567ac011bd8c22632f175535",
+  "server/src/__tests__/documents-service.test.ts": "33f3fb8de188f0c9273faba234c83899a316438e744575bb95429a9e936653a6",
+  "server/src/__tests__/manual-comment-payload-source.integration.test.ts": "e8833e977a6194f7092ea074fa97316fb70fd069b388db08b698a7073d3c7ebb",
+  "packages/db/src/schema/issue_documents.ts": "40520bccd0e4b98fb62261b9ad02badebf1e8a11e8d4c636a5d83be0ef4cb4b6",
+  "packages/db/src/migrations/0509_nebulous_wong.sql": "4e9f04e21728f67595127d424eacf418108cb80c678eef214991321ada1d934f",
+  "tests/e2e/aw-v10-native-auth.spec.ts": "f0cd25aeca1aa75e49db902e7cccd296f3e6a5af6aabe8a5b73789ecf82fd3d2",
+  "tests/e2e/aw-v10-native-auth.config.ts": "6cae7be75201ec1681482ac8fa19124ab58230f705dc1fb492dfbf7145a15be6",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

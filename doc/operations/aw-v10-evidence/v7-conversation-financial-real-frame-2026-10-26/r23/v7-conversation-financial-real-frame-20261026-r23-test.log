@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 30 skipped) 31345ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 27381ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:778:23
+    776|       const billingCode = `native-conversation-model:${reservation.id}…
+    777|       const settled = await db.select().from(costEvents).where(eq(cost…
+    778|       expect(settled).toHaveLength(1);
+       |                       ^
+    779|       expect(settled[0]).toMatchObject({ companyId: facts.companyId, a…
+    780|         issueId: result.issueId, heartbeatRunId: result.run?.id, costC…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  17:56:44
+   Duration  46.21s (transform 10.48s, setup 85ms, import 14.66s, tests 31.34s, environment 0ms)
+

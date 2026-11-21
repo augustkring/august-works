@@ -1,0 +1,306 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts (4 tests | 4 failed) 22226ms
+     × hides a native private-source job from another current admin on API and maintenance history 1621ms
+     × filters before output limits so newer hidden jobs cannot displace an older readable job 4361ms
+     × withholds a source-version-stale job without trusting retained version metadata 267ms
+     × keeps only an own original source-free index tombstone after actual source erasure 477ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > hides a native private-source job from another current admin on API and maintenance history
+AssertionError: expected [ { …(8) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "attemptNumber": 1,
++     "errorCode": null,
++     "finishedAt": null,
++     "id": "51bc66af-500c-4ae0-9b48-b6a8087ef683",
++     "operationType": "index_refresh",
++     "result": null,
++     "status": "queued",
++     "submittedAt": "2026-10-22T23:40:23.432Z",
++   },
++ ]
+
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:89:32
+     87|     expect((await http(s, s.alice).get(`/api/companies/${s.companyId}/…
+     88|     const response = await http(s).get(`/api/companies/${s.companyId}/…
+     89|     expect.soft(response.body).toEqual([]);
+       |                                ^
+     90|     const history = await readMemoryMaintenanceHistory(db, s.bob, s.co…
+     91|     expect(history.entries).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > hides a native private-source job from another current admin on API and maintenance history
+AssertionError: expected [ { …(10) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "attemptNumber": 1,
++     "finishedAt": null,
++     "indexedRecordCount": null,
++     "jobId": "51bc66af-500c-4ae0-9b48-b6a8087ef683",
++     "leaseExpiresAt": null,
++     "maintenanceClass": "M1",
++     "outcome": "queued",
++     "receiptId": null,
++     "startedAt": null,
++     "submittedAt": "2026-10-22T23:40:23.432Z",
++   },
++ ]
+
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:91:29
+     89|     expect.soft(response.body).toEqual([]);
+     90|     const history = await readMemoryMaintenanceHistory(db, s.bob, s.co…
+     91|     expect(history.entries).toEqual([]);
+       |                             ^
+     92|   });
+     93|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > filters before output limits so newer hidden jobs cannot displace an older readable job
+AssertionError: expected [ …(50) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
+-   "fe05f4f7-06b7-41b6-ab37-536e6e1d7b45",
++   "0bb2cc39-9564-4174-9457-793de182d8e4",
++   "f3b51ef3-dee5-4c1c-9bcb-7da51db8201a",
++   "5a1a5c28-ef60-4954-9b9e-7770c51dea60",
++   "6df03cff-4fef-459c-86c8-2ed1a14299cc",
++   "7ebad06a-a9a5-4f61-a131-a91941236a36",
++   "626fae9b-f9ba-4a76-a200-8fc19c14b795",
++   "78e2f725-4f57-4ae3-85e5-456d63ec1517",
++   "81449520-42d8-4bdb-be98-fb0e2cf79a93",
++   "661ab9ec-e58e-4a5a-92da-d9f1ca2fa448",
++   "5bda6788-dba8-4ad5-853e-d5d8e918cdeb",
++   "a95ff6a3-ecc3-4265-a87f-ba179cd2e5e2",
++   "3184adf9-b5a2-4344-81c3-247565e116aa",
++   "a267ee72-f64f-4651-9472-4ccb01ca9fad",
++   "21612505-7ed7-4cc9-a9d6-3273902b525a",
++   "9ab2a179-2997-4803-8e0e-6d7005f6a9c2",
++   "427b2e47-6d20-4a15-a651-d576adc9c0b5",
++   "2609888c-af9d-48cc-8a4c-06923c971187",
++   "f5ff66ed-30f8-4c1f-8ce9-f3ac736b8b02",
++   "99b385e3-71d7-4a66-bab8-2ee499c3069e",
++   "5c5f3045-230e-46ca-8669-fd4860f9cf94",
++   "212ff7f2-eabf-427d-90c4-6741620ba969",
++   "a5c7f171-ba84-4930-bd50-064c53a01a12",
++   "bf50f00b-8002-41aa-8cb9-be1659e612e7",
++   "5e6a4f25-6d58-4e6d-9620-22c994a9cfd2",
++   "c225b403-dd8b-4249-b72e-147f03bfd6b7",
++   "88a3ce4f-2a3f-42ba-9e71-0f10797fad7a",
++   "2ef952cc-c57b-4c68-852e-e7da65b1f7b8",
++   "38d7ce03-0343-4780-94a0-b34dc2f95ec8",
++   "ce71800b-7eb7-4651-bbb4-b0acb1b33c3d",
++   "c7f29520-1cfa-48fb-b692-a523b5db662e",
++   "055fb6f1-d117-4fb3-82d2-7bf19d5037a9",
++   "adef387e-eca1-4fff-9adb-ef73a9b397f9",
++   "4366364b-205b-4940-b099-712b6f5fc9f8",
++   "17811f41-460c-4dc2-bc09-155250809e72",
++   "91300501-e0e5-4aec-bcfe-a23ac5877181",
++   "615326fa-f1af-4cb6-b6c5-88fbb2356523",
++   "8bdb4ab1-8df3-4e80-b62d-f5de86ca863b",
++   "8a858856-672e-4a55-ba70-13c959ffd595",
++   "a2b5ef88-8bf0-4654-b4ea-f9e4c7a3c48c",
++   "93f31116-2ebd-4b5e-9fc7-b46d86cf915a",
++   "38b2de85-dd0c-4483-b5a0-804c570f3873",
++   "f32a7ecf-1f13-46bd-a914-97b79154170f",
++   "62b11d23-c3d2-45cc-b4fd-d5eaa9b3a103",
++   "9b0043be-a4c5-47a6-8bc4-2e3d166d5d33",
++   "035948c9-c3a5-4dd3-bc1d-8a47fccfb036",
++   "d8db9913-20dd-4f5c-be64-c4d854adffb6",
++   "48720b48-d9d6-479f-acbb-d9849fe0064a",
++   "84e5a2ed-5179-418f-8fc8-8a6eb7c35f2d",
++   "89e648a7-ff30-411e-84d3-9548cc625b55",
++   "e5c50703-1168-4a65-9273-6c5861b66104",
+  ]
+
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:100:71
+     98|     for (let i = 0; i < 51; i++) await enqueue(s, privateRow.id);
+     99|     const response = await http(s).get(`/api/companies/${s.companyId}/…
+    100|     expect.soft(response.body.map((item: { id: string }) => item.id)).…
+       |                                                                       ^
+    101|     expect((await readMemoryMaintenanceHistory(db, s.bob, s.companyId)…
+    102|   }, 60000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > filters before output limits so newer hidden jobs cannot displace an older readable job
+AssertionError: expected [ …(10) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
+-   "fe05f4f7-06b7-41b6-ab37-536e6e1d7b45",
++   "0bb2cc39-9564-4174-9457-793de182d8e4",
++   "f3b51ef3-dee5-4c1c-9bcb-7da51db8201a",
++   "5a1a5c28-ef60-4954-9b9e-7770c51dea60",
++   "6df03cff-4fef-459c-86c8-2ed1a14299cc",
++   "7ebad06a-a9a5-4f61-a131-a91941236a36",
++   "626fae9b-f9ba-4a76-a200-8fc19c14b795",
++   "78e2f725-4f57-4ae3-85e5-456d63ec1517",
++   "81449520-42d8-4bdb-be98-fb0e2cf79a93",
++   "661ab9ec-e58e-4a5a-92da-d9f1ca2fa448",
++   "5bda6788-dba8-4ad5-853e-d5d8e918cdeb",
+  ]
+
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:101:106
+     99|     const response = await http(s).get(`/api/companies/${s.companyId}/…
+    100|     expect.soft(response.body.map((item: { id: string }) => item.id)).…
+    101|     expect((await readMemoryMaintenanceHistory(db, s.bob, s.companyId)…
+       |                                                                                                          ^
+    102|   }, 60000);
+    103|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > withholds a source-version-stale job without trusting retained version metadata
+AssertionError: expected [ { …(8) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "attemptNumber": 1,
++     "errorCode": null,
++     "finishedAt": null,
++     "id": "14c81ab0-18a6-4279-9609-35f923cfb9a5",
++     "operationType": "index_refresh",
++     "result": null,
++     "status": "queued",
++     "submittedAt": "2026-10-22T23:40:28.207Z",
++   },
++ ]
+
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:108:100
+    106|     await db.update(memoryRecords).set({ content: "A later changed pay…
+    107|       .where(and(eq(memoryRecords.companyId, s.companyId), eq(memoryRe…
+    108|     expect.soft((await http(s).get(`/api/companies/${s.companyId}/memo…
+       |                                                                                                    ^
+    109|     expect((await readMemoryMaintenanceHistory(db, s.bob, s.companyId)…
+    110|     expect(job.sourceRefJson.recordVersions).toEqual({ [row.id]: row.u…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > withholds a source-version-stale job without trusting retained version metadata
+AssertionError: expected [ { …(10) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "attemptNumber": 1,
++     "finishedAt": null,
++     "indexedRecordCount": null,
++     "jobId": "14c81ab0-18a6-4279-9609-35f923cfb9a5",
++     "leaseExpiresAt": null,
++     "maintenanceClass": "M1",
++     "outcome": "queued",
++     "receiptId": null,
++     "startedAt": null,
++     "submittedAt": "2026-10-22T23:40:28.207Z",
++   },
++ ]
+
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:109:82
+    107|       .where(and(eq(memoryRecords.companyId, s.companyId), eq(memoryRe…
+    108|     expect.soft((await http(s).get(`/api/companies/${s.companyId}/memo…
+    109|     expect((await readMemoryMaintenanceHistory(db, s.bob, s.companyId)…
+       |                                                                                  ^
+    110|     expect(job.sourceRefJson.recordVersions).toEqual({ [row.id]: row.u…
+    111|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > keeps only an own original source-free index tombstone after actual source erasure
+AssertionError: expected [ { …(10) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "attemptNumber": 1,
++     "finishedAt": "2026-10-22T23:40:28.574Z",
++     "indexedRecordCount": null,
++     "jobId": "857385fd-62a0-4507-a507-7d366c1cd38e",
++     "leaseExpiresAt": null,
++     "maintenanceClass": "M1",
++     "outcome": "source_unavailable",
++     "receiptId": null,
++     "startedAt": "2026-10-22T23:40:28.476Z",
++     "submittedAt": "2026-10-22T23:40:28.468Z",
++   },
++ ]
+
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:120:87
+    118|     const own = await readMemoryMaintenanceHistory(db, s.alice, s.comp…
+    119|     expect(own.entries).toMatchObject([{ jobId: job.id, outcome: "sour…
+    120|     expect.soft((await readMemoryMaintenanceHistory(db, s.bob, s.compa…
+       |                                                                                       ^
+    121|     expect((await http(s, s.alice).get(`/api/companies/${s.companyId}/…
+    122|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > keeps only an own original source-free index tombstone after actual source erasure
+AssertionError: expected [ { …(8) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "attemptNumber": 1,
++     "errorCode": null,
++     "finishedAt": "2026-10-22T23:40:28.574Z",
++     "id": "857385fd-62a0-4507-a507-7d366c1cd38e",
++     "operationType": "index_refresh",
++     "result": null,
++     "status": "succeeded",
++     "submittedAt": "2026-10-22T23:40:28.468Z",
++   },
++ ]
+
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:121:104
+    119|     expect(own.entries).toMatchObject([{ jobId: job.id, outcome: "sour…
+    120|     expect.soft((await readMemoryMaintenanceHistory(db, s.bob, s.compa…
+    121|     expect((await http(s, s.alice).get(`/api/companies/${s.companyId}/…
+       |                                                                                                        ^
+    122|   });
+    123| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  23:39:09
+   Duration  79.01s (transform 40.25s, setup 206ms, import 56.23s, tests 22.23s, environment 0ms)
+

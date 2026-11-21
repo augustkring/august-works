@@ -1,0 +1,81 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[14:32:34] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"7c1ea9f5-58a8-4b36-9bdc-f4974670874d","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 176,
+        "column": 17
+      }
+    }
+[14:34:59] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"7c1ea9f5-58a8-4b36-9bdc-f4974670874d","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 176,
+        "column": 17
+      }
+    }
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 2 failed | 25 skipped) 185355ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 15980ms
+     × retains an actual unknown conversation hold and blocks canonical company purge 95794ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+AssertionError: expected { …(11) } to match object { …(3) }
+(13 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "id": "edb4a132-5499-4feb-b190-edba6cb585c6",
+-   "stage": "completed",
+-   "status": "completed",
++   "stage": "purge",
++   "status": "processing",
+  }
+
+ ❯ purgeConversationCompany src/__tests__/v7-model-reservations.integration.test.ts:442:25
+    440|       expect(await offboarding.processOne(new Date(Date.now() + 1_000)…
+    441|       const completed = await offboarding.get(facts.companyId);
+    442|       expect(completed).toMatchObject({ id: operation.id, stage: "comp…
+       |                         ^
+    443|       return completed!;
+    444|     }
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:576:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains an actual unknown conversation hold and blocks canonical company purge
+AssertionError: expected { …(11) } to match object { Object (stage, status) }
+(14 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "stage": "purge",
++   "stage": "retention",
+    "status": "processing",
+  }
+
+ ❯ startConversationOffboarding src/__tests__/v7-model-reservations.integration.test.ts:435:25
+    433|         expect(await offboarding.processOne(new Date(Date.now() + 1_00…
+    434|       const operation = await offboarding.get(companyId);
+    435|       expect(operation).toMatchObject({ stage: "purge", status: "proce…
+       |                         ^
+    436|       return { offboarding, operation: operation! };
+    437|     }
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:659:29
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed | 25 skipped (31)
+   Start at  14:31:37
+   Duration  202.31s (transform 11.87s, setup 86ms, import 16.74s, tests 185.35s, environment 0ms)
+

@@ -1,0 +1,45 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 4.198298887989949,
+      "filesAdvised": 620392,
+      "memoryAfter": 6167621632,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "/workspace/blentera-v10/packages/paperclip-runner/vitest.config.ts",
+        "--root",
+        "packages/paperclip-runner",
+        "--maxWorkers=1",
+        "src/catalog/operation-groups-doc.test.ts",
+        "src/catalog/reconciliation.test.ts",
+        "src/catalog/catalog-docs.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 1.37082895898493,
+      "peakGroupRssBytes": 243003392,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "node_modules/tsx/dist/cli.mjs",
+        "packages/paperclip-runner/scripts/generate-operation-groups.ts",
+        "--check"
+      ],
+      "exit": 1,
+      "seconds": 0.22684589301934466,
+      "peakGroupRssBytes": 21094400,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

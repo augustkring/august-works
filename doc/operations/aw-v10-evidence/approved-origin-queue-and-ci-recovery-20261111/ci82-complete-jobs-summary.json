@@ -1,0 +1,16 @@
+{
+  "run": 43039847135,
+  "head": "fdd850d9afc2d1289a7d1eef4259bd67fefe5d68",
+  "totalJobs": 79,
+  "returnedJobs": 79,
+  "failedSteps": {
+    "Run serialized server test shard": 1,
+    "Install selected native sandbox": 8,
+    "Install generated-code sandbox": 43,
+    "Run grouped general test suites": 3,
+    "Fail if any e2e shard failed": 1,
+    "Fail if any split verify lane failed": 1
+  },
+  "status": "Jobs API complete page; precise failed tests require their own logs",
+  "qualifiesTests": false
+}

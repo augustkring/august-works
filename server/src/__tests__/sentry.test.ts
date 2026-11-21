@@ -616,7 +616,7 @@ describe("one-project resolution", () => {
   function makeSessionApp() {
     const app = express();
     app.use((req, _res, next) => {
-      req.actor = { type: "board", userId: "user-1", source: "session" };
+      req.actor = { type: "board", userId: "user-1", source: "session", sessionId: "session-1" };
       next();
     });
     const db = {

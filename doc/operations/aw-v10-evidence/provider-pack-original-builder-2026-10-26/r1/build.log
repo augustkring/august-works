@@ -1,0 +1,46 @@
+Packages are copied from the content-addressable store to the virtual store.
+  Content-addressable store is at: /workspace/.cloud-setup/pnpm-store/v3
+  Virtual store is at:             ../../tmp/paperclip-provider-pack-b4ffBa/pack/node_modules/.pnpm
+Progress: resolved 1, reused 0, downloaded 0, added 0
+ WARN  1 deprecated subdependencies found: @ungap/structured-clone@1.3.0
+.                                        | +241 ++++++++++++++++++++++++
+Progress: resolved 341, reused 341, downloaded 0, added 241, done
+.../esbuild@0.28.2/node_modules/esbuild postinstall$ node install.js
+.../node_modules/opencode-ai postinstall$ node ./postinstall.mjs
+.../esbuild@0.28.2/node_modules/esbuild postinstall: [esbuild] Failed to find package "@esbuild/linux-x64" on the file system
+.../esbuild@0.28.2/node_modules/esbuild postinstall: This can happen if you use the "--no-optional" flag. The "optionalDependencies"
+.../esbuild@0.28.2/node_modules/esbuild postinstall: package.json feature is used by esbuild to install the correct binary executable
+.../esbuild@0.28.2/node_modules/esbuild postinstall: for your current platform. This install script will now attempt to work around
+.../esbuild@0.28.2/node_modules/esbuild postinstall: this. If that fails, you need to remove the "--no-optional" flag to use esbuild.
+.../esbuild@0.28.2/node_modules/esbuild postinstall: [esbuild] Trying to install package "@esbuild/linux-x64" using npm
+.../node_modules/opencode-ai postinstall: npm error code ENOTCACHED
+.../node_modules/opencode-ai postinstall: npm error request to https://registry.npmjs.org/opencode-linux-x64 failed: cache mode is 'only-if-cached' but no cached response is available.
+.../node_modules/opencode-ai postinstall: npm error A complete log of this run can be found in: /workspace/.cloud-setup/npm-cache/_logs/2026-10-26T23_05_53_656Z-debug-0.log
+.../esbuild@0.28.2/node_modules/esbuild postinstall: [esbuild] Failed to install package "@esbuild/linux-x64" using npm: Command failed: npm install --loglevel=error --prefer-offline --no-audit --progress=false @esbuild/linux-x64@0.28.2
+.../esbuild@0.28.2/node_modules/esbuild postinstall: npm error code ENOTCACHED
+.../esbuild@0.28.2/node_modules/esbuild postinstall: npm error request to https://registry.npmjs.org/@esbuild%2flinux-x64 failed: cache mode is 'only-if-cached' but no cached response is available.
+.../esbuild@0.28.2/node_modules/esbuild postinstall: npm error A complete log of this run can be found in: /workspace/.cloud-setup/npm-cache/_logs/2026-10-26T23_05_53_656Z-debug-0.log
+.../esbuild@0.28.2/node_modules/esbuild postinstall: [esbuild] Trying to download "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz"
+.../node_modules/opencode-ai postinstall: npm error code ENOTCACHED
+.../node_modules/opencode-ai postinstall: npm error request to https://registry.npmjs.org/opencode-linux-x64-baseline failed: cache mode is 'only-if-cached' but no cached response is available.
+.../node_modules/opencode-ai postinstall: npm error A complete log of this run can be found in: /workspace/.cloud-setup/npm-cache/_logs/2026-10-26T23_05_53_960Z-debug-0.log
+.../node_modules/opencode-ai postinstall: npm error code ENOTCACHED
+.../node_modules/opencode-ai postinstall: npm error request to https://registry.npmjs.org/opencode-linux-x64-musl failed: cache mode is 'only-if-cached' but no cached response is available.
+.../node_modules/opencode-ai postinstall: npm error A complete log of this run can be found in: /workspace/.cloud-setup/npm-cache/_logs/2026-10-26T23_05_54_199Z-debug-0.log
+.../node_modules/opencode-ai postinstall: npm error code ENOTCACHED
+.../node_modules/opencode-ai postinstall: npm error request to https://registry.npmjs.org/opencode-linux-x64-baseline-musl failed: cache mode is 'only-if-cached' but no cached response is available.
+.../node_modules/opencode-ai postinstall: npm error A complete log of this run can be found in: /workspace/.cloud-setup/npm-cache/_logs/2026-10-26T23_05_54_455Z-debug-0.log
+.../node_modules/opencode-ai postinstall: It seems your package manager failed to install the right opencode CLI package. Try manually installing "opencode-linux-x64" or "opencode-linux-x64-baseline" or "opencode-linux-x64-musl" or "opencode-linux-x64-baseline-musl".
+.../node_modules/opencode-ai postinstall: Failed
+ ELIFECYCLE  Command failed with exit code 1.
+file:///workspace/blentera-v10/packages/paperclip-runner/scripts/build-provider-pack.mjs:129
+    throw new Error(`pnpm deploy failed with exit code ${deployed.status}`);
+          ^
+
+Error: pnpm deploy failed with exit code 1
+    at file:///workspace/blentera-v10/packages/paperclip-runner/scripts/build-provider-pack.mjs:129:11
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.19.0

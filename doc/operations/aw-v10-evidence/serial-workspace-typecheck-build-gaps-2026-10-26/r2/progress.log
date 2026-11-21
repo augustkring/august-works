@@ -1,0 +1,43 @@
+RUN prerequisite emit shared
+RUN prerequisite emit plugin-sdk
+RUN prerequisite emit eval-kernel
+RUN Runner protocol contract checks
+RUN Runner vendor emit
+RUN Server vendor dependency check
+RUN @paperclipai/db migration checks
+PASS @paperclipai/shared
+PASS @paperclipai/adapter-utils
+PASS @paperclipai/adapter-claude-local
+PASS @paperclipai/adapter-codex-local
+PASS @paperclipai/adapter-cursor-cloud
+PASS @paperclipai/adapter-cursor-local
+PASS @paperclipai/adapter-gemini-local
+PASS @paperclipai/adapter-grok-local
+PASS @paperclipai/hermes-paperclip-adapter
+PASS @paperclipai/adapter-hermes-gateway
+PASS @paperclipai/adapter-kimi-local
+PASS @paperclipai/adapter-openclaw-gateway
+PASS @paperclipai/adapter-opencode-local
+PASS @paperclipai/adapter-pi-local
+PASS @paperclipai/plugin-sdk
+PASS @paperclipai/create-paperclip-plugin
+PASS @paperclipai/db
+PASS @paperclipai/google-sheets-mcp-server
+PASS @paperclipai/kv-demo-mcp-server
+PASS @paperclipai/mcp-server
+PASS @paperclipai/paperclip-eval-kernel
+PASS @paperclipai/paperclip-runner
+PASS @paperclipai/plugin-authoring-smoke-example
+PASS @paperclipai/plugin-fake-sandbox
+PASS @paperclipai/plugin-file-browser-example
+PASS @paperclipai/plugin-hello-world-example
+PASS @paperclipai/plugin-kitchen-sink-example
+PASS @paperclipai/plugin-llm-wiki
+PASS @paperclipai/plugin-workspace-diff
+PASS @paperclipai/skills-catalog
+FAIL @paperclipai/server exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T193240Z/31-paperclipai_server.log
+PASS @paperclipai/tailscale-https-broker
+PASS @paperclipai/teams-catalog
+PASS @paperclipai/ui
+FAIL paperclipai exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T193240Z/35-paperclipai.log
+RUN server runtime asset check

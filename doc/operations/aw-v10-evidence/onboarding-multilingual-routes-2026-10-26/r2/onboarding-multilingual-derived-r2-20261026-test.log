@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts (8 tests | 1 failed) 17025ms
+     × propagates Context root erasure into run/Task payloads and blocks late restored writes 1717ms
+[18:37:33] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"43ff7fe4-8863-4220-9136-361b7057cc33","actorType":"board","actorIdentityHash":"FWKell-KeYGDrmKY","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"O8uy3qoVtezUPLN1","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset","q"],"requestCount":1,"durationMs":1110,"statusCode":200,"responseBytes":2647,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > propagates Context root erasure into run/Task payloads and blocks late restored writes
+AssertionError: {"warnings":[{"providerKey":"memory","code":"provider_timeout","message":"Optional source memory timed out and was omitted."},{"providerKey":"derived_memory","code":"provider_timeout","message":"Optional source derived_memory timed out and was omitted."}],"selectedProviders":[]}: expected [] to have a length of 2 but got +0
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts:141:147
+    139|       query: "customer onboarding", intent: "general_work", includeFou…
+    140|     expect(await db.select().from(contextManifestMemoryRoots).where(eq…
+    141|       JSON.stringify({ warnings: assembled.packet.warnings, selectedPr…
+       |                                                                                                                                                   ^
+    142|     await db.transaction(async (tx) => { await purgeMemoryRecords(tx a…
+    143|     const [erased] = await db.select().from(heartbeatRuns).where(eq(he…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 31 passed (32)
+   Start at  18:36:35
+   Duration  62.37s (transform 11.56s, setup 210ms, import 24.27s, tests 37.50s, environment 0ms)
+

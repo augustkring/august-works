@@ -1,0 +1,87 @@
+{
+  "checkpoint": "V10 support-request recovery after browser history remount",
+  "recordedAt": "2026-10-23T19:15:00Z",
+  "scope": "Bounded UI history recovery evidence only. This does not qualify physical-browser crash recovery, authenticated API behavior, external dispatch, or complete SUP-01/SUP-02 acceptance.",
+  "sourcePins": {
+    "file": "support-request-recovery-reviewed-final.sources",
+    "result": "All five SHA-256 pins matched after actual test/compiler/token process exit0."
+  },
+  "runs": [
+    {
+      "name": "Initial support request recovery component run",
+      "result": "11 tests passed, 1 file passed",
+      "log": "support-request-recovery-initial.log",
+      "exit": "support-request-recovery-initial.exit",
+      "exitCode": 0,
+      "sourcePins": "support-request-recovery-reviewed-pins.txt"
+    },
+    {
+      "name": "Reviewed 15-test component run before final history error-guard refinement",
+      "result": "15 tests passed, 1 file passed",
+      "log": "support-request-recovery-reviewed.log",
+      "exit": "support-request-recovery-reviewed.exit",
+      "exitCode": 0,
+      "sourcePins": "support-request-recovery-reviewed-pins.txt"
+    },
+    {
+      "name": "Final focused recovery and App routing attempt",
+      "result": "20 tests passed, 1 failed, across 2 files. The sole failure was the expected focus assertion: after return, `document.activeElement` was body instead of the Help anchor. The dialog closed and the original textarea node/value remained present.",
+      "log": "support-request-recovery-final.log",
+      "exit": "support-request-recovery-final.exit",
+      "exitCode": 1,
+      "sourcePins": "support-request-recovery-final-pins.txt"
+    },
+    {
+      "name": "Final UI typecheck",
+      "result": "passed",
+      "log": "support-request-recovery-final-ui-types.log",
+      "exit": "support-request-recovery-final-ui-types.exit",
+      "exitCode": 0,
+      "sourcePins": "support-request-recovery-final-pins.txt"
+    },
+    {
+      "name": "Final token gates",
+      "result": "clean",
+      "log": "support-request-recovery-final-token-gates.log",
+      "exit": "support-request-recovery-final-token-gates.exit",
+      "exitCode": 0,
+      "sourcePins": "support-request-recovery-final-pins.txt"
+    },
+    {
+      "name": "Reviewed final component and native App routing",
+      "result": "23 tests passed across 2 files in86.17s; includes original-case reply/close recovery and already-CLOSED no-op retry. Original exact focus assertion now waits for native dialog auto-focus scheduling.",
+      "log": "support-request-recovery-reviewed-final.log",
+      "exit": "support-request-recovery-reviewed-final.exit",
+      "exitCode": 0,
+      "sourcePins": "support-request-recovery-reviewed-final.sources"
+    },
+    {
+      "name": "Reviewed final UI compiler",
+      "result": "passed",
+      "log": "support-request-recovery-reviewed-ui-types.log",
+      "exit": "support-request-recovery-reviewed-ui-types.exit",
+      "exitCode": 0,
+      "sourcePins": "support-request-recovery-reviewed-final.sources"
+    },
+    {
+      "name": "Reviewed final token gates",
+      "result": "passed",
+      "log": "support-request-recovery-reviewed-token-gates.log",
+      "exit": "support-request-recovery-reviewed-token-gates.exit",
+      "exitCode": 0,
+      "sourcePins": "support-request-recovery-reviewed-final.sources"
+    }
+  ],
+  "coverage": [
+    "The focused UI test uses React Router MemoryRouter history with a mocked support API/auth boundary; it is not a physical browser reload or crash-recovery test.",
+    "Recovery history is limited to company/principal binding, an idempotency key, operation kind, and optional case UUID plus existing navigation/safe-context metadata. It does not store request description, reply, subject, or unrelated prior location state.",
+    "A remount performs read-only request receipt lookup; it does not automatically POST. Unknown outcomes retain the same key for explicit retry, and acknowledgements for a different account/company are ignored.",
+    "Native support API behavior was qualified by its separate earlier PostgreSQL evidence; this checkpoint records only the UI slice."
+  ],
+  "openLimits": [
+    "Earlier combined focus failure is preserved and superseded by the reviewed final23-test pass, with the same exact focus expectation awaited.",
+    "Physical browser reload/crash recovery and live authentication/API integration were not exercised here.",
+    "Gateway/operator processing, policy binding before external transport, uploads, export, support-session linkage and complete V10 remain open."
+  ],
+  "archivedScratch": "All support-request-recovery-* logs, exit files, source captures, and source pin lists were copied from /workspace/v10-preparation into this directory."
+}

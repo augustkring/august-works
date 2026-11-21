@@ -1,0 +1,10 @@
+{
+  "server/src/routes/issues.ts": "803c0688a24830cb3acdd12bc2174478a36a5ea69d672319e9b04355c4c01b45",
+  "server/src/services/issue-thread-interactions.ts": "609a94f755ee13c942f411699109f06aded33545697ff2acea39b4b9381ce163",
+  "server/src/__tests__/issue-thread-interaction-routes.test.ts": "026581c4b869697b1776407bc87a1296dbb76ccefadfba92d923303a1a381ac9",
+  "server/src/services/native-runtime/paperclip-control-plane-port.test.ts": "c9cb0730cc7bc7d0abf9798065b9b0231811e2dbad8c4e2cb1638f8304653170",
+  "server/src/services/native-runtime/native-safe-replacement.test.ts": "c6c2aea27a7909eb0d951dd05ba6dd1260a94cdcbab97117f9bbd4479fa895c7",
+  "server/src/services/authorization.ts": "3e2b0bbf78061ddb5fe97007d3fb756b5f3b92fba225cb78ff5c0ae4fdabb91d",
+  "server/src/services/issues.ts": "c0d48f11e8ff2cbd7da84a23499bb1623f5b4be05f534967b7301c0bbbc18ed4",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

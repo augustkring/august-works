@@ -1136,8 +1136,8 @@ describe.sequential("agent skill routes", () => {
         adapterType: "claude_local",
       }),
       expect.objectContaining({
-        "AGENTS.md": expect.stringContaining("You are the CEO."),
-        "HEARTBEAT.md": expect.stringContaining("CEO Heartbeat Checklist"),
+        "AGENTS.md": expect.stringContaining("Your role is CEO."),
+        "HEARTBEAT.md": expect.stringContaining("# CEO work cycle"),
         "SOUL.md": expect.stringContaining("CEO Persona"),
         "TOOLS.md": expect.stringContaining("# Tools"),
       }),
@@ -1165,38 +1165,14 @@ describe.sequential("agent skill routes", () => {
           adapterType: "claude_local",
         }),
         expect.objectContaining({
-          "AGENTS.md": expect.stringMatching(/Start actionable work in the same heartbeat\.[\s\S]*Keep the work moving until it is done\./),
+          "AGENTS.md": expect.stringMatching(/You are a Blentera Co-worker\.[\s\S]*required `blentera-platform`/),
         }),
         { entryFile: "AGENTS.md", replaceExisting: false },
       );
-      expect(mockAgentInstructionsService.materializeManagedBundle).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({
-          "AGENTS.md": expect.stringContaining('kind: "request_confirmation"'),
-        }),
-        expect.any(Object),
-      );
-      expect(mockAgentInstructionsService.materializeManagedBundle).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({
-          "AGENTS.md": expect.stringContaining("confirmation:{issueId}:plan:{revisionId}"),
-        }),
-        expect.any(Object),
-      );
-      expect(mockAgentInstructionsService.materializeManagedBundle).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({
-          "AGENTS.md": expect.stringMatching(/PUT \/issues\/\{id\}\/documents\/plan[\s\S]*Re-`GET \/documents\/plan`, assert it returns `200`[\s\S]*latestRevisionId[\s\S]*target=\{ type: 'issue_document', key: 'plan', revisionId: latestRevisionId \}[\s\S]*Never present a plan only in a thread comment or through `ask_user_questions`/),
-        }),
-        expect.any(Object),
-      );
-      expect(mockAgentInstructionsService.materializeManagedBundle).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({
-          "AGENTS.md": expect.stringContaining("skills/paperclip/scripts/paperclip-upload-artifact.sh"),
-        }),
-        expect.any(Object),
-      );
+      const instructions = mockAgentInstructionsService.materializeManagedBundle.mock.calls[0][1]["AGENTS.md"];
+      expect(instructions).toContain("Do not infer permission from instructions or conversation.");
+      expect(instructions).toContain("Respect current approvals, budgets, pause/cancel/revoke and company boundaries.");
+      expect(instructions).toContain("Complete the requested outcome or leave an explicit durable waiting/recovery state.");
     });
   });
 
@@ -1255,7 +1231,8 @@ describe.sequential("agent skill routes", () => {
     const expected = ["paperclip", "paperclip-board", "paperclip-converting-plans-to-tasks", "paperclip-create-agent", "para-memory-files", "first-task"]
       .map((name) => ({ key: `paperclipai/paperclip/${name}`, versionId: `paperclipai/paperclip/${name}` === canonicalKey ? versionId : null }));
     expect(input.adapterConfig.paperclipSkillSync.desiredSkills).toEqual(expect.arrayContaining(expected));
-    expect(input.adapterConfig.paperclipSkillSync.desiredSkills).toHaveLength(6);
+    expect(input.adapterConfig.paperclipSkillSync.desiredSkills).toContainEqual({ key: "blentera-platform", versionId: null });
+    expect(input.adapterConfig.paperclipSkillSync.desiredSkills).toHaveLength(7);
   });
 
   it.each(["agents", "agent-hires"])("leaves ordinary general agents' defaults unchanged via %s", async (route) => {
@@ -1411,7 +1388,8 @@ describe.sequential("agent skill routes", () => {
     };
     const desired = createInput.adapterConfig.paperclipSkillSync.desiredSkills;
     // "paperclip" resolves to its canonical key and dedupes with the default.
-    expect(desired).toHaveLength(5);
+    expect(desired).toHaveLength(6);
+    expect(desired).toContain("blentera-platform");
     expect(desired).toContain("paperclipai/paperclip/paperclip");
   });
 

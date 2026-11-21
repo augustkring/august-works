@@ -1,0 +1,69 @@
+{
+  "parentCommit": "229c43d3a",
+  "requirements": [
+    "UP-03",
+    "CE-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "parentActualTypedAndRoutineCases": {
+      "exit": 1,
+      "passed": 4,
+      "failed": 6,
+      "suites": 2,
+      "log": "routine-source-identity-parent.log"
+    },
+    "originalPrivateOriginReclassification": {
+      "exit": 1,
+      "failed": 1,
+      "unselected": 23,
+      "log": "routine-origin-reclassification-red.log"
+    },
+    "normalAndCustomGeneration": {
+      "exit": 0,
+      "log": "routine-source-identity-generate.log"
+    },
+    "databaseBuildAndMigrationChecks": {
+      "exit": 0,
+      "log": "routine-source-identity-db-build.log"
+    },
+    "initialGuardAndFullConversationSuite": {
+      "exit": 1,
+      "passed": 26,
+      "failed": 2,
+      "suites": 2,
+      "log": "routine-source-identity-owned.log"
+    },
+    "compatibilityFixtureCounterexample": {
+      "exit": 1,
+      "passed": 4,
+      "failed": 2,
+      "unselected": 72,
+      "log": "routine-source-identity-compat.log"
+    },
+    "finalNativeIdentityDeletionAndLegacyRestore": {
+      "exit": 0,
+      "passed": 5,
+      "failed": 0,
+      "unselected": 73,
+      "suites": 2,
+      "log": "routine-source-identity-checked.log"
+    },
+    "finalServerTypes": {
+      "exit": 0,
+      "log": "routine-source-identity-types.log"
+    }
+  },
+  "observations": [
+    "Actual PostgreSQL parent counterexamples allow cross-company/wrong-parent Routine run bindings and mutable retained revision content. The independent original typed Task suite reproduces its three known typed-origin failures; the new real runRoutine lifecycle control also reaches that existing Task-origin failure instead of pretending that execution succeeds.",
+    "A real existing conversation-authoring owner reproduces origin reclassification: changing conversation_draft to manual makes existing native read/erasure guards skip its original private source. There is no legitimate post-insert service writer for originKind/originId. The new original-owner regression requires these actual source identities to remain unchanged.",
+    "Generated custom migration0525 pins actual same-company Routine/revision parents on INSERT, binds version1 snapshot owner IDs, freezes Routine identity/origin and retained run/revision tuples/content, and preserves only actual deleted-reference FK nulling and the exact existing conversation-source erasure projection. It does not backfill or qualify historical rows.",
+    "All24 existing native conversation-authoring/erasure cases pass with the new migration, including original-source reclassification rejection. New run/revision wrong-owner/body-edit probes also pass. The actual FK reference-deletion assertions pass; the extra direct company-delete control initially fails on the existing membership FK, so it now uses the original companyService.remove cleanup owner.",
+    "A bounded gpt-6-luna agent audited actual service/trigger writers and prepared the SQL/native regressions outside the repo. Root extended immutable origin identity and exact revision snapshot ownership, generated the custom migration normally, retained real failing lifecycle controls, added the original native conversation regression, and ran verification.",
+    "The compatibility stage passes4 cases and retains the existing real runRoutine typed-origin failure plus the legacy fixture attempting an immutable body UPDATE. The fixture now inserts a separate owned historical revision with omitted activity-gate fields and sets its historical current pointer before the real append/restore calls. Defaults assertions are unchanged; no trigger bypass or fake source qualification is used. Final selected5 native identity/FK/company-owner/legacy defaults cases pass. The unselected actual runRoutine lifecycle case remains explicitly failing as previously reproduced, not silently converted to green."
+  ],
+  "limits": [
+    "This is native retained relational identity and erasure-preserving immutability, not a source-complete input receipt, a new reader permission, Human/provider execution proof or a repair of malformed history.",
+    "The three typed Task origin regressions (also reproduced by real routine execution), private-Memory/temporal source cases, broader V10 implementation and full PR gates remain open. No PR readiness, merge, release or deployment is claimed."
+  ]
+}

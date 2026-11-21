@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (43 tests | 1 failed | 42 skipped) 5379ms
+     × appends only an actual acknowledged Native history read with current source owners 1089ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > appends only an actual acknowledged Native history read with current source owners
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:950:59
+    948|
+    949|     const positive = await runRead("exact");
+    950|     expect(positive.run.nativeInputSourceProtocolVersion).toBe(1);
+       |                                                           ^
+    951|     const positiveProfile = positive.run.runnerProfileJson!;
+    952|     const captures = positiveProfile.nativeToolResultSourceCaptures as…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 42 skipped (43)
+   Start at  06:50:15
+   Duration  20.95s (transform 11.17s, setup 79ms, import 15.35s, tests 5.38s, environment 0ms)
+

@@ -1,3 +1,4 @@
+import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { sql } from "drizzle-orm";
 import {
   check,
@@ -5,6 +6,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -77,6 +79,9 @@ export const contextManifestItems = pgTable(
     sourceProvider: text("source_provider").notNull(),
     sourceRef: text("source_ref").notNull(),
     sourceVersion: text("source_version"),
+    // Exact selected body closure, separate from its independently revocable
+    // source policy anchor. NULL never means a qualified empty closure.
+    payloadSourceSnapshot: jsonb("payload_source_snapshot").$type<NativePayloadSourceSnapshot | null>(),
     contentHash: text("content_hash").notNull(),
     authorityDomain: text("authority_domain"),
     trustLevel: text("trust_level").notNull(),

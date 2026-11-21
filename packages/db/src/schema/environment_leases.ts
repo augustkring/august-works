@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 import { environments } from "./environments.js";
@@ -36,6 +37,13 @@ export const environmentLeases = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    resourceCleanupIdx: index("environment_leases_resource_cleanup_idx").on(table.companyId, table.heartbeatRunId, table.id)
+      .where(sql`not coalesce(((${table.status} in ('released','expired','failed') and ${table.releasedAt} is not null and
+        (${table.cleanupStatus}='success' or (${table.cleanupStatus} is null and
+          ((${table.provider}='local' and ${table.providerLeaseId} is null) or
+           (${table.provider}='ssh' and ${table.metadata}->>'driver'='ssh' and ${table.providerLeaseId} like 'ssh://%')))))
+        or (${table.status}='retained' and ${table.leasePolicy}='reuse_by_environment' and ${table.cleanupStatus}='success')),false)
+        or coalesce(${table.metadata}->>'pendingCleanupInFlight','false')<>'false'`),
     companyEnvironmentStatusIdx: index("environment_leases_company_environment_status_idx").on(
       table.companyId,
       table.environmentId,

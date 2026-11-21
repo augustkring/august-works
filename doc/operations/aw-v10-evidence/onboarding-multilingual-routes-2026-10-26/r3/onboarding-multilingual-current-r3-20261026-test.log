@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[18:48:30] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"475d9372-e2cf-48b0-9daf-19b8e78f98ad","actorType":"board","actorIdentityHash":"aOW1r-1-xDubLmya","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"qyvTEfn2uuihf_Xv","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset","q"],"requestCount":1,"durationMs":1135,"statusCode":200,"responseBytes":2647,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+
+ Test Files  2 passed (2)
+      Tests  24 passed (24)
+   Start at  18:48:02
+   Duration  47.24s (transform 14.46s, setup 194ms, import 25.03s, tests 21.72s, environment 0ms)
+

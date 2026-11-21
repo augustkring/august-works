@@ -1,0 +1,24 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/durable-chat-wakeup.test.ts": "3d0f96d583771e9b8cb3d380206b74d87294f9bcdd4cc3f49240db6e27fd7e06",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "9480fb3937b0a4d718f81d5dc0a99d2824d99a1ef019406924ca9939787c839b",
+    "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts": "166ecd6e8ddaffe5835932efaeb72b4c9e24c5a734665a7634ba5a3313de0afc",
+    "server/src/__tests__/native-opencode-conformance.integration.test.ts": "774a6116e4e604a0d19a43b3f908d5858faf2f0fa4ef4b19e10a6b9c88bdf98f",
+    "server/src/__tests__/v7-agent-packages.integration.test.ts": "2128dcdef25deccf9a301ce2072a2f7cd35eb9082c7936c0de04c32fd97cb3c9",
+    "server/src/services/execution-sandbox/sandbox-service.ts": "668c6c3dff4f457bfb4483f971cb4e7aa152056a68cb28404e970005b7918608",
+    "server/src/services/heartbeat.ts": "893cb7aa50833e5fd2f8c9762ff2c2c72251d38d58c898f31b7aff6de7cfd807",
+    "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts": "f486c4e35c69cdbf808e884ec30b1fd49a134bf5b97b28dd4bf09e37f8e4baa2",
+    "server/src/services/native-runtime/native-attachment-remote-stage.test.ts": "bcdd58969ebd5d93c854f39df790c81b54cdae34f5f307fa8f83426bf5355507",
+    "server/src/services/native-runtime/native-attachment-remote-stage.ts": "45ecc6fcf1ab01f4444a626ff28f928f105dcff8aa3e905194ddedc94fdfaf56",
+    "server/src/services/native-runtime/native-execution-input.test.ts": "7010309e969f1fbafcd29961ef943475efe551ba1bb5a47696e01a8725ed951d",
+    "server/src/services/native-runtime/native-execution-input.ts": "09e1a3591ae31459175729749d065371714266bfbef6c34cbf9cb6a68ae12b1a",
+    "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts": "f3a23f27879c2cecdab9264b1b2b65e565d01cc30c65712078403ff96def5c57",
+    "server/src/services/native-runtime/native-session-executor.ts": "4e942e48908b03c621a525ab81dbd6ee27a4544095928b6fee4b7b809612bfe8",
+    "server/src/services/runtime/control.ts": "9126fc02f7e05a9075e470d7e1fc786f683065d3d7fa2c69a0c283ff79304593",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "allPinsUnchanged": true
+}

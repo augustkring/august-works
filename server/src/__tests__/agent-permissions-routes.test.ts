@@ -122,8 +122,12 @@ const mockEnvironmentService = vi.hoisted(() => ({
 const mockInstanceSettingsService = vi.hoisted(() => ({
   getGeneral: vi.fn(),
 }));
+const mockAdmitAgentSelfApiRead = vi.hoisted(() => vi.fn());
 
 function registerModuleMocks() {
+  vi.doMock("../services/agent-api-rate-limit.js", () => ({
+    admitAgentSelfApiRead: mockAdmitAgentSelfApiRead,
+  }));
   vi.doMock("@paperclipai/adapter-opencode-local/server", async () => {
     const actual = await vi.importActual<typeof import("@paperclipai/adapter-opencode-local/server")>("@paperclipai/adapter-opencode-local/server");
     return {
@@ -344,6 +348,7 @@ describe.sequential("agent permission routes", () => {
     mockSyncInstructionsBundleConfigFromFilePath.mockImplementation((_agent, config) => config);
     mockGetTelemetryClient.mockReturnValue({ track: vi.fn() });
     mockAgentService.getById.mockResolvedValue(baseAgent);
+    mockAdmitAgentSelfApiRead.mockResolvedValue({ allowed: true, remaining: 119, retryAfterSeconds: 0 });
     mockAgentService.getConfigRevision.mockResolvedValue(null);
     mockAgentService.listConfigRevisions.mockResolvedValue([]);
     mockAgentService.list.mockResolvedValue([baseAgent]);
@@ -597,6 +602,8 @@ describe.sequential("agent permission routes", () => {
     const res = await requestApp(app, (baseUrl) => request(baseUrl).get("/api/agents/me"));
 
     expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(mockAdmitAgentSelfApiRead).toHaveBeenCalledWith(expect.anything(), agentId);
     expect(res.body.adapterConfig.env).toEqual({
       EXISTING_VALUE: { type: "plain", value: "***REDACTED***" },
       NEW_VALUE: { type: "plain", value: "***REDACTED***" },
@@ -607,6 +614,28 @@ describe.sequential("agent permission routes", () => {
       },
     });
     expect(JSON.stringify(res.body)).not.toContain(plaintextValue);
+  }, 20_000);
+
+  it("returns a bounded Retry-After when the stable self-read admission is exhausted", async () => {
+    mockAdmitAgentSelfApiRead.mockResolvedValue({ allowed: false, remaining: 0, retryAfterSeconds: 17 });
+    const app = await createApp({
+      type: "agent",
+      agentId,
+      companyId,
+      runId: null,
+      source: "agent_key",
+    });
+
+    const res = await requestApp(app, (baseUrl) => request(baseUrl).get("/api/agents/me"));
+
+    expect(res.status).toBe(429);
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(res.headers["retry-after"]).toBe("17");
+    expect(res.body).toMatchObject({
+      code: "agent_self_read_rate_limited",
+      details: { retryAfterSeconds: 17 },
+    });
+    expect(mockAgentService.getById).not.toHaveBeenCalled();
   }, 20_000);
 
   it("preserves stored env values when a redacted detail response is submitted unchanged", async () => {

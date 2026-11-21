@@ -1,0 +1,54 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-stage:start 50118.107765
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-stage:analyticalSignal 50132.778605
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-stage:domainProposal 50536.574498
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-stage:skill-proposed 52115.247362
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-stage:runtime-seeded 52358.130821
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-stage:before-provider 52431.222208
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-stage:before-fabric-prepare 52512.604918
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-stage:after-fabric-prepare 58753.748438
+
+ ❯ |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts (42 tests | 1 failed | 41 skipped) 42305ms
+     × retains complete actual Skill candidate Source before native body and snapshot consumption 30312ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-learning.integration.test.ts:994:34
+    992|     await expect(playbooks.get(owner,companyId,created.id)).rejects.to…
+    993|   });
+    994|   it.each(["candidate","active"])("retains complete actual Skill %s So…
+       |                                  ^
+    995|     console.info("skill-stage:start", performance.now());
+    996|     const priorHome=process.env.PAPERCLIP_HOME,priorInstance=process.e…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  23:25:20
+   Duration  80.89s (transform 25.93s, setup 232ms, import 37.78s, tests 42.31s, environment 0ms)
+

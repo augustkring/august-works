@@ -1,0 +1,144 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "42f94c804aa85baa0853935955399bd3fd5217aa",
+  "meaning": "Scoped native actor, credential and import discovery follow-up. Each log is an individual receipt, not a full workspace or V10 pass. The private Memory before log preserves the reproduced leak before the subsequent fix. Source completeness, temporal provenance, hosted/provider qualification and PR readiness remain open.",
+  "logs": [
+    {
+      "name": "creator-native-input-integration",
+      "exitCode": 0,
+      "rawSha256": "b3daff3a15a9aea7e556df24ea6297f924eef4c2d20a8c052c08ddc34d75490a",
+      "sanitizedSha256": "b3daff3a15a9aea7e556df24ea6297f924eef4c2d20a8c052c08ddc34d75490a",
+      "archiveSha256": "328d778e2469dd145c884dea900af87f31e6e6c33b5b078de1dac317ebd4379a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  6 passed (6)",
+        "Tests  60 passed (60)",
+        "Duration  79.02s (transform 11.60s, setup 362ms, import 33.30s, tests 44.52s, environment 1ms)"
+      ]
+    },
+    {
+      "name": "creator-credential-lifetime-expanded",
+      "exitCode": 0,
+      "rawSha256": "f796f08c7588976ab9fbc65a701e770d358d79ea0a18bada5af21be5d411942d",
+      "sanitizedSha256": "f796f08c7588976ab9fbc65a701e770d358d79ea0a18bada5af21be5d411942d",
+      "archiveSha256": "1068552ea200cb36dbb073b7202c2d967fd1c1f6f5ceb50814a497c257dd0328",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed (9)",
+        "Duration  27.77s (transform 10.35s, setup 76ms, import 14.37s, tests 13.21s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "unbound-import-history-integrated",
+      "exitCode": 0,
+      "rawSha256": "7a7b65937daec6401b2910b4b6a8232eb8b9e2679e269880ce1e6bd2cdd6d700",
+      "sanitizedSha256": "7a7b65937daec6401b2910b4b6a8232eb8b9e2679e269880ce1e6bd2cdd6d700",
+      "archiveSha256": "5fa2c2d95fa90398e5aa4b1ac0217c43dc99585f0811055f5e8eb57b489d0fa5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  6 passed (6)",
+        "Duration  25.02s (transform 12.68s, setup 148ms, import 18.81s, tests 5.00s, environment 814ms)"
+      ]
+    },
+    {
+      "name": "import-discovery-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "import-discovery-ui-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "import-discovery-token-gates",
+      "exitCode": 0,
+      "rawSha256": "e593d94fd920c3403cbfc7b0a549ae3b06c78d6ec0d2be065e5e056d2f309d11",
+      "sanitizedSha256": "e593d94fd920c3403cbfc7b0a549ae3b06c78d6ec0d2be065e5e056d2f309d11",
+      "archiveSha256": "b2acf30d7116322e944203f8bc1d232e1bfdc22cab71a2fe1f8c2a38f13664e2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "import-discovery-help-unit",
+      "exitCode": 0,
+      "rawSha256": "660c3984555b0fa20443a0e6cb9e2a6fc0ebe696511702888c7005861ec8850a",
+      "sanitizedSha256": "660c3984555b0fa20443a0e6cb9e2a6fc0ebe696511702888c7005861ec8850a",
+      "archiveSha256": "5f79d75066b1552dba3aafec4d2997e3606ccf5e366daf9dec5d0624c1413d42",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "private-memory-owner-before",
+      "exitCode": 1,
+      "rawSha256": "600105a8e8069fd46ee6c165f3f8501ea7717b6f0d0f6b705c71ac3a75928ab9",
+      "sanitizedSha256": "600105a8e8069fd46ee6c165f3f8501ea7717b6f0d0f6b705c71ac3a75928ab9",
+      "archiveSha256": "03022820676fa634a000a579adfc04d6be1132be69bc7c301c6ded013ce4e256",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed (1)",
+        "Duration  17.04s (transform 9.16s, setup 80ms, import 12.54s, tests 4.29s, environment 0ms)"
+      ]
+    }
+  ]
+}

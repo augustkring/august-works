@@ -1,0 +1,23 @@
+{
+  "tool": "drizzle-kit 0.31.10",
+  "command": "drizzle-kit generate --custom --name native_manifest_run_owned_purge --config ./drizzle.config.ts",
+  "generatedDirectory": "/workspace/v10-preparation/conversation-migration-generation-vq_kc6eq",
+  "schemaChange": false,
+  "snapshotPreviousIdVerified": true,
+  "journalPrefixPreserved": true,
+  "files": [
+    {
+      "path": "packages/db/src/migrations/0550_native_manifest_run_owned_purge.sql",
+      "sha256": "df172fd77b663bb7df43a89335aa6fc1e82be50b8a0e00bbd8ac43c1a10c5005"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0550_snapshot.json",
+      "sha256": "d539df48754cc39f21fe1d4bf9dd29263e98bb3a15cc4d8574fcac8f4e88d8d3"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "27b646c8054712be24d4f5d032819c30926ae1a8d3f5f843715becdc61f3a1df"
+    }
+  ],
+  "qualification": "Generated/published metadata only; fresh PostgreSQL positive/negative and canonical purge checks pending."
+}

@@ -1,0 +1,23 @@
+{
+  "reviewedHead": "76d7cc8f3bfa365438a0bb892b5b1e9e5da45040",
+  "workingTree": "Includes unrelated concurrent edits; these pins identify audited test/evidence files only.",
+  "sha256": {
+    "server/src/__tests__/typed-task-private-sources.integration.test.ts": "f623134936e13764e022e42774cbb9c5dce5beb6b497dcf2b93dc0c84f348696",
+    "server/src/__tests__/v10-private-payload.integration.test.ts": "2ff07df03312c0f7c10790591ce0af625249d4cf65661f570d43990de13e2a5c",
+    "server/src/__tests__/v10-private-live-events.integration.test.ts": "7d8597780e1e2bf6c0a88ca2d3834446907944a4c2e487bd9022911c23847999",
+    "server/src/__tests__/memory-private-live-events.integration.test.ts": "32d9b5002430cf7853cd30429ee5b572562afdd8ea84018604cc7f9629603aa3",
+    "server/src/__tests__/activity-native-source-privacy.integration.test.ts": "1f097a40a1b30e275cc088cf001e9889b3dbb9395de51a47505e3e2b81018fea",
+    "server/src/__tests__/issue-native-memory-source-privacy.integration.test.ts": "beddd7101602b6580782ccd6d3d4c59740d5eeff46b6c8c40400bdbc28e36565",
+    "server/src/__tests__/native-payload-temporal-sources.integration.test.ts": "dcfe52aaf77af85bafceee34ce996c79424e7f37263571a43083dc87d78498ee",
+    "server/src/services/connectors/slack-native-search.test.ts": "5c5c2dafea53b6a495e811604abc9471eef2635df62ac568b53c71ebeb7eccb8",
+    "server/src/services/connectors/slack-access.test.ts": "696007b31ed20f9212c557c12a29f3903bf31693c8b6bec91f653b79c025a9ad",
+    "server/src/__tests__/chat-channels.integration.test.ts": "dfc01283dda8f1ab2b233d49d4924fe8d1c92337a8eefc281c99bcd3ddc29536",
+    "server/src/services/chat-teams-file-transfers.test.ts": "2b1d77eb4c23ad6f20e7cc3b594bf0fff5394422d1e7d4bb27355b96d5005a4b",
+    "server/src/services/chat-teams-file-publication.test.ts": "a48247c4c0b03f52bdf6b4079f69a66d4a0c9897b26c503e711a381554c689e0",
+    "server/src/__tests__/issue-attachment-routes.test.ts": "4b0a51226f87df3485a913b4b1a6e35a9f83c02739784e78550d661273bbf789",
+    "server/src/__tests__/native-payload-source-mutation-binding.integration.test.ts": "ab29827f900a9fa8c25a98cfc1043c55d656ce1194ccd44adf63ddfcaf3bb3b0",
+    "server/src/__tests__/v9-notification-delivery.integration.test.ts": "397b855d31bcf96ef064bc48df922bd03a7261c1be04854f49f91398c18f82f7",
+    "doc/operations/aw-v10-evidence/typed-query-current19-2026-10-26/receipt.json": "14f803ea1afe17ff4889f34e1aade071c2cf54ab20ca38b3e1df1e374cb021b3",
+    "doc/operations/aw-v10-evidence/native-activity-source-privacy-2026-10-24/checkpoint.json": "552d0fd093cf46955be75c8e65450c3c553e4fdfa3bd53911247a8652b3975cc"
+  }
+}

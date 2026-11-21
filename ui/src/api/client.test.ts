@@ -210,3 +210,20 @@ it("preserves JSON and observability headers when posting with an idempotency ke
   expect(init.credentials).toBe("include");
   expect(JSON.parse(init.body as string)).toEqual({ operationType: "index_refresh", recordIds: ["record"] });
 });
+
+it("passes session-binding headers through private GET and DELETE requests", async () => {
+  fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+  const expected = {
+    "X-Blentera-Expected-User": "human-1",
+    "X-Blentera-Expected-Session": "session-1",
+  };
+  await api.get("/private", { cache: "no-store", headers: expected });
+  await api.delete("/private/receipt", undefined, { headers: expected });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  const getInit = fetchMock.mock.calls[0]![1] as RequestInit;
+  const deleteInit = fetchMock.mock.calls[1]![1] as RequestInit;
+  expect(new Headers(getInit.headers).get("X-Blentera-Expected-User")).toBe("human-1");
+  expect(new Headers(getInit.headers).get("X-Blentera-Expected-Session")).toBe("session-1");
+  expect(new Headers(deleteInit.headers).get("X-Blentera-Expected-User")).toBe("human-1");
+  expect(new Headers(deleteInit.headers).get("X-Blentera-Expected-Session")).toBe("session-1");
+});

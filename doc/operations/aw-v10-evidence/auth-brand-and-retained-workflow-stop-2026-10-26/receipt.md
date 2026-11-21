@@ -1,0 +1,3 @@
+# Auth language and retained workflow Stop browser checks
+
+Two actual built-UI browser tests passed together (exit0,31.7s) on system Chromium using the original E2E configuration and the retained source pins. The auth-language case now asserts the current Blentera product identity in both EN/DA. The retained workflow Stop case uses the existing account-language isolation hook, preserving and restoring the real saved preference. Its actual waiting Native workflow, single Stop request, lost-response recovery, original GET receipt, disabled-rollout controls, Danish mobile and accessibility assertions passed. These software journeys do not qualify hosted accounts, provider stop semantics or the separate actual managed Memory temporal/erasure matrix.

@@ -1,0 +1,6 @@
+6a4ed41900f0ef2a30f1566f83dd7d18d961223c02b3351fb0052baac566dd4d  server/src/services/access.ts
+5ae8f08f348e3a87f1566febaca954cbcbf6273df0f8c9e6dd4a65398e486483  server/src/services/saas/account-deletion.ts
+58f7ccaa63b85c38ab0d76ed8c19490555e9b8c556efef5bb1d32c7008420dcb  server/src/__tests__/access-service.test.ts
+0c9b6a49bafc50e0d806a8aace363c236a9a718cf1052baed926c22965acc15a  server/src/__tests__/v6-account-deletion.integration.test.ts
+a0a5dcdcb8557a6709a15dacf67c8d0c6365b75dce270dc8a33bf98000d5eb26  ui/src/pages/CompanyAccess.tsx
+f692f7ab2e1e5b2376cce00a0ea1e6f854d99e148b0878ed7ea77eac199ce064  ui/src/pages/CompanyAccess.test.tsx

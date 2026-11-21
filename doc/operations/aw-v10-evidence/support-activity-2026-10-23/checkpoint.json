@@ -1,0 +1,60 @@
+{
+  "baseCommit": "109df839d",
+  "sources": {
+    "ui/src/App.tsx": "c96e50e8a36dc9c9cdd915226e3aaf70da6b514885e01c1b3b57117be91fa715",
+    "ui/src/App.cases-routing.test.tsx": "24282c2ab44fe0bea871c77ece860472b898d91b5837b488c809078b72c7acf0",
+    "ui/src/pages/CustomerSupportCases.tsx": "2a24da0ecac30f6cc497e507479e6fe8fa61bd343964002464986682fbe8cca0",
+    "ui/src/pages/CustomerSupportCases.test.tsx": "df734cfed0217c4aad888108a456570cd8933de8421312ce207ff5c0b7127d14",
+    "tests/e2e/aw-v10-support.spec.ts": "ff0f789b1f7ad36345f4c6adc36990220f6b46088d9b1233cb5cd23285dc5878",
+    "tests/e2e/aw-v10-support.config.ts": "c29be28f45a925d723e099d1ee32b636b12f0ba7344445d0e3115fe50f621362"
+  },
+  "nativeImplementation": "Installed React19.2.8 Activity preserves same-scope component state; hidden effects clean up native Radix modality and private queries. No forceMount, draft store, dependency, browser text storage or automatic POST.",
+  "baseline": {
+    "result": "Activity initial writer loses opaque history intent after reopen:2FAIL/21filtered25.24s,actual exit1. Exact page/test sources retained.",
+    "log": "history-baseline.log"
+  },
+  "intermediate": [
+    {
+      "result": "29PASS52.47s,actual exit0",
+      "log": "initial.log"
+    },
+    {
+      "result": "34PASS50.60s,actual exit0",
+      "log": "reviewed.log"
+    },
+    {
+      "result": "35PASS49.69s,actual exit0,before navigation-history refinement",
+      "log": "final-unit.log"
+    }
+  ],
+  "final": {
+    "result": "35PASS51.25s,actual exit0. Actual App/router/React/Radix composition with controlled domain component; actual support page/API-controlled create and reply fixtures.",
+    "log": "final.log"
+  },
+  "uiCompiler": {
+    "result": "actual exit0,process closed",
+    "log": "ui-types.log"
+  },
+  "tokenGates": {
+    "result": "actual exit0,all gates clean",
+    "log": "token-gates.log"
+  },
+  "browser": {
+    "result": "1PASS1.6min,test33.0s;actual exit0. Production Vite UI, actual Chromium151/cookie login/native PostgreSQL and support HTTP owners. Three dismissal mechanisms preserve unsent draft/work node/exact Help focus and release pointer blocking. Lost accepted response survives dismiss/reopen plus reload; original receipt recovered with no extra POST. Before-acceptance reload still requires explicit original-key retry; total3POST attempts/2native cases.",
+    "log": "browser.log",
+    "unmaskedInvitePathSegments": 0,
+    "cleanup": {
+      "listening": {
+        "3199": false,
+        "54329": false
+      },
+      "postgresUnixSocketExists": false,
+      "gracefulSIGTERM": true
+    }
+  },
+  "limits": [
+    "Account/session/company replacement and hidden async create/reply details use controlled identity/API fixtures; actual browser session replacement is not qualified.",
+    "No physical process crash, full Task composer draft, manual accessibility, external support gateway/provider/operator session, whole workspace or complete V10/PR qualification.",
+    "Other original source/privacy and31 substantive portability failures remain open."
+  ]
+}

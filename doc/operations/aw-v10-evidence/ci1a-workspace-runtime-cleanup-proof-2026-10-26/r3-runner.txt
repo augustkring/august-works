@@ -1,0 +1,1 @@
+timeout_seconds=240ntest_file=src/__tests__/workspace-runtime.test.tsntest_pattern=keeps a runtime-created branch when its tip changes after guarded worktree removal|records teardown and cleanup operations with an inspection-minted restoration proofn

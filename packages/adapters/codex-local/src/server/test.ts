@@ -1,3 +1,4 @@
+import { admitPaidModelProbe } from "@paperclipai/adapter-utils/paid-model-probe";
 import type {
   AdapterEnvironmentCheck,
   AdapterEnvironmentTestContext,
@@ -374,7 +375,7 @@ export async function testEnvironment(
 
   const canRunProbe =
     checks.every((check) => check.code !== "codex_cwd_invalid" && check.code !== "codex_command_unresolvable");
-  if (canRunProbe) {
+  if (canRunProbe && admitPaidModelProbe(checks)) {
     if (!commandLooksLike(command, "codex")) {
       checks.push({
         code: "codex_hello_probe_skipped_custom_command",

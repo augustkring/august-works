@@ -208,6 +208,14 @@ export function SidePanelTabs({
   function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, tabId: string) {
     const index = tabIds.indexOf(tabId);
     if (index < 0) return;
+    // APG tabs pattern: Delete closes a closable tab. The visual close control
+    // stays out of the tablist's accessibility tree and tab order.
+    if (event.key === "Delete" && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      if (tabs[index]?.closable === false) return;
+      event.preventDefault();
+      closeTab(tabId);
+      return;
+    }
     if (event.altKey && event.shiftKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       if (!onReorderTabs) return;
       event.preventDefault();
@@ -267,7 +275,14 @@ export function SidePanelTabs({
             : "overflow-x-auto",
         )}
       >
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        {/* Render dnd-kit's live region and instructions outside the tablist,
+            which may own only tabs (WCAG 1.3.1, aria-required-children). */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+          accessibility={typeof document === "undefined" ? undefined : { container: document.body }}
+        >
           <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
             <div className={cn(
               "flex items-center",

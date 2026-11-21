@@ -1,0 +1,4 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+Vitest execution count is zero or unverified (all skipped or completion summary missing)

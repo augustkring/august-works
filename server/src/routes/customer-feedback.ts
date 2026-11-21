@@ -236,6 +236,10 @@ export function customerFeedbackRoutes(
       );
     },
   );
+  router.post("/companies/:companyId/customer-feedback/:feedbackId/experience-measure/withdraw", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(await service.withdrawExperienceMeasure(req.actor, context(req), feedbackId(req), req.body));
+  });
   // Explicit platform operator admission lives in service; no company-admin bypass.
   router.get("/internal/customer-feedback/:companyId", async (req, res) => {
     identity(req);
@@ -247,6 +251,16 @@ export function customerFeedbackRoutes(
         z.uuid().optional().parse(req.query.before),
       ),
     );
+  });
+  router.get("/internal/customer-feedback/:companyId/quality", async (req, res) => {
+    identity(req);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(await service.qualitySummary(
+      req.actor,
+      z.uuid().parse(req.params.companyId),
+      z.iso.datetime().parse(req.query.from),
+      z.iso.datetime().parse(req.query.to),
+    ));
   });
   router.get(
     "/internal/customer-feedback/:companyId/:feedbackId",

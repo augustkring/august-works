@@ -9,7 +9,26 @@ import { seedV5Companies } from "./helpers/v5-fixtures.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { readConnectorRecovery } from "../services/experience/connector-recovery.js";
 import { experienceService } from "../services/experience/service.js";
+import { toolAccessService } from "../services/tool-access.js";
+import {
+  githubRepositoryAccessScopeHash,
+  githubRepositoryAccessSourceIdentityHash,
+} from "../services/tool-connection-lifecycle.js";
 import * as recovery from "../services/experience/connector-recovery.js";
+
+function verifiedGitHubRepositoryAccess(repositories: Array<{ id: string; fullName: string; installationId: string }>) {
+  const completedAt = new Date().toISOString();
+  return {
+    state: "reconciled" as const,
+    mode: "full" as const,
+    lastSuccessAt: completedAt,
+    lastFullReconciledAt: completedAt,
+    lastAttemptAt: completedAt,
+    nextAttemptAt: new Date(Date.parse(completedAt) + 60 * 60_000).toISOString(),
+    scopeHash: githubRepositoryAccessScopeHash(["repo", "read:user"], ["456"], repositories)!,
+    sourceIdentityHash: githubRepositoryAccessSourceIdentityHash("123")!,
+  };
+}
 
 describe("V9 Original connector recovery projection", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -46,6 +65,21 @@ describe("V9 Original connector recovery projection", () => {
     expect(await db.select().from(toolConnections).where(eq(toolConnections.companyId, fixture.home))).toEqual(before);
     expect(await db.select().from(activityLog).where(eq(activityLog.companyId, fixture.home))).toEqual(log);
   });
+  it("projects a shared grant reauthorization as one safe manager recovery action and withdraws it after repair", async () => {
+    const row = await connection(fixture.home, { healthStatus: "ok", authKind: "oauth", config: { private: "PRIVATE-CONFIGURATION", oauth: { expiresAt: "2000-01-01T00:00:00.000Z" } } });
+    const [grant] = await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: row.id,
+      kind: "organization", status: "needs_reauthorization", providerTenant: { oauth: { scopes: ["read:data"], accessTokenExpiresAt: "2000-01-01T00:00:00.000Z" } } }).returning();
+    const beforeConnection = await db.select().from(toolConnections).where(eq(toolConnections.id, row.id));
+    const beforeGrant = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+    const finding = await read();
+    expect(finding.needsYou.filter(card => card.source.resourceId === row.id)).toHaveLength(1);
+    expect(finding.needsYou.find(card => card.source.resourceId === row.id)?.evidence).toEqual(["connector_access_review"]);
+    expect(JSON.stringify(finding)).not.toContain("PRIVATE-");
+    expect(await db.select().from(toolConnections).where(eq(toolConnections.id, row.id))).toEqual(beforeConnection);
+    expect(await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id))).toEqual(beforeGrant);
+    await db.update(connectionGrants).set({ status: "active", updatedAt: new Date() }).where(eq(connectionGrants.id, grant!.id));
+    expect((await read()).needsYou.some(card => card.source.resourceId === row.id)).toBe(false);
+  });
   it("uses Original AI revoked-credential enrichment and withdraws the finding when its grant recovers", async () => {
     const row = await connection(fixture.home, { connectionPurpose: "ai", transport: "runtime_auth", authKind: "api_key", healthStatus: "ok" });
     const [grant] = await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: row.id,
@@ -55,11 +89,75 @@ describe("V9 Original connector recovery projection", () => {
     expect((await read()).needsYou).toEqual([]);
   });
   it("uses the current native user for GitHub per-user reauthorization rather than another user's active grant", async () => {
-    const row = await connection(fixture.home, { healthStatus: "ok", credentialPolicy: "per_user", config: { sourceTemplateKey: "github" } });
+    const row = await connection(fixture.home, { healthStatus: "ok", healthCheckedAt: new Date(), credentialPolicy: "per_user", config: { sourceTemplateKey: "github" } });
     await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: row.id, kind: "user", subjectUserId: "other-native-user", status: "active" });
     expect((await read()).needsYou[0]?.evidence).toEqual(["connector_access_review"]);
-    await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: row.id, kind: "user", subjectUserId: fixture.userId, status: "active" });
+    const repositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
+    await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: row.id, kind: "user", subjectUserId: fixture.userId, status: "active",
+      providerTenant: { oauth: { scopes: ["repo", "read:user"] }, github: { userId: "123", login: "current-user", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        repositories, accessRevision: "verified-version", repositoryAccessReconciliation: verifiedGitHubRepositoryAccess(repositories),
+        lastAccessRefreshAt: new Date().toISOString(), webhookHealth: "healthy" } } });
     expect((await read()).needsYou).toEqual([]);
+  });
+  it("projects the current personal grant's active refresh expiry and withdraws it after repair", async () => {
+    await ordinaryMember();
+    const own = await connection(fixture.home, { healthStatus: "ok", healthCheckedAt: new Date(), credentialPolicy: "per_user", authKind: "oauth",
+      createdByUserId: fixture.userId, config: { sourceTemplateKey: "slack" } });
+    const [grant] = await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: own.id,
+      kind: "user", subjectUserId: fixture.userId, status: "active",
+      providerTenant: { oauth: { scopes: ["read:data"], refreshTokenExpiresAt: "2000-01-01T00:00:00.000Z" } },
+      credentialSecretRefs: [{ secretId: "PRIVATE-SECRET-REFERENCE", configPath: "oauth.refreshToken" }] }).returning();
+    const other = await connection(fixture.home, { healthStatus: "ok", healthCheckedAt: new Date(), credentialPolicy: "per_user", authKind: "oauth",
+      createdByUserId: "other-native-user", config: { sourceTemplateKey: "slack" } });
+    await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: other.id,
+      kind: "user", subjectUserId: fixture.userId, status: "active",
+      providerTenant: { oauth: { refreshTokenExpiresAt: "2000-01-01T00:00:00.000Z" } } });
+
+    const identity = await toolAccessService(db).personalReconnectIdentity(fixture.home, own.id, fixture.userId);
+    expect(identity?.grant?.lifecycle).toMatchObject({
+      state: "REQUIRES_REAUTH", reason: "refresh_credential_expired", action: "reauthorize",
+      refreshCredentialFreshness: "expired",
+    });
+    expect(JSON.stringify(identity)).not.toContain("PRIVATE-SECRET-REFERENCE");
+    const current = await read();
+    expect(current.needsYou.map(card => card.source.resourceId)).toEqual([own.id]);
+    expect(JSON.stringify(current)).not.toContain("other-native-user");
+
+    await db.update(connectionGrants).set({ providerTenant: { oauth: { scopes: ["read:data"],
+      refreshTokenExpiresAt: "2099-01-01T00:00:00.000Z" } }, updatedAt: new Date() }).where(eq(connectionGrants.id, grant!.id));
+    expect((await read()).needsYou).toEqual([]);
+  });
+  it("projects the current personal grant's GitHub access invalidation until the verified repository snapshot returns", async () => {
+    const row = await connection(fixture.home, { healthStatus: "ok", healthCheckedAt: new Date(), credentialPolicy: "per_user", createdByUserId: fixture.userId,
+      config: { sourceTemplateKey: "github" } });
+    const repositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
+    const [grant] = await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: row.id,
+      kind: "user", subjectUserId: fixture.userId, status: "active",
+      providerTenant: { github: { userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        accessRevision: "invalidated-version", lastAccessRefreshAt: new Date().toISOString(), webhookHealth: "healthy" } } }).returning();
+    expect((await toolAccessService(db).personalReconnectIdentity(fixture.home, row.id, fixture.userId))?.grant?.lifecycle).toMatchObject({
+      state: "PERMISSION_CHANGED", action: "refresh_access", accessVersion: "invalidated-version",
+      syncReconciliation: {
+        state: "required", mode: "github_repository_full_snapshot", accessRevision: "invalidated-version",
+        accessRevisionKind: "local_access_revision", lastFullReconciledAt: null, gapDetection: "not_reported",
+      },
+    });
+    const value = await read();
+    expect(value.needsYou.filter(card => card.source.resourceId === row.id)).toHaveLength(1);
+    expect(value.needsYou.find(card => card.source.resourceId === row.id)?.evidence).toEqual(["connector_access_review"]);
+    expect(JSON.stringify(value)).not.toContain("octocat");
+    await db.update(connectionGrants).set({ providerTenant: { oauth: { scopes: ["repo", "read:user"] }, github: { userId: "123", login: "octocat", installationCount: 1,
+      repositoryCount: 1, repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+      repositories, accessRevision: "verified-version", repositoryAccessReconciliation: verifiedGitHubRepositoryAccess(repositories),
+      lastAccessRefreshAt: new Date().toISOString(), webhookHealth: "healthy" } }, updatedAt: new Date() })
+      .where(eq(connectionGrants.id, grant!.id));
+    expect((await toolAccessService(db).personalReconnectIdentity(fixture.home, row.id, fixture.userId))?.grant?.lifecycle)
+      .toMatchObject({ syncReconciliation: { state: "reconciled", mode: "github_repository_full_snapshot",
+        accessRevision: "verified-version", accessRevisionKind: "local_access_revision", lastFullReconciledAt: expect.any(String),
+        gapDetection: "not_reported" } });
+    expect((await read()).needsYou.some(card => card.source.resourceId === row.id)).toBe(false);
   });
   it("uses the Original manager role/grant policy and denies viewer/admin bypass", async () => {
     await connection();

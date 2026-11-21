@@ -1,0 +1,58 @@
+{
+  "status": "Bounded bootstrap Context reference handoff; complete input receipts and UP03 remain OPEN",
+  "actual": {
+    "session": 89583,
+    "exit": 0,
+    "durable_exit": 0,
+    "passed": 8,
+    "skipped_by_explicit_filter": 4,
+    "files": 3,
+    "seconds": 89.34,
+    "source_pins_unchanged": 6,
+    "scope": "Seven wrapper/authored-boundary unit cases and one actual PostgreSQL V5 repeat-preparation case. The current fresh Context differs from immutable stored inventory, its returned id binds to actual company/run/Agent, and later Human membership withdrawal still denies."
+  },
+  "regressions": [
+    {
+      "session": 73852,
+      "exit": 1,
+      "failed": 1,
+      "passed": 6,
+      "seconds": 37.86,
+      "scope": "Wrapper discarded the actual manifest tuple while returning trimmed markdown; two source pins unchanged."
+    },
+    {
+      "session": 55045,
+      "exit": 1,
+      "failed": 1,
+      "skipped_by_explicit_filter": 4,
+      "seconds": 59.31,
+      "scope": "Actual persisted V5 preparation lost its current Context reference at the return boundary; two source pins unchanged."
+    }
+  ],
+  "earlier_wrapper_current": {
+    "session": 5969,
+    "exit": 0,
+    "passed": 7,
+    "seconds": 51.56,
+    "note": "Wrapper-only proof; no native/host/persistence completion inferred."
+  },
+  "compiler": {
+    "session": 71004,
+    "exit": 0,
+    "durable_exit": 0,
+    "scope": "Direct current server compiler; all six final source pins unchanged."
+  },
+  "implementation": [
+    "Original fresh Context wrapper returns its actual immutable manifest tuple with the same trimmed markdown.",
+    "Original V5 fabric returns actual fresh input Context references separately from the older immutable inventory manifest.",
+    "Original heartbeat first-bootstrap persistence records nativeBootstrapContextManifests under the same locked run/input write. Recovery preserves the old capture, including missing historical data; NULL stays unknown and [] denotes no delivered Context for this family only."
+  ],
+  "limits": [
+    "Constructor wiring is source-traced and compiled, not an actual first-provider-transport/recovery persistence qualification.",
+    "The new field captures Context identity only; it is not a complete run input receipt, ready bit, permission or reconstruction of historical provenance.",
+    "Global DB immutability, binding to complete bootstrap/final dispatched input digests and all non-Context/staged/later-tool/retained-history inputs remain pending.",
+    "No source capability/qualification flag is set, no payload owner stamps protocol1, and existing private admission remains closed.",
+    "Original copied-private-Memory and two temporal failures, canonical same-transaction SQL before limits and UP03 remain OPEN.",
+    "Full current workspace typecheck/test:run/build, physical provider/host proofs and all V10/PR/release gates remain OPEN."
+  ]
+}

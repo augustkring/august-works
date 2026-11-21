@@ -1,0 +1,47 @@
+Scope: all 36 workspace projects
+@playwright/test is linked to /workspace/blentera-v10/node_modules from /workspace/v10-dep-qualification/node_modules/.pnpm/@playwright+test@1.62.1/node_modules/@playwright/test
+axe-core is linked to /workspace/blentera-v10/node_modules from /workspace/v10-dep-qualification/node_modules/.pnpm/axe-core@4.13.0/node_modules/axe-core
+typescript is linked to /workspace/blentera-v10/node_modules from /workspace/v10-dep-qualification/node_modules/.pnpm/typescript@7.0.2/node_modules/typescript
+agentmail is linked to /workspace/blentera-v10/node_modules from /workspace/v10-dep-qualification/node_modules/.pnpm/agentmail@0.5.20/node_modules/agentmail
+cross-env is linked to /workspace/blentera-v10/node_modules from /workspace/v10-dep-qualification/node_modules/.pnpm/cross-env@10.1.0/node_modules/cross-env
+esbuild is linked to /workspace/blentera-v10/node_modules from /workspace/v10-dep-qualification/node_modules/.pnpm/esbuild@0.28.2/node_modules/esbuild
+typescript-compiler-api is linked to /workspace/blentera-v10/node_modules from /workspace/v10-dep-qualification/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript
+vitest is linked to /workspace/blentera-v10/node_modules from /workspace/v10-dep-qualification/node_modules/.pnpm/vitest@4.1.11_@opentelemetry+api@1.9.1_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_jsdom@30_e3jxd7stdurun4cek57kpy36xi/node_modules/vitest
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Progress: resolved 28, reused 0, downloaded 0, added 0
+server                                   |  WARN  deprecated @types/sharp@0.32.0
+Progress: resolved 73, reused 0, downloaded 0, added 0
+Progress: resolved 117, reused 0, downloaded 0, added 0
+Progress: resolved 168, reused 0, downloaded 0, added 0
+Progress: resolved 227, reused 0, downloaded 0, added 0
+Progress: resolved 268, reused 0, downloaded 0, added 0
+Progress: resolved 331, reused 0, downloaded 0, added 0
+Progress: resolved 393, reused 0, downloaded 0, added 0
+Progress: resolved 454, reused 0, downloaded 0, added 0
+Progress: resolved 524, reused 0, downloaded 0, added 0
+Progress: resolved 597, reused 0, downloaded 0, added 0
+Progress: resolved 683, reused 0, downloaded 0, added 0
+Progress: resolved 749, reused 0, downloaded 0, added 0
+Progress: resolved 855, reused 0, downloaded 0, added 0
+Progress: resolved 926, reused 0, downloaded 0, added 0
+Progress: resolved 1008, reused 0, downloaded 0, added 0
+Progress: resolved 1092, reused 0, downloaded 0, added 0
+Progress: resolved 1165, reused 0, downloaded 0, added 0
+Progress: resolved 1246, reused 0, downloaded 0, added 0
+Progress: resolved 1327, reused 0, downloaded 0, added 0
+Progress: resolved 1429, reused 0, downloaded 0, added 0
+Progress: resolved 1545, reused 0, downloaded 0, added 0
+ WARN  5 deprecated subdependencies found: @esbuild-kit/core-utils@3.3.2, @esbuild-kit/esm-loader@2.6.5, @ungap/structured-clone@1.3.0, glob@10.5.0, node-domexception@1.0.0
+Progress: resolved 1619, reused 0, downloaded 0, added 0
+Progress: resolved 1619, reused 0, downloaded 0, added 0, done
+
+Done in 23.8s
+Scope: 20 of 36 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+.                                        |   +1   -1 +-
+Progress: resolved 1, reused 1, downloaded 0, added 1, done
+Done in 4s
+dist/index.mjs 7ff8d9b6a5777746dca7ec4c3114db4f2a05eca0e1b39b45a42eef26d6c7d60a
+dist/index-sM6JWXeV.d.mts c62e16bb7ff924eaf0d6871f86d7d9cb30c5e3328bd3acf966ef27e2bc960d81
+OpenCode installed binary retains pinned SHA-256

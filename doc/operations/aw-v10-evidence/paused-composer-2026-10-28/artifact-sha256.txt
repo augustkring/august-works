@@ -1,0 +1,3 @@
+617323cc020d66cbddd1cd98b027a061db3d032112fd37ecce485b9ef53df947  /workspace/v10-preparation/v9-paused-menu-closure-20261028-r26/test.log
+cd95c42ba39a5910bb67aef16da1ae16e0e31df627587b181fb3b3e90ca613f9  /workspace/v10-preparation/v9-paused-menu-closure-20261028-r26/source-pins.json
+b3c2af19f6ebbeb1a8fdebfb668d2b355eee13819530585fa2e83ae32dca3dc2  /workspace/v10-preparation/v9-paused-menu-closure-20261028-r26/unit-160.log

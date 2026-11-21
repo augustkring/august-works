@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "requirement": "V10-145",
+  "briefSections": [
+    "21B.28",
+    "21B.29",
+    "21B.30",
+    "21B.31",
+    "43.15"
+  ],
+  "releaseRegistry": "skills-releases/blentera-platform/releases.json",
+  "caseCorpus": "evals/platform-skill/cases.json",
+  "operatorGuide": "evals/platform-skill/README.md",
+  "runner": "scripts/run-platform-skill-evals.mjs",
+  "runnerEngine": "existing_promptfoo_runner",
+  "governedPromotionOwner": "server/src/services/skill-evaluations.ts",
+  "coverageDomains": {
+    "routing_reachability": [
+      "route-explicit",
+      "route-implicit",
+      "route-contextual",
+      "route-negative",
+      "route-near-miss",
+      "route-overlap",
+      "route-many-skills",
+      "route-description-pressure"
+    ],
+    "procedural_correctness": [
+      "process-canonical-tool",
+      "process-no-invented-tool",
+      "process-relevant-reference",
+      "process-direct-mode",
+      "process-proposal-mode",
+      "process-confirmation-mode",
+      "process-human-only-mode",
+      "process-current-state-version",
+      "process-postcondition",
+      "process-durable-wait"
+    ],
+    "authorization_security": [
+      "security-ignore-policy",
+      "security-self-admin",
+      "security-self-approval",
+      "security-task-injection",
+      "security-tool-output-injection",
+      "security-cross-company",
+      "security-peer-delegation",
+      "security-secret-memory",
+      "security-fake-channel-identity",
+      "security-stale-approval",
+      "security-malicious-metadata",
+      "security-changed-metadata",
+      "security-same-name-override"
+    ],
+    "failure_recovery": [
+      "recovery-permission-denied",
+      "recovery-version-conflict",
+      "recovery-timeout-effect",
+      "recovery-partial-effect",
+      "recovery-tool-removed",
+      "recovery-connection-expired",
+      "recovery-stale-skill-pin",
+      "recovery-operation-manifest",
+      "recovery-runtime-reconnect",
+      "recovery-pause-revoke"
+    ],
+    "efficiency": [
+      "efficiency-activation",
+      "efficiency-reference-loads",
+      "efficiency-tool-calls",
+      "efficiency-retries",
+      "efficiency-context",
+      "efficiency-latency-cost"
+    ],
+    "cross_runtime": [
+      "runtime-native-delivery"
+    ]
+  },
+  "runtimeProfiles": [
+    {
+      "profile": "blentera_managed_native",
+      "qualification": "source_present_external_and_runtime_qualification_open",
+      "deliverySources": [
+        "server/src/services/platform-skill-admission.ts",
+        "server/src/services/agent-runtime-fabric.ts",
+        "server/src/services/native-runtime/native-session-executor.ts"
+      ],
+      "testSources": [
+        "server/src/__tests__/platform-skill-admission.integration.test.ts",
+        "server/src/services/native-runtime/native-session-executor.test.ts"
+      ]
+    },
+    {
+      "profile": "openclaw",
+      "qualification": "not_qualified_not_claimed_ga",
+      "deliverySources": [
+        "packages/adapters/openclaw-gateway/src/server/execute.ts"
+      ],
+      "testSources": [
+        "packages/adapters/openclaw-gateway/src/server/execute-dispatch.test.ts"
+      ],
+      "limitation": "Operation manifest currently marks OpenClaw qualification false; delivery source/tests do not establish GA runtime conformance."
+    },
+    {
+      "profile": "hermes",
+      "qualification": "not_qualified_not_claimed_ga",
+      "deliverySources": [
+        "packages/adapters/hermes-gateway/src/index.ts"
+      ],
+      "testSources": [
+        "packages/adapters/hermes/src/server/governed-profile.test.ts",
+        "packages/adapters/hermes/src/server/paperclip-task-bridge.test.ts"
+      ],
+      "limitation": "Adapter presence does not establish isolated-profile Platform Skill GA qualification."
+    },
+    {
+      "profile": "a2a_or_custom",
+      "qualification": "unknown_not_claimed_ga",
+      "deliverySources": [
+        "server/src/services/agent-runtime-fabric.ts"
+      ],
+      "testSources": [
+        "server/src/__tests__/platform-skill-admission.test.ts"
+      ],
+      "limitation": "No runtime-equivalence qualification is inferred from protocol support or generic release compatibility metadata."
+    }
+  ],
+  "gaProfileInventory": {
+    "status": "not_supplied_in_current_source_register",
+    "claimedProfiles": [],
+    "rule": "A runtime may be called GA only when its current operation coverage, exact delivery profile, eval receipt, security/recovery evidence, and owner review are linked here."
+  },
+  "fieldRegressionPolicy": {
+    "intake": "manual_reviewed_case_only",
+    "acceptedSources": [
+      "production_failure",
+      "support_failure"
+    ],
+    "requiredProvenance": [
+      "sourceKind",
+      "sourceDigest",
+      "reviewedByRole",
+      "reviewedAt"
+    ],
+    "scenarioVocabulary": "bounded_enum_only",
+    "prohibitedRetention": [
+      "raw_ticket_or_issue_id",
+      "private_path",
+      "transcript",
+      "credential",
+      "customer_or_employee_identity",
+      "arbitrary_source_text"
+    ],
+    "privacyReview": "A reviewed generic scenario is retained; source content is not copied. The source digest preserves integrity provenance without retaining a source locator."
+  },
+  "measurementLimits": {
+    "efficiency": "The runner measures inserted package/reference assets, exact prompt bytes, and approximate input tokens before invocation; Promptfoo reports provider latency/token/cost diagnostics on explicit live runs. Tool calls and provider-internal retries are not observable in this text-only harness; external/runtime activation effects require runtime instrumentation. These measures set no efficiency pass threshold.",
+    "behavior": "Promptfoo text-signal checks are screening evidence, not runtime authorization proof or a GA conformance claim. Current server/adaptor tests remain the enforcement owners; no runtime profile is qualified as GA by this audit."
+  },
+  "retainedEvidenceOwners": [
+    "server/src/services/skill-evaluations.ts",
+    "server/src/__tests__/skill-evaluation-promotion-runtime.integration.test.ts",
+    "server/src/__tests__/tool-gateway-service.test.ts",
+    "server/src/__tests__/platform-skill-admission.integration.test.ts"
+  ]
+}

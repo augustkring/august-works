@@ -5,7 +5,7 @@ import type { AuthorizationActor } from "./authorization.js";
 import { conflict, forbidden, unprocessable } from "../errors.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { assertAnalyticalSourcesNotErased } from "./analytical-privacy.js";
-import { authorizeStrategyNativePopulation, authorizeStrategyReference } from "./strategy-execution/references.js";
+import { authorizeStrategyNativePopulation, authorizeStrategyReference, authorizeStrategyReferenceForCapture } from "./strategy-execution/references.js";
 import { assertV7Authorization } from "./v7-authorization.js";
 import { processFindingService } from "./process-findings.js";
 import { inspectBusinessForecastRun } from "./business-forecasting/service.js";
@@ -29,6 +29,7 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
  const now=new Date(),edges=new Map<string,Edge>(),evidence:CapturedDecisionEvidence[]=[],manifestIds=new Set<string>(),revalidationRequiredEvidenceKeys:string[]=[];
  let expiresAt=new Date(now.getTime()+definition.retentionDays*DAY);
  const inspectedMetricObjects=new Set<string>();
+ let metricLineageForCapture:{manifest:typeof analyticalLineageManifests.$inferSelect;edges:Array<typeof analyticalLineageEdges.$inferSelect>;observation:typeof businessMetricObservations.$inferSelect}|undefined;
  function edge(value:Edge) {
   value={inputType:value.inputType,inputRef:value.inputRef,inputHash:value.inputHash,relationship:value.relationship};
   const key=`${value.inputType}:${value.inputRef}`;
@@ -40,10 +41,12 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
     checkTime(deadline);let manifestId:string,facts:CapturedDecisionEvidence["facts"],sourceHash:string,sourceExpiry:Date,limitations:string[];
     const ref=link.source;
     if(ref.type==="metric_observation") {
-      const admitted=await authorizeStrategyReference(tx,companyId,actor,ref,definition.sensitivity);
+      const admitted=await authorizeStrategyReferenceForCapture(tx,companyId,actor,ref,definition.sensitivity);
       const result=admitted.metricObservation;
-      if(!result)throw conflict("The original metric owner did not admit this exact observation");
-      const [observation]=await tx.select().from(businessMetricObservations).where(and(eq(businessMetricObservations.companyId,companyId),eq(businessMetricObservations.id,ref.id))).for("share");
+      const currentLineage=admitted.metricObservationLineage;
+      if(!result||!currentLineage)throw conflict("The original metric owner did not admit this exact observation");
+      metricLineageForCapture=currentLineage;
+      const observation=currentLineage.observation;
       if(!observation || observation.metricId!==ref.metricId || observation.versionId!==ref.metricVersionId) throw conflict("Exact metric observation pins are unavailable");
       const [metricVersion]=await tx.select().from(businessMetricVersions).where(and(eq(businessMetricVersions.companyId,companyId),eq(businessMetricVersions.metricId,ref.metricId),eq(businessMetricVersions.id,ref.metricVersionId))).for("share");
       if(!metricVersion) throw conflict("Metric evidence definition is unavailable");
@@ -106,8 +109,9 @@ export async function captureAnalyticalEvidence(tx:Db,companyId:string,actor:Aut
       continue;
     }
     manifestIds.add(manifestId);
-    const [manifest]=await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),eq(analyticalLineageManifests.id,manifestId))).for("share");
-    const inherited=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,manifestId))).limit(EDGE_BUDGET+1);
+    const currentLineage=ref.type==="metric_observation"?metricLineageForCapture:undefined;
+    const [manifest]=currentLineage?[currentLineage.manifest]:await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),eq(analyticalLineageManifests.id,manifestId))).for("share");
+    const inherited=currentLineage?currentLineage.edges:await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,manifestId))).limit(EDGE_BUDGET+1);
     if(!manifest || inherited.length>EDGE_BUDGET) throw conflict("Native evidence lineage is unavailable");
     for(const source of inherited) {checkTime(deadline);edge(source);
       // The original metric owner just reauthorized and share-locked every

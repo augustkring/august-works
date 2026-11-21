@@ -1,0 +1,3 @@
+f8148495a9a0ff284e76ec27a475bc293b831f9b4c98297c9690f6d6768e0a7c  server/src/services/issue-thread-interactions.ts
+d2ce49fbe1369258675f45251b626800bba368ab99e4e99bd8ededc612f5eef5  server/src/services/native-runtime/native-interaction-bridge.ts
+753919d6825ccf3789206a83c912ca2ee7400564795153dc05b29dcb8be80256  server/src/__tests__/native-interaction-bridge.test.ts

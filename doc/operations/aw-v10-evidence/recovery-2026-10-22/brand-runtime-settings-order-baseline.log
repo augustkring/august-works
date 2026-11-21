@@ -1,0 +1,55 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx (46 tests | 1 failed) 6082ms
+     × alphabetizes cards by their displayed title within each section 93ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > alphabetizes cards by their displayed title within each section
+AssertionError: expected [ 'Agent Chat', 'Beta skills', …(16) ] to deeply equal [ 'Agent Chat', 'Beta skills', …(16) ]
+
+- Expected
++ Received
+
+@@ -1,19 +1,19 @@
+  [
+    "Agent Chat",
+    "Beta skills",
+-   "Blentera Runner",
+    "Built-in Agents",
+    "Cases",
+    "Chat connectors",
+    "Decisions",
+    "Enable Environments",
+    "Enable External Objects",
+    "Enable Isolated Workspaces",
+    "Experimental File Viewer",
+    "First task: propose with a plan document",
+    "Memory connectors",
++   "Blentera Runner",
+    "Simplified English Interactions",
+    "Status Cards",
+    "Streamlined UI",
+    "Summaries",
+    "Use Isolated Workspaces By Default",
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1003:22
+    1001|       const titles = [...section.querySelectorAll("h3")].map((heading)…
+    1002|       expect(titles.length).toBeGreaterThan(1);
+    1003|       expect(titles).toEqual([...titles].sort((a, b) => a.localeCompar…
+       |                      ^
+    1004|     }
+    1005|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 90 passed (91)
+   Start at  12:02:17
+   Duration  48.83s (transform 9.26s, setup 319ms, import 21.78s, tests 15.20s, environment 8.36s)
+

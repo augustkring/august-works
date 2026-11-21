@@ -32,6 +32,7 @@ import { ensureAgentJwtSecret, ensureToolActionSigningSecret, resolveAgentJwtEnv
 import { ensureLocalSecretsKeyFile } from "../config/secrets-key.js";
 import { promptDatabase } from "../prompts/database.js";
 import { promptLlm } from "../prompts/llm.js";
+import { checkLlmProviderKey } from "../llm-provider-check.js";
 import { promptLogging } from "../prompts/logging.js";
 import { defaultSecretsConfig } from "../prompts/secrets.js";
 import { defaultStorageConfig, promptStorage } from "../prompts/storage.js";
@@ -376,7 +377,7 @@ function printManagedInstallHint(): void {
   if (manifest && isManagedExecutable(process.argv[1], manifest)) return;
   if (!isEphemeralNpxExecution()) return;
   p.log.info(
-    `This npx run is temporary. Use ${pc.cyan("paperclipai install")} for atomic updates, rollback, and service support.`,
+    `This npx run is temporary. Use ${pc.cyan("blentera install")} for atomic updates, rollback, and service support.`,
   );
 }
 
@@ -386,7 +387,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
   }
 
   printPaperclipCliBanner();
-  p.intro(pc.bgCyan(pc.black(" paperclipai onboard ")));
+  p.intro(pc.bgCyan(pc.black(" blentera onboard ")));
   const configPath = resolveConfigPath(opts.config);
   const instance = describeLocalInstancePaths(resolvePaperclipInstanceId());
   p.log.message(
@@ -440,9 +441,9 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
 
   if (existingConfig) {
     p.log.message(
-      pc.dim("Existing Paperclip install detected; keeping the current configuration unchanged."),
+      pc.dim("Existing Blentera install detected; keeping the current configuration unchanged."),
     );
-    p.log.message(pc.dim(`Use ${pc.cyan("paperclipai configure")} if you want to change settings.`));
+    p.log.message(pc.dim(`Use ${pc.cyan("blentera configure")} if you want to change settings.`));
 
     const jwtSecret = ensureAgentJwtSecret(configPath);
     const envFilePath = resolveAgentJwtEnvFile(configPath);
@@ -483,9 +484,9 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
 
     p.note(
       [
-        `Run: ${pc.cyan("paperclipai run")}`,
-        `Reconfigure later: ${pc.cyan("paperclipai configure")}`,
-        `Diagnose setup: ${pc.cyan("paperclipai doctor")}`,
+        `Run: ${pc.cyan("blentera run")}`,
+        `Reconfigure later: ${pc.cyan("blentera configure")}`,
+        `Diagnose setup: ${pc.cyan("blentera doctor")}`,
       ].join("\n"),
       "Next commands",
     );
@@ -499,7 +500,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     let shouldRunNow = !serviceInstalled && (opts.run === true || opts.yes === true);
     if (shouldOfferForegroundStart({ serviceInstalled, startAlreadyDecided: shouldRunNow, invokedByRun: opts.invokedByRun === true, interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY) })) {
       const answer = await p.confirm({
-        message: "Start Paperclip now?",
+        message: "Start Blentera now?",
         initialValue: true,
       });
       if (!p.isCancel(answer)) {
@@ -512,7 +513,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
       return;
     }
 
-    p.outro("Existing Paperclip setup is ready.");
+    p.outro("Existing Blentera setup is ready.");
     return;
   }
 
@@ -591,7 +592,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
         await db.execute("SELECT 1");
         s.stop("Database connection successful");
       } catch {
-        s.stop(pc.yellow("Could not connect to database — you can fix this later with `paperclipai doctor`"));
+        s.stop(pc.yellow("Could not connect to database — you can fix this later with `blentera doctor`"));
       }
     }
 
@@ -601,43 +602,10 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     if (llm?.apiKey) {
       const s = p.spinner();
       s.start("Validating API key...");
-      try {
-        if (llm.provider === "claude") {
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "x-api-key": llm.apiKey,
-              "anthropic-version": "2023-06-01",
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-5-20250929",
-              max_tokens: 1,
-              messages: [{ role: "user", content: "hi" }],
-            }),
-          });
-          if (res.ok || res.status === 400) {
-            s.stop("API key is valid");
-          } else if (res.status === 401) {
-            s.stop(pc.yellow("API key appears invalid — you can update it later"));
-          } else {
-            s.stop(pc.yellow("Could not validate API key — continuing anyway"));
-          }
-        } else {
-          const res = await fetch("https://api.openai.com/v1/models", {
-            headers: { Authorization: `Bearer ${llm.apiKey}` },
-          });
-          if (res.ok) {
-            s.stop("API key is valid");
-          } else if (res.status === 401) {
-            s.stop(pc.yellow("API key appears invalid — you can update it later"));
-          } else {
-            s.stop(pc.yellow("Could not validate API key — continuing anyway"));
-          }
-        }
-      } catch {
-        s.stop(pc.yellow("Could not reach API — continuing anyway"));
-      }
+      const result = await checkLlmProviderKey(llm.provider, llm.apiKey);
+      if (result === "valid") s.stop("API key is valid");
+      else if (result === "invalid") s.stop(pc.yellow("API key appears invalid — you can update it later"));
+      else s.stop(pc.yellow("Could not validate API key — continuing anyway"));
     }
 
     p.log.step(pc.bold("Logging"));
@@ -710,7 +678,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     server,
     auth,
     telemetry: {
-      enabled: true,
+      enabled: false,
     },
     storage,
     secrets,
@@ -748,9 +716,9 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
 
   p.note(
     [
-      `Run: ${pc.cyan("paperclipai run")}`,
-      `Reconfigure later: ${pc.cyan("paperclipai configure")}`,
-      `Diagnose setup: ${pc.cyan("paperclipai doctor")}`,
+      `Run: ${pc.cyan("blentera run")}`,
+      `Reconfigure later: ${pc.cyan("blentera configure")}`,
+      `Diagnose setup: ${pc.cyan("blentera doctor")}`,
     ].join("\n"),
     "Next commands",
   );
@@ -770,7 +738,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
   let shouldRunNow = !serviceInstalled && (opts.run === true || opts.yes === true);
   if (shouldOfferForegroundStart({ serviceInstalled, startAlreadyDecided: shouldRunNow, invokedByRun: opts.invokedByRun === true, interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY) })) {
     const answer = await p.confirm({
-      message: "Start Paperclip now?",
+      message: "Start Blentera now?",
       initialValue: true,
     });
     if (!p.isCancel(answer)) {
@@ -787,8 +755,8 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     p.log.info(
       [
         "Bootstrap CEO invite will be created after the server starts.",
-        `Next: ${pc.cyan("paperclipai run")}`,
-        `Then: ${pc.cyan("paperclipai auth bootstrap-ceo")}`,
+        `Next: ${pc.cyan("blentera run")}`,
+        `Then: ${pc.cyan("blentera auth bootstrap-ceo")}`,
       ].join("\n"),
     );
   }

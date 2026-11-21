@@ -1,0 +1,35 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/CustomerSupportCases.test.tsx (20 tests | 1 failed | 18 skipped) 690ms
+   × ignores a late create acknowledgement after the session changes 225ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CustomerSupportCases.test.tsx > ignores a late create acknowledgement after the session changes
+AssertionError: expected 'Old account draft' to be '' // Object.is equality
+
+- Expected
++ Received
+
++ Old account draft
+
+ ❯ src/pages/CustomerSupportCases.test.tsx:274:80
+    272|
+    273|   expect(container.textContent).not.toContain(receipt.reference);
+    274|   expect(container.querySelector<HTMLTextAreaElement>("form textarea")…
+       |                                                                                ^
+    275|   expect(client.getQueryCache().findAll({ predicate: (query) => query.…
+    276| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 18 skipped (20)
+   Start at  21:10:35
+   Duration  17.57s (transform 5.96s, setup 116ms, import 13.29s, tests 690ms, environment 3.00s)
+

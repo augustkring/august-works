@@ -6,7 +6,18 @@ import {
   stopTaskDrain,
 } from "../services/heartbeat.ts";
 
+import { beginIdleTrackedWork, idleWorkSnapshot } from "../services/task-admission.js";
+
 describe("heartbeat task drain", () => {
+  it("holds quiescence through tracked work and releases each token once", () => {
+    const initial = idleWorkSnapshot();
+    const finish = beginIdleTrackedWork();
+    expect(getTaskDrainStatus().quiescent).toBe(false);
+    expect(idleWorkSnapshot()).toEqual({ active: initial.active + 1, generation: initial.generation + 1 });
+    finish(); finish();
+    expect(idleWorkSnapshot()).toEqual({ active: initial.active, generation: initial.generation + 2 });
+    expect(getTaskDrainStatus().quiescent).toBe(true);
+  });
   afterEach(() => {
     stopTaskDrain();
     vi.useRealTimers();

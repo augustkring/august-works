@@ -1,0 +1,5 @@
+src/components/NativeAuthenticationSettings.test.tsx(126,68): error TS2345: Argument of type '{ sessionId: string; }' is not assignable to parameter of type 'void'.
+src/components/NativeAuthenticationSettings.test.tsx(158,24): error TS2345: Argument of type '{ sessionId: string; }' is not assignable to parameter of type 'void'.
+undefined
+/workspace/blentera-v10/ui:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --singleThreaded --incremental --tsBuildInfoFile /workspace/v10-preparation/v10-ui-check.tsbuildinfo

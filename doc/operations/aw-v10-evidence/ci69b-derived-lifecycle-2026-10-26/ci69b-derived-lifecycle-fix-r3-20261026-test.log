@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts (8 tests | 1 failed) 15040ms
+     × propagates Context root erasure into run/Task payloads and blocks late restored writes 1256ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > propagates Context root erasure into run/Task payloads and blocks late restored writes
+AssertionError: expected [] to have a length of 2 but got +0
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts:139:144
+    137|     await db.update(issues).set({ checkoutRunId: runId, executionRunId…
+    138|     const assembled = await contextEngineService(db).assemble({ compan…
+    139|     expect(await db.select().from(contextManifestMemoryRoots).where(eq…
+       |                                                                                                                                                ^
+    140|     await db.transaction(async (tx) => { await purgeMemoryRecords(tx a…
+    141|     const [erased] = await db.select().from(heartbeatRuns).where(eq(he…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  13:14:45
+   Duration  29.12s (transform 9.80s, setup 70ms, import 13.89s, tests 15.04s, environment 0ms)
+

@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/legacy-runtime-assets.integration.test.ts
+test_pattern=shared historical bundle|pre-upgrade success receipt

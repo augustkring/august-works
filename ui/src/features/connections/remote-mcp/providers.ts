@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 /** Presentation metadata only. Each provider will have its own catalog entry and connection. */
 export type RemoteMcpProviderId = "zapier" | "arcade" | "composio" | "executor";
 
@@ -53,7 +54,7 @@ export const remoteMcpProviders: Record<RemoteMcpProviderId, RemoteMcpProvider> 
     setupUrl: "https://executor.sh/docs/mcp-proxy",
     dashboardUrl: "https://executor.sh",
     defaultUrl: "", placeholder: "Paste your Executor workspace MCP URL",
-    urlHelp: "Use the hosted workspace URL or a self-hosted HTTP endpoint reachable from Paperclip. The server’s endpoint policy also applies.",
+    urlHelp: `Use the hosted workspace URL or a self-hosted HTTP endpoint reachable from ${PRODUCT_IDENTITY.productName}. The server’s endpoint policy also applies.`,
     authHelp: "Keep any options in the copied URL. If using an API key, use a user key; workspace and organization keys cannot open an MCP session.",
   },
 };

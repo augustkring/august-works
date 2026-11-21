@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   routineRevisionSnapshotV1Schema,
+  createRoutineTriggerSchema,
   routineVariableSchema,
   updateRoutineSchema,
 } from "./routine.js";
@@ -11,6 +12,22 @@ const triggerId = "33333333-3333-4333-8333-333333333333";
 const baseRevisionId = "44444444-4444-4444-8444-444444444444";
 
 describe("routine validators", () => {
+  it("preserves an omitted schedule timezone for the owning company default to resolve", () => {
+    const inherited = createRoutineTriggerSchema.parse({
+      kind: "schedule",
+      cronExpression: "0 9 * * 1-5",
+    });
+    const explicit = createRoutineTriggerSchema.parse({
+      kind: "schedule",
+      cronExpression: "0 9 * * 1-5",
+      timezone: "Europe/Copenhagen",
+    });
+    expect(inherited.kind).toBe("schedule");
+    expect(inherited.kind === "schedule" ? inherited.timezone : null).toBeUndefined();
+    expect(explicit.kind).toBe("schedule");
+    expect(explicit.kind === "schedule" ? explicit.timezone : null).toBe("Europe/Copenhagen");
+  });
+
   it.each(["bearer", "app_webhook", "fireflies_hmac"])("accepts versioned routine revision snapshots with %s trigger metadata", (signingMode) => {
     const parsed = routineRevisionSnapshotV1Schema.parse({
       version: 1,

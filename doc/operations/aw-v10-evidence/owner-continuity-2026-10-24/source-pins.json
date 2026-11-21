@@ -1,0 +1,19 @@
+{
+  "packages/shared/src/types/access.ts": "9e410e7ed3cbf62f207d5bf0e1013f51f53dac7accdd163c93bdbd33e3212c63",
+  "packages/shared/src/validators/access.ts": "bf664598909d0cee6c8506d6d3a27636663c1dcca35e51d3ba36725942a7b646",
+  "packages/shared/src/index.ts": "13e7e9352573bf42bc0ecb98f3580e9239cbc0c97118f1d29534d01110104b84",
+  "packages/shared/src/experience.ts": "c3895614a481d92a10939263cb97581fd28c21aa0295f9a5cc8ff5664464829a",
+  "server/src/services/access.ts": "1bdf3c55d87498bccd113356d79531ac089b63c1bacfef77cc6592e2664d0161",
+  "server/src/services/routines.ts": "474f34d1e11fecf0c947823b50098004238bd2047693795e7ecc6b8d2ecb2f01",
+  "server/src/index.ts": "aa34ddc061b16f3ee1acfe74245e1e083121ff4a2500edca296b02cb172d1a20",
+  "server/src/routes/access.ts": "c27951bb9d390ce59190931c842a03e97c0f5fafec7aae17f5a11919f1ebb1b2",
+  "server/src/services/experience/service.ts": "2350ddc8a7b3d39e483a57a5c7c771e5eba569ebe2279d388d52e149829aa14f",
+  "server/src/services/experience/routine-responsibility-attention.ts": "94249bed80769a4c1486cfa493574d550c5a359c4e35100b0cb16a81049f42b3",
+  "server/src/__tests__/access-service.test.ts": "1d9284c62d8f3febb63fcfc7f9556975f79fc1ed05ed21612340dca49b5e4efd",
+  "server/src/__tests__/routines-service.test.ts": "5f70c27e90e639594ea921040de8ee3d623d3cc0965195e153a335172ca19885",
+  "server/src/__tests__/routine-responsibility-attention.integration.test.ts": "fec812ab1ad3cd0306295dc3f3527df37c0100743c665e10ae2ba018e5f87ee5",
+  "server/src/__tests__/v9-experience.integration.test.ts": "2afc6ab7e9d6e4e4d26eeed8b5e7ebf6170607dd2233aedefe6c56ef3c25e663",
+  "ui/src/api/access.ts": "07e9a4fcbec2e0131e9cdd980b37949b6a4e25c91a915fa39c6937a7d736971d",
+  "ui/src/pages/CompanyAccess.tsx": "9a17414a949ed4ed796eef2fe4d08dab8ff6309be6917a619cf33dc467f28b3d",
+  "ui/src/pages/CompanyAccess.test.tsx": "4c5038fa1da500ce700040cfd049ed6c1f032d86401c1949324a7b85b3b771cc"
+}

@@ -1,0 +1,40 @@
+{
+  "caseNames": [
+    "runs unrelated assigned Native Text tasks concurrently under separate issue claims",
+    "repairs clean Native Text branch drift before successful workspace finalization",
+    "adopts a Native Text forward branch with commits without persisting the workspace branch",
+    "allows Native Text finalization after the branch transition is persisted",
+    "coalesces two durable status-wake domain inputs into one real installed-controller Run",
+    "cancels a genuinely queued Task after a Human adds its blocker, repairs its stale pointer, and completes ready work",
+    "persists and consumes the chat-control admission marker on a real Native Text C0 Plan: intact",
+    "persists and consumes the chat-control admission marker on a real Native Text C0 Plan: lost",
+    "persists and consumes the chat-control admission marker on a real Native Text C0 Plan: copied",
+    "pauses an installed Native Text Run through the canonical Human Agent-pause owner before selection",
+    "cancels a real installed-controller Run at before_selection without dispatching its model",
+    "cancels a real installed-controller Run at after_selection without dispatching its model",
+    "cancels a real installed-controller Run at before_selection_row_lock without dispatching its model",
+    "aborts the dispatched Native text HTTP call on canonical Run cancellation and retains its unknown charge",
+    "joins concurrent Stops through the installed Native text owner without duplicating the dispatch",
+    "keeps an installed Native text request live when durable Stop intent cannot be written, then retries once"
+  ],
+  "observedPassedNames": [
+    "runs unrelated assigned Native Text tasks concurrently under separate issue claims",
+    "repairs clean Native Text branch drift before successful workspace finalization",
+    "adopts a Native Text forward branch with commits without persisting the workspace branch",
+    "allows Native Text finalization after the branch transition is persisted",
+    "coalesces two durable status-wake domain inputs into one real installed-controller Run",
+    "cancels a genuinely queued Task after a Human adds its blocker, repairs its stale pointer, and completes ready work",
+    "persists and consumes the chat-control admission marker on a real Native Text C0 Plan: intact",
+    "persists and consumes the chat-control admission marker on a real Native Text C0 Plan: lost",
+    "persists and consumes the chat-control admission marker on a real Native Text C0 Plan: copied",
+    "pauses an installed Native Text Run through the canonical Human Agent-pause owner before selection",
+    "cancels a real installed-controller Run at before_selection without dispatching its model",
+    "cancels a real installed-controller Run at after_selection without dispatching its model",
+    "cancels a real installed-controller Run at before_selection_row_lock without dispatching its model",
+    "aborts the dispatched Native text HTTP call on canonical Run cancellation and retains its unknown charge",
+    "joins concurrent Stops through the installed Native text owner without duplicating the dispatch",
+    "keeps an installed Native text request live when durable Stop intent cannot be written, then retries once"
+  ],
+  "selectedPasses": 16,
+  "otherCohortUnselected": 16
+}

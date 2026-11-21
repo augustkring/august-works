@@ -94,7 +94,8 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
         const selected = resolvePaperclipRunnerProviderProfile(proposed?.configuration ?? configured.adapterConfig);
         if (selected.provider !== "aw_text_only") throw forbidden("The installed text transport is required");
         const p = selectWorkerModelProfile(options.profiles, { companyId: cid, agentId: aid, profileId: selected.workerModelProfileId,
-          sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin });
+          sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin,
+          purpose: proposed ? "candidate_evaluation" : "runtime" });
         const advertised = proposed ? { capabilitySnapshotHash: proposed.snapshot.hash, capabilitySnapshot: proposed.snapshot }
           : await providerDiscoveryService(db).discover(actor, cid, aid);
         if (advertised.capabilitySnapshotHash !== p.providerSnapshotHash) throw conflict("Draft capability profile changed before qualification");
@@ -105,7 +106,7 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
         async function current(tx: Db, runId?: string) {
           const virtual = proposed ? await virtualCandidate(tx) : null;
           await assertV7Enabled(tx, "orchestration_v7");
-          const fresh = assertWorkerModelProfileCurrent(p, options.sourceSha, options.protectedEvidenceOrigin);
+          const fresh = assertWorkerModelProfileCurrent(p, options.sourceSha, options.protectedEvidenceOrigin, proposed ? "candidate_evaluation" : "runtime");
           for (const action of ["agents:configure", "agent:wake"] as const)
             await assertV7Authorization(tx, actor, cid, action, { type: "agent", companyId: cid, agentId: aid });
           const [presence] = await tx.select({ agent: agents, identity: agentIdentities, company: companies }).from(agents)
@@ -219,7 +220,7 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
         const timeout = setTimeout(() => controller.abort(), 20000);
         let cancelTimer: ReturnType<typeof setTimeout> | undefined;
         const broker = modelReservationService(db, { sourceSha: options.sourceSha,
-          qualifiedTariff: async () => assertWorkerModelProfileCurrent(entry.p, options.sourceSha, options.protectedEvidenceOrigin).tariff,
+          qualifiedTariff: async () => assertWorkerModelProfileCurrent(entry.p, options.sourceSha, options.protectedEvidenceOrigin, "candidate_evaluation").tariff,
           currentAuthority: async (tx) => (await entry.current(tx, run.id)).authorityHash });
         const guard = setInterval(() => {
           if (checking || !authorityHash) return;
@@ -242,18 +243,21 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
           const credential = await aiConnectionService(db).credential(fresh.connection);
           if (createHash("sha256").update(credential).digest("hex") !== fresh.credentialHash) throw forbidden("Draft credential changed before dispatch");
           if ((await entry.current(db, run.id)).authorityHash !== authorityHash) throw forbidden("Draft authority changed during credential resolution");
-          const result = await anthropicReadOnlyCall(request, credential, controller.signal, { fetch: async (...args) => {
-            controller.signal.throwIfAborted();
-            await logActivity(db, { companyId: entry.cid, actorType: "user", actorId: userId, runId: run.id, agentId: entry.aid,
-              action: "provider.draft_conformance_dispatch_started", entityType: "heartbeat_run", entityId: run.id,
-              details: { groupId, reservationId, source: "native-draft-conformance", providerStreaming: false } });
-            eventRetained = true;
-            if ((await entry.current(db, run.id)).authorityHash !== authorityHash) throw forbidden("Draft authority changed at the actual dispatch boundary");
-            controller.signal.throwIfAborted();
-            dispatched = true;
-            if (cancel) cancelTimer = setTimeout(() => { cancellationRequested = true; controller.abort(); }, 100);
-            return (options.fetch ?? guardedRemoteHttpFetch)(...args);
-          } });
+          const result = await anthropicReadOnlyCall(request, credential, controller.signal, {
+            onWireDispatch: async wire => { await broker.recordWireDispatch(actor, entry.cid, reservation.id, wire); },
+            fetch: async (...args) => {
+              controller.signal.throwIfAborted();
+              await logActivity(db, { companyId: entry.cid, actorType: "user", actorId: userId, runId: run.id, agentId: entry.aid,
+                action: "provider.draft_conformance_dispatch_started", entityType: "heartbeat_run", entityId: run.id,
+                details: { groupId, reservationId, source: "native-draft-conformance", providerStreaming: false } });
+              eventRetained = true;
+              if ((await entry.current(db, run.id)).authorityHash !== authorityHash) throw forbidden("Draft authority changed at the actual dispatch boundary");
+              controller.signal.throwIfAborted();
+              dispatched = true;
+              if (cancel) cancelTimer = setTimeout(() => { cancellationRequested = true; controller.abort(); }, 100);
+              return (options.fetch ?? guardedRemoteHttpFetch)(...args);
+            },
+          });
           controller.signal.throwIfAborted();
           if ((await entry.current(db, run.id)).authorityHash !== authorityHash) throw forbidden("Draft authority changed before publication");
           const outcome = await broker.recordOutcome(entry.cid, reservation.id, { status: "completed", providerResponseHash: nativeSha256(result), usage: result.usage });

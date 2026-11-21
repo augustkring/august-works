@@ -1,0 +1,29 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 4.124626738979714,
+      "filesAdvised": 620401,
+      "memoryAfter": 6097227776,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "pnpm",
+        "--filter",
+        "@paperclipai/paperclip-runner",
+        "exec",
+        "tsx",
+        "scripts/generate-operation-groups.ts",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.6661459849856328,
+      "peakGroupRssBytes": 169562112,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

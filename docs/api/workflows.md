@@ -53,6 +53,8 @@ A registered node may be `ready` or `draft_only`. Publish fails closed with `wor
 
 `core.manual_trigger`, `core.transform`, `core.condition`, bounded `core.wait`, `human.approval`, `work.create_task`, `agent.task`, and `agent.external` are publish-ready. Connector Action remains intentionally draft-only until its governed execution-time authorization and connector/tool integration path lands. Agent Task with a non-null `expectedOutputSchema` remains publish-blocked until Tasks expose an authoritative structured-result channel. External Agent structured output is validated from the authoritative heartbeat/OpenClaw result channel instead.
 
+`core.http_request` is draft-only. Existing drafts remain editable, but publication and execution are refused until a server-owned connector contract can bound the remote operation. A public HTTPS GET or HEAD request alone does not establish that contract. An older published HTTP step also fails closed with `configuration_incomplete` / `tool_model_effect_unqualified` before making a request.
+
 A Condition may be terminal or may expose exactly one `true` and one `false` branch. Branch labels/source handles are part of the published graph contract; ambiguous or duplicate condition branches fail publish.
 
 ## Stable errors

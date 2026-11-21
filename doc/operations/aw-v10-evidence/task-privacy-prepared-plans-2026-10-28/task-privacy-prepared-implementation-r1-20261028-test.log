@@ -1,0 +1,11 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/task-privacy-prepared-plan.integration.test.ts > keeps current Task readers and nested transaction visibility with prepared statements true 1026ms
+ ✓ src/__tests__/task-privacy-prepared-plan.integration.test.ts > keeps current Task readers and nested transaction visibility with prepared statements false 2358ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  09:53:28
+   Duration  24.89s (transform 12.22s, setup 88ms, import 17.10s, tests 7.59s, environment 0ms)
+

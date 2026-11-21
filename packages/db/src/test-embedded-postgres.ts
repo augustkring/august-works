@@ -30,6 +30,7 @@ type EmbeddedPostgresCtor = new (opts: {
   port: number;
   persistent: boolean;
   initdbFlags?: string[];
+  postgresFlags?: string[];
   onLog?: (message: unknown) => void;
   onError?: (message: unknown) => void;
 }) => EmbeddedPostgresInstance;
@@ -41,6 +42,7 @@ export type EmbeddedPostgresTestSupport = {
 
 export type EmbeddedPostgresTestDatabase = {
   connectionString: string;
+  dataDir?: string;
   cleanup(): Promise<void>;
 };
 
@@ -128,6 +130,13 @@ async function createEmbeddedPostgresTestInstance(tempDirPrefix: string) {
     password: "paperclip",
     port,
     persistent: true,
+    // Each test cluster is disposable: its data dir is deleted after the file,
+    // and nothing survives a host crash. Without this, every 16 MB WAL segment
+    // and every commit waits for the runner's disk flush, so timing budgets
+    // measured the CI disk instead of the code (the 68,000-outcome experiment
+    // capture issues about 100 WAL fsyncs). WAL is still written and replayed
+    // after a PostgreSQL process crash; only the flush to stable storage goes.
+    postgresFlags: ["-c", "fsync=off"],
     initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"],
     onLog: (message) => logBuffer.append(message),
     onError: (message) => logBuffer.append(message),
@@ -273,7 +282,7 @@ export async function getEmbeddedPostgresTestSupport(): Promise<EmbeddedPostgres
 
 export async function startEmbeddedPostgresTestDatabase(
   tempDirPrefix: string,
-  options: { beforeMigrations?: (connectionString: string) => Promise<void> } = {},
+  options: { beforeMigrations?: (connectionString: string) => Promise<void>; preserveDataOnFailure?: () => boolean } = {},
 ): Promise<EmbeddedPostgresTestDatabase> {
   // The bounded retry hardens the cluster start against the port race. It throws
   // with the real Postgres output if every attempt fails.
@@ -290,6 +299,7 @@ export async function startEmbeddedPostgresTestDatabase(
 
     return {
       connectionString,
+      dataDir,
       cleanup: async () => {
         // End every client a caller created against this cluster first. A
         // client that still holds a reserved connection when the cluster
@@ -297,7 +307,8 @@ export async function startEmbeddedPostgresTestDatabase(
         // but a queued write on that connection still fires later and finds
         // a null socket.
         await closeRegisteredClients(connectionString);
-        await stopEmbeddedPostgresBounded(instance, () => cleanupEmbeddedPostgresTestDirs(dataDir));
+        await stopEmbeddedPostgresBounded(instance, () => options.preserveDataOnFailure?.()
+          ? Promise.resolve() : cleanupEmbeddedPostgresTestDirs(dataDir));
       },
     };
   } catch (error) {

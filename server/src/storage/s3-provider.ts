@@ -7,8 +7,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { Readable } from "node:stream";
 import type { StorageProvider, GetObjectResult, HeadObjectResult } from "./types.js";
-import { notFound, unprocessable } from "../errors.js";
+import { conflict, notFound, unprocessable } from "../errors.js";
 import { storageScopeIdentity } from "./object-scope.js";
+import { eraseS3Object } from "./s3-erasure.js";
 
 interface S3ProviderConfig {
   bucket: string;
@@ -169,6 +170,16 @@ export function createS3StorageProvider(config: S3ProviderConfig): StorageProvid
         }),
         { abortSignal: AbortSignal.timeout(30000) },
       );
+    },
+
+    async eraseObject(input): Promise<void> {
+      try { await eraseS3Object(client, bucket, buildKey(prefix, input.objectKey)); }
+      catch (error) {
+        const details = error && typeof error === "object" && "details" in error
+          ? (error as { details?: { code?: unknown } }).details : null;
+        if (details?.code === "storage_object_erasure_pending") throw error;
+        throw conflict("S3 object erasure is awaiting physical confirmation", { code: "storage_object_erasure_pending" });
+      }
     },
   };
 }

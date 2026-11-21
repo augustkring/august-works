@@ -1,0 +1,37 @@
+✖ accepts classified material operations and explicit Human-only actions (2.709872ms)
+✔ fails closed when a new material manifest operation lacks UI classification (0.262677ms)
+✔ rejects an unmapped mounted UI operation instead of accepting a wildcard (0.26537ms)
+✔ rejects inventory entries that are absent from the canonical manifest (0.190688ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 3
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97.257043
+
+✖ failing tests:
+
+test at scripts/check-aw-v10-operation-coverage.test.mjs:24:1
+✖ accepts classified material operations and explicit Human-only actions (2.709872ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   'Inventory canonical owner does not match the manifest: blentera.example.run'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///workspace/blentera-v10/scripts/check-aw-v10-operation-coverage.test.mjs:25:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'Inventory canonical owner does not match the manifest: blentera.example.run' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

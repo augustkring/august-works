@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import type { TranscriptEntry } from "@/adapters";
 import type { HeartbeatRunEvent } from "@paperclipai/shared";
 import {
@@ -990,7 +991,7 @@ describe("buildActivityPhases provider summaries", () => {
       providerTool("block", "paperclip_block", "edit", "paperclip"),
     ];
     expect(buildActivityPhases(items, false)[0]?.summary).toBe(
-      "Searched available tools 6 times, read from Paperclip 3 times, used Paperclip 3 times",
+      `Searched available tools 6 times, read from ${PRODUCT_IDENTITY.productName} 3 times, used ${PRODUCT_IDENTITY.productName} 3 times`,
     );
   });
 });

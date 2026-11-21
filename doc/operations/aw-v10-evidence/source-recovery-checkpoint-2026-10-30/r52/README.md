@@ -1,0 +1,3 @@
+# Recoverable source checkpoint r52
+
+Recovery only; R66 Native source, R14.8 coherent qualification policy, runtime guards, RT03 budget transport drafts and source reconciliation remain under development. This Nov1 checkpoint preserves all current MAIN tracked edits and named private source drafts after environment restart. R6.1 vendor source checks are separately qualified at committed evidence. Apply the working patch at the exact manifest base. Private candidates use preparation/ paths and require review; archived source-pin/patch files inside an unfinished candidate may describe its older parent. The full current files/ tree is saved independently. Prior checkpoint r51 retains older candidate history. No software, physical-host or release acceptance is inferred.

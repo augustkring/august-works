@@ -5,6 +5,8 @@ import {
   activityLog,
   agents,
   agentWakeupRequests,
+  authUsers,
+  companyMemberships,
   companies,
   createDb,
   heartbeatRuns,
@@ -49,7 +51,9 @@ describeEmbeddedPostgres("issueTreeControlService", () => {
     await db.delete(heartbeatRuns);
     await db.delete(agentWakeupRequests);
     await db.delete(agents);
+    await db.delete(companyMemberships);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -267,6 +271,63 @@ describeEmbeddedPostgres("issueTreeControlService", () => {
     expect(released.members).toHaveLength(1);
   });
 
+  it("previews current descendants of a pause without rewriting its snapshot or releasing independent holds", async () => {
+    const companyId = randomUUID();
+    const rootId = randomUUID();
+    const lateChildId = randomUUID();
+    const independentlyHeldChildId = randomUUID();
+    const doneChildId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Current ancestry",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}` });
+    await db.insert(issues).values({ id: rootId, companyId, title: "Root", status: "todo" });
+    const svc = issueTreeControlService(db);
+    const actor = { actorType: "user" as const, actorId: "board-user", userId: "board-user" };
+    const original = await svc.createHold(companyId, rootId, { mode: "pause", actor });
+    const originalMembers = await db.select().from(issueTreeHoldMembers)
+      .where(eq(issueTreeHoldMembers.holdId, original.hold.id));
+    expect(originalMembers.map(member => member.issueId)).toEqual([rootId]);
+    await db.insert(issues).values([
+      { id: lateChildId, companyId, parentId: rootId, title: "Late child", status: "todo" },
+      { id: independentlyHeldChildId, companyId, parentId: rootId, title: "Independent", status: "todo" },
+      { id: doneChildId, companyId, parentId: rootId, title: "Done", status: "done" },
+    ]);
+    expect(await svc.getActivePauseHoldGate(companyId, lateChildId)).toMatchObject({
+      holdId: original.hold.id, rootIssueId: rootId, isRoot: false,
+    });
+    const childPreview = await svc.preview(companyId, lateChildId, { mode: "resume" });
+    expect(childPreview.issues).toEqual([expect.objectContaining({
+      id: lateChildId, skipped: false, activeHoldIds: [original.hold.id],
+    })]);
+    const independent = await svc.createHold(companyId, independentlyHeldChildId, { mode: "pause", actor });
+    const preview = await svc.preview(companyId, rootId, { mode: "resume" });
+    expect(preview.issues.find(issue => issue.id === lateChildId)).toMatchObject({
+      skipped: false, activeHoldIds: [original.hold.id], action: "resume",
+    });
+    expect(preview.issues.find(issue => issue.id === independentlyHeldChildId)?.activeHoldIds)
+      .toEqual([independent.hold.id, original.hold.id]);
+    expect(preview.issues.find(issue => issue.id === doneChildId)).toMatchObject({
+      skipped: true, skipReason: "terminal_status",
+    });
+    expect(preview.totals.affectedIssues).toBe(3);
+    await db.update(issues).set({ status: "done" }).where(eq(issues.id, rootId));
+    const terminalRootPreview = await svc.preview(companyId, rootId, { mode: "resume" });
+    expect(terminalRootPreview.issues.find(issue => issue.id === rootId)).toMatchObject({
+      status: "done", skipped: true, skipReason: "terminal_status", activeHoldIds: [original.hold.id],
+    });
+    expect(terminalRootPreview.issues.find(issue => issue.id === lateChildId)).toMatchObject({ skipped: false });
+    const released = await svc.releaseHold(companyId, rootId, original.hold.id, { actor });
+    expect(released.members?.map(member => member.issueId)).toEqual([rootId]);
+    expect(await svc.getActivePauseHoldGate(companyId, lateChildId)).toBeNull();
+    expect(await svc.getActivePauseHoldGate(companyId, independentlyHeldChildId)).toMatchObject({
+      holdId: independent.hold.id, rootIssueId: independentlyHeldChildId,
+    });
+    expect(await db.select().from(issueTreeHoldMembers)
+      .where(eq(issueTreeHoldMembers.holdId, original.hold.id))).toEqual(originalMembers);
+    const remaining = await svc.preview(companyId, rootId, { mode: "resume" });
+    expect(remaining.issues.find(issue => issue.id === lateChildId)).toMatchObject({ skipped: true, skipReason: "not_held" });
+    expect(remaining.issues.find(issue => issue.id === independentlyHeldChildId)).toMatchObject({ skipped: false });
+  });
+
   it("cancels non-terminal issue statuses and restores from the cancel snapshot", async () => {
     const companyId = randomUUID();
     const rootIssueId = randomUUID();
@@ -280,6 +341,8 @@ describeEmbeddedPostgres("issueTreeControlService", () => {
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
+    await db.insert(authUsers).values({ id: "board-user", name: "Current tree owner", email: "tree-owner@example.test", createdAt: new Date(), updatedAt: new Date() }).onConflictDoNothing();
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "board-user", membershipRole: "owner", status: "active" });
     await db.insert(issues).values([
       {
         id: rootIssueId,

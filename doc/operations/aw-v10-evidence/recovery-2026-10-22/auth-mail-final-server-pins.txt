@@ -1,0 +1,6 @@
+23dba75031e4d9f8d0ed0a877b19abc441768ac51329fd49ded5fa92041e311c  packages/shared/src/auth-mail-copy.ts
+90b523d237cabf2ab91bff9f4f1c9c0bfdf437b0ca94235f476a847fdcc6c108  packages/shared/src/index.ts
+8ba0d5ba832b60e52fda9d1bb9da97f2eebc12152579e8a44818f5130e841e3b  server/src/auth/better-auth.ts
+5d585a8077ecaa2ff77bf502f141746b6c9f92a01bd723ac88af1316902a10fa  server/src/services/saas/auth-delivery.ts
+05f51ab4ab12f1ee3b0e5f06de361188afd725d4700f1f6250dd05a86eda1a28  server/src/services/saas/auth-delivery.test.ts
+009d9855c3b173df8603fbbdd9c9d4854da1baf4b4484fa781ab86f9e4e21cdc  server/src/__tests__/v6-saas-auth.integration.test.ts

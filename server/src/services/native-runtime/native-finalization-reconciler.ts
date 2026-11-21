@@ -300,6 +300,9 @@ export function reconcileRetainedNativeSessionCleanups(
   return pending;
 }
 
+/** Rolls back a resume claim whose coordinator named another Task than the one it locked first. */
+class ResumeClaimTaskChanged extends Error {}
+
 export async function dispatchNativeSessionResumptions(input: {
   db: Db;
   runnerInstanceId: string;
@@ -362,7 +365,23 @@ export async function claimNativeSessionResumptions(input: {
   for (const candidate of candidates) {
     const leaseOwner = `${input.runnerInstanceId}:resume:${randomUUID()}`;
     let terminalRunToEmit: typeof heartbeatRuns.$inferSelect | null = null;
-    const claimed = await input.db.transaction(async (tx) => {
+    // D5e. Lock order (run-identity.ts): Task > run > coordinator, the
+    // finalizer's order. The ambiguous-state branch below writes the
+    // coordinator's Task (issueService.update locks it FOR UPDATE by id), so
+    // read the coordinator's Task id unlocked, lock that Task with the same
+    // mode and predicate, then lock the run and coordinator and check the
+    // coordinator still names that Task. If it changed, roll back and retry
+    // once; a second change proceeds as before (run and coordinator, then
+    // the Task they name).
+    const claimOnce = (lastAttempt: boolean) => input.db.transaction(async (tx) => {
+      const [unlocked] = await tx
+        .select({ issueId: nativeRunFinalizations.issueId })
+        .from(nativeRunFinalizations)
+        .where(eq(nativeRunFinalizations.runId, candidate.runId));
+      const lockedIssueId = unlocked?.issueId ?? null;
+      if (lockedIssueId) {
+        await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, lockedIssueId)).for("update");
+      }
       const row = await tx.select({
         run: heartbeatRuns,
         coordinator: nativeRunFinalizations,
@@ -373,6 +392,7 @@ export async function claimNativeSessionResumptions(input: {
         .limit(1)
         .then((rows) => rows[0] ?? null);
       if (!row) return false;
+      if (row.coordinator.issueId !== lockedIssueId && !lastAttempt) throw new ResumeClaimTaskChanged();
       if (
         row.run.runtimeMode !== "native" ||
         isNativeRunnerOwnershipHeld(row.run) ||
@@ -521,6 +541,16 @@ export async function claimNativeSessionResumptions(input: {
       }).where(eq(heartbeatRuns.id, row.run.id));
       return true;
     });
+    let claimed = false;
+    for (let attempt = 1; ; attempt += 1) {
+      terminalRunToEmit = null;
+      try {
+        claimed = await claimOnce(attempt > 1);
+        break;
+      } catch (error) {
+        if (!(error instanceof ResumeClaimTaskChanged) || attempt > 1) throw error;
+      }
+    }
     // Telemetry is best-effort background work; it must not delay claiming
     // the remaining candidates in this loop, so fire it and do not await it.
     if (terminalRunToEmit) {
@@ -825,9 +855,9 @@ export async function reconcileNativeFinalizations(
         results.push({
           runId: row.runId,
           phase: "committed",
-          reconciliationAction: decision.reasonCode,
+          reconciliationAction: committed.effectiveDecision.reasonCode,
           decisionId: committed.decision.id,
-          reconciliationDecision: decision,
+          reconciliationDecision: committed.effectiveDecision,
         });
         continue;
       }

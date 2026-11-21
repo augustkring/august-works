@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { testEnvironment } from "@paperclipai/adapter-pi-local/server";
 
-async function writeFakePiCommand(binDir: string, mode: "success" | "stale-package"): Promise<void> {
+async function writeFakePiCommand(binDir: string, mode: "success" | "stale-package", helloProbeMarkerPath?: string): Promise<void> {
   const commandPath = path.join(binDir, "pi");
   const script =
     mode === "success"
@@ -13,6 +13,10 @@ if (process.argv.includes("--list-models")) {
   console.log("provider  model");
   console.log("openai    gpt-4.1-mini");
   process.exit(0);
+}
+if (process.argv.includes("-p")) {
+  const marker = ${JSON.stringify(helloProbeMarkerPath ?? null)};
+  if (marker) require("node:fs").appendFileSync(marker, "hello-entry\\n");
 }
 console.log(JSON.stringify({ type: "session", version: 3, id: "session-1", timestamp: new Date().toISOString(), cwd: process.cwd() }));
 console.log(JSON.stringify({ type: "agent_start" }));
@@ -39,7 +43,7 @@ process.exit(1);
 }
 
 describe("pi_local environment diagnostics", () => {
-  it("passes a hello probe when model discovery and execution succeed", async () => {
+  it("retains model discovery while denying an unqualified hello probe before execution", async () => {
     const root = path.join(
       os.tmpdir(),
       `paperclip-pi-local-probe-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -48,7 +52,8 @@ describe("pi_local environment diagnostics", () => {
     const cwd = path.join(root, "workspace");
     await fs.mkdir(binDir, { recursive: true });
     await fs.mkdir(cwd, { recursive: true });
-    await writeFakePiCommand(binDir, "success");
+    const helloProbeMarker = path.join(root, "hello-probe-entered");
+    await writeFakePiCommand(binDir, "success", helloProbeMarker);
 
     const result = await testEnvironment({
       companyId: "company-1",
@@ -64,9 +69,12 @@ describe("pi_local environment diagnostics", () => {
       },
     });
 
-    expect(result.status).toBe("pass");
+    expect(result.status).toBe("fail");
     expect(result.checks.some((check) => check.code === "pi_models_discovered")).toBe(true);
-    expect(result.checks.some((check) => check.code === "pi_hello_probe_passed")).toBe(true);
+    expect(result.checks.filter((check) => check.level === "error").map((check) => check.code))
+      .toEqual(["paid_transport_unqualified"]);
+    expect(result.checks.some((check) => check.code === "pi_hello_probe_passed")).toBe(false);
+    await expect(fs.stat(helloProbeMarker)).rejects.toMatchObject({ code: "ENOENT" });
     await fs.rm(root, { recursive: true, force: true });
   });
 

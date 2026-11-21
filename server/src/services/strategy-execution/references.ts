@@ -1,4 +1,5 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, is, isNull } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import { businessMetrics, businessMetricVersions, businessMetricTargets, businessMetricTargetVersions, businessMetricObservations, decisions, decisionTargetIssues, documentRevisions, foundationDocuments, foundationSections, goals, issues, projects, projectMilestones, type Db } from "@paperclipai/db";
 import { v5FeatureEnabled, type BusinessMetricResult, type StrategyExecutionReference } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
@@ -18,20 +19,29 @@ export function strategyReferenceId(ref: StrategyExecutionReference) {
 /** Current authority is checked separately from current version validity, so a
  * stale pin never makes a denied source visible through a review response. */
 const nativeProjectColumns = {id:projects.id,status:projects.status,createdAt:projects.createdAt,updatedAt:projects.updatedAt,archivedAt:projects.archivedAt};
-const nativeIssueColumns = {id:issues.id,projectId:issues.projectId,parentId:issues.parentId,assigneeAgentId:issues.assigneeAgentId,assigneeUserId:issues.assigneeUserId,status:issues.status,originKind:issues.originKind,originId:issues.originId,createdAt:issues.createdAt,updatedAt:issues.updatedAt};
+const nativeIssueColumns = {id:issues.id,projectId:issues.projectId,parentId:issues.parentId,assigneeAgentId:issues.assigneeAgentId,assigneeUserId:issues.assigneeUserId,status:issues.status,originKind:issues.originKind,originId:issues.originId,hiddenAt:issues.hiddenAt,createdAt:issues.createdAt,updatedAt:issues.updatedAt};
 type NativePopulationReads = {
   authority?: Pick<ReturnType<typeof authorizationService>, "decide">;
+  batchAdmittedSources?: boolean;
   issues: Map<string, Pick<typeof issues.$inferSelect, keyof typeof nativeIssueColumns>>;
   projects: Map<string, Pick<typeof projects.$inferSelect, keyof typeof nativeProjectColumns>>;
 };
+type NativePopulationResult = Map<string, Awaited<ReturnType<typeof authorizeStrategyReference>>>;
 export async function authorizeStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false) {
   return authorizeReference(tx, companyId, actor, ref, sensitivity, includeNativeSnapshot);
 }
-async function authorizeReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false, reads?: NativePopulationReads) {
+/** Capture-only form keeps the original metric owner's exact admitted lineage
+ * rows in the same transaction so retention does not refetch them. */
+export async function authorizeStrategyReferenceForCapture(tx:Db,companyId:string,actor:AuthorizationActor,ref:StrategyExecutionReference,sensitivity:"internal"|"confidential") {
+  return authorizeReference(tx,companyId,actor,ref,sensitivity,false,undefined,true);
+}
+async function authorizeReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false, reads?: NativePopulationReads, includeMetricLineage=false) {
   const issueIds = new Set<string>(), projectIds = new Set<string>();
   let metricObservation: BusinessMetricResult | undefined;
+  let metricObservationLineage: Awaited<ReturnType<ReturnType<typeof businessMetricService>["inspectCurrentObservationWithLineage"]>> | undefined;
   let nativeObject:{snapshot:NativeMetricInput;archived:boolean}|undefined;
   async function authorizeSource(action: "issue:read" | "project:read", resource: AuthorizationResource) {
+    if (reads?.batchAdmittedSources) return;
     if (!reads?.authority) return assertV7Authorization(tx, actor, companyId, action, resource);
     const decision = await reads.authority.decide({ actor, action, resource, enforceResponsibleUserIntersection: true });
     if (!decision.allowed) throw forbidden(decision.explanation, { code: "permission_denied", reason: decision.reason });
@@ -115,10 +125,11 @@ async function authorizeReference(tx: Db, companyId: string, actor: Authorizatio
       await metric(ref.metricId, ref.metricVersionId);
       // The measurement owner reauthorizes every retained lineage source, not
       // only the selected project or a copied aggregate.
-      metricObservation = await businessMetricService(tx).inspectCurrentObservation(companyId, actor, ref.id); break;
+      if(includeMetricLineage){metricObservationLineage=await businessMetricService(tx).inspectCurrentObservationWithLineage(companyId,actor,ref.id);metricObservation=metricObservationLineage.result;}
+      else metricObservation = await businessMetricService(tx).inspectCurrentObservation(companyId, actor, ref.id); break;
     }
   }
-  return { issueIds: [...issueIds], projectIds: [...projectIds], ...(metricObservation ? { metricObservation } : {}),...(nativeObject?{nativeObject}:{}) };
+  return { issueIds: [...issueIds], projectIds: [...projectIds], ...(metricObservation ? { metricObservation } : {}),...(metricObservationLineage?{metricObservationLineage}:{}),...(nativeObject?{nativeObject}:{}) };
 }
 
 
@@ -127,14 +138,23 @@ async function authorizeReference(tx: Db, companyId: string, actor: Authorizatio
  * never accept caller material or escape this native owner/transaction. No grant,
  * source admission or actor decision is cached or skipped. */
 export async function authorizeStrategyNativePopulation(tx: Db, companyId: string, actor: AuthorizationActor,
-  type: "issue" | "project", unitIds: string[], sensitivity: "internal" | "confidential", deadline: number) {
+  type: "issue" | "project", unitIds: string[], sensitivity: "internal" | "confidential", deadline: number): Promise<NativePopulationResult> {
+  // The transport rows and their batch privacy proof must share one native
+  // transaction. Some canonical readers arrive with the root database; start
+  // the transaction here before selecting rows so the owner cannot mistake
+  // autocommit facts for the locked population.
+  if (!is(tx, PgTransaction)) return tx.transaction(async (raw): Promise<NativePopulationResult> => {
+    const scoped = raw as unknown as Db;
+    if (!is(scoped, PgTransaction)) throw forbidden("Strategy source authorization requires its native read transaction.");
+    return authorizeStrategyNativePopulation(scoped, companyId, actor, type, unitIds, sensitivity, deadline);
+  });
   if (unitIds.length > 4000 || new Set(unitIds).size !== unitIds.length) throw unprocessable("Native strategy source population exceeds its exact bounds");
   const budget = () => { if (performance.now() > deadline) throw unprocessable("Native strategy source population budget exceeded"); };
   const reads: NativePopulationReads = { issues: new Map(), projects: new Map() };
   if (type === "issue") for (let offset = 0; offset < unitIds.length; offset += 1000) {
     budget();
     const selected = unitIds.slice(offset, offset + 1000);
-    const rows = await tx.select(nativeIssueColumns).from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, selected), isNull(issues.hiddenAt))).limit(selected.length + 1).for("share");
+    const rows = await tx.select(nativeIssueColumns).from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, selected))).limit(selected.length + 1).for("share");
     for (const row of rows) reads.issues.set(row.id, row);
   }
   const projectIds = type === "project" ? unitIds : [...new Set([...reads.issues.values()].flatMap(row => row.projectId ? [row.projectId] : []))];
@@ -144,12 +164,15 @@ export async function authorizeStrategyNativePopulation(tx: Db, companyId: strin
     const rows = await tx.select(nativeProjectColumns).from(projects).where(and(eq(projects.companyId, companyId), inArray(projects.id, selected))).limit(selected.length + 1).for("share");
     for (const row of rows) reads.projects.set(row.id, row);
   }
-  // The original Source owner transports only locked current row facts and
-  // compiled SQL. Every exact root and ancestor still gets its own current
-  // actor × responsible-human decision. No permission result is reused.
+  if (type === "issue" && unitIds.some(id => !reads.issues.has(id) || reads.issues.get(id)!.hiddenAt)) throw notFound("Strategy task source is unavailable");
+  if (projectIds.some(id => !reads.projects.has(id))) throw notFound("Strategy project source is unavailable");
+  // Batch the canonical action plus exact private-ACL predicates once for this
+  // complete population. The owner then transports only these same-transaction
+  // share-locked rows; it does not repeat an identical decision for each row.
   return authorizationService(tx).withReadSources(companyId, type === "issue" ? unitIds : [], projectIds, async authority => {
-    const currentReads: NativePopulationReads = { ...reads, authority };
-    const admitted = new Map<string, Awaited<ReturnType<typeof authorizeReference>>>();
+    await authority.assertTaskPrivacyBatch(actor, type === "issue" ? unitIds : [], projectIds, deadline);
+    const currentReads: NativePopulationReads = { ...reads, authority, batchAdmittedSources: true };
+    const admitted: NativePopulationResult = new Map();
   for (let offset = 0; offset < unitIds.length; offset += 32) {
     budget();
     // Drain every in-flight authorization before throwing: no admission may

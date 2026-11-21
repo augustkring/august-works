@@ -1,0 +1,50 @@
+{
+  "parentCommit": "835291f3e1d976774cf60dd49e7d431fa3092986",
+  "requirements": [
+    "UP-03",
+    "UP-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "runnerUnit": {
+      "exit": 0,
+      "passed": 142,
+      "suites": 1
+    },
+    "server": {
+      "exit": 0,
+      "passed": 481,
+      "suites": 2,
+      "actualPostgresCases": 10,
+      "executorMockCases": 471
+    },
+    "runnerTypescriptBuild": {
+      "exit": 0
+    },
+    "serverCompiler": {
+      "exit": 0
+    },
+    "originalSourceRegressions": {
+      "exit": 1,
+      "failed": 3,
+      "passed": 1,
+      "status": "open"
+    }
+  },
+  "observations": [
+    "Actual turn selection occurs later than onSessionAdmission. The awaited callback runs after continuation/recovery selection immediately before startTurn, observes a detached copy and cannot mutate the sent object. Goal-only/adopted turns do not invent new message captures.",
+    "The original server callback stores pre-I/O dispatch intent facts, not model text. Current actual lease/attempt/controller, native run/agent/Task and original launch-event sequence are checked in a physical transaction. Current responsible UID or NULL is an attribution fact rather than permission.",
+    "History preserves prior entries and profile, is bounded64/2MiB, and checks the actual RETURNING value after native DB triggers. A controlled suppressing trigger first reproduced successful return without stored intent.",
+    "The existing native lease renewal now checks/extends database wall time rather than transaction start time. Actual nested PostgreSQL transaction first reproduced lease revival after expiry; final test proves the lease was live at transaction start and rejects after the wait.",
+    "Actual failed profile UPDATE exposed the synthetic prior private profile in raw driver diagnostics. Only finite owned control errors now propagate; unexpected persistence errors contain no query, parameters or cause.",
+    "Native PG fixtures qualify actual persistence/rollback/binding/history/clock/error behavior. Executor and runner cases use their original owned backend/DB mocks; they do not qualify a physical provider, model, host or actual transport receipt.",
+    "Initial standalone runner project selection and PG import/duplicate test import failed before execution, were corrected and retained. Final successful checks are scoped to current pinned sources."
+  ],
+  "limits": [
+    "This is a pre-send intention and selected-input boundary, not proof of delivery, a complete native input receipt, source completeness or a current actor grant.",
+    "No source protocol/constructor/Ready flag is activated or historical input upgraded. Complete bootstrap/runtime/tool/history/retained-workspace inputs and exact source lineage remain open.",
+    "Original private-Memory and temporal read failures remain open, along with typed workflow/routine origins, Context/readiness/portability and complete V10 gates.",
+    "Steering/goal-only input capture, complete async effect authority, mixed-version rollout, physical transport/provider/host qualification and latest full workspace checks remain unqualified.",
+    "No complete V10, beta, production or PR-ready acceptance is claimed. No PR, merge or deployment was performed."
+  ]
+}

@@ -21,7 +21,10 @@ const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockAccessService = vi.hoisted(() => ({
   canUser: vi.fn(async () => false),
   hasPermission: vi.fn(async () => false),
+  decide: vi.fn(async () => ({ allowed: true, explanation: "Allowed by test mock." })),
 }));
+const mockCanReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn(async () => undefined));
 const mockHeartbeatService = vi.hoisted(() => ({
   wakeup: vi.fn(async () => undefined),
   reportRunActivity: vi.fn(async () => undefined),
@@ -42,6 +45,7 @@ const mockInstanceSettingsService = vi.hoisted(() => ({
     },
   })),
   listCompanyIds: vi.fn(async () => ["company-1"]),
+  getExperimental: vi.fn(async () => ({ enableExternalObjects: false })),
 }));
 const mockRoutineService = vi.hoisted(() => ({
   syncRunStatusForIssue: vi.fn(async () => undefined),
@@ -52,6 +56,15 @@ const mockRunnerGoalService = vi.hoisted(() => ({
 }));
 
 function registerModuleMocks() {
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    canActorReadIssuePrivacy: mockCanReadIssuePrivacy,
+  }));
+
+  vi.doMock("../services/analytical-context-authority.js", () => ({
+    assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+  }));
+
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
   }));
@@ -69,7 +82,10 @@ function registerModuleMocks() {
   }));
 
   vi.doMock("../services/instance-settings.js", () => ({
-    instanceSettingsService: () => mockInstanceSettingsService,
+    instanceSettingsService: () => ({
+      ...mockInstanceSettingsService,
+      getExperimental: vi.fn(async () => ({ enableExternalObjects: false })),
+    }),
   }));
 
   vi.doMock("../services/issues.js", () => ({
@@ -136,7 +152,7 @@ function registerModuleMocks() {
   }));
 }
 
-async function createApp(db: unknown = {}) {
+async function createApp(db: unknown = {}, onError?: (error: unknown) => void) {
   const [{ issueRoutes }, { errorHandler }] = await Promise.all([
     vi.importActual<typeof import("../routes/issues.js")>("../routes/issues.js"),
     vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
@@ -154,6 +170,8 @@ async function createApp(db: unknown = {}) {
     next();
   });
   app.use("/api", issueRoutes(db as any, {} as any));
+  const captureError: express.ErrorRequestHandler = (error, _req, _res, next) => { onError?.(error); next(error); };
+  app.use(captureError);
   app.use(errorHandler);
   return app;
 }
@@ -183,6 +201,8 @@ function issueUpdateWithReceipt(issue: ReturnType<typeof makeIssue>, patch: Reco
     actorRunStopId: _actorRunStopId,
     actorUserId: _actorUserId,
     blockedByIssueIds: _blockedByIssueIds,
+    privacyActor: _privacyActor,
+    privateWorkAdmission: _privateWorkAdmission,
     ...issuePatch
   } = patch;
   const updated = {
@@ -200,6 +220,8 @@ describe("issue activity event routes", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.doUnmock("../services/access.js");
+    vi.doUnmock("../services/analytical-context-authority.js");
+    vi.doUnmock("../services/authorization.js");
     vi.doUnmock("../services/activity-log.js");
     vi.doUnmock("../services/feedback.js");
     vi.doUnmock("../services/heartbeat.js");
@@ -220,6 +242,9 @@ describe("issue activity event routes", () => {
     mockIssueService.getWakeableParentAfterChildCompletion.mockResolvedValue(null);
     mockAccessService.canUser.mockResolvedValue(false);
     mockAccessService.hasPermission.mockResolvedValue(false);
+    mockAccessService.decide.mockResolvedValue({ allowed: true, explanation: "Allowed by test mock." });
+    mockCanReadIssuePrivacy.mockReset().mockResolvedValue(true);
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockFeedbackService.listIssueVotesForUser.mockResolvedValue([]);
     mockFeedbackService.saveIssueVote.mockResolvedValue({
       vote: null,
@@ -238,8 +263,22 @@ describe("issue activity event routes", () => {
         feedbackDataSharingPreference: "prompt",
       },
     });
+    mockInstanceSettingsService.getExperimental.mockResolvedValue({ enableExternalObjects: false });
     mockInstanceSettingsService.listCompanyIds.mockResolvedValue(["company-1"]);
     mockRoutineService.syncRunStatusForIssue.mockResolvedValue(undefined);
+  });
+
+  it("does not update an issue when privacy denies the actor", async () => {
+    const issue = makeIssue();
+    mockIssueService.getById.mockResolvedValue(issue);
+    mockCanReadIssuePrivacy.mockResolvedValue(false);
+
+    const response = await request(await createApp())
+      .patch(`/api/issues/${issue.id}`)
+      .send({ priority: "high" });
+
+    expect(response.status).toBe(404);
+    expect(mockIssueService.update).not.toHaveBeenCalled();
   });
 
   it("returns a field-change receipt and omits a requested no-op field", async () => {
@@ -513,11 +552,12 @@ describe("issue activity event routes", () => {
       })),
     };
 
-    const res = await request(await createApp(dbMock))
+    let routeError: unknown;
+    const res = await request(await createApp(dbMock, error => { routeError = error; }))
       .patch(`/api/issues/${issue.id}`)
       .send({ executionWorkspaceId: nextExecutionWorkspaceId });
 
-    expect(res.status).toBe(200);
+    expect(res.status, routeError instanceof Error ? routeError.stack : undefined).toBe(200);
     await vi.waitFor(() => {
       expect(mockLogActivity).toHaveBeenCalledWith(
         expect.anything(),

@@ -1,0 +1,3 @@
+# Plugin Routine source classification migration
+
+Actual Drizzle Kit 0.31.10 generated custom migration 0549 and its unchanged schema snapshot after 0548. Publication verified journal prefix, previous snapshot ID, closed source enum and exact custom SQL hash, then published the journal last under the shared test lock. Numbering and migration safety both exit zero. The original trigger now classifies an exact bound plugin operation as a Routine Run, with the existing read owners still responsible for permissions. Unknown plugin bindings are rejected. No retained historical source edges are removed or backfilled. Actual PostgreSQL plugin controls remain a separate acceptance result.

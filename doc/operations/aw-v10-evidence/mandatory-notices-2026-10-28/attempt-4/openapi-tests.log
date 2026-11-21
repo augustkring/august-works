@@ -1,0 +1,67 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents Native support/access availability and the optional grant-revocation body 64ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents the native operator case response with path-owned case ID and exact receipt 51ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents owned notification proposal review and exact Human baseline confirmation 37ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents exact human experiment protocol commands, account guards and no-store responses 41ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents V7 human review, bounded sandbox control and signed host consumption 33ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > covers every V7 action in bounded route loops 93ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents V4 governance identities, typed result authority and maintenance idempotency 41ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents personal board-only announcements and private responses 46ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents exact failed-run selection and durable accepted retry responses 141ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > serves the generated OpenAPI document 100ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > publishes the complete board contract for chat channels 42ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents bounded V5 consent, strict draft creation and canonical schedule review 42ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents native supplemental outcomes, joint Human review and execution-bound Playbook bodies 31ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents current V9 setup, image transport and retention consent without inventing effects 36ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > covers the mounted server routes exactly 115ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents V9 private human/operator admission and blocked publication without an invented success 34ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents board-only repository discovery and selection 31ms
+ × |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents mandatory Trust notices and Trust routes as native-session-only 40ms
+   → expected [ { BoardSessionAuth: [] }, …(1) ] to deeply equal [ { BoardSessionAuth: [] } ]
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents auth and reviewed response-code invariants 33ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > publishes the Claude browser-code grammar and strict setup-token response shapes 34ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents the 404 non-member gate on the Claude setup-token cancel route 31ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > heartbeat run ID OpenAPI contract > publishes the runtime UUID constraint and 400 response on all agent-router run endpoints 112ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > documents the account binding required for preference reads 30ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > documents original Native review, pending recovery and cancellation without a second grant API 34ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > documents the current-account read-only insight reference and bounded closed query 31ms
+ ✓ |@paperclipai/server| src/__tests__/openapi-routes.test.ts > documents private local observations, mandatory current-person binding and strict consent/input contracts 35ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents mandatory Trust notices and Trust routes as native-session-only
+AssertionError: expected [ { BoardSessionAuth: [] }, …(1) ] to deeply equal [ { BoardSessionAuth: [] } ]
+
+- Expected
++ Received
+
+  [
+    {
+      "BoardSessionAuth": [],
+    },
++   {
++     "BoardApiKeyAuth": [],
++   },
+  ]
+
+ ❯ src/__tests__/openapi-routes.test.ts:1102:34
+    1100|     for (const [path, method] of paths) {
+    1101|       const operation = spec.paths[path][method];
+    1102|       expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+       |                                  ^
+    1103|       expect(operation.security).not.toContainEqual({ BoardApiKeyAuth:…
+    1104|       expect(operation["x-paperclip-authorization"]).toEqual({ actor: …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 25 passed (26)
+   Start at  09:18:22
+   Duration  5.66s (transform 2.62s, setup 72ms, import 4.09s, tests 1.36s, environment 0ms)
+

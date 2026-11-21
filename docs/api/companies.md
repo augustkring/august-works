@@ -3,7 +3,7 @@ title: Companies
 summary: Company CRUD endpoints
 ---
 
-Manage companies within your Paperclip instance.
+Manage companies within your Blentera instance.
 
 ## List Companies
 
@@ -72,7 +72,7 @@ Valid image content types:
 - `image/gif`
 - `image/svg+xml`
 
-Company logo uploads use the normal Paperclip attachment size limit.
+Company logo uploads use the normal Blentera attachment size limit.
 
 Then set the company logo by PATCHing the returned `assetId` into `logoAssetId`.
 
@@ -84,6 +84,22 @@ POST /api/companies/{companyId}/archive
 
 Archives a company. Archived companies are hidden from default listings.
 
+## Delete Company
+
+```
+DELETE /api/companies/{companyId}
+{
+  "confirmName": "Acme Labs"
+}
+```
+
+Permanently erases the company and its data (Tasks, agents, projects, Memory and the rest of its records). It cannot be undone; archive the company instead to hide it while keeping its data.
+
+- Only an active owner of the company, an instance admin or the local trusted operator may delete it. Other members, viewers and agents receive `403` (`COMPANY_OWNER_REQUIRED` for non-owner members). Being the sole owner does not block deletion.
+- `confirmName` must equal the company's current name exactly; otherwise the server returns `422` (`COMPANY_DELETE_CONFIRMATION_MISMATCH`) and deletes nothing.
+- A signed-in user must have authenticated within the last 5 minutes; otherwise the server returns `403` (`recent_authentication_required`). Board API keys cannot delete a company in authenticated deployments.
+- A `company.deletion_requested` activity entry is written before the data is purged. The removal can still be refused with `409` while a run is active or protected files await erasure; nothing is deleted then.
+
 ## Company Fields
 
 | Field | Type | Description |
@@ -93,7 +109,7 @@ Archives a company. Archived companies are hidden from default listings.
 | `description` | string | Company description |
 | `status` | string | `active`, `paused`, `archived` |
 | `logoAssetId` | string | Optional asset id for the stored logo image |
-| `logoUrl` | string | Optional Paperclip asset content path for the stored logo image |
+| `logoUrl` | string | Optional Blentera asset content path for the stored logo image |
 | `budgetMonthlyCents` | number | Monthly budget limit |
 | `createdAt` | string | ISO timestamp |
 | `updatedAt` | string | ISO timestamp |

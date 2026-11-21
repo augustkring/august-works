@@ -1,0 +1,9 @@
+
+> @paperclipai/db@0.3.1 build /workspace/v10-dep-qualification/packages/db
+> pnpm run check:migrations && tsc && rm -rf dist/migrations && mkdir -p dist/migrations/meta && cp src/migrations/*.sql dist/migrations/ && cp src/migrations/meta/_journal.json dist/migrations/meta/
+
+
+> @paperclipai/db@0.3.1 check:migrations /workspace/v10-dep-qualification/packages/db
+> tsx src/check-migration-numbering.ts && tsx src/check-migration-safety.ts
+
+Migration safety check passed: 20 historical finding(s) covered by baseline (1 stale baseline id(s) ignored).

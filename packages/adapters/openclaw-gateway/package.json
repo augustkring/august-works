@@ -42,7 +42,8 @@
     "types": "./dist/index.d.ts"
   },
   "files": [
-    "dist"
+    "dist",
+    "openclaw-extension"
   ],
   "scripts": {
     "build": "tsc",
@@ -57,6 +58,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/ws": "^8.18.1",
+    "typebox": "1.4.1",
     "typescript": "^7.0.2"
   },
   "engines": {

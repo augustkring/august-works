@@ -1,0 +1,100 @@
+{
+  "head": "d8f26fed22d4768ac04fb32c08c8b0a39c68ae7d",
+  "files": {
+    ".nvmrc": {
+      "sha256": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+      "bytes": 8
+    },
+    "package.json": {
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "bytes": 14972
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "bytes": 634978
+    },
+    "server/package.json": {
+      "sha256": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "bytes": 6179
+    },
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": {
+      "sha256": "9131efbb882301e19d3a93d1966a11a8175083217e9030bffc70c02f328edf0d",
+      "bytes": 200215
+    },
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": {
+      "sha256": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+      "bytes": 27192
+    },
+    "server/src/__tests__/heartbeat-issue-liveness-escalation.test.ts": {
+      "sha256": "2d440f3f9df97ce74fd868e5cb608168ecfd42213c9d7c1bfb004952b76bad06",
+      "bytes": 40143
+    },
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": {
+      "sha256": "a90529e45012737cd3b0c4a952e5a27a49aafa9d5ec8e721a94ff82634afb98c",
+      "bytes": 568563
+    },
+    "server/src/services/execution-continuation.ts": {
+      "sha256": "f3792e52a6d1b7e518d00f84bf54fca25ef4cf605f353e0791e1d3af7c2058dc",
+      "bytes": 65082
+    },
+    "server/src/services/heartbeat.ts": {
+      "sha256": "893cb7aa50833e5fd2f8c9762ff2c2c72251d38d58c898f31b7aff6de7cfd807",
+      "bytes": 1268442
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "860654da71dd4451cb4a90ca8861eb68357694b7727231219156dc3784b422f4",
+      "bytes": 527535
+    },
+    "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts": {
+      "sha256": "9c63563c5a2456a91f7a3319cfec6ecf93c7d095bf5d7f2a9ed317079754c1f5",
+      "bytes": 19239
+    },
+    "server/src/services/native-runtime/native-attachment-remote-stage.ts": {
+      "sha256": "b8f5b2511e39d9ab4cae7b4a2d3db92cda6c4ac2392f4cbf00db62a4dd42ad1e",
+      "bytes": 24391
+    },
+    "server/src/services/native-runtime/native-execution-input.test.ts": {
+      "sha256": "56d183c427aecb7375d3f91c7da29bed41b56a18cfd6756094c8f44a67d32d3e",
+      "bytes": 130706
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "sha256": "b53a8649c800171d11dc849e0d42f7a2db03474c1a1bafc99d90e8e08e1d6be3",
+      "bytes": 128235
+    },
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": {
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+      "bytes": 14778
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "bytes": 9673
+    },
+    "server/src/services/native-runtime/native-session-executor.ts": {
+      "sha256": "ebb8d3baa809c205b30b60dfd8abedeebf5da8bd5895ef8fa3111f8f0271c6e5",
+      "bytes": 769608
+    },
+    "server/src/services/native-runtime/remote-deliverable-file.ts": {
+      "sha256": "06c96738b691779bb77dad34dd2cc1042d4971669858b3ed7cc9e6cbe1af7fd1",
+      "bytes": 8339
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": {
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "bytes": 8437
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "bytes": 12734
+    },
+    "server/src/services/runtime/control.ts": {
+      "sha256": "cad66dfa516f84a88c89df5994c6bb05b661969a32f2fa462560e8dae96114d7",
+      "bytes": 319887
+    },
+    "server/vitest.config.ts": {
+      "sha256": "1c32f3f46cb9206de3cdbb1745d43abf17bd2b5c385183675835ba928c2d31b3",
+      "bytes": 1883
+    }
+  },
+  "allRecordedSourcePinsUnchanged": true,
+  "allQualificationInputPinsUnchanged": true,
+  "changedRecordedPaths": []
+}

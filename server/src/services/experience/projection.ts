@@ -13,7 +13,7 @@ export interface ExperienceReader {
     Partial<Record<ExperienceSection, ExperienceCard[]>> & {
       coverage?: {
         state: "partial";
-        reason: "more_items_available" | "source_stale";
+        reason: "more_items_available" | "source_stale" | "source_unavailable" | "overflow";
       };
     }
   >;

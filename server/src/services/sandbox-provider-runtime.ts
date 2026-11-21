@@ -154,6 +154,10 @@ class FakeSandboxProvider implements SandboxProvider {
 
   async acquireLease(input: AcquireSandboxLeaseInput): Promise<SandboxLeaseHandle> {
     assertProviderConfig<FakeSandboxEnvironmentConfig>(this.provider, input.config);
+    const requestedExpiry = input.requestedExpiresAt ? Date.parse(input.requestedExpiresAt) : Number.NaN;
+    if (input.requestedExpiresAt && (!Number.isFinite(requestedExpiry) || requestedExpiry <= Date.now())) {
+      throw new Error("Fake sandbox requires a future provider-attested lease deadline.");
+    }
     const providerLeaseId = input.config.reuseLease && this.supportsReusableLeases
       ? `sandbox://fake/${input.environmentId}/${input.executionWorkspaceId ?? "workspace"}/${input.agentId ?? "agent"}`
       : `sandbox://fake/${input.heartbeatRunId}/${randomUUID()}`;
@@ -165,6 +169,9 @@ class FakeSandboxProvider implements SandboxProvider {
         image: input.config.image,
         reuseLease: input.config.reuseLease,
       },
+      ...(Number.isFinite(requestedExpiry)
+        ? { expiresAt: new Date(requestedExpiry).toISOString() }
+        : {}),
     };
   }
 

@@ -1,0 +1,150 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-portability.integration.test.ts (3 tests | 1 failed | 2 skipped) 70379ms
+     × retains portability with rollout off and excludes source-erased payloads 31151ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-portability.integration.test.ts > native owner V7 portability > retains portability with rollout off and excludes source-erased payloads
+AssertionError: expected '{\n  "schema": "memory_export.v1",\n …' not to contain 'a6b7acb1-45a7-4b20-bc4d-1112dfc35b76'
+
+- Expected
++ Received
+
+- a6b7acb1-45a7-4b20-bc4d-1112dfc35b76
++ {
++   "schema": "memory_export.v1",
++   "companyId": "7c4ef0c1-82e4-41fb-98d3-9c3d4008b109",
++   "exportedAt": "2026-10-26T16:11:25.253Z",
++   "records": [
++     {
++       "id": "20ab9368-d419-4ddc-82d5-be939f6c8863",
++       "payloadSourceProtocolVersion": 1,
++       "payloadSourceSnapshot": {
++         "owner": {
++           "id": "20ab9368-d419-4ddc-82d5-be939f6c8863",
++           "kind": "memory_record",
++           "companyId": "7c4ef0c1-82e4-41fb-98d3-9c3d4008b109",
++           "contentHash": "a4e8b5ea00c77653407234134c554737de4f59bd598de6863e5ff5c38d233f4c"
++         },
++         "digest": "74a98f26b61cff4c0008cb9bb2ca7d7117b5267f8a8378098b29869832439384",
++         "inputs": [
++           {
++             "kind": "task",
++             "issueId": "46574e8c-8e3d-4e2c-8451-1289ea95ae47",
++             "contentHash": "a495436f6f7a6cc912697ddd45737d8015cfaa289a9ce3390d9d3384b74d96cf",
++             "sourceVersion": "2026-10-26T16:10:19.565Z"
++           }
++         ],
++         "policy": {
++           "runIds": [],
++           "issueIds": [
++             "46574e8c-8e3d-4e2c-8451-1289ea95ae47"
++           ],
++           "memoryIds": [],
++           "projectIds": [],
++           "foundationRevisionIds": []
++         },
++         "version": 1
++       },
++       "payloadSourceSnapshotInvalidated": false,
++       "companyId": "7c4ef0c1-82e4-41fb-98d3-9c3d4008b109",
++       "bindingId": "f2938a59-ad88-4a17-88df-3581e66f3d50",
++       "providerKey": "local",
++       "memoryType": "outcome",
++       "scopeType": "company",
++       "scopeId": null,
++       "subjectType": null,
++       "subjectId": null,
++       "ownerAgentId": null,
++       "title": "Portable shared reviewed outcome 2",
++       "content": "Portable shared reviewed outcome 2",
++       "summary": "A current Human reviewed portable Task outcome",
++       "reviewState": "accepted",
++       "verificationState": "human_verified",
++       "sensitivityLabel": "internal",
++       "importance": 50,
++       "confidenceScore": 0.8,
++       "validFrom": null,
++       "validUntil": null,
++       "observedAt": "2026-10-26T16:10:20.900Z",
++       "retentionPolicy": "standard",
++       "expiresAt": null,
++       "retentionState": "active",
++       "supersedesRecordId": null,
++       "supersededByRecordId": null,
++       "revokedAt": null,
++       "revokedByActorType": null,
++       "revokedByActorId": null,
++       "revocationReason": null,
++       "createdByActorType": "user",
++       "createdByActorId": "user-42fe3912-29f3-43dc-863a-4b142fcce2f6",
++       "createdByOperationId": "c1f31dcd-a920-4c8d-9b5b-36f91d1232aa",
++       "sourceProvenanceQualified": true,
++       "privateOwnerUserId": null,
++       "sourceRunIds": [],
++       "sourceIssueIds": [
++         "46574e8c-8e3d-4e2c-8451-1289ea95ae47"
++       ],
++       "sourceProjectIds": [],
++       "sourceMemoryIds": [],
++       "sourceFoundationRevisionIds": [],
++       "metadata": {
++         "memoryResolution": {
++           "kind": "new",
++           "version": "v1",
++           "reasonCode": "no_deterministic_claim_identity",
++           "resolvedAt": "2026-10-26T16:10:20.909Z",
++           "targetRecordId": null,
++           "relatedRecordIds": [
++             "a6b7acb1-45a7-4b20-bc4d-1112dfc35b76"
++           ],
++           "novelEvidenceCount": 0
++         }
++       },
++       "createdAt": "2026-10-26T16:10:21.086Z",
++       "updatedAt": "2026-10-26T16:10:22.015Z",
++       "deletedAt": null
++     }
++   ],
++   "evidence": [
++     {
++       "id": "500768e1-d48a-4374-8682-cfbc63e0a9bd",
++       "companyId": "7c4ef0c1-82e4-41fb-98d3-9c3d4008b109",
++       "memoryRecordId": "20ab9368-d419-4ddc-82d5-be939f6c8863",
++       "sourceClass": "task",
++       "sourceProvider": "august_works_tasks",
++       "sourceType": "issue",
++       "sourceRef": "issue://46574e8c-8e3d-4e2c-8451-1289ea95ae47",
++       "sourceVersion": "2026-10-26T16:10:19.565Z",
++       "sourceUpdatedAt": "2026-10-26T16:10:19.565Z",
++       "observedAt": "2026-10-26T16:10:20.900Z",
++       "excerptHash": "4ccc37b1fa661e97e77bae1f44a8f89f908e8de96ba839c22d3dc4ac9a91304a",
++       "citationJson": {
++         "label": "Reviewed outcome"
++       },
++       "trustLevel": "high",
++       "supportsOrContradicts": "supports",
++       "createdAt": "2026-10-26T16:10:20.901Z"
++     }
++   ]
++ }
++
+
+ ❯ src/__tests__/v7-portability.integration.test.ts:187:54
+    185|       );
+    186|       const state = await exportCompanyStateV7(db, f.actor, f.home);
+    187|       expect(state.files["memory/records.json"]).not.toContain(firstMe…
+       |                                                      ^
+    188|       expect(state.files["memory/observations.json"]).not.toContain(
+    189|         "Portable observation",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 skipped (3)
+   Start at  16:09:57
+   Duration  87.70s (transform 12.18s, setup 95ms, import 17.06s, tests 70.38s, environment 0ms)
+

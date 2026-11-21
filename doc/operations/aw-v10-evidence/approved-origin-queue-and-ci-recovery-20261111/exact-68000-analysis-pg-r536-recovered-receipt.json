@@ -1,0 +1,21 @@
+{
+  "status": "recovered child test pass from completed Vitest log; normal outer harness receipt absent after environment restart",
+  "vitestTestFilesPassed": 1,
+  "vitestTestsPassed": 1,
+  "vitestUnselectedTests": 15,
+  "vitestDurationSeconds": 144.79,
+  "vitestTestSeconds": 128.13,
+  "outerHarnessExit": null,
+  "outerHarnessResourceTelemetry": "not recovered; not inferred",
+  "sourceManifest": "exact-68000-analysis-pg-r536-source-manifest.json",
+  "sourceManifestFilesUnchangedAtRecovery": true,
+  "sourceHeadUnchanged": true,
+  "captureAndReadMs": 39923,
+  "readMs": 17017,
+  "units": 4000,
+  "metrics": 17,
+  "outcomes": 68000,
+  "assertions": "full analysis, exact outcome count, replay, hidden-source denial and complete analytical erasure assertions reached the passing Vitest summary",
+  "scope": "actual embedded PostgreSQL software fixture; no SDK/Host/provider qualification",
+  "restartBoundary": "Outer telemetry, process-exit observation and normal cleanup receipt were not saved; no values fabricated."
+}

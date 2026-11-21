@@ -1,0 +1,5 @@
+04bb490e4bb083f1f823fce49eb282dfa7e859ae6b361bb3135434e6d8cef665  packages/db/src/migrations/0516_memory_payload_binding_order.sql
+d09bc9833c1e7ac1470693aad6898745a93956bb6ef85ba5c788c962282022f7  packages/db/src/migrations/meta/_journal.json
+9f8603bf47cbbc459eb82ffd79d4a3ebf67544ebe9acdec3d55fb7178c00140c  packages/db/src/migrations/meta/0516_snapshot.json
+9125a73554e99ff7973255cee8e17cca5d819c1dae73c22e45deef06f6d59838  server/src/services/memory/memory-privacy.ts
+bffa4a253c5446e5ad5894c5f35e162dabdd35350fb15e6571add20871c70848  server/src/__tests__/native-payload-source-binding.integration.test.ts

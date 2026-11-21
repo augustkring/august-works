@@ -56,6 +56,14 @@ const nativeSessionExecutor = await readFile(
   "utf8",
 );
 
+const nativeArtifactPreparation = await readFile(
+  new URL(
+    "../../../server/src/services/native-runtime/native-artifact-preparation.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
+
 test("the runner pins every qualified ACPX production dependency", () => {
   assert.equal(runnerPackage.dependencies["@openai/codex"], "0.156.0");
   assert.equal(runnerPackage.dependencies["@anthropic-ai/claude-agent-sdk"], undefined);
@@ -93,11 +101,23 @@ test("the patched Codex ACP executable digest stays aligned across launch bounda
     new RegExp(`acpxProfileDigests:[\\s\\S]*?codex:[\\s\\S]*?${digest}`),
   );
   assert.match(
-    nativeSessionExecutor,
+    nativeArtifactPreparation,
     new RegExp(
-      `REMOTE_PROVIDER_PACK_PROFILE_DIGESTS[\\s\\S]*?codex:[\\s\\S]*?${digest}`,
+      `export const REMOTE_PROVIDER_PACK_PROFILE_DIGESTS[\\s\\S]*?codex:[\\s\\S]*?${digest}`,
     ),
   );
+  assert.match(
+    nativeSessionExecutor,
+    /import \{[^}]*\bREMOTE_PROVIDER_PACK_PROFILE_DIGESTS\b[^}]*\} from "\.\/native-artifact-preparation\.js"/,
+    "the executor imports the reviewed artifact owner's digest vector",
+  );
+  for (const source of [nativeArtifactPreparation, nativeSessionExecutor]) {
+    assert.match(
+      source,
+      /canonicalJson\(payload\.acpxProfileDigests\)\s*!==\s*canonicalJson\(REMOTE_PROVIDER_PACK_PROFILE_DIGESTS\)/,
+      "both preparation and execution reject a manifest with drifted ACP digests",
+    );
+  }
 });
 
 test("the package exposes only the reviewed runner CLI binaries", () => {

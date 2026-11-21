@@ -1,0 +1,13 @@
+{
+  "sourceHead": "8f10748ef5f78ecd4d87283a4de5dc1265a1f011",
+  "result": {
+    "passed": 9,
+    "failed": 0,
+    "exit": 0
+  },
+  "sourceHashes": {
+    "server/src/__tests__/v9-project-draft-receipt-routes.test.ts": "4dbaead89e57846169e82e43e0339bc683f0a1366529f6de08757add358c1bb6",
+    "server/src/routes/projects.ts": "5638d81454f9f7bee6789803ee06eb2c6968a5fde2e0e4dd30771382b580e28b"
+  },
+  "fullPrivateSnapshotManifestSha256": "bc0218ca6f17937a6d163d9605882f6b72a8ac2a327e07e9ffbb9d83036ae0b6"
+}

@@ -1,0 +1,65 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "3d3fb473623cebf2b819d3fb9baabe6e75a9835f",
+  "meaning": "Original native mutation input/result receipt nowbinds exact acknowledged backend dispatch identity in the same transaction as effect; unknown remainsnull, replaynotrebound, no Sourcequalification. Fullauthority33PASS.",
+  "logs": [
+    {
+      "name": "native-mutation-receipt-dispatch-attempt1",
+      "exitCode": 1,
+      "rawSha256": "0caa44dca3ab2e733dcd6b3609d16d4bbf1df7b95a3f3874cdbde3a186ea5678",
+      "sanitizedSha256": "0caa44dca3ab2e733dcd6b3609d16d4bbf1df7b95a3f3874cdbde3a186ea5678",
+      "archiveSha256": "b0839578cfca733dd5a57a6e2e684dc0416565e9cf9c4a173dc45d0d55cbc8e8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 4 passed | 26 skipped (31)",
+        "Duration  21.19s (transform 11.14s, setup 85ms, import 15.17s, tests 5.79s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-mutation-receipt-dispatch-ambiguity",
+      "exitCode": 0,
+      "rawSha256": "0ec5cc593710fb7e597cd3dd66ab51854f763c6dbe682e0ef1f51e87873301d2",
+      "sanitizedSha256": "0ec5cc593710fb7e597cd3dd66ab51854f763c6dbe682e0ef1f51e87873301d2",
+      "archiveSha256": "b70ff344f4f7883cd1d5a32fd82a27a9de75a703f397a562d26a3066348ae8eb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed | 26 skipped (33)",
+        "Duration  20.02s (transform 9.96s, setup 81ms, import 13.61s, tests 6.18s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-mutation-receipt-authority-full",
+      "exitCode": 0,
+      "rawSha256": "80d0574f42cc8c84ee3cef829625772cd8e719c539d9c89040b51b5368e38cdb",
+      "sanitizedSha256": "80d0574f42cc8c84ee3cef829625772cd8e719c539d9c89040b51b5368e38cdb",
+      "archiveSha256": "267fdf1fd9bac2576e4d79454993dff1befc088ae872397a04a2e9a6c025ad19",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  33 passed (33)",
+        "Duration  28.95s (transform 10.42s, setup 69ms, import 14.37s, tests 14.37s, environment 0ms)"
+      ]
+    }
+  ]
+}

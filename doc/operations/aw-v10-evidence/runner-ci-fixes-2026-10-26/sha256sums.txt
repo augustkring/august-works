@@ -1,0 +1,8 @@
+a38480f62b6062f6d9a16c40dae8416355dd4ee1e7702ebc4f2369797712c0a0  packages/paperclip-runner/src/drivers/acpx/installation-integrity.ts
+eec43546f4d1b51e8f5451df88b71ef39e7ffe304d089b7ae311bdc9486c7315  packages/paperclip-runner/src/drivers/acpx/installation-integrity.test.ts
+bd697349e0ab4c4b0c1ee836148ac788e93d97507254f5edf71247beb742b23e  packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts
+c7bc6d8ea998b0fda5db42f621c61ec9013a5d892a400bceae2c1c5fbf659a52  server/src/__tests__/helpers/runner-api-server.ts
+bb90da6104452ac1bcb97cc3fbc67ed034e7fc3808ff9028685626405ac67d69  server/src/services/native-runtime/runner-api.integration.test.ts
+4f3e7ecb1af6ea2dd9d11fc8a3fec794f014eab9226e2aedf5ded2aa5e515c4f  doc/operations/aw-v10-evidence/runner-ci-fixes-2026-10-26/runner-api-integration-direct.log
+45cfb87db63b76e8ca545a6234931331c0fed5bade70867314633a1d4b6a7888  doc/operations/aw-v10-evidence/runner-ci-fixes-2026-10-26/runner-api-integration-final.log
+4c9a1a78884fb09ccf6fbe63c20c431549b0e95ebeaf1cc15a9abd35932e55b8  doc/operations/aw-v10-evidence/runner-ci-fixes-2026-10-26/runner-pinned-and-opencode-direct.log

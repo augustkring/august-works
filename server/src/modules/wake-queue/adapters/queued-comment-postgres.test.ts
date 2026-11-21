@@ -117,6 +117,7 @@ describeEmbeddedPostgres("queued-comment postgres adapter", () => {
     agentId: string;
     issueId: string;
     commentIds: string[];
+    executionWait?: { reason: string; message: string };
   }): Promise<string> {
     const id = randomUUID();
     await db.insert(agentWakeupRequests).values({
@@ -130,6 +131,7 @@ describeEmbeddedPostgres("queued-comment postgres adapter", () => {
       payload: {
         issueId: input.issueId,
         _paperclipWakeContext: { wakeCommentIds: input.commentIds },
+        ...(input.executionWait ? { executionWait: input.executionWait } : {}),
       },
     });
     return id;
@@ -248,6 +250,81 @@ describeEmbeddedPostgres("queued-comment postgres adapter", () => {
     expect((queue.entries[0]!.comment as { body: string }).body).toBe("edited body");
     const commentRow = (await db.select().from(issueComments).where(eq(issueComments.id, commentId)))[0];
     expect(commentRow?.body).toBe("edited body");
+  });
+
+  it("preserves a persisted task-hold wait through queue edits and clears it when the wake is queued", async () => {
+    const companyId = await seedCompany();
+    const agentId = await seedAgent({ companyId });
+    const issueId = await seedIssue({ companyId, assigneeAgentId: agentId });
+    const commentId = await seedComment({ companyId, issueId, authorUserId: "user-1" });
+    const executionWait = {
+      reason: "issue_tree_hold_active",
+      message: "This task is paused. Resume it to send your saved message.",
+    };
+    const wakeId = await seedDeferredWake({ companyId, agentId, issueId, commentIds: [commentId], executionWait });
+    const issueLock = createQueuedCommentIssueLockWriter(db, noopDeps);
+    const actor = { actorType: "user" as const, actorId: "user-1", agentId: null, runId: null, agentApiKeyId: null };
+    const issue = { id: issueId, companyId, assigneeAgentId: agentId, executionRunId: null };
+
+    const deferredQueue = await issueLock.withLockedQueue(
+      { issue, actor, queueId: wakeId },
+      async (locked, transaction) => {
+        expect(locked.state).toBe("deferred");
+        const updated = await transaction.updateCommentBody({
+          issueId,
+          commentId,
+          body: "edited while paused",
+          updatedAt: new Date(),
+        });
+        expect(updated).toBe(true);
+        return transaction.buildQueueSnapshot({
+          issue,
+          actor,
+          wake: locked.wake,
+          state: locked.state,
+          queueRun: locked.queueRun,
+          activeRun: locked.activeRun,
+        });
+      },
+    );
+    expect(deferredQueue.executionWait).toEqual(executionWait);
+    expect((deferredQueue.entries[0]!.comment as { body: string }).body).toBe("edited while paused");
+
+    const queueRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: queueRunId,
+      companyId,
+      agentId,
+      issueId,
+      invocationSource: "on_demand",
+      status: "queued",
+      runtimeMode: "legacy",
+      contextSnapshot: {},
+      wakeupRequestId: wakeId,
+    });
+    const [promotedWake] = await db.update(agentWakeupRequests)
+      .set({ status: "queued", runId: queueRunId })
+      .where(eq(agentWakeupRequests.id, wakeId))
+      .returning();
+    const queuedSnapshot = await issueLock.withLockedQueue(
+      { issue, actor, queueId: wakeId },
+      async (_locked, transaction) => transaction.buildQueueSnapshot({
+        issue,
+        actor,
+        wake: {
+          id: promotedWake!.id,
+          agentId: promotedWake!.agentId,
+          status: promotedWake!.status,
+          runId: promotedWake!.runId,
+          payload: promotedWake!.payload as Record<string, unknown>,
+        },
+        state: "queued",
+        queueRun: { id: queueRunId, status: "queued", runtimeMode: "legacy", contextSnapshot: {} },
+        activeRun: null,
+      }),
+    );
+    expect(queuedSnapshot.state).toBe("queued");
+    expect(queuedSnapshot.executionWait).toBeUndefined();
   });
 
   it("rolls back an already-applied comment edit when its own activity insert fails", async () => {

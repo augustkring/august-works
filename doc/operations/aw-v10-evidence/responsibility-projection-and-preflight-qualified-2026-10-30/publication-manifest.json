@@ -1,0 +1,47 @@
+[
+  {
+    "path": "server/src/services/experience/service.ts",
+    "action": "modified",
+    "sha256": "1097d875101c74ac9a779f0a32614371ffeb2a22d66df0f10d45d2ac01bf67e1"
+  },
+  {
+    "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+    "action": "modified",
+    "sha256": "6e0e28a1a829654402eb26fa39fdf25fd71c59d1bd92e70f59d86fa5ffaa720a"
+  },
+  {
+    "path": "server/src/services/experience/routine-responsibility-attention.ts",
+    "action": "delete_after_review",
+    "sha256": null
+  },
+  {
+    "path": "server/src/__tests__/routine-responsibility-attention.integration.test.ts",
+    "action": "delete_after_review",
+    "sha256": null
+  },
+  {
+    "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+    "action": "delete_after_review",
+    "sha256": null
+  },
+  {
+    "path": "packages/shared/src/experience.ts",
+    "action": "unchanged_required_closure",
+    "sha256": "b99030a6e1337bb28d64e560f72824acec17de5ecbb72aa76e73066ea479a5d2"
+  },
+  {
+    "path": "server/src/services/experience/projection.ts",
+    "action": "unchanged_required_closure",
+    "sha256": "5bcc62901a2257382d3f2870ccd9acf43b32933bd1d2c274b5a0925b5cf7f255"
+  },
+  {
+    "path": "ui/src/pages/CompanyAccess.tsx",
+    "action": "modified",
+    "sha256": "cb8e6e85bfa94a7ed88fca1b3d6881c5fee77ad044f84845ef78f59fdfe8d553"
+  },
+  {
+    "path": "ui/src/pages/CompanyAccess.test.tsx",
+    "action": "modified",
+    "sha256": "e159d8cfb3f3a34dc1749760a16129323349e95c6413999a4c4f3f09bf6e911b"
+  }
+]

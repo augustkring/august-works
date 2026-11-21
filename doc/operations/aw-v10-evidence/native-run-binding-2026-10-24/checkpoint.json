@@ -1,0 +1,57 @@
+{
+  "parentCommit": "5bcac1cb1240cd84437a9d0b1283f80680091d39",
+  "requirements": [
+    "UP-03",
+    "UP-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "parentAmbiguousRunControl": {
+      "exit": 1,
+      "failed": 1,
+      "unselected": 6
+    },
+    "firstFixedNativeCases": {
+      "exit": 0,
+      "passed": 123,
+      "suites": 5
+    },
+    "finalNativeCases": {
+      "exit": 0,
+      "passed": 124,
+      "suites": 5
+    },
+    "serverCompiler": {
+      "exit": 0
+    },
+    "openSourceRegressions": {
+      "exit": 1,
+      "failed": 6,
+      "passed": 5,
+      "suites": 3,
+      "status": "open"
+    },
+    "initialTypedFixtureRun": {
+      "exit": 1,
+      "failed": 5,
+      "passed": 2,
+      "fixtureConstraintFailures": 4,
+      "genuineRoutineOriginFailure": 1
+    }
+  },
+  "observations": [
+    "One SQL helper now checks actual persisted native run Task identities for direct Run and recursive Task/Project source reads before list/count projection. Company runs have no Task anchors/keys. Issue runs require exactly one actual UUID identity; malformed/non-object contexts, missing UUIDs, display-key-only unknown history and conflicting identities are withheld.",
+    "UUID equality uses the native UUID type and guarded casts, so valid case-equivalent context references do not create a false conflict. The final real PG test exercises both direct Run and derived Task access for this valid case, as well as denial of actual conflicting stored references.",
+    "The parent production control reproduced direct ambiguous-Run exposure. Contrary to an initial source-reading assumption, the old direct method collected a Set but did not enforce one unique Task. Its separate JS checks are replaced by the common SQL condition; current resource/action policy and original ACL/source traversal/bounds remain authoritative.",
+    "Legacy positive Project fixtures now use actual local-trusted projectRoutes admission rather than inserting an unqualified Project. Valid native/legacy/TaskId/TaskKey-with-pointer runs store consistent actual Task UUID bindings; separate negative rows retain ambiguous and TaskKey-only inputs. This reconciles the three earlier route cases without loosening provenance or setting a fixture qualification flag.",
+    "Workflow typed-origin fixtures originally violated a native published revision backref. They now retain the original DB constraints and use the existing transactional forward-pointer pattern. The revised native fixture reaches genuine domain failures: valid typed Workflow and retained-revision Routine origins seek heartbeat rows, while a same-ID unrelated heartbeat can substitute for a missing WorkflowRun.",
+    "The parent control source was restored exactly; its historical test was subsequently strengthened with stored-row checks, soft assertions for both readers, and the equivalent-UUID positive. Final pass qualification is pinned to the current source files.",
+    "The six-failure open-source gate used the preceding fixed authorization source, whose SHA256 is recorded in parent-control-sources.json; the only subsequent production change normalizes equivalent UUID spellings. Its fixtures use ordinary canonical UUIDs, and no rerun or final-source green claim is made for these known failures."
+  ],
+  "limits": [
+    "This narrows native run identity reads only. It grants no company action, Human/Agent permission, private-work admission or complete payload provenance.",
+    "Three private-Memory/temporal failures and three typed Workflow/Routine origin failures remain open. Typed kinds need coordinated native writer lookup, exact revision identity, retained-source trigger/schema and canonical before-limit reader policy; UUID existence/fallback cannot replace that work.",
+    "Complete Native input receipts, all payload constructors/read families, portability/Context/readiness, mixed deployments and latest full workspace checks remain unqualified.",
+    "Native PG/local-trusted fixtures do not qualify SaaS identity, physical hosts/providers/authenticators or all browser journeys. No full V10/release/PR acceptance, PR, merge or deployment occurred."
+  ]
+}

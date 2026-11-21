@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-28T10:23:36.174701+00:00",
+  "repository": "https://github.com/paperclipai/paperclip",
+  "upstreamCommit": "5623304586c04092d2a44c25b3850301a909989d",
+  "upstreamTree": "ad33c1e247992f068b49236787cf26eb64117aae",
+  "sourceAvailabilityReceipt": "doc/operations/aw-v10-evidence/upstream-intake-2026-10-28/source-availability-update.json",
+  "method": "Read path-specific source owners using git show <pinned-commit>:<path> from the isolated shallow bare repository. Captured only paths reviewed for the listed P0 decisions.",
+  "boundary": "The older sourceShas in this receipt are not objects in the shallow bare repository; the reviewed code is the later pinned snapshot. Historical missing-blob counts in inventory.json are preserved as historical measurements. Security dispositions remain fast-path review only; no change is auto-admitted and no regression suite is claimed to have run here.",
+  "reviews": [
+    {
+      "prs": [
+        "#10633",
+        "#14717",
+        "#14718"
+      ],
+      "sourceShas": [
+        "3a726e676fe47f4725d03037e823d7f057760708",
+        "b67db12d90c1bd191f99975e35cc5c84137858e4",
+        "b31558064093564fb937cf046596d1d497f5be27"
+      ],
+      "disposition": "P0 security_fast_path; the source register says private-task storage, service enforcement, and UI changes are required as one adapted behavior set.",
+      "observedPinnedBehavior": "The pinned authorization owner exposes issue/project private-read predicates, explicit-grant lookups, query pushdown, and workspace/approval privacy conditions; the run privacy owner denies issue-scoped run access without a same-company readable issue; migrations establish grants and bind draft assets; share UI distinguishes implicit principals and revocable grants. This is source observation only, not parity/admission.",
+      "paths": [
+        "server/src/services/authorization.ts",
+        "server/src/services/heartbeat-run-privacy.ts",
+        "server/src/routes/issues.ts",
+        "packages/db/src/migrations/0313_private_task_access.sql",
+        "packages/db/src/migrations/0314_private_task_draft_assets.sql",
+        "ui/src/components/IssueShareSheet.tsx",
+        "ui/src/lib/issuePrivacy.ts",
+        "server/src/__tests__/issue-access-grants-routes.test.ts"
+      ],
+      "reviewedPinnedPaths": [
+        {
+          "path": "server/src/services/authorization.ts",
+          "mode": "100644",
+          "blobSha": "315d70d0f687486753b601716bbc5a07a5bb436f",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/services/authorization.ts"
+        },
+        {
+          "path": "server/src/services/heartbeat-run-privacy.ts",
+          "mode": "100644",
+          "blobSha": "0564f93c427eda14baa412ccc77fab0cfd5094a9",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/services/heartbeat-run-privacy.ts"
+        },
+        {
+          "path": "server/src/routes/issues.ts",
+          "mode": "100644",
+          "blobSha": "6852b422809be7ebf2c717d00af9f21d66227400",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/routes/issues.ts"
+        },
+        {
+          "path": "packages/db/src/migrations/0313_private_task_access.sql",
+          "mode": "100644",
+          "blobSha": "480a338740081e9d252cb9c12a83b771e02f7b1b",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/packages/db/src/migrations/0313_private_task_access.sql"
+        },
+        {
+          "path": "packages/db/src/migrations/0314_private_task_draft_assets.sql",
+          "mode": "100644",
+          "blobSha": "a7591cf72f907ccf0b783e9d4dff9164ed4fcc74",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/packages/db/src/migrations/0314_private_task_draft_assets.sql"
+        },
+        {
+          "path": "ui/src/components/IssueShareSheet.tsx",
+          "mode": "100644",
+          "blobSha": "c2269bc397b009a151295e98d78e5b7f834be837",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/ui/src/components/IssueShareSheet.tsx"
+        },
+        {
+          "path": "ui/src/lib/issuePrivacy.ts",
+          "mode": "100644",
+          "blobSha": "649b95c8fca56665d3465d96a749e4fa714cfaf5",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/ui/src/lib/issuePrivacy.ts"
+        },
+        {
+          "path": "server/src/__tests__/issue-access-grants-routes.test.ts",
+          "mode": "100644",
+          "blobSha": "f89dc4f0af6d4705704254fafb536ca27ebeff19",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/__tests__/issue-access-grants-routes.test.ts"
+        }
+      ],
+      "evidenceBoundary": "Read from exact upstream snapshot commit/tree; source observations do not prove fork parity, regression execution, deployment, automatic admission, or release acceptance."
+    },
+    {
+      "prs": [
+        "#13183"
+      ],
+      "sourceShas": [
+        "514d8738cfa66f5ce5bb07d196a4c7412c0a42b8"
+      ],
+      "disposition": "P0 security_fast_path; preserve a JWT run-mismatch audit even when an untrusted claimed run ID has no row/FK target.",
+      "observedPinnedBehavior": "Authentication tests run-existence before writing the activity-log run FK, while retaining the claim in audit entity/details.",
+      "paths": [
+        "server/src/middleware/auth.ts",
+        "server/src/__tests__/agent-auth-middleware.test.ts"
+      ],
+      "reviewedPinnedPaths": [
+        {
+          "path": "server/src/middleware/auth.ts",
+          "mode": "100644",
+          "blobSha": "fba7462aa1e9c8699c39f3938e17306ee0bf668d",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/middleware/auth.ts"
+        },
+        {
+          "path": "server/src/__tests__/agent-auth-middleware.test.ts",
+          "mode": "100644",
+          "blobSha": "087846195c84a34f62f62499607c4d605117f1f4",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/__tests__/agent-auth-middleware.test.ts"
+        }
+      ],
+      "evidenceBoundary": "Read from exact upstream snapshot commit/tree; source observations do not prove fork parity, regression execution, deployment, automatic admission, or release acceptance."
+    },
+    {
+      "prs": [
+        "#14413"
+      ],
+      "sourceShas": [
+        "6f40e23536ad9f80c6379543acc22871380fdc25"
+      ],
+      "disposition": "P0 security_fast_path; cloud credentials and signed assertions must be redacted from successful and failed request logs.",
+      "observedPinnedBehavior": "The pinned logger redacts tenant token, cloud session ID, runtime identity, control, and inspection headers; focused logger tests cover 200/403/500 and canary absence.",
+      "paths": [
+        "server/src/middleware/http-log-redaction.ts",
+        "server/src/__tests__/http-log-redaction.test.ts"
+      ],
+      "reviewedPinnedPaths": [
+        {
+          "path": "server/src/middleware/http-log-redaction.ts",
+          "mode": "100644",
+          "blobSha": "21acd2a633fe251d74608282e4abb423e370570e",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/middleware/http-log-redaction.ts"
+        },
+        {
+          "path": "server/src/__tests__/http-log-redaction.test.ts",
+          "mode": "100644",
+          "blobSha": "edefe3fac820520a0321b9e220115d3c18a14b24",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/__tests__/http-log-redaction.test.ts"
+        }
+      ],
+      "evidenceBoundary": "Read from exact upstream snapshot commit/tree; source observations do not prove fork parity, regression execution, deployment, automatic admission, or release acceptance."
+    },
+    {
+      "prs": [
+        "#14773"
+      ],
+      "sourceShas": [
+        "98d8a6ccac82d1605ac10dcea17f351c385814e5"
+      ],
+      "disposition": "P0 security_fast_path; ambiguous disconnects cannot be automatically retried by the shared database client.",
+      "observedPinnedBehavior": "The pinned client passes the real postgres connection to Drizzle without the generic retry wrapper; the dedicated disconnect test models a statement effect reaching the peer before the socket closes.",
+      "paths": [
+        "packages/db/src/client.ts",
+        "packages/db/src/client-disconnect-replay.test.ts"
+      ],
+      "reviewedPinnedPaths": [
+        {
+          "path": "packages/db/src/client.ts",
+          "mode": "100644",
+          "blobSha": "1f4a9257a39c36887da9d5daf567d0a0d9519484",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/packages/db/src/client.ts"
+        },
+        {
+          "path": "packages/db/src/client-disconnect-replay.test.ts",
+          "mode": "100644",
+          "blobSha": "e03c22146d6236c0a72bf5a361bc5e7910136d92",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/packages/db/src/client-disconnect-replay.test.ts"
+        }
+      ],
+      "evidenceBoundary": "Read from exact upstream snapshot commit/tree; source observations do not prove fork parity, regression execution, deployment, automatic admission, or release acceptance."
+    },
+    {
+      "prs": [
+        "#16482"
+      ],
+      "sourceShas": [
+        "2befcd9a0a087ef82506e1649140dd307b90e96a"
+      ],
+      "disposition": "P0 security_fast_path; adapt applicable CLI approval, descriptor, and native verification safeguards independently of Muse.",
+      "observedPinnedBehavior": "Pinned source adds challenge polling expiry validation and 429 Retry-After handling, no-store/referrer policy and rate limits for CLI challenge endpoints, plus company/admin scope checks in approval.",
+      "paths": [
+        "cli/src/client/board-auth.ts",
+        "server/src/routes/access.ts",
+        "server/src/services/board-auth.ts",
+        "server/src/__tests__/cli-auth-routes.test.ts",
+        "cli/src/__tests__/board-auth.test.ts"
+      ],
+      "reviewedPinnedPaths": [
+        {
+          "path": "cli/src/client/board-auth.ts",
+          "mode": "100644",
+          "blobSha": "12650763548252113a1ea2e190f3d806e5b6a72e",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/cli/src/client/board-auth.ts"
+        },
+        {
+          "path": "server/src/routes/access.ts",
+          "mode": "100644",
+          "blobSha": "526bd1a3b42c2aee03b2fd8f04d41536afb0d450",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/routes/access.ts"
+        },
+        {
+          "path": "server/src/services/board-auth.ts",
+          "mode": "100644",
+          "blobSha": "8ee2ad93c4a948000d8bbe64c9692c4f17df4d35",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/services/board-auth.ts"
+        },
+        {
+          "path": "server/src/__tests__/cli-auth-routes.test.ts",
+          "mode": "100644",
+          "blobSha": "c60cf770d06986c081daf4c01de897b567a1ebf3",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/__tests__/cli-auth-routes.test.ts"
+        },
+        {
+          "path": "cli/src/__tests__/board-auth.test.ts",
+          "mode": "100644",
+          "blobSha": "d30db701f747bddab84a92d2754b756579c6bc3e",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/cli/src/__tests__/board-auth.test.ts"
+        }
+      ],
+      "evidenceBoundary": "Read from exact upstream snapshot commit/tree; source observations do not prove fork parity, regression execution, deployment, automatic admission, or release acceptance."
+    },
+    {
+      "prs": [
+        "#16577"
+      ],
+      "sourceShas": [
+        "4de6335c3bba6de631a469fddac6bc511f890aa7"
+      ],
+      "disposition": "P0 security_fast_path; trim saved run JSON in agent authentication while preserving exact run/company/agent identity, fresh cancellation state, and denial behavior.",
+      "observedPinnedBehavior": "The pinned authentication projection selects only identity fields, cancellation state and conversation flag from JSON, retaining exact run, company and agent predicates; its tests cover legacy shapes, fresh cancellation and large-payload omission.",
+      "paths": [
+        "server/src/middleware/agent-run-authentication.ts",
+        "server/src/middleware/auth.ts",
+        "server/src/__tests__/agent-run-authentication.test.ts"
+      ],
+      "reviewedPinnedPaths": [
+        {
+          "path": "server/src/middleware/agent-run-authentication.ts",
+          "mode": "100644",
+          "blobSha": "d130e9e706b5d1e3c875c63e0666d0fbbbbf0031",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/middleware/agent-run-authentication.ts"
+        },
+        {
+          "path": "server/src/middleware/auth.ts",
+          "mode": "100644",
+          "blobSha": "fba7462aa1e9c8699c39f3938e17306ee0bf668d",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/middleware/auth.ts"
+        },
+        {
+          "path": "server/src/__tests__/agent-run-authentication.test.ts",
+          "mode": "100644",
+          "blobSha": "fe2da4eb36311b20dc632c0f6a0b12a8e89c890b",
+          "pinnedRef": "https://github.com/paperclipai/paperclip/blob/5623304586c04092d2a44c25b3850301a909989d/server/src/__tests__/agent-run-authentication.test.ts"
+        }
+      ],
+      "evidenceBoundary": "Read from exact upstream snapshot commit/tree; source observations do not prove fork parity, regression execution, deployment, automatic admission, or release acceptance."
+    }
+  ]
+}

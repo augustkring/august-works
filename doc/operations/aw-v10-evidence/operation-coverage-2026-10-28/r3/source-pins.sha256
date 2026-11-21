@@ -1,0 +1,9 @@
+babe6fa54af0ce1d62e189b8b3f4b2b755cdc109561f7f2083da80fe5b0464ce  scripts/aw-v10-operation-coverage.mjs
+f29f07103e0e3b07936524ee4a2ad507909ff02cac8f9767f7477ca20aa1d30d  scripts/check-aw-v10-operation-coverage.mjs
+824085ea0d28e85feb7008a684a7b4e10a1316b8e3596a7a24916ccad409ac3c  scripts/check-aw-v10-operation-coverage.test.mjs
+d57869d63090cbc8fc16df35144b823ce7fd65efa10f2995a766e608399cb4f2  scripts/check-aw-v9-coverage.mjs
+db036b733a5e76ed2b19bc1fbdb48d2b8345401f2b2b54d2e75cfaf2068ae40a  server/src/services/agent-native-operation-manifest.ts
+2923e32f635dcfa60f7da22abbf99ea200e26175ce03f35628ab0b8cd7d57a1c  doc/operations/agent-native-ui-operation-coverage.json
+72109aa734be2261ae7df8c66e3aab25d2e4ee3c131d7d784b677f8fa081b1c6  .github/workflows/aw-v9-coverage.yml
+1716e9619c28aec2529902c201a8b45cd641c7327705bf005bcc0ecb2b7589c8  ui/src/App.tsx
+d3db029bdb89fac6e3b0606797d0753951e8ec1d41debf35fab2b8fed1e69c80  ui/src/pages/V9RouteEntries.tsx

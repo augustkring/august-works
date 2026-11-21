@@ -1,0 +1,50 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T20:15:44.596189+00:00",
+  "baseCommit": "ef2a8cf92ffce181a2c1c0f7d848cda1509912ea",
+  "patchBytes": 1642398,
+  "patchSha256": "2aef30db53533da128bc249732f635cb5c649f1fb030baf894d83fe2917d59ba",
+  "archiveSha256": "2baf6e664ae07afe68a0ad5e85bf597f6cf28685be63932b3bfe69ab75dd054e",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0563_wise_yellow_claw.sql",
+      "bytes": 3167,
+      "sha256": "3a657358183cd499efba154831c969c49dda4d1f7df69a5d0236eb2358a4e57d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0563_snapshot.json",
+      "bytes": 2785918,
+      "sha256": "2cda86e5db45b3f55304bcbfbb9afd3bd6cdb405b138de8ef0d3039c86567e71"
+    },
+    {
+      "path": "packages/db/src/schema/agent_model_migration_monitor_receipts.ts",
+      "bytes": 3030,
+      "sha256": "25b781862fb45a42ef09de0802c0665234c83d8d7373e98652661a0670110d85"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.test.ts",
+      "bytes": 2094,
+      "sha256": "d840e1f3dc02097ae59d5acd5ecf1af41cbccb1b92a9827cf0dde253e81b850e"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.ts",
+      "bytes": 2289,
+      "sha256": "625c3d11b0eb727393bd99943fb4d099d88eced84b8d23949b231badfb8bea83"
+    },
+    {
+      "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
+      "bytes": 19902,
+      "sha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.test.tsx",
+      "bytes": 11897,
+      "sha256": "92bc4b104b26a017955c41864734f1c89eff4cef0b23d2756b1ecb48a9138f19"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.tsx",
+      "bytes": 8089,
+      "sha256": "1744bbfd25942411c42bf2eba07af387d763a20f7b24e67dadc48acf966c2f32"
+    }
+  ]
+}

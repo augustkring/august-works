@@ -1,0 +1,28 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-model-input-dispatch.integration.test.ts (8 tests | 8 skipped) 7132ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent
+TypeError: currentNativeControllerIdentity is not a function
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:32:24
+     30|     database = await startEmbeddedPostgresTestDatabase("native-model-i…
+     31|     db = createDb(database.connectionString);
+     32|     controller = await currentNativeControllerIdentity();
+       |                        ^
+     33|     await db.insert(companies).values({ id: companyId, name: "Dispatch…
+     34|     await db.insert(agents).values({ id: agentId, companyId, name: "Di…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 skipped (8)
+   Start at  07:00:26
+   Duration  34.70s (transform 18.87s, setup 173ms, import 27.02s, tests 7.13s, environment 0ms)
+

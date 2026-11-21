@@ -1,0 +1,3 @@
+Source log SHA-256: 210ab167ff98eff7505bc278da2d24ecd16440a22399ead50792a254f6468c0c
+sandbox_relay_schema_issue_facts [{"code":"too_big","path":["stdinBase64"],"maximum":524288,"origin":"string"},{"code":"custom","path":[],"reasonCode":"exec_request_too_large"}]
+conversation_software_host_relay_request_sizes {"nativePreparationPurpose":"provider_artifact","commandKind":"shell","argvCount":3,"argvJsonBytes":871,"envKeyCount":0,"envJsonBytes":2,"stdinUtf8Bytes":49117504,"stdinBase64CharacterCount":65490008}

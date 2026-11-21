@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+
+ Test Files  1 passed (1)
+      Tests  74 passed (74)
+   Start at  09:16:53
+   Duration  43.26s (transform 12.14s, setup 89ms, import 17.30s, tests 25.72s, environment 0ms)
+

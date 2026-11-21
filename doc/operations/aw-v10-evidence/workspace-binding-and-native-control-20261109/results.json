@@ -1,0 +1,67 @@
+{
+  "invocations": [
+    {
+      "invocation": "workspace-binding-owner-full39-r3",
+      "passed": 39,
+      "failed": 0,
+      "unselected": 0,
+      "seconds": 48.25493782199919,
+      "observedPeakOwnedDescendantRssBytes": 3386339328,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "native-text-current-group-a-r1",
+      "passed": 9,
+      "failed": 0,
+      "unselected": 10,
+      "seconds": 92.59415534300206,
+      "observedPeakOwnedDescendantRssBytes": 3159044096,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "native-text-current-group-b-r2",
+      "passed": 11,
+      "failed": 0,
+      "unselected": 22,
+      "seconds": 91.78976701799911,
+      "observedPeakOwnedDescendantRssBytes": 3034304512,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "native-policy-and-finalization-components-r1",
+      "passed": 44,
+      "failed": 0,
+      "unselected": 0,
+      "seconds": 3.1462008070011507,
+      "observedPeakOwnedDescendantRssBytes": 544509952,
+      "scope": "controlled component modules, no PostgreSQL process observed; no external provider/SDK/host proof"
+    }
+  ],
+  "serverTypecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 98.12243187400236,
+        "peakGroupRssBytes": 6118162432,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "nativeTextCoverage": "Exact disjoint union of 9 and 10 cases covers all 19 registered Native Text cases. Group B also selects one responsibility refusal case.",
+  "limits": [
+    "SDK Memory allow policies and unique conversation application names await actual CI.",
+    "Source39 and Native group A ran before the later diagnostic-only code and sandbox fixture edits. Their original input manifests remain authoritative.",
+    "Original group B passed ten cases but lost its supervisor during environment resume. Group B R2 is the complete bounded repeat.",
+    "Two new deferred-comment candidates did not reach the intended deferred-wake owner. They remain private and are not counted as coverage.",
+    "Five legacy responsibility positive cases and the remaining lifecycle and current CI failures stay open.",
+    "No paid live provider, physical Host, release, deployment or Human acceptance claim."
+  ]
+}

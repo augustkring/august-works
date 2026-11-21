@@ -1,0 +1,37 @@
+2026-10-22T20:22:41Z
+e86f2e3bd0271418bcbdc49f50fe270d7ab3849a9d35b623692e4db1abe338d6  server/src/services/authorization.ts
+395111484eaa16848c63c4fbe8e01ef5e06a004e8af0636784af7f446f34736f  server/src/__tests__/authorization-service.test.ts
+9f41bc0b885e6aed121bf5aca49f6aac67d5cd953392a66205ebf968b54a806e  packages/db/src/migrations/0503_furry_norman_osborn.sql
+9db5984b7fe27cf4adb3680ebb7f578d687f489f72a37ce7cd22e07fba04014a  packages/db/src/migrations/meta/_journal.json
+b176f427af12e5b0b403e6ac29051fbda78b068c0c1084663d4e090e7b5b855e  packages/db/src/schema/issues.ts
+b58a24ceb08214a57c62322e47d07410fd70f29c50a8974655ff08554b71af89  packages/db/src/schema/projects.ts
+dfc63f7543a16a56885fe7c26754b240ac00bca5757610a73a8dced01190a19c  packages/db/src/schema/heartbeat_runs.ts
+3402c713a28cdd662650c239bf1bfb65d89e1465f87002fdcdb89a752331d4cb  packages/db/src/schema/issue_access_grants.ts
+5890ffe82a4eb54ddbe3a85742d341c7972ddb02a60be088db68e75af44997c2  packages/db/src/schema/issue_privacy_sources.ts
+a0f980daa4101e75d51bb9d7dbd5f6363604c388cc2bddf61ad6e99dd6e29523  packages/db/src/schema/project_access_members.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:23:12] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_no_grant","action":"skill_config:update","resourceType":"company","companyId":"f9f7e777-2bde-474c-9dd7-97123c7954ca","actorAgentId":"bade16d0-3445-4dc7-a48b-e3158324a5a8","responsibleUserId":"user-c8223c02-5af0-442d-8286-b5ed805ab66b"}[39m
+[20:23:12] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:comment","resourceType":"issue","companyId":"68cd9e66-157b-4551-bbde-a832998cc3c7","actorAgentId":"31c6f0bf-cf0a-44ca-bc8f-ed71f15100cd","responsibleUserId":"user-8e48fabc-b428-4abe-8cb4-162c01026854"}[39m
+[20:23:12] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:mutate","resourceType":"issue","companyId":"68cd9e66-157b-4551-bbde-a832998cc3c7","actorAgentId":"31c6f0bf-cf0a-44ca-bc8f-ed71f15100cd","responsibleUserId":"user-8e48fabc-b428-4abe-8cb4-162c01026854"}[39m
+[20:23:13] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_policy_restricted","action":"tasks:assign","resourceType":"issue","companyId":"147d1730-2fae-402e-b7f5-70428e73d2c2","actorAgentId":"a6811cfd-b15c-4ae5-8adc-ecbc0acdb52f","responsibleUserId":"user-d0650291-2615-461e-b260-3935b5877139"}[39m
+[20:23:13] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:mutate","resourceType":"issue","companyId":"354b1c5c-275f-46d1-b60c-a90b9e796df2","actorAgentId":"1263a9f3-c969-4191-bdaf-ae57ce0cef58","responsibleUserId":"user-f2e2e5d2-e1fc-4563-a9a7-04535ce6a9ea"}[39m
+[20:23:13] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_unsupported_action","action":"issue:mutate","resourceType":"issue","companyId":"557acd9c-9bb3-4860-a250-0dfb331bcb76","actorAgentId":"8c95e9bb-dde3-4afb-8795-22b5ccbf9259","responsibleUserId":"user-657bfb38-10a8-4c41-b753-0cd73147a756"}[39m
+[20:23:13] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"tasks:assign","resourceType":"issue","companyId":"8f1cf585-212b-45ae-9c23-1d853e28eb17","actorAgentId":"e4b1fc74-f32c-42b6-97cb-ae73ee174296","responsibleUserId":"missing-e60a3b5e-e4c6-46fc-aa25-2dd3c6306449"}[39m
+[20:23:14] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"b8ba100f-8f3f-4ab3-89af-daff378c2ab9","issueId":"07a11b35-dd96-4e17-b2c1-3d2d52ca8953","companyId":"f2bb3e51-cdbd-4356-8cf0-acc5d145faab","commentId":"fdc5b27e-66e5-42d5-950c-5239950858ee","grantedAction":"issue:read","grant":"issue_mention_comment"}[39m
+[20:23:14] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"b8ba100f-8f3f-4ab3-89af-daff378c2ab9","issueId":"07a11b35-dd96-4e17-b2c1-3d2d52ca8953","companyId":"f2bb3e51-cdbd-4356-8cf0-acc5d145faab","commentId":"fdc5b27e-66e5-42d5-950c-5239950858ee","grantedAction":"issue:comment","grant":"issue_mention_comment"}[39m
+[20:23:14] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"22ab271e-3cec-4fd8-91cb-c12f32c01211","issueId":"446f1335-37ab-4d03-8c72-03df89143912","companyId":"b16d5700-9340-427a-b901-a6dc734c836a","commentId":"9c2ab9ce-091b-4954-994c-cd9b179b0981","grantedAction":"issue:comment","grant":"issue_mention_comment"}[39m
+[20:23:14] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"f431ccc6-ba34-4f43-89dc-e14f1805e396","issueId":"d2b3aae6-0390-42b8-9068-c5045b45f78d","companyId":"4f397a69-2990-4eea-b16b-37cd629413e5","commentId":"adc2ec8e-33d1-401a-9e3c-a75c0a39c2b4","grantedAction":"issue:comment","grant":"issue_mention_comment"}[39m
+[20:23:16] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_membership","action":"issue:read","resourceType":"issue","companyId":"1cec046d-776a-4fca-a9c4-ff6494e42d3f","actorAgentId":"4bfd5bb2-c370-42e4-b750-28ae36c1796f","responsibleUserId":"user-17d54287-79cf-4656-8dfd-d52fa5c874a9"}[39m
+[20:23:16] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_membership","action":"issue:read","resourceType":"issue","companyId":"1cec046d-776a-4fca-a9c4-ff6494e42d3f","actorAgentId":"4bfd5bb2-c370-42e4-b750-28ae36c1796f","responsibleUserId":"user-17d54287-79cf-4656-8dfd-d52fa5c874a9"}[39m
+
+ Test Files  1 passed (1)
+      Tests  78 passed (78)
+   Start at  20:22:43
+   Duration  35.35s (transform 7.38s, setup 205ms, import 16.31s, tests 18.38s, environment 0ms)
+
+VITEST_EXIT=0

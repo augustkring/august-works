@@ -1,0 +1,7 @@
+{
+  "sourceParent": "25180b7cf49b6e242ef4914505d5a0885c8d3cc4",
+  "workingSourceDiffSha256Preserved": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "scope": "recovery only; no activation, final software qualification or merge claim",
+  "dependsOn": "r65 and its committed recovery ancestors",
+  "archiveSha256": "bd72f03a604e1342c6a0a69d0c94c0297a30ea971ce23322b1e46af243234503"
+}

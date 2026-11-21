@@ -1,0 +1,83 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[19:58:55] [33mWARN[39m: [36mfailed to delete import transfer spool after a successful apply[39m [90m{"transferId":"d6eb7b1f-267f-42a6-b582-82b232641e4b"}[39m
+    err: {
+      "type": "Error",
+      "message": "EACCES: spool dir is busy",
+      "stack":
+          Error: EACCES: spool dir is busy
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:800:33
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:58:55] [33mWARN[39m: [36mfailed to attach the imported company to its transfer run[39m [90m{"transferId":"af46342d-b7af-42f6-970f-b2abf08cf05f"}[39m
+    err: {
+      "type": "Error",
+      "message": "registry write timed out",
+      "stack":
+          Error: registry write timed out
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:851:30
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:58:55] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"c381483a-a457-479c-b750-0119eda00b2a"}[39m
+[19:58:55] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"c381483a-a457-479c-b750-0119eda00b2a"}[39m
+ ❯ |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts (27 tests | 2 failed) 13159ms
+     × keeps a completed run completed when post-success spool cleanup fails 25ms
+     × sweeps abandoned spools and cancels their open runs 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts > company import transfer routes > keeps a completed run completed when post-success spool cleanup fails
+AssertionError: expected { …(3) } to deeply equal { …(2) }
+
+- Expected
++ Received
+
+  {
+    "action": "updated",
+    "id": "11111111-1111-4111-8111-111111111111",
++   "name": "Chunked Import Target",
+  }
+
+ ❯ src/__tests__/company-import-transfer-routes.test.ts:806:36
+    804|         .send(importMeta);
+    805|       expect(applied.status).toBe(200);
+    806|       expect(applied.body.company).toEqual({ id: companyId, action: "u…
+       |                                    ^
+    807|     } finally {
+    808|       spoolRemovalFailure.error = null;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts > company import transfer routes > sweeps abandoned spools and cancels their open runs
+AssertionError: expected { swept: 2 } to deeply equal { swept: +0 }
+
+- Expected
++ Received
+
+  {
+-   "swept": 0,
++   "swept": 2,
+  }
+
+ ❯ src/__tests__/company-import-transfer-routes.test.ts:926:69
+    924|
+    925|     // Fresh activity: nothing to sweep at the real threshold.
+    926|     expect(await sweepAbandonedImportTransferSpools(db, spoolRoot)).to…
+       |                                                                     ^
+    927|     await expect(fs.stat(path.join(spoolRoot, transferId))).resolves.t…
+    928|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 28 passed (30)
+   Start at  19:58:38
+   Duration  22.71s (transform 9.31s, setup 125ms, import 5.66s, tests 16.69s, environment 0ms)
+

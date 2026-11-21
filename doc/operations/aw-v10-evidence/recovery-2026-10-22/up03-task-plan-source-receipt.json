@@ -1,0 +1,45 @@
+{
+  "scope": "Original task plan selected-source collector; public DTO unchanged, no native bootstrap/admission/producer qualification claim",
+  "api": "Optional onSourceCapture callback reuses original DocumentRevisionSourceCapture; missing plan returns callbacknull; unknown selected snapshot stays nestednull; SHAexactreturnedbody after trust redaction",
+  "red": {
+    "actualExit": 1,
+    "failed": 2,
+    "deselected": 35,
+    "durationSeconds": 58.33,
+    "log": "/workspace/v10-preparation/up03-task-plan-source-red.log",
+    "durableExit": "/workspace/v10-preparation/up03-task-plan-source-red.exit",
+    "before": "/workspace/v10-preparation/up03-task-plan-source-red-before.sha256",
+    "exactTest": "/workspace/v10-preparation/up03-task-plan-source-red-test.ts",
+    "exactOwner": "/workspace/v10-preparation/up03-task-plan-source-red-owner.ts",
+    "all5PinsUnchanged": true
+  },
+  "green": {
+    "actualExit": 0,
+    "passed": 3,
+    "deselected": 34,
+    "durationSeconds": 71.53,
+    "log": "/workspace/v10-preparation/up03-task-plan-source-green.log",
+    "durableExit": "/workspace/v10-preparation/up03-task-plan-source-green.exit",
+    "before": "/workspace/v10-preparation/up03-task-plan-source-green-before.sha256",
+    "after": "/workspace/v10-preparation/up03-task-plan-source-green-after.sha256",
+    "all5PinsUnchanged": true,
+    "embeddedPostgresCleanupClosed": true
+  },
+  "dependencyCircumstance": {
+    "heartbeat": "Root saved distinct native bootstrap callbacks around launch; no upfront heartbeat pin existed. CurrentSHA recorded onlyduringcapture and verifiedsameafter; no unchanged-from-start claim",
+    "during": "/workspace/v10-preparation/up03-task-plan-source-heartbeat-during.json",
+    "after": "/workspace/v10-preparation/up03-task-plan-source-heartbeat-after.json",
+    "testedScope": "Collector and preexisting pure Markdown builder; native heartbeat bootstrap wiring not exercised"
+  },
+  "ownedSources": {
+    "server/src/services/task-plan-context.ts": "45e5fece006ceb30f391ea97ace74406889d35096076db1aad14d6bd171e32bd",
+    "server/src/__tests__/agent-conversations.test.ts": "653d94e7f4eadad201ff658ba60a07911a2873e1a30a4964e6e13e394a9f828b"
+  },
+  "limits": [
+    "Known snapshot fixture is source-free structural binding, not native producer completeness",
+    "Both original same-run temporal regressions remain open",
+    "No final dispatch byte/hash or full native run source receipt qualification",
+    "No production heartbeat/shared/schema changes by A",
+    "No Git commit"
+  ]
+}

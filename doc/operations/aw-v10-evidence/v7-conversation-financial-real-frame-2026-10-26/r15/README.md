@@ -1,0 +1,3 @@
+# Conversation reservation purge predicate diagnostic R15
+
+Fresh snapshot passed and one actual known-cost conversation purge case executed. Purge still failed on `aw_v5_execution_manifest_immutable`. The rollback-only diagnostic attempted a temp-table capture around the manifest trigger, but the immutable error occurred before its finite predicate facts could be retained. Root review identified the manifest item/authorization child guards as a likely separate failure path; R16 tests the Run-owned cascade with these children excluded from direct deletion. No production trigger was relaxed in R15.

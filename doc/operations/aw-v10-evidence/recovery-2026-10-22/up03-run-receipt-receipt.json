@@ -1,0 +1,75 @@
+{
+  "scope": "Original run JSON receipt integrity barrier; not Ready, source completeness, full input validation, permission or dispatch qualification",
+  "generator": {
+    "actualExit": 0,
+    "durableExit": "/workspace/v10-preparation/up03-run-receipt-generate.exit",
+    "log": "/workspace/v10-preparation/up03-run-receipt-generate.log",
+    "command": "pnpm --filter @paperclipai/db exec drizzle-kit generate --custom --name native_run_input_source_binding",
+    "historicalSnapshotDeletions": 0
+  },
+  "first": {
+    "actualExit": 1,
+    "passed": 6,
+    "failed": 1,
+    "durationSeconds": 23.21,
+    "log": "/workspace/v10-preparation/up03-run-receipt-first.log",
+    "before": "/workspace/v10-preparation/up03-run-receipt-first-before.sha256",
+    "migration": "/workspace/v10-preparation/up03-run-receipt-first-migration.sql",
+    "test": "/workspace/v10-preparation/up03-run-receipt-first-test.ts",
+    "pinsUnchanged": true,
+    "finding": "Existing erasure scrub ran before late barrier; marker-backed partial profile removal accepted after native normalization"
+  },
+  "second": {
+    "actualExit": 1,
+    "passed": 6,
+    "failed": 1,
+    "durationSeconds": 25.89,
+    "log": "/workspace/v10-preparation/up03-run-receipt-second.log",
+    "before": "/workspace/v10-preparation/up03-run-receipt-second-before.sha256",
+    "migration": "/workspace/v10-preparation/up03-run-receipt-second-migration.sql",
+    "test": "/workspace/v10-preparation/up03-run-receipt-second-test.ts",
+    "pinsUnchanged": true,
+    "finding": "Fixture expected {} but original erasure owner correctly normalized profile to SQL NULL; source barrier checks passed before final fixture expectation"
+  },
+  "nonMarkerSourceErasureRed": {
+    "actualExit": 1,
+    "failed": 1,
+    "deselected": 7,
+    "durationSeconds": 25.2,
+    "log": "/workspace/v10-preparation/up03-run-receipt-source-erasure-red.log",
+    "before": "/workspace/v10-preparation/up03-run-receipt-source-erasure-red-before.sha256",
+    "test": "/workspace/v10-preparation/up03-run-receipt-source-erasure-red-test.ts",
+    "migration": "/workspace/v10-preparation/up03-run-receipt-second-migration.sql",
+    "pinsUnchanged": true,
+    "finding": "Actual canonical source-version erasure rejected by new immutable guard because run marker was absent"
+  },
+  "current": {
+    "actualExit": 0,
+    "passed": 8,
+    "durationSeconds": 20.44,
+    "log": "/workspace/v10-preparation/up03-run-receipt-current.log",
+    "durableExit": "/workspace/v10-preparation/up03-run-receipt-current.exit",
+    "before": "/workspace/v10-preparation/up03-run-receipt-current-before.sha256",
+    "after": "/workspace/v10-preparation/up03-run-receipt-current-after.sha256",
+    "pinsUnchanged": true,
+    "actualEmbeddedPostgresCleanupClosed": true
+  },
+  "files": {
+    "packages/db/src/migrations/0511_native_run_input_source_binding.sql": "0159ed3cab84b8393e4340b437b5adca393b1372006c796207fec71e8a5342b0",
+    "packages/db/src/migrations/meta/_journal.json": "27719f76eee238cc2a2132415eb79b180bdc72a44a09061eb4015b3bf4e25133",
+    "packages/db/src/migrations/meta/0511_snapshot.json": "d035d4e881eb52350a42460917de84dff6352a5ceb01ba80899ad6f6905f1f9c",
+    "packages/db/src/native-run-input-source-receipt.test.ts": "6c213dd82a3b6d8ca0ee4a037ffddfd518955a95e8e7686662e6b5f4e125dc04"
+  },
+  "limits": [
+    "Structural nativeExecutionInput JSON fixtures, no provider/transport execution claim",
+    "No production constructor stamps protocol1 or receipt",
+    "Full finite descriptor parsing and source permission belong to consumer guards",
+    "Canonical JSONB receipt::text byte cap may be stricter than compact shared serialization",
+    "Original canonical erasure predicate reused unchanged; its future-Context temporal scope remains separately open",
+    "Privileged SQL/replica restore and deletion of durable tombstones are not solved",
+    "No independent full compiler or broader suite claimed",
+    "Dormant prepareNativeHeartbeatRun replaces whole profile and would correctly fail for existing receipt; no production caller found",
+    "Legacy mode/profile reset of a receipted run fails closed; capability-only legacy rows still allowed",
+    "No Git commit by A"
+  ]
+}

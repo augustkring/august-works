@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-26",
+  "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "sourceHead": "c4970c44d9abe63df495fba7a5e02157ffac824c",
+  "qualificationWorkspace": "/workspace/v10-dep-qualification",
+  "focused": {
+    "runner": "/workspace/v10-preparation/run-worker-heartbeats-diagnostics-r8.sh",
+    "result": "2 passed, 64 skipped, 1 file passed; snapshot, syntax, and test exit 0",
+    "cases": [
+      "forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review",
+      "withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation"
+    ],
+    "testLog": "focused-test.log",
+    "sourcePins": "focused-source-pins.json",
+    "boundary": "The Pause case makes one provider call, publishes no document, and persists the ambiguous Native reconciliation receipt. This is controlled software integration evidence, not provider qualification."
+  },
+  "fullFile": {
+    "runner": "/workspace/v10-preparation/run-worker-gateway-full-r10.sh",
+    "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+    "result": "66 passed, 1 file passed; snapshot, syntax, and test exit 0",
+    "durationSeconds": 298.54,
+    "testLog": "full-test.log",
+    "sourcePins": "full-source-pins.json",
+    "snapshotLog": "full-snapshot.log",
+    "syntaxLog": "full-syntax.log",
+    "boundary": "The two Native heartbeat cases passed inside the full original Gateway file. Controlled software integration evidence; no provider/customer qualification claimed."
+  }
+}

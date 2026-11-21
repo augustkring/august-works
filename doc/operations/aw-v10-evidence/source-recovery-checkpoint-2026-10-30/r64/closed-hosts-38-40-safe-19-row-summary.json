@@ -1,0 +1,54 @@
+{
+  "scope": "Report rows only; not overall route qualification",
+  "hosts": {
+    "38": {
+      "sourceLogSha256": "d5eef6897eed15e2d3c7cdd3094d035d133eee72bea6f03abcfa22f83b0a8409",
+      "reportStatus": "passed",
+      "probeRows": 19,
+      "passedRows": 19,
+      "exceptions": [],
+      "exitCodes": {
+        "managed-source-target-vitest": "1",
+        "source-oxc": "0",
+        "server-tsc": "0",
+        "host-session-node": "0",
+        "qualification-clock-vitest": "0",
+        "shared-build": "0",
+        "db-build": "0"
+      }
+    },
+    "39": {
+      "sourceLogSha256": "86b4a1c7d2237709c1d3213006261b5e9bcb9f69da93bbb61b5872dede18e605",
+      "reportStatus": "passed",
+      "probeRows": 19,
+      "passedRows": 19,
+      "exceptions": [],
+      "exitCodes": {
+        "managed-source-target-vitest": "1",
+        "source-oxc": "0",
+        "server-tsc": "0",
+        "host-session-node": "1",
+        "qualification-clock-vitest": "0",
+        "shared-build": "0",
+        "db-build": "0"
+      }
+    },
+    "40": {
+      "sourceLogSha256": "379f05ac0fc0f197651f91ddac0656c03ca0646c87471c2fee986e2bc024d572",
+      "reportStatus": "passed",
+      "probeRows": 19,
+      "passedRows": 19,
+      "exceptions": [],
+      "exitCodes": {
+        "managed-source-target-vitest": "1",
+        "source-oxc": "0",
+        "server-tsc": "0",
+        "host-session-node": "1",
+        "qualification-clock-vitest": "0",
+        "shared-build": "0",
+        "db-build": "0"
+      }
+    }
+  },
+  "limitations": "All three captured managed-source reports list 19/19 probe rows as pass, but each managed-source Vitest command exited 1. Host39 and Host40 host-session-node commands also exited 1. These are scoped report results only; no overall Host route qualification is claimed."
+}

@@ -1,0 +1,330 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > does not read private alternative profiles until Advanced is opened
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > does not read private alternative profiles until Advanced is opened
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > does not read private alternative profiles until Advanced is opened
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > shows only the current owner-declared model lifecycle and published workflow references
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > shows only the current owner-declared model lifecycle and published workflow references
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > shows only the current owner-declared model lifecycle and published workflow references
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/components/AgentRuntimeCandidates.test.tsx > does not read private alternative profiles until Advanced is opened 163ms
+stderr | src/components/AgentRuntimeCandidates.test.tsx > keeps an unknown creation immutable and recovers by original read without creating twice
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > keeps an unknown creation immutable and recovers by original read without creating twice
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > keeps an unknown creation immutable and recovers by original read without creating twice
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/components/AgentRuntimeCandidates.test.tsx > shows only the current owner-declared model lifecycle and published workflow references 111ms
+stderr | src/components/AgentRuntimeCandidates.test.tsx > withholds a late creation across the private source check and retains its original key for recovery
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > withholds a late creation across the private source check and retains its original key for recovery
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > withholds a late creation across the private source check and retains its original key for recovery
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/components/AgentRuntimeCandidates.test.tsx > keeps an unknown creation immutable and recovers by original read without creating twice 144ms
+stderr | src/components/AgentRuntimeCandidates.test.tsx > recovers the original qualification after draft version and selected candidate change without another model dispatch
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > recovers the original qualification after draft version and selected candidate change without another model dispatch
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > recovers the original qualification after draft version and selected candidate change without another model dispatch
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/components/AgentRuntimeCandidates.test.tsx > withholds a late creation across the private source check and retains its original key for recovery 133ms
+stderr | src/components/AgentRuntimeCandidates.test.tsx > recovers the original qualification after draft version and selected candidate change without another model dispatch
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > recovers the original qualification after draft version and selected candidate change without another model dispatch
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > recovers the original qualification after draft version and selected candidate change without another model dispatch
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/AgentRuntimeCandidates.test.tsx > recovers the original qualification after draft version and selected candidate change without another model dispatch
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentRuntimeCandidates inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ |@paperclipai/ui| src/components/AgentRuntimeCandidates.test.tsx > recovers the original qualification after draft version and selected candidate change without another model dispatch 224ms
+ ✓ |@paperclipai/server| src/__tests__/v7-worker-model-profiles.test.ts > private worker model transport qualifications > keeps the general tool-capable Messages profile distinct from the text-only contract 9ms
+ ✓ |@paperclipai/server| src/__tests__/v7-worker-model-profiles.test.ts > private worker model transport qualifications > selects only the explicit owned profile and never falls back to another installed alternative 4ms
+ ✓ |@paperclipai/server| src/__tests__/v7-worker-model-profiles.test.ts > private worker model transport qualifications > loads distinct configuration pins for one presence while refusing ambiguous configuration or global profile identity 28ms
+ ✓ |@paperclipai/server| src/__tests__/v7-worker-model-profiles.test.ts > private worker model transport qualifications > requires paired deployment pins, a private owner file and exact bytes; missing configuration stays inactive 5ms
+ ✓ |@paperclipai/server| src/__tests__/v7-worker-model-profiles.test.ts > private worker model transport qualifications > binds current source, short price qualification and protected artifact origin without inventing judge calibration 2ms
+ ✓ |@paperclipai/server| src/__tests__/v7-worker-model-profiles.test.ts > private worker model transport qualifications > enforces owner-declared retirement dates at the exact admission boundary and reserves candidate status for evaluation 4ms
+ ✓ |@paperclipai/server| src/__tests__/v7-worker-model-profiles.test.ts > private worker model transport qualifications > allows migration only when declared data/region, tool, rate, context and cost ceilings are preserved 1ms
+ ✓ |@paperclipai/server| src/__tests__/v7-worker-model-profiles.test.ts > private worker model transport qualifications > refuses raw keys, sessions, unknown model destinations, subscriptions and ambiguous presence qualification 189ms
+ ✓ |@paperclipai/server| src/__tests__/v7-read-only-model-profiles.test.ts > deployment-pinned read-only model qualifications > keeps absent configuration inactive and requires a private owner file with an exact digest 12ms
+ ✓ |@paperclipai/server| src/__tests__/v7-read-only-model-profiles.test.ts > deployment-pinned read-only model qualifications > rejects current-source, expiry, future, long-lived and protected-origin/query drift 2ms
+ ✓ |@paperclipai/server| src/__tests__/v7-read-only-model-profiles.test.ts > deployment-pinned read-only model qualifications > blocks an explicitly retired model at runtime admission 2ms
+ ✓ |@paperclipai/server| src/__tests__/v7-read-only-model-profiles.test.ts > deployment-pinned read-only model qualifications > requires an explicit API-key grant and refuses an extra endpoint, raw key or unsupported contract 1ms
+ ✓ |@paperclipai/server| src/__tests__/first-party-support-model-profiles.test.ts > private first-party Support funding profiles > keeps missing configuration closed and loads only a private file with the exact deployment digest 17ms
+ ✓ |@paperclipai/server| src/__tests__/first-party-support-model-profiles.test.ts > private first-party Support funding profiles > binds funding to the fixed purpose, platform account, exact company package and qualified tariff interval 6ms
+ ✓ |@paperclipai/server| src/__tests__/first-party-support-model-profiles.test.ts > private first-party Support funding profiles > does not spend the support funding profile after its owner retires it 2ms
+
+ Test Files  4 passed (4)
+      Tests  20 passed (20)
+   Start at  10:10:41
+   Duration  11.41s (transform 4.91s, setup 303ms, import 8.63s, tests 1.07s, environment 806ms)
+

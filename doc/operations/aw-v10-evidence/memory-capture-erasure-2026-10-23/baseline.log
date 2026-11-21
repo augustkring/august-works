@@ -1,0 +1,42 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (10 tests | 1 failed | 9 skipped) 19422ms
+     × erases a captured Memory without depending on an evidence-row invalidation 101ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > erases a captured Memory without depending on an evidence-row invalidation
+Error: Failed query: update "memory_records" set "subject_type" = $1, "subject_id" = $2, "title" = $3, "content" = $4, "summary" = $5, "review_state" = $6, "retention_state" = $7, "revoked_at" = $8, "revoked_by_actor_type" = $9, "revoked_by_actor_id" = $10, "revocation_reason" = $11, "metadata" = $12, "updated_at" = $13, "deleted_at" = $14 where ("memory_records"."company_id" = $15 and "memory_records"."id" in ($16))
+params: ,,,,,rejected,expired,,,,,{},2026-10-23T21:06:28.677Z,2026-10-23T21:06:28.677Z,cc33f51a-2874-44d5-baaa-85bec2a2c5d2,f746b903-2bb5-40bf-9352-9d38f7fa0c84
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ purgeMemoryRecords src/services/memory/memory-privacy.ts:359:3
+    357|   }
+    358|   await db.delete(memoryEvidence).where(and(eq(memoryEvidence.companyI…
+    359|   await db.update(memoryRecords).set({ content: "", title: null, summa…
+       |   ^
+    360|     metadata: {}, deletedAt: now, updatedAt: now, retentionState: "exp…
+    361|     revokedAt: null, revokedByActorType: null, revokedByActorId: null,…
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:156:7
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:155:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "memory_records" set "subject_type" = $1, "subject_id" = $2, "title" = $3, "content" = $4, "summary" = $5, "review_state" = $6, "retention_state" = $7, "revoked_at" = $8, "revoked_by_actor_type" = $9, "revoked_by_actor_id" = $10, "revocation_reason" = $11, "metadata" = $12, "updated_at" = $13, "deleted_at" = $14 where ("memory_records"."company_id" = $15 and "memory_records"."id" in ($16))', parameters: [ null, null, null, '', null, 'rejected', 'expired', null, null, null, null, '{}', '2026-10-23T21:06:28.677Z', '2026-10-23T21:06:28.677Z', 'cc33f51a-2874-44d5-baaa-85bec2a2c5d2', 'f746b903-2bb5-40bf-9352-9d38f7fa0c84' ], args: [ null, null, null, '', null, 'rejected', 'expired', null, null, null, null, '{}', '2026-10-23T21:06:28.677Z', '2026-10-23T21:06:28.677Z', 'cc33f51a-2874-44d5-baaa-85bec2a2c5d2', 'f746b903-2bb5-40bf-9352-9d38f7fa0c84' ], types: [ 25, 25, 25, 25, 25, 25, 25, 1184, 25, 25, 25, 3802, 1184, 1184, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  21:05:36
+   Duration  52.04s (transform 22.33s, setup 220ms, import 31.90s, tests 19.42s, environment 0ms)
+

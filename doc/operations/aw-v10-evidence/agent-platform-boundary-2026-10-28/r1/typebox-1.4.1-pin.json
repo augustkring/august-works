@@ -1,0 +1,10 @@
+{
+  "name": "typebox",
+  "version": "1.4.1",
+  "tarball": "https://registry.npmjs.org/typebox/-/typebox-1.4.1.tgz",
+  "integrity": "sha512-t3PeLDn0qJkwg0x6r9s6EuaOG7wivByLlst62TI7r6fy7eXHu/5LF/cRIeRcrT9qhJZ5VRFM6efHt1/bc7LMCg==",
+  "unpackedSize": 1567695,
+  "registryMetadataSha256": "825d221483db5cfd794d8c70c5e7d2da1a800f4e0d4a4ce81eb4a8d8b673f864",
+  "tarballSha256": "31b39902c033c1f256ed679fceaea71a0163efc038ba413bfc370e3ed516a9c3",
+  "verifiedDistIntegrity": "t3PeLDn0qJkwg0x6r9s6EuaOG7wivByLlst62TI7r6fy7eXHu/5LF/cRIeRcrT9qhJZ5VRFM6efHt1/bc7LMCg=="
+}

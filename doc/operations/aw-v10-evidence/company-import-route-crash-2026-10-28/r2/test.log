@@ -1,0 +1,56 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ × |@paperclipai/server| src/__tests__/company-import-process-recovery.integration.test.ts > company import process recovery > preserves one real imported Agent and the original unknown job after child death before receipt 90009ms
+   → Test timed out in 90000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ × |@paperclipai/server| src/__tests__/company-import-process-recovery.integration.test.ts > company import process recovery > rechecks the current Human after an HTTP import effect and stops before the next target write 88406ms
+   → expected [ Array(1) ] to deeply equal []
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-process-recovery.integration.test.ts > company import process recovery > preserves one real imported Agent and the original unknown job after child death before receipt
+Error: Test timed out in 90000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/company-import-process-recovery.integration.test.ts:90:3
+     88|   afterAll(async () => { await database?.cleanup(); }, 30_000);
+     89|
+     90|   it("preserves one real imported Agent and the original unknown job a…
+       |   ^
+     91|     const companyId = randomUUID();
+     92|     const userId = `user-${randomUUID()}`;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-process-recovery.integration.test.ts > company import process recovery > rechecks the current Human after an HTTP import effect and stops before the next target write
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "id": "session-67590ab2-3cef-4ad7-a6bc-c70343637876",
++   },
++ ]
+
+ ❯ src/__tests__/company-import-process-recovery.integration.test.ts:347:33
+    345|         await new Promise(resolve => setTimeout(resolve, 25));
+    346|       }
+    347|       expect(remainingSessions).toEqual([]);
+       |                                 ^
+    348|       expect(targetAgents).toHaveLength(1);
+    349|       expect(targetAgents[0]).toMatchObject({ status: "paused", name: …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  10:52:22
+   Duration  199.39s (transform 11.42s, setup 89ms, import 16.41s, tests 182.76s, environment 0ms)
+

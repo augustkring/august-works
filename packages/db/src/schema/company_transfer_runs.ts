@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, integer, jsonb, timestamp, index } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 
@@ -15,7 +16,7 @@ export const companyTransferRuns = pgTable(
     // set as soon as the destination company exists.
     companyId: uuid("company_id").references(() => companies.id, { onDelete: "set null" }),
     direction: text("direction").notNull(), // "export" | "import"
-    status: text("status").notNull().default("pending"), // pending | running | applying | completed | failed | cancelled
+    status: text("status").notNull().default("pending"), // pending | running | applying | needs_reconciliation | completed | failed | cancelled
     // The actor the run belongs to (board session / API key identity); run
     // visibility and resume are scoped to the same actor.
     actorKey: text("actor_key").notNull(),
@@ -39,6 +40,9 @@ export const companyTransferRuns = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    resourceActiveIdx: index("company_transfer_runs_resource_active_idx")
+      .on(table.companyId, table.id)
+      .where(sql`${table.direction}='export' and (${table.status}='running' or ${table.containerRef} #>> '{artifact,state}'='allocated')`),
     companyIdx: index("company_transfer_runs_company_idx").on(table.companyId),
     idempotencyDirectionIdx: index("company_transfer_runs_idempotency_direction_idx").on(
       table.idempotencyKey,

@@ -1,0 +1,5 @@
+Listing tests:
+  [chromium] › agent-chat-sessions.spec.ts:212:1 › an owner can explicitly recover after source visibility is lost while original metric facts survive
+  [chromium] › agent-chat-sessions.spec.ts:259:1 › feature flag blocks new sends and resets while preserving existing history
+  [chromium] › agent-chat-sessions.spec.ts:295:1 › Stop then queued /new resets unpause the conversation without losing history
+Total: 3 tests in 1 file

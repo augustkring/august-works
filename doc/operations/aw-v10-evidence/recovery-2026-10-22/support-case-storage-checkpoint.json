@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-23",
+  "scope": "Native support storage, erasure markers, company purge fences and quarantine/backup ledger. No intake API, delivery gateway or lifecycle completion claim.",
+  "files": {
+    "deploy/v6/deletion-ledger.mjs": "494dc43b48fb3e295565efc882038795b810421e710a1bf397d4ad3dc3e46b28",
+    "deploy/v6/deletion-ledger.test.mjs": "223b1ac17692950d19222cf30e6cf754a74e1b3ad8229b6c4ddad8d9d99a12a7",
+    "doc/operations/aw-v6-runtime.md": "b23585d00e15f52e0731e783cd71a9bdd4480e858e982df97c2a91964aded0ed",
+    "packages/db/src/migrations/meta/_journal.json": "6a6931a515c66a2b529ed9629d81e06bad1fa8eaf4a1148c30e5d2ece5b49958",
+    "packages/db/src/schema/index.ts": "033757da962c2167d0e69b92cad72f76896564efc19afef5dc884f7a11a029f8",
+    "packages/shared/src/customer-support.test.ts": "db12fc4a9cfd8d49c478eee1e931edc952eac897d29b277a625f4aff22a91e49",
+    "packages/shared/src/customer-support.ts": "0b3c09193d45ab0c69b0d5fcd0ff55e0e30dc4b4f9fcf38802f43861e21283b2",
+    "server/scripts/v6-database-backup.mjs": "45ed4d33a1d614c3e8ec15816128ad62396a5c117a20aa9b215e8bd564e256b9",
+    "server/src/__tests__/business-events.integration.test.ts": "2488d9a8f3c21647fb24f4b3b04e3b98034cc65e6f5f03ad2010dafb86b69028",
+    "server/src/__tests__/business-experiment-analysis.integration.test.ts": "9e289de147fa286b4e023e3be969fd52196120cdd29a49f7cd2d5d44449a93d7",
+    "server/src/__tests__/business-metrics.integration.test.ts": "a75befd2f888c262dbc510661f368ea4179c09a60aaa8595d385543ec88ff44b",
+    "server/src/__tests__/process-analysis.integration.test.ts": "f2aaa307c341e4a1ed1df2d6507874c9ae0baca32d532682c5e5707405809637",
+    "server/src/__tests__/strategy-execution.integration.test.ts": "323aee8bfc53ba24a0da88e5cc63b83c4d25b964988cb5445d88ff8bf0c535ba",
+    "server/src/__tests__/v6-database-quarantine.integration.test.ts": "620f474d165282588ade343b274f4d45c71af5e57da307552e56650203aed12f",
+    "server/src/__tests__/v9-feedback-retention-erasure.integration.test.ts": "6c850d541edec65fcaa24a4f9cc29917275492e4cdd7f3670b180095b2674283",
+    "server/src/services/saas/company-purge.ts": "b7b59f6b8369a2f7ff62df2f026ba7ee5f813e386bb7142f2f83f17bd75899e0",
+    "server/src/services/saas/quarantine.ts": "1661f8ecf088d171d262ad9084ac0399e7bae94d7aa574601e9ff3a94ea50516",
+    "packages/db/src/migrations/0515_happy_screwball.sql": "bacbaf19835c5e8b73107f0c68dafd2368b1aa2162e7a889800ae8a2f3af32a3",
+    "packages/db/src/migrations/meta/0515_snapshot.json": "6d7db4b1de2a44d5c4fb7a0548ce1ff353ecd2b802e4859e7a58ea9d1e52fe84",
+    "packages/db/src/schema/support_cases.ts": "69b01365fc5d46b668ee451f3be1384a544371a2976fb095affa54dec0166d36",
+    "server/src/__tests__/support-case-storage.integration.test.ts": "24aa06502dddce6463e9715d6a77d283e8ad877426a4d243478b3b45db98c1e1"
+  },
+  "checks": {
+    "finalPostgres": {
+      "files": 2,
+      "passed": 15,
+      "seconds": 310.28,
+      "exit": 0,
+      "details": "14 storage cases plus original actual Docker pg_dump/encryption/restore; pinned official PostgreSQL image."
+    },
+    "reviewedPostgres": {
+      "files": 2,
+      "passed": 29,
+      "skipped": 1,
+      "seconds": 156.75,
+      "exit": 0,
+      "overlap": "Storage and original feedback cases; V6 dump skipped here then run in finalPostgres."
+    },
+    "sharedPolicy": {
+      "passed": 14,
+      "seconds": 2.7,
+      "exit": 0
+    },
+    "nativeLedger": {
+      "passed": 5,
+      "seconds": 5.017,
+      "exit": 0
+    },
+    "typechecks": {
+      "server": 0,
+      "db": 0,
+      "shared": 0
+    }
+  },
+  "earlierFailures": [
+    "Initial generated schema used a unique index referenced before index creation; migration setup failed 42830, no business cases ran. Regenerated with actual unique constraint.",
+    "One unchanged-source retry timed out during startup hook; following retry started normally.",
+    "Cross-company test originally attempted immutable UPDATE and hit 23514 first; corrected to actual cross-company INSERT, retaining strict guards."
+  ],
+  "dockerImage": "postgres@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+  "open": "Account deletion linkage next. Full customer support flow, provider erasure, lifecycle, source privacy, full latest workspace and V10/PR/release gates remain open."
+}

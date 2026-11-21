@@ -1,0 +1,43 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/adapter-openclaw-gateway| openclaw-extension/bridge-boundary.unit.test.ts > Blentera OpenClaw governed bridge protocol v1 > binds only after authenticated exact-run metadata, then lists and calls through MCP 27ms
+ ✓ |@paperclipai/adapter-openclaw-gateway| openclaw-extension/bridge-boundary.unit.test.ts > Blentera OpenClaw governed bridge protocol v1 > rejects wrong run attestations and untrusted origins before exposing tools 2ms
+ ✓ |@paperclipai/adapter-openclaw-gateway| openclaw-extension/bridge-boundary.unit.test.ts > Blentera OpenClaw governed bridge protocol v1 > rejects stale contract, assignment, capability, or Skill pins before tool discovery 3ms
+ ✓ |@paperclipai/adapter-openclaw-gateway| openclaw-extension/bridge-boundary.unit.test.ts > Blentera OpenClaw governed bridge protocol v1 > rejects expired run tokens, current-policy revocation, and invocation context substitution 2ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > does not grant instance admin by default (flag off) 17ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > stays scoped to exactly the stack's company when the user has no other membership rows 2ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > purges stale instance_admin rows left by pre-hardening deployments 2ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > still upserts the user, company, and membership 2ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > resyncs an A to B to A context transition inside the debounce window 3ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > returns null when the server token is unset 1ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > resolves identically from a raw upgrade-request header map via the shim 1ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > maps a non-owner stack role through to the membership without elevating 1ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > company membership union > unions the pinned primary with the user's own active membership rows, primary first and deduped 3ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > company membership union > loads memberships with the session path's exact own-user active-status filter 3ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > company membership union > degrades to the primary company when the membership read fails 6ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > owner instance-admin elevation (enableOwnerInstanceAdmin) > elevates the owner while the flag is enabled, still without any role row 1ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > owner instance-admin elevation (enableOwnerInstanceAdmin) > does not elevate the owner while the flag is disabled 1ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > owner instance-admin elevation (enableOwnerInstanceAdmin) > never elevates the member stack role even with the flag enabled 0ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > owner instance-admin elevation (enableOwnerInstanceAdmin) > never elevates the admin stack role even with the flag enabled 0ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > owner instance-admin elevation (enableOwnerInstanceAdmin) > never elevates the support stack role even with the flag enabled 0ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > owner instance-admin elevation (enableOwnerInstanceAdmin) > resolves the flag through the managed overlay: overlay on elevates over a DB value of off 6ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > owner instance-admin elevation (enableOwnerInstanceAdmin) > resolves the flag through the managed overlay: overlay off wins over a DB value of on 1ms
+ ✓ |@paperclipai/server| src/middleware/cloud-tenant-actor.test.ts > resolveCloudTenantActor (shared-pool hardening) > owner instance-admin elevation (enableOwnerInstanceAdmin) > fails closed when the settings read errors: actor resolves without elevation 2ms
+[12:08:01] [33mWARN[39m: [36mFailed to repair legacy tenant company provisioning defaults[39m [90m{"companyId":"77a7e424-8c06-51f6-9363-bb7e3491582b"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 74,
+        "column": 73
+      }
+    }
+
+ Test Files  2 passed (2)
+      Tests  23 passed (23)
+   Start at  12:07:44
+   Duration  17.49s (transform 11.94s, setup 59ms, import 17.11s, tests 92ms, environment 0ms)
+

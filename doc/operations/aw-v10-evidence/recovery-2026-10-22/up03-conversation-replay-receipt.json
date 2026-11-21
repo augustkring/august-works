@@ -1,0 +1,38 @@
+{
+  "scope": "Conversation replay partial source collector, not unified input receipt/qualification or permission",
+  "red": {
+    "actualExit": 1,
+    "durableExit": "/workspace/v10-preparation/up03-conversation-replay-red.exit",
+    "failed": 2,
+    "deselected": 33,
+    "durationSeconds": 64.99,
+    "log": "/workspace/v10-preparation/up03-conversation-replay-red.log",
+    "exactTest": "/workspace/v10-preparation/up03-conversation-replay-red-test.ts",
+    "before": "/workspace/v10-preparation/up03-conversation-replay-red-before.sha256",
+    "pinsUnchanged": true
+  },
+  "green": {
+    "actualExit": 0,
+    "durableExit": "/workspace/v10-preparation/up03-conversation-replay-green.exit",
+    "log": "/workspace/v10-preparation/up03-conversation-replay-green.log",
+    "before": "/workspace/v10-preparation/up03-conversation-replay-green-before.sha256",
+    "after": "/workspace/v10-preparation/up03-conversation-replay-green-after.sha256",
+    "pinsUnchanged": true,
+    "passed": 3,
+    "deselected": 32,
+    "durationSeconds": 72.8
+  },
+  "ownedSources": {
+    "server/src/services/agent-conversations.ts": "0b890f4750714000a4025da20200fc639030bb07f519b3b13cc0976d9ef21f8c",
+    "server/src/services/heartbeat.ts": "c9654b6bb7304bf8f720951fbfefbcac41c8c2bbf437d122e260ff27a36a18a5",
+    "server/src/__tests__/agent-conversations.test.ts": "825a81ccee6e7c5c3e28d8c4a026d4d5f6495e747196a82efa5d3851b7e65407"
+  },
+  "limits": [
+    "Rendition SHA binds exact per-comment JSON line after original sanitizer/truncation, not full owner envelope or final redacted dispatch bytes",
+    "NULL snapshot remains unknown",
+    "Snapshot fixture is structural binding, not actual native producer qualification",
+    "Scoped PG fixtures exercise collector selection/rendering and original reset behavior; full native bootstrap workflow/review/recovery branches source-reviewed, not runtime-qualified here",
+    "No full compiler/suite or unified receipt/admission claim",
+    "No Git commit by A"
+  ]
+}

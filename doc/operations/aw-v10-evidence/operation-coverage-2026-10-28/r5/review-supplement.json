@@ -1,0 +1,1857 @@
+{
+  "formatVersion": 1,
+  "source": "source-reviewed current groups absent from prior route/client review chunks",
+  "operations": [
+    {
+      "clientCall": "announcementsApi.changelog",
+      "httpClassification": "unknown",
+      "routeSignatures": [
+        "unknown:`/api/announcements/${path}`"
+      ],
+      "apiClientDefinition": {
+        "source": "ui/src/api/announcements.ts",
+        "method": "changelog"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/CustomerChangelog.tsx",
+          "line": 11,
+          "pathSignature": "locale",
+          "argumentsSignature": "locale, signal",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "NOT_APPLICABLE",
+        "materiality": "nonmaterial",
+        "canonicalServerOwner": "server/src/routes/announcements.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/announcements.ts",
+            "line": 19,
+            "claim": "Router middleware requires an authenticated Board user; releases handler serves changelog data only."
+          },
+          {
+            "path": "server/src/routes/announcements.ts",
+            "line": 33,
+            "claim": "GET /announcements/releases returns changelog projection."
+          }
+        ],
+        "rationale": "Read-only customer changelog; no mutating operation or Agent tool parity applies.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "announcementsApi.current",
+      "httpClassification": "unknown",
+      "routeSignatures": [
+        "unknown:`/api/announcements/${path}`"
+      ],
+      "apiClientDefinition": {
+        "source": "ui/src/api/announcements.ts",
+        "method": "current"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/hooks/useAnnouncement.ts",
+          "line": 88,
+          "pathSignature": "controller.signal",
+          "argumentsSignature": "controller.signal",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "NOT_APPLICABLE",
+        "materiality": "nonmaterial",
+        "canonicalServerOwner": "server/src/routes/announcements.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/announcements.ts",
+            "line": 19,
+            "claim": "Router middleware requires an authenticated Board user; current handler only reads feed and dismissal state."
+          },
+          {
+            "path": "server/src/routes/announcements.ts",
+            "line": 28,
+            "claim": "GET /announcements/current returns current feed item."
+          }
+        ],
+        "rationale": "Read-only current announcement projection; no mutation or Agent tool parity applies.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "announcementsApi.dismiss",
+      "httpClassification": "unknown",
+      "routeSignatures": [
+        "unknown:`/api/announcements/${path}`"
+      ],
+      "apiClientDefinition": {
+        "source": "ui/src/api/announcements.ts",
+        "method": "dismiss"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/hooks/useAnnouncement.ts",
+          "line": 41,
+          "pathSignature": "id",
+          "argumentsSignature": "id, latest.current.companyId, controller.signal",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/routes/announcements.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/announcements.ts",
+            "line": 19,
+            "claim": "Announcement routes require authenticated Board user context."
+          },
+          {
+            "path": "server/src/routes/announcements.ts",
+            "line": 115,
+            "claim": "Dismiss handler records the user preference after validating current account/company context."
+          }
+        ],
+        "rationale": "This changes an instance-wide user preference; Board authentication and account identity gate the handler. It is not a company workflow action.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.patch",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "patch:`/companies/${cid}/projects/${pid}/roadmap/milestones/${m.id}`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "patch"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/ProjectRoadmap.tsx",
+          "line": 95,
+          "pathSignature": "`/companies/${cid}/projects/${pid}/roadmap/milestones/${m.id}`",
+          "argumentsSignature": "`/companies/${cid}/projects/${pid}/roadmap/milestones/${m.id}`, { expectedUpdatedAt: m.updatedAt, status: e.target.value }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/project-control.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/project-control.ts",
+            "line": 34,
+            "claim": "Milestone update route checks company access and dispatches update to Project Control service."
+          },
+          {
+            "path": "server/src/services/project-control.ts",
+            "line": 101,
+            "claim": "updateMilestone requires v5HumanActorId and tasks:assign permission."
+          }
+        ],
+        "rationale": "Milestone update has an explicit Human actor and tasks:assign guard in the canonical service.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.patch",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "patch:`/companies/${cid}/projects/${pid}/roadmap/tasks/${editor.id}/forecast`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "patch"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/ProjectRoadmap.tsx",
+          "line": 96,
+          "pathSignature": "`/companies/${cid}/projects/${pid}/roadmap/tasks/${editor.id}/forecast`",
+          "argumentsSignature": "`/companies/${cid}/projects/${pid}/roadmap/tasks/${editor.id}/forecast`, { expectedUpdatedAt: editor.updatedAt, forecastStartAt: instant(forecastStart), forecastEndAt: instant(forecastEnd), forecastConfidence: confidence === \"\" ? null : Number(confidence), forecastReason: reason }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "DIRECT_AGENT",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/project-control.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/project-control.ts",
+            "line": 38,
+            "claim": "Forecast route checks company access and dispatches forecast update."
+          },
+          {
+            "path": "server/src/services/project-control.ts",
+            "line": 173,
+            "claim": "forecast rejects Agent updates unless project policy allowAgentForecast is true and forecast ownership is internal."
+          }
+        ],
+        "rationale": "Canonical service permits an Agent only under project forecast ownership/policy checks; no manifest ID asserted.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.patch",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "patch:`${base}/${selected}`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "patch"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 22,
+          "pathSignature": "`${base}/${selected}`",
+          "argumentsSignature": "`${base}/${selected}`, input",
+          "occurrence": 0
+        },
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 22,
+          "pathSignature": "`${base}/${selected}`",
+          "argumentsSignature": "`${base}/${selected}`, { status: row.status === \"active\" ? \"archived\" : \"active\" }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/organization.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/organization.ts",
+            "line": 31,
+            "claim": "Org-unit update route checks company access and dispatches service update."
+          },
+          {
+            "path": "server/src/services/organization.ts",
+            "line": 14,
+            "claim": "All organization writes require v5HumanActorId and users:manage_permissions."
+          }
+        ],
+        "rationale": "Organization configuration writes require Human authorization in the service.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.patch",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "patch:`${base}/lifecycle/governance`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "patch"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/SkillGovernance.tsx",
+          "line": 42,
+          "pathSignature": "`${base}/lifecycle/governance`",
+          "argumentsSignature": "`${base}/lifecycle/governance`, input",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/skill-lifecycle.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/skill-lifecycle.ts",
+            "line": 13,
+            "claim": "Governance route dispatches to lifecycle service."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 119,
+            "claim": "Governance requires skills.approve; Agent authorize rejects all lifecycle actions except skills.propose and explicitly configured skills.promote."
+          }
+        ],
+        "rationale": "Governance configuration is a Human approval operation.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/companies/${cid}/agents/${selected.agentId}/provider-binding/${attachId}/acknowledge-shared`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/AgentRuntimeFabric.tsx",
+          "line": 43,
+          "pathSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding/${attachId}/acknowledge-shared`",
+          "argumentsSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding/${attachId}/acknowledge-shared`, { warningVersion: PROVIDER_ISOLATION_WARNING_VERSION, acknowledged: true }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/agent-provider-bindings.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/agent-provider-bindings.ts",
+            "line": 40,
+            "claim": "Shared-runtime acknowledgement route is mounted at this handler."
+          },
+          {
+            "path": "server/src/routes/agent-provider-bindings.ts",
+            "line": 42,
+            "claim": "Route checks company access."
+          },
+          {
+            "path": "server/src/services/agent-provider-bindings.ts",
+            "line": 183,
+            "claim": "Acknowledgement binds identity through v5HumanActorId."
+          }
+        ],
+        "rationale": "Shared-runtime risk acknowledgement is recorded against a Human user.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/companies/${cid}/agents/${selected.agentId}/provider-binding/${binding.provider.id}/acknowledge-shared`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/AgentRuntimeFabric.tsx",
+          "line": 41,
+          "pathSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding/${binding.provider.id}/acknowledge-shared`",
+          "argumentsSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding/${binding.provider.id}/acknowledge-shared`, { warningVersion: PROVIDER_ISOLATION_WARNING_VERSION, acknowledged: true }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/agent-provider-bindings.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/agent-provider-bindings.ts",
+            "line": 40,
+            "claim": "Shared-runtime acknowledgement route is mounted at this handler."
+          },
+          {
+            "path": "server/src/routes/agent-provider-bindings.ts",
+            "line": 42,
+            "claim": "Route checks company access."
+          },
+          {
+            "path": "server/src/services/agent-provider-bindings.ts",
+            "line": 183,
+            "claim": "Acknowledgement binds identity through v5HumanActorId."
+          }
+        ],
+        "rationale": "Shared-runtime risk acknowledgement is bound to a Human user.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/companies/${cid}/agents/${selected.agentId}/provider-binding/discover`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/AgentRuntimeFabric.tsx",
+          "line": 42,
+          "pathSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding/discover`",
+          "argumentsSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding/discover`, {}",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/provider-discovery.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/agent-provider-bindings.ts",
+            "line": 28,
+            "claim": "Discovery route checks company access and calls provider discovery."
+          },
+          {
+            "path": "server/src/services/provider-discovery.ts",
+            "line": 17,
+            "claim": "discover binds the actor to v5HumanActorId."
+          },
+          {
+            "path": "server/src/services/provider-discovery.ts",
+            "line": 18,
+            "claim": "discover requires agents:configure."
+          }
+        ],
+        "rationale": "Provider discovery requires a Human actor and agents:configure.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/companies/${cid}/agents/${selected.agentId}/provider-binding/revalidate`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/AgentRuntimeFabric.tsx",
+          "line": 42,
+          "pathSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding/revalidate`",
+          "argumentsSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding/revalidate`, { expectedSnapshotHash: binding.provider.capabilitySnapshot!.hash, rationale: providerReview }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/agent-provider-bindings.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/agent-provider-bindings.ts",
+            "line": 36,
+            "claim": "Revalidation route checks company access and dispatches service revalidate."
+          },
+          {
+            "path": "server/src/services/agent-provider-bindings.ts",
+            "line": 142,
+            "claim": "revalidate requires v5HumanActorId and agents:configure."
+          }
+        ],
+        "rationale": "Provider revalidation is Human-authorized.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/companies/${cid}/agents/${selected.agentId}/provider-binding`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/AgentRuntimeFabric.tsx",
+          "line": 43,
+          "pathSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding`",
+          "argumentsSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding`, { providerType, providerAgentRef: physicalAgent, isolationMode: shared ? \"shared_trusted_runtime\" : \"isolated_per_presence\" }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/agent-provider-bindings.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/agent-provider-bindings.ts",
+            "line": 20,
+            "claim": "Creation route checks company access and dispatches service create."
+          },
+          {
+            "path": "server/src/services/agent-provider-bindings.ts",
+            "line": 79,
+            "claim": "create requires v5HumanActorId."
+          },
+          {
+            "path": "server/src/services/agent-provider-bindings.ts",
+            "line": 80,
+            "claim": "create requires agents:configure for the local Agent."
+          }
+        ],
+        "rationale": "Provider binding creation requires a Human actor and agents:configure.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/agents/${agentId}/provider-binding/conformance`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/ProviderConformanceControls.tsx",
+          "line": 15,
+          "pathSignature": "`/companies/${companyId}/agents/${agentId}/provider-binding/conformance`",
+          "argumentsSignature": "`/companies/${companyId}/agents/${agentId}/provider-binding/conformance`, { acknowledgeProviderRuns: true, maximumCostCents: Number(costCeiling), isolationPeer: peer ? { companyId: peerCompanyId, agentId: peer.agentId } : null }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/provider-conformance.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/agent-provider-bindings.ts",
+            "line": 32,
+            "claim": "Conformance route checks company access and dispatches provider conformance."
+          },
+          {
+            "path": "server/src/services/provider-conformance.ts",
+            "line": 31,
+            "claim": "Conformance derives userId from v5HumanActorId."
+          },
+          {
+            "path": "server/src/services/provider-conformance.ts",
+            "line": 32,
+            "claim": "Conformance requires agents:configure."
+          }
+        ],
+        "rationale": "Provider conformance is initiated by a Human actor with agents:configure.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/portfolio-capabilities/subscriptions/${subscription.id}/prepare-upgrade`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/PortfolioPublication.tsx",
+          "line": 31,
+          "pathSignature": "`/companies/${companyId}/portfolio-capabilities/subscriptions/${subscription.id}/prepare-upgrade`",
+          "argumentsSignature": "`/companies/${companyId}/portfolio-capabilities/subscriptions/${subscription.id}/prepare-upgrade`, { publicationId: subscription.availablePublicationId, ...input }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/portfolio-capabilities.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/portfolio.ts",
+            "line": 12,
+            "claim": "Portfolio capability routes check company access."
+          },
+          {
+            "path": "server/src/services/portfolio-capabilities.ts",
+            "line": 19,
+            "claim": "Portfolio service checks the feature and company scope."
+          },
+          {
+            "path": "server/src/services/portfolio-capabilities.ts",
+            "line": 20,
+            "claim": "Mutations require v5HumanActorId, users:manage_permissions and portfolio.use."
+          }
+        ],
+        "rationale": "Upgrade preparation writes a candidate through a Human-authorized portfolio operation.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/support/assistant/answers`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/CustomerSupportAssistant.tsx",
+          "line": 50,
+          "pathSignature": "`/companies/${companyId}/support/assistant/answers`",
+          "argumentsSignature": "`/companies/${companyId}/support/assistant/answers`, { requestId, expectedUserId: principal, question: text,\n          locale, consent: true, consentPolicyRevision: available.policyRevision }, { signal: request.signal }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/routes/customer-support.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/customer-support.ts",
+            "line": 30,
+            "claim": "Assistant answer route asserts Board access and company scope."
+          },
+          {
+            "path": "server/src/routes/customer-support.ts",
+            "line": 30,
+            "claim": "Expected user identity is bound to current Human actor."
+          }
+        ],
+        "rationale": "Support answer submission is Board-only and binds the expected user identity.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/companies/${selectedCompanyId}/skills/governed-drafts`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/NewGovernedSkill.tsx",
+          "line": 16,
+          "pathSignature": "`/companies/${selectedCompanyId}/skills/governed-drafts`",
+          "argumentsSignature": "`/companies/${selectedCompanyId}/skills/governed-drafts`, { slug: key, name, description, markdown, triggerTerms: terms(triggers), excludeTerms: terms(excludes), sharing: shared ? \"company_proposed\" : \"private_draft\" }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "PROPOSAL_ONLY",
+        "materiality": "launchcritical",
+        "canonicalServerOwner": "server/src/services/skill-lifecycle.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 37,
+            "claim": "Agent lifecycle authorization only permits skills.propose apart from explicitly gated promotion."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 129,
+            "claim": "Governed draft requires skills.propose and creates candidate proposal."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 145,
+            "claim": "Candidate proposal requires skills.propose and records author/limits."
+          }
+        ],
+        "rationale": "This is a guarded Skills proposal operation; Agent path proposes a candidate rather than bypassing Human approval semantics.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`/internal/customer-feedback/${companyId}/${request.id}/triage?expectedUserId=${encodeURIComponent(principal)}`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/FeedbackTriage.tsx",
+          "line": 130,
+          "pathSignature": "`/internal/customer-feedback/${companyId}/${request.id}/triage?expectedUserId=${encodeURIComponent(principal)}`",
+          "argumentsSignature": "`/internal/customer-feedback/${companyId}/${request.id}/triage?expectedUserId=${encodeURIComponent(principal)}`, request.input",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "OPERATOR_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/customer-feedback.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 269,
+            "claim": "Triage route asserts Board identity and invokes canonical service."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 200,
+            "claim": "operator() calls configured operator authentication."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 678,
+            "claim": "triage requires recent verified operator authentication and rechecks the record version."
+          }
+        ],
+        "rationale": "Triage requires a configured verified operator session; Board identity alone is insufficient.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/${r.id}/transition`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 33,
+          "pathSignature": "`${base}/${r.id}/transition`",
+          "argumentsSignature": "`${base}/${r.id}/transition`, { action: \"reject\" }",
+          "occurrence": 0
+        },
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 33,
+          "pathSignature": "`${base}/${r.id}/transition`",
+          "argumentsSignature": "`${base}/${r.id}/transition`, { action: \"accept\" }",
+          "occurrence": 0
+        },
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 33,
+          "pathSignature": "`${base}/${r.id}/transition`",
+          "argumentsSignature": "`${base}/${r.id}/transition`, { action: \"revoke\" }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/organization.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/organization.ts",
+            "line": 19,
+            "claim": "Relationship transition route checks company access and dispatches transition."
+          },
+          {
+            "path": "server/src/services/organization.ts",
+            "line": 14,
+            "claim": "All relationship writes require v5HumanActorId and users:manage_permissions."
+          }
+        ],
+        "rationale": "Relationship state transitions are Human-authorized in the canonical service.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/${selected}/versions/${selectedVersion}/publish`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/RolePacks.tsx",
+          "line": 32,
+          "pathSignature": "`${base}/${selected}/versions/${selectedVersion}/publish`",
+          "argumentsSignature": "`${base}/${selected}/versions/${selectedVersion}/publish`, { expectedPublishedVersionId: detail.data!.publishedVersionId }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/role-packs.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/role-packs.ts",
+            "line": 1,
+            "claim": "Role Pack routes apply company scope."
+          },
+          {
+            "path": "server/src/services/role-packs.ts",
+            "line": 21,
+            "claim": "configurable() requires v5HumanActorId and agents:configure."
+          }
+        ],
+        "rationale": "Role Pack publication is Human-configured.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/${selected}/versions`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/RolePacks.tsx",
+          "line": 32,
+          "pathSignature": "`${base}/${selected}/versions`",
+          "argumentsSignature": "`${base}/${selected}/versions`, { items, summary }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/role-packs.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/role-packs.ts",
+            "line": 17,
+            "claim": "Role Pack version route is company-scoped and dispatches to createVersion."
+          },
+          {
+            "path": "server/src/services/role-packs.ts",
+            "line": 21,
+            "claim": "configurable() requires v5HumanActorId and agents:configure."
+          }
+        ],
+        "rationale": "Role Pack version creation is Human-configured through the canonical service.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/evaluations/runs`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/SkillGovernance.tsx",
+          "line": 39,
+          "pathSignature": "`${base}/evaluations/runs`",
+          "argumentsSignature": "`${base}/evaluations/runs`, { suiteId: suite, candidateVersionId: candidate, championVersionId: life.activeVersionId, trials: life.promotionPolicy.minimumPairedTrials }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/skill-evaluations.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/skill-evaluations.ts",
+            "line": 1,
+            "claim": "Evaluation routes apply company scope."
+          },
+          {
+            "path": "server/src/services/skill-evaluations.ts",
+            "line": 41,
+            "claim": "Mutating evaluation operations require v5HumanActorId and users:manage_permissions."
+          }
+        ],
+        "rationale": "Evaluation run creation is Human-only in the canonical service.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/lifecycle/candidates/${candidate}/overlap-review`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/SkillGovernance.tsx",
+          "line": 38,
+          "pathSignature": "`${base}/lifecycle/candidates/${candidate}/overlap-review`",
+          "argumentsSignature": "`${base}/lifecycle/candidates/${candidate}/overlap-review`, { rationale }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/skill-lifecycle.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/skill-lifecycle.ts",
+            "line": 16,
+            "claim": "Overlap review route dispatches to reviewOverlap."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 190,
+            "claim": "reviewOverlap requires skills.approve and records reviewedByUserId."
+          }
+        ],
+        "rationale": "This is an approval judgment recorded to the candidate, explicitly Human-only.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/lifecycle/candidates/${candidate}/submit`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/SkillGovernance.tsx",
+          "line": 38,
+          "pathSignature": "`${base}/lifecycle/candidates/${candidate}/submit`",
+          "argumentsSignature": "`${base}/lifecycle/candidates/${candidate}/submit`, {}",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "PROPOSAL_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/skill-lifecycle.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 37,
+            "claim": "Agent lifecycle authorization only permits skills.propose apart from explicitly gated promotion."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 129,
+            "claim": "Governed draft requires skills.propose and creates candidate proposal."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 145,
+            "claim": "Candidate proposal requires skills.propose and records author/limits."
+          }
+        ],
+        "rationale": "Submission only makes the authored candidate visible as proposed for later review.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/lifecycle/candidates`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/SkillGovernance.tsx",
+          "line": 36,
+          "pathSignature": "`${base}/lifecycle/candidates`",
+          "argumentsSignature": "`${base}/lifecycle/candidates`, { baseActiveVersionId: life.activeVersionId, markdown: body, summary, sharing }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "PROPOSAL_ONLY",
+        "materiality": "launchcritical",
+        "canonicalServerOwner": "server/src/services/skill-lifecycle.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 37,
+            "claim": "Agent lifecycle authorization only permits skills.propose apart from explicitly gated promotion."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 129,
+            "claim": "Governed draft requires skills.propose and creates candidate proposal."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 145,
+            "claim": "Candidate proposal requires skills.propose and records author/limits."
+          }
+        ],
+        "rationale": "Candidate creation is an Agent-capable proposal, not approval or publication.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/lifecycle/promote`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/SkillGovernance.tsx",
+          "line": 41,
+          "pathSignature": "`${base}/lifecycle/promote`",
+          "argumentsSignature": "`${base}/lifecycle/promote`, { versionId: candidate, expectedActiveVersionId: life.activeVersionId, evaluationRunId: evalId }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "DIRECT_AGENT",
+        "materiality": "launchcritical",
+        "canonicalServerOwner": "server/src/services/skill-lifecycle.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/skill-lifecycle.ts",
+            "line": 18,
+            "claim": "Promotion route passes actor and expected promotion input to canonical lifecycle service."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 37,
+            "claim": "Agent promotion requires explicit enabled feature, local owner match, allowAutonomousPromotion and no required Human review."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 213,
+            "claim": "Promotion compares expected active version; subsequent checks require a passed paired evaluation, configured suites, safety/process/outcome/cost thresholds, retained traces, and current dependencies."
+          }
+        ],
+        "rationale": "Agent promotion is possible only under explicit local owner policy and extensive promotion evidence; this does not establish a separate tool mapping.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/lifecycle/transition`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/SkillGovernance.tsx",
+          "line": 42,
+          "pathSignature": "`${base}/lifecycle/transition`",
+          "argumentsSignature": "`${base}/lifecycle/transition`, { state, reason: rationale }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/skill-lifecycle.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/skill-lifecycle.ts",
+            "line": 17,
+            "claim": "Lifecycle transition route dispatches to transition."
+          },
+          {
+            "path": "server/src/services/skill-lifecycle.ts",
+            "line": 207,
+            "claim": "transition authorizes skills.deprecate; Agent authorization only allows proposal and explicit autonomous promotion."
+          }
+        ],
+        "rationale": "Lifecycle state transitions require Human approval permission.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/publications/${release.id}/withdraw`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/PortfolioPublication.tsx",
+          "line": 23,
+          "pathSignature": "`${base}/publications/${release.id}/withdraw`",
+          "argumentsSignature": "`${base}/publications/${release.id}/withdraw`, {}",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/portfolio-capabilities.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/portfolio.ts",
+            "line": 1,
+            "claim": "Portfolio route boundary applies company scope."
+          },
+          {
+            "path": "server/src/services/portfolio-capabilities.ts",
+            "line": 19,
+            "claim": "Portfolio service checks the feature and company scope."
+          },
+          {
+            "path": "server/src/services/portfolio-capabilities.ts",
+            "line": 20,
+            "claim": "Mutations require v5HumanActorId, users:manage_permissions and portfolio.use."
+          }
+        ],
+        "rationale": "Withdrawal is a Human-authorized publication control.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/publications`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/PortfolioPublication.tsx",
+          "line": 23,
+          "pathSignature": "`${base}/publications`",
+          "argumentsSignature": "`${base}/publications`, { assetType: kind, assetId, versionId: revision, recipientCompanyIds: recipients, releaseNotes: notes, classification }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/portfolio-capabilities.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/portfolio.ts",
+            "line": 1,
+            "claim": "Portfolio route boundary applies company scope."
+          },
+          {
+            "path": "server/src/services/portfolio-capabilities.ts",
+            "line": 19,
+            "claim": "Portfolio service checks the feature and company scope."
+          },
+          {
+            "path": "server/src/services/portfolio-capabilities.ts",
+            "line": 20,
+            "claim": "Mutations require v5HumanActorId, users:manage_permissions and portfolio.use."
+          }
+        ],
+        "rationale": "Publication is a Human-authorized cross-company release.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:`${base}/runs/${evaluation.id}/observations`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/SkillEvaluationEvidence.tsx",
+          "line": 27,
+          "pathSignature": "`${base}/runs/${evaluation.id}/observations`",
+          "argumentsSignature": "`${base}/runs/${evaluation.id}/observations`, { caseId, trial, arm, testRunId: trace.id, humanAssessment: { processScore: Number(process), outcomeScore: Number(outcome), safetyPassed: safety, rationale } }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/skill-evaluations.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/skill-evaluations.ts",
+            "line": 1,
+            "claim": "Evaluation routes apply company scope."
+          },
+          {
+            "path": "server/src/services/skill-evaluations.ts",
+            "line": 41,
+            "claim": "Mutating evaluation operations require v5HumanActorId and users:manage_permissions."
+          }
+        ],
+        "rationale": "Evaluation assessment entry derives the judge identity from the Human actor.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:base"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/RolePacks.tsx",
+          "line": 29,
+          "pathSignature": "base",
+          "argumentsSignature": "base, { key, name }",
+          "occurrence": 0
+        },
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 22,
+          "pathSignature": "base",
+          "argumentsSignature": "base, input",
+          "occurrence": 0
+        },
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 33,
+          "pathSignature": "base",
+          "argumentsSignature": "base, { targetCompanyId: target, relationshipType: type }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "unresolved",
+        "materiality": "unresolved",
+        "canonicalServerOwner": "unresolved",
+        "rationale": "Current exact route/service authorization was not fully source-reviewed; remain fail-closed.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:path"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/FeedbackRetentionControls.tsx",
+          "line": 41,
+          "pathSignature": "path",
+          "argumentsSignature": "path, attempted.current",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "OPERATOR_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/customer-feedback-retention.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 75,
+            "claim": "Retention mutation route asserts Board identity."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 244,
+            "claim": "Retention writes reject local implicit sessions and call verified operator guard."
+          }
+        ],
+        "rationale": "Retention control is restricted to verified internal operators.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:path + identity"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/FeedbackRetentionErasure.tsx",
+          "line": 38,
+          "pathSignature": "path + identity",
+          "argumentsSignature": "path + identity, command",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "OPERATOR_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/customer-feedback-retention-erasure.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 106,
+            "claim": "Erasure mutation route calls identity() which asserts Board."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 244,
+            "claim": "Retention owner boundary rejects local implicit sessions."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 248,
+            "claim": "Retention owner boundary validates configured operator authentication."
+          },
+          {
+            "path": "server/src/services/customer-feedback-retention-erasure.ts",
+            "line": 116,
+            "claim": "Erasure execution uses the verified internal retention receipt boundary."
+          }
+        ],
+        "rationale": "Retention erasure requires verified internal operator authorization.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:replacementSuiteId ? `${base}/evaluations/suites/${replacementSuiteId}/replace` : `${base}/evaluations/suites`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/SkillGovernance.tsx",
+          "line": 39,
+          "pathSignature": "replacementSuiteId ? `${base}/evaluations/suites/${replacementSuiteId}/replace` : `${base}/evaluations/suites`",
+          "argumentsSignature": "replacementSuiteId ? `${base}/evaluations/suites/${replacementSuiteId}/replace` : `${base}/evaluations/suites`, replacementSuiteId ? { replacement, reason: replacementReason } : replacement",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/skill-evaluations.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/skill-evaluations.ts",
+            "line": 1,
+            "claim": "Evaluation routes apply company scope."
+          },
+          {
+            "path": "server/src/services/skill-evaluations.ts",
+            "line": 41,
+            "claim": "Mutating evaluation operations require v5HumanActorId and users:manage_permissions."
+          }
+        ],
+        "rationale": "Evaluation suite creation/replacement is Human-only.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:supportPath(companyId, \"/cases\")"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/CustomerSupportCases.tsx",
+          "line": 364,
+          "pathSignature": "supportPath(companyId, \"/cases\")",
+          "argumentsSignature": "supportPath(companyId, \"/cases\"), attempt.payload",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/experience/support-cases.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/customer-support.ts",
+            "line": 62,
+            "claim": "Support case create route asserts Board and company access."
+          },
+          {
+            "path": "server/src/routes/customer-support.ts",
+            "line": 62,
+            "claim": "Canonical support case service is invoked with current Board actor."
+          }
+        ],
+        "rationale": "Support case creation is Board-gated; existing UI inventory row is the mapped UI operation.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.post",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:supportPath(companyId, `/cases/${encodeURIComponent(attempt.caseId)}/${attempt.kind === \"close\" ? \"close\" : \"replies\"}`)"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "post"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/CustomerSupportCases.tsx",
+          "line": 415,
+          "pathSignature": "supportPath(companyId, `/cases/${encodeURIComponent(attempt.caseId)}/${attempt.kind === \"close\" ? \"close\" : \"replies\"}`)",
+          "argumentsSignature": "supportPath(companyId, `/cases/${encodeURIComponent(attempt.caseId)}/${attempt.kind === \"close\" ? \"close\" : \"replies\"}`), attempt.payload",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/experience/support-cases.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/customer-support.ts",
+            "line": 75,
+            "claim": "Support case reply/close route asserts Board and company access."
+          },
+          {
+            "path": "server/src/routes/customer-support.ts",
+            "line": 75,
+            "claim": "Canonical support case service is invoked with current Board actor."
+          }
+        ],
+        "rationale": "Support case replies and closure are Board-gated; existing UI inventory row is mapped to the canonical support case owner.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.put",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "put:`/companies/${cid}/agents/${selected.agentId}/provider-binding`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "put"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/AgentRuntimeFabric.tsx",
+          "line": 43,
+          "pathSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding`",
+          "argumentsSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding`, { providerBindingId: created.id, providerProfileRef: profileRef }",
+          "occurrence": 0
+        },
+        {
+          "source": "ui/src/pages/AgentRuntimeFabric.tsx",
+          "line": 43,
+          "pathSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding`",
+          "argumentsSignature": "`/companies/${cid}/agents/${selected.agentId}/provider-binding`, { providerBindingId: attachId, providerProfileRef: profileRef }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/agent-provider-bindings.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/agent-provider-bindings.ts",
+            "line": 24,
+            "claim": "Attach route checks company access and dispatches service attach."
+          },
+          {
+            "path": "server/src/services/agent-provider-bindings.ts",
+            "line": 114,
+            "claim": "attach requires v5HumanActorId."
+          },
+          {
+            "path": "server/src/services/agent-provider-bindings.ts",
+            "line": 115,
+            "claim": "attach requires agents:configure for the local Agent."
+          }
+        ],
+        "rationale": "Provider attachment is Human-authorized.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.put",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "put:`/companies/${companyId}/cross-company/policy`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "put"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/CrossCompanyPolicy.tsx",
+          "line": 12,
+          "pathSignature": "`/companies/${companyId}/cross-company/policy`",
+          "argumentsSignature": "`/companies/${companyId}/cross-company/policy`, policy",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/cross-company-context.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/cross-company-context.ts",
+            "line": 17,
+            "claim": "PUT policy route checks company access and calls setPolicy."
+          },
+          {
+            "path": "server/src/services/cross-company-context.ts",
+            "line": 89,
+            "claim": "setPolicy requires v5HumanActorId and users:manage_permissions."
+          }
+        ],
+        "rationale": "Cross-company policy changes require a Human actor and users:manage_permissions in the canonical service.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.put",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "put:`/companies/${companyId}/projects/${projectId}/roadmap/policy`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "put"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/components/RoadmapPolicy.tsx",
+          "line": 11,
+          "pathSignature": "`/companies/${companyId}/projects/${projectId}/roadmap/policy`",
+          "argumentsSignature": "`/companies/${companyId}/projects/${projectId}/roadmap/policy`, value",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/project-control.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/project-control.ts",
+            "line": 32,
+            "claim": "Roadmap policy route checks company access and dispatches policy update."
+          },
+          {
+            "path": "server/src/services/project-control.ts",
+            "line": 80,
+            "claim": "Policy update requires v5HumanActorId and users:manage_permissions."
+          }
+        ],
+        "rationale": "Policy configuration requires a Human actor and permission in the canonical service.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.put",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "put:`${base}/${selected}/memberships`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "put"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 23,
+          "pathSignature": "`${base}/${selected}/memberships`",
+          "argumentsSignature": "`${base}/${selected}/memberships`, { principalType: m.principalType, principalId: m.principalId, role: m.role, status: \"archived\" }",
+          "occurrence": 0
+        },
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 23,
+          "pathSignature": "`${base}/${selected}/memberships`",
+          "argumentsSignature": "`${base}/${selected}/memberships`, { principalType: \"agent\", principalId, role, status: \"active\" }",
+          "occurrence": 0
+        },
+        {
+          "source": "ui/src/pages/OrganizationV5.tsx",
+          "line": 23,
+          "pathSignature": "`${base}/${selected}/memberships`",
+          "argumentsSignature": "`${base}/${selected}/memberships`, { principalType: \"user\", principalId: humanId, role, status: \"active\" }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/organization.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/organization.ts",
+            "line": 39,
+            "claim": "Org-unit membership route checks company access and dispatches membership update."
+          },
+          {
+            "path": "server/src/services/organization.ts",
+            "line": 14,
+            "claim": "All organization writes require v5HumanActorId and users:manage_permissions."
+          }
+        ],
+        "rationale": "Organization membership writes require Human authorization in the canonical service.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "api.put",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "put:`${base}/assignments`"
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "put"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/RolePacks.tsx",
+          "line": 33,
+          "pathSignature": "`${base}/assignments`",
+          "argumentsSignature": "`${base}/assignments`, { scopeType, scopeId: scopeType === \"company\" ? cid : scopeType === \"org_unit\" ? unitId : agentId, rolePackId: selected, versionPolicy: pin ? \"pinned\" : \"follow_published\", pinnedVersionId: pin ? selectedVersion : null }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "HUMAN_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/services/role-packs.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/role-packs.ts",
+            "line": 1,
+            "claim": "Role Pack routes apply company scope."
+          },
+          {
+            "path": "server/src/services/role-packs.ts",
+            "line": 21,
+            "claim": "configurable() requires v5HumanActorId and agents:configure."
+          }
+        ],
+        "rationale": "Role Pack assignments are Human-configured.",
+        "manifestOperationId": null
+      }
+    },
+    {
+      "clientCall": "fetch.fetch",
+      "httpClassification": "write",
+      "routeSignatures": [
+        "post:\"/api/board/chat/stream\""
+      ],
+      "apiClientDefinition": {
+        "source": "unknown",
+        "method": "fetch"
+      },
+      "sourceCallsites": [
+        {
+          "source": "ui/src/pages/BoardChat.tsx",
+          "line": 552,
+          "pathSignature": "\"/api/board/chat/stream\"",
+          "argumentsSignature": "\"/api/board/chat/stream\", {\n          method: \"POST\",\n          headers: { \"Content-Type\": \"application/json\" },\n          body: JSON.stringify({\n            companyId: selectedCompanyId,\n            message: trimmed,\n            taskId: boardIssueId ?? undefined,\n          }),\n          signal: controller.signal,\n        }",
+          "occurrence": 0
+        }
+      ],
+      "proposedClassification": "unreviewed",
+      "proposedMateriality": "unresolved",
+      "canonicalServerOwner": "unresolved",
+      "review": {
+        "classification": "OPERATOR_ONLY",
+        "materiality": "ordinary",
+        "canonicalServerOwner": "server/src/routes/board-chat.ts",
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/board-chat.ts",
+            "line": 98,
+            "claim": "Board chat endpoint is experimental and feature-gated."
+          },
+          {
+            "path": "server/src/routes/board-chat.ts",
+            "line": 108,
+            "claim": "Endpoint refuses every deployment mode except local_trusted single-operator instances."
+          },
+          {
+            "path": "server/src/routes/board-chat.ts",
+            "line": 138,
+            "claim": "The route verifies company access before issue reads/writes."
+          }
+        ],
+        "rationale": "This mutating chat relay is restricted to local_trusted single-operator deployment and current actor company access.",
+        "manifestOperationId": null
+      }
+    }
+  ]
+}

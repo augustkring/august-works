@@ -422,7 +422,7 @@ async function promptForImportSelection(preview: CompanyPortabilityPreviewResult
 
   while (true) {
     const choice = await p.select<ImportSelectableGroup | "company" | "confirm">({
-      message: "Select what Paperclip should import",
+      message: "Select what Blentera should import",
       options: [
         {
           value: "company",
@@ -1980,7 +1980,8 @@ export function registerCompanyCommands(program: Command): void {
 
           assertDeleteConfirmation(target, opts);
 
-          await ctx.api.delete<{ ok: true }>(apiPath`/api/companies/${target.id}`);
+          // The server also requires the organization's current name (EXIT-AUTH1).
+          await ctx.api.deleteWithBody<{ ok: true }>(apiPath`/api/companies/${target.id}`, { confirmName: target.name });
 
           printOutput(
             {

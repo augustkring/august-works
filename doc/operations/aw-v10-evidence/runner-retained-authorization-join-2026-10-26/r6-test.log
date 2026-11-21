@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/packages/paperclip-runner
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 18 skipped (19)
+   Start at  10:28:13
+   Duration  5.49s (transform 795ms, setup 0ms, import 970ms, tests 4.39s, environment 0ms)
+

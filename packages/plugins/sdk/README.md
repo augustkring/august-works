@@ -1,6 +1,6 @@
 # `@paperclipai/plugin-sdk`
 
-Official TypeScript SDK for Paperclip plugin authors.
+Official TypeScript SDK for Blentera plugin authors.
 
 - **Worker SDK:** `@paperclipai/plugin-sdk` — `definePlugin`, context, lifecycle
 - **UI SDK:** `@paperclipai/plugin-sdk/ui` — React hooks and slot props
@@ -42,12 +42,12 @@ pnpm add @paperclipai/plugin-sdk
 The SDK is stable enough for local development and first-party examples, but the runtime deployment model is still early.
 
 - Plugin workers and plugin UI should both be treated as trusted code today.
-- Plugin UI bundles run as same-origin JavaScript inside the main Paperclip app. They can call ordinary Paperclip HTTP APIs with the board session, so manifest capabilities are not a frontend sandbox.
+- Plugin UI bundles run as same-origin JavaScript inside the main Blentera app. They can call ordinary Blentera HTTP APIs with the board session, so manifest capabilities are not a frontend sandbox.
 - Local-path installs and the repo example plugins are development workflows. They assume the plugin source checkout exists on disk.
-- For deployed plugins, publish an npm package and install that package into the Paperclip instance at runtime.
+- For deployed plugins, publish an npm package and install that package into the Blentera instance at runtime.
 - The current host runtime expects a writable filesystem, `npm` available at runtime, and network access to the package registry used for plugin installation.
 - Dynamic plugin install is currently best suited to single-node persistent deployments. Multi-instance cloud deployments still need a shared artifact/distribution model before runtime installs are reliable across nodes.
-- The host ships a small shared React component kit through `@paperclipai/plugin-sdk/ui`. Use it for native Paperclip controls; custom React and CSS are still supported.
+- The host ships a small shared React component kit through `@paperclipai/plugin-sdk/ui`. Use it for native Blentera controls; custom React and CSS are still supported.
 - `ctx.assets` is not part of the supported runtime in this build. Do not depend on asset upload/read APIs yet.
 
 If you are authoring a plugin for others to deploy, treat npm-packaged installation as the supported path and treat repo-local example installs as a development convenience.
@@ -135,6 +135,32 @@ Subscribe in `setup` with `ctx.events.on(name, handler)` or `ctx.events.on(name,
 **Filter (optional):** Pass a second argument to `on()`: `{ projectId?, companyId?, agentId? }` so the host only delivers matching events.
 
 **Company context:** Events still carry `companyId` for company-scoped data, but plugin installation and activation are instance-wide in the current runtime. Access and authorization host services require an active company-scoped invocation such as an event, API route, tool run, environment call, or UI bridge call; the requested `companyId` must match that active scope.
+
+## Durable resource lifecycle hooks
+
+Plugins that maintain runtime state can declare `resourceLifecycle` in the manifest and implement `onResourceLifecycle`:
+
+```ts
+const manifest = {
+  // ...
+  capabilities: ["events.subscribe", "agents.lifecycle.manage"],
+  agentLifecycle: true,
+  resourceLifecycle: ["agent_runtime", "agent", "project"],
+};
+
+definePlugin({
+  manifest,
+  async onResourceLifecycle(event) {
+    // Apply or reconcile current state before acknowledging this revision.
+    await syncResource(event);
+    return { eventId: event.id, status: "acknowledged" };
+  },
+});
+```
+
+`agentLifecycle` requires `agents.lifecycle.manage`; `agent_runtime` also requires `events.subscribe`. Runtime ownership is assigned only to a ready, company-configured, enabled plugin with these declarations. Lifecycle event IDs are decimal strings: compare them with `BigInt` or decimal-string logic and never convert them to `Number`. Return the exact event ID with `acknowledged`, `retry`, or `deferred`; the host acknowledges only after the callback completes successfully. Delivery is at least once, so handlers should be idempotent. `deferred` leaves the event available for a later authoritative scan.
+
+The current assigned runtime owner can call `ctx.agents.getRuntime(agentId, companyId)` to read the latest revision, redacted agent configuration, instructions location, Skills and bounded connection/profile assignments. `skillsReady` is false until there is a current native run; wait or defer before applying a Skill snapshot in that state. During a native run, returned Skills are limited by its current manifest and source permissions. Secret values are redacted.
 
 ## Scheduled (recurring) jobs
 
@@ -253,7 +279,7 @@ Replaces the auto-generated JSON Schema settings form with a custom React compon
 
 #### `dashboardWidget`
 
-A card or section rendered on the main dashboard. Use this for at-a-glance metrics, status indicators, or summary views that surface plugin data alongside core Paperclip information. Receives `PluginWidgetProps` with `context.companyId` set to the active company. Requires the `ui.dashboardWidget.register` capability.
+A card or section rendered on the main dashboard. Use this for at-a-glance metrics, status indicators, or summary views that surface plugin data alongside core Blentera information. Receives `PluginWidgetProps` with `context.companyId` set to the active company. Requires the `ui.dashboardWidget.register` capability.
 
 #### `detailTab`
 
@@ -404,7 +430,7 @@ Implement `onDetectExternalObjects()` to map sanitized URL candidates to
 metadata such as `displayKey`/`iconKey`. Implement `onResolveExternalObject()`
 to return a normalized snapshot with `statusCategory`, `statusTone`,
 `statusLabel`, optional `statusIconKey`, board-safe `data`, and freshness
-metadata. Slow or failing plugins are isolated: Paperclip logs the failure and
+metadata. Slow or failing plugins are isolated: Blentera logs the failure and
 continues saving the source issue, comment, or document.
 
 MVP security posture: provider plugins are trusted installs. Manifest
@@ -716,7 +742,7 @@ export function IssueLinearLink({ context }: PluginDetailTabProps) {
 
 #### `useHostNavigation()`
 
-Routes Paperclip-internal plugin links through the host router without a full document reload. Use `linkProps()` for anchors so the browser still gets a real `href` for copy-link, modifier-click, middle-click, and open-in-new-tab behavior.
+Routes Blentera-internal plugin links through the host router without a full document reload. Use `linkProps()` for anchors so the browser still gets a real `href` for copy-link, modifier-click, middle-click, and open-in-new-tab behavior.
 
 ```tsx
 import { useHostNavigation } from "@paperclipai/plugin-sdk/ui";
@@ -729,7 +755,7 @@ export function WikiSidebarLink() {
 
 `linkProps("/wiki")` resolves against the active company prefix, so in company `PAP` it renders `href="/PAP/wiki"`. Already-prefixed paths such as `/PAP/wiki` are not prefixed again. For button-style commands, call `hostNavigation.navigate("/issues/PAP-123")`.
 
-Avoid raw same-origin `href`s or `window.location.assign()` for Paperclip-internal navigation from plugin UI. Those bypass the host router and can reload the whole app. External links should keep normal anchors with `target="_blank"` and `rel="noopener noreferrer"` as appropriate.
+Avoid raw same-origin `href`s or `window.location.assign()` for Blentera-internal navigation from plugin UI. Those bypass the host router and can reload the whole app. External links should keep normal anchors with `target="_blank"` and `rel="noopener noreferrer"` as appropriate.
 
 #### `usePluginStream<T>(channel, options?)`
 
@@ -776,7 +802,7 @@ await copyTextToClipboard("text to copy");
 ```
 
 Use the shared components when the plugin needs to look and behave like a native
-Paperclip surface:
+Blentera surface:
 
 | Component | Use when |
 |---|---|
@@ -791,7 +817,7 @@ Paperclip surface:
 #### Shared Markdown Components
 
 Plugin UI can render markdown and edit markdown using the same host components
-used by Paperclip issue comments and documents:
+used by Blentera issue comments and documents:
 
 ```tsx
 import { MarkdownBlock, MarkdownEditor } from "@paperclipai/plugin-sdk/ui";
@@ -813,7 +839,7 @@ target URL shape:
 
 ```tsx
 <MarkdownBlock
-  content={"See [[wiki/entities/paperclip|Paperclip]]."}
+  content={"See [[wiki/entities/paperclip|Blentera]]."}
   enableWikiLinks
   wikiLinkRoot="/wiki/page"
 />
@@ -854,7 +880,7 @@ export function WikiFiles() {
 #### Shared Assignee and Project Pickers
 
 Use `AssigneePicker` and `ProjectPicker` when a plugin needs to create, filter,
-or configure work against Paperclip entities. Both are controlled components and
+or configure work against Blentera entities. Both are controlled components and
 load their options from the host for the provided company.
 
 ```tsx

@@ -1,3 +1,4 @@
+import { admitPaidModelProbe } from "@paperclipai/adapter-utils/paid-model-probe";
 import type {
   AdapterEnvironmentCheck,
   AdapterEnvironmentTestContext,
@@ -298,7 +299,7 @@ export async function testEnvironment(
     }
   }
 
-  if (canRunProbe && configuredModelIsCompatible) {
+  if (canRunProbe && configuredModelIsCompatible && admitPaidModelProbe(checks)) {
     if (!claudeCommandLooksLike(command, "claude")) {
       checks.push({
         code: "claude_hello_probe_skipped_custom_command",

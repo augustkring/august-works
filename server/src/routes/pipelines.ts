@@ -35,10 +35,13 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  contextManifestItems,
+  contextManifests,
   documents,
   documentRevisions,
   heartbeatRuns,
   issueDocuments,
+  issuePrivacySources,
   issues as issueRows,
   issueRelations,
   pipelineAutomationExecutions,
@@ -54,6 +57,8 @@ import {
   routines,
   workflowRuns,
   workflows,
+  companyMemberships,
+  companies,
 } from "@paperclipai/db";
 import { validate } from "../middleware/validate.js";
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized, unprocessable } from "../errors.js";
@@ -84,9 +89,14 @@ import {
   PIPELINE_ATTENTION_MAX_LIMIT,
   type AttentionCaller,
 } from "../services/pipelines-aggregation.js";
+import { logPostgresLockUnavailable } from "../services/postgres-lock-diagnostics.js";
 import { accessService } from "../services/access.js";
-import { authorizationService } from "../services/authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, pinCurrentBoardActor,
+  type AuthorizationActor } from "../services/authorization.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { issueService } from "../services/issues.js";
+import { visibleIssueCondition } from "../services/issue-visibility.js";
 import { assertCompanyAccess } from "./authz.js";
 import {
   computePipelineHealth,
@@ -343,6 +353,31 @@ function assertPipelineCompanyAccess(req: Request, companyId: string) {
     }
     throw error;
   }
+}
+
+/** Recheck live company access inside the same transaction as case/event proof.
+ * For an authenticated Human, pin their current credential and active company
+ * membership so revocation cannot race the response after the final check. */
+async function assertCurrentPipelineCompanyRead(db: Db, req: Request, companyId: string) {
+  const [company] = await db.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("share");
+  if (!company) throw notFound("Pipeline resource not found");
+  const actor = req.actor;
+  let decisionActor: AuthorizationActor = actor;
+  if (actor.type === "board" && actor.source !== "local_implicit") {
+    const pinned = await pinCurrentBoardActor(db, actor);
+    if (!pinned) throw notFound("Pipeline resource not found");
+    const currentUserId = pinned.actor.type === "board" ? pinned.actor.userId : null;
+    if (!currentUserId) throw notFound("Pipeline resource not found");
+    decisionActor = pinned.actor;
+    const [membership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, currentUserId), eq(companyMemberships.status, "active"),
+    )).for("share", { noWait: true });
+    if (!membership) throw notFound("Pipeline resource not found");
+  }
+  const decision = await authorizationService(db).decide({ actor: decisionActor, action: "company_scope:read",
+    resource: { type: "company", companyId }, scope: null });
+  if (!decision.allowed) throw notFound("Pipeline resource not found");
 }
 
 function actorForMutation(req: Request): PipelineActor {
@@ -676,7 +711,179 @@ async function sourceTrustForPipelineCaseDocumentWrite(
 async function assertCaseAccess(db: Db, req: Request, caseId: string) {
   const companyId = await resolveCaseCompanyId(db, caseId);
   assertPipelineCompanyAccess(req, companyId);
+  await requirePipelineCaseBodySources(db, req, companyId, caseId);
   return companyId;
+}
+
+function hasPostgresLockUnavailableCode(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current && typeof current === "object"; depth += 1) {
+    const record = current as { code?: unknown; sqlState?: unknown; cause?: unknown };
+    if (record.code === "55P03" || record.sqlState === "55P03") return true;
+    current = record.cause;
+  }
+  return false;
+}
+
+/** Retry a complete current-authority read proof only for PostgreSQL's
+ * lock-unavailable code. Each attempt starts fresh statements; every retry
+ * rechecks the current actor authority and source ownership. */
+async function retryPipelineCasePrivacyProof<T>(db: Db, source: string, read: () => Promise<T>): Promise<T> {
+  let diagnosticEmitted = false;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await read();
+    } catch (error) {
+      if (!hasPostgresLockUnavailableCode(error)) throw error;
+      if (!diagnosticEmitted) {
+        diagnosticEmitted = true;
+        await logPostgresLockUnavailable(db, error, source);
+      }
+      if (attempt >= 4) {
+        throw conflict("Authentication state is changing; try again", {
+          code: "authentication_state_busy",
+          retryable: true,
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+    }
+  }
+}
+
+/** Human-authored case content remains company-shared. Agent-produced body
+ * versions inherit the current native privacy of their retained producer runs. */
+async function canReadPipelineCaseBodySources(db: Db, req: Request, companyId: string, caseId: string) {
+  return retryPipelineCasePrivacyProof(db, "pipeline_case_body_source", () =>
+    canReadPipelineCaseBodySourcesOnce(db, req, companyId, caseId));
+}
+
+async function canReadPipelineCaseBodySourcesOnce(db: Db, req: Request, companyId: string, caseId: string) {
+  if (req.actor.type === "board") {
+    const pinned = req.actor.source === "local_implicit" ? { actor: req.actor, credentialExpiresAt: null }
+      : await db.transaction(async tx => pinCurrentBoardActor(tx, req.actor));
+    if (!pinned) return false;
+    const currentAccess = await authorizationService(db).decide({ actor: pinned.actor, action: "company_scope:read",
+      resource: { type: "company", companyId } });
+    if (!currentAccess.allowed) return false;
+  }
+  const [caseRow] = await db.select({ createdByAgentId: pipelineCases.createdByAgentId,
+    originRunId: pipelineCases.originRunId }).from(pipelineCases).where(and(
+      eq(pipelineCases.companyId, companyId), eq(pipelineCases.id, caseId))).limit(1);
+  if (!caseRow) return false;
+  const events = await db.select({ runId: pipelineCaseEvents.runId }).from(pipelineCaseEvents).where(and(
+    eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId),
+    eq(pipelineCaseEvents.type, "updated"), eq(pipelineCaseEvents.actorType, "agent"),
+    sql`${pipelineCaseEvents.payload}->>'materialChanged' = 'true'`)).limit(257);
+  if (events.length > 256 || (caseRow.createdByAgentId && !caseRow.originRunId) || events.some(event => !event.runId)) return false;
+  const runIds = [...new Set([...(caseRow.originRunId ? [caseRow.originRunId] : []),
+    ...events.map(event => event.runId).filter((id): id is string => Boolean(id))])];
+  if (runIds.length > 256) return false;
+  for (const runId of runIds) {
+    if (!await canReadPipelineCaseProducerRun(db, req, companyId, runId)) return false;
+  }
+  return true;
+}
+
+async function canReadPipelineCaseProducerRun(db: Db, req: Request, companyId: string, runId: string) {
+  const [run] = await db.select({ issueId: heartbeatRuns.issueId, nativeIssueId: heartbeatRuns.nativeIssueId,
+    contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId))).limit(1);
+  if (!run) return false;
+  const context = run.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+    ? run.contextSnapshot : {};
+  const ids = [run.issueId, run.nativeIssueId];
+  for (const key of ["issueId", "taskId"] as const) {
+    const value = context[key];
+    if (value != null) {
+      if (typeof value !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)) return false;
+      ids.push(value);
+    }
+  }
+  const issueIds = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  const manifestRoots = await db.execute<{ id: string }>(sql`
+    select distinct roots.id::text as id from (
+      select manifest.issue_id as id from ${contextManifests} manifest
+        where manifest.company_id=${companyId} and manifest.run_id=${runId} and manifest.issue_id is not null
+      union all select case when item.source_ref ~* '^issue://[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        then substring(item.source_ref from 9)::uuid end as id
+        from ${contextManifests} manifest join ${contextManifestItems} item
+          on item.company_id=manifest.company_id and item.manifest_id=manifest.id
+        where manifest.company_id=${companyId} and manifest.run_id=${runId}
+          and item.source_provider='august_works_tasks'
+    ) roots where roots.id is not null
+  `);
+  for (const root of manifestRoots) if (!issueIds.includes(root.id)) issueIds.push(root.id);
+  if (issueIds.length > 256) return false;
+  if (issueIds.length) {
+    const sourceIssues = await db.select({ id: issueRows.id, hiddenAt: issueRows.hiddenAt }).from(issueRows).where(and(
+      eq(issueRows.companyId, companyId), inArray(issueRows.id, issueIds)));
+    if (sourceIssues.length !== issueIds.length || sourceIssues.some(issue => issue.hiddenAt !== null)) return false;
+  }
+  return canActorReadHeartbeatRunPrivacy(db, req.actor, { id: runId, companyId });
+}
+
+async function canReadPipelineCaseTaskSource(db: Db, req: Request, companyId: string, issueId: string,
+  sourceRunId?: string | null) {
+  const [visible] = await db.select({ id: issueRows.id }).from(issueRows).where(and(
+    eq(issueRows.id, issueId), eq(issueRows.companyId, companyId), visibleIssueCondition())).limit(1);
+  if (!visible) return false;
+  if (!await canActorReadIssuePrivacy(db, req.actor, { id: issueId, companyId })) return false;
+  return sourceRunId ? canReadPipelineCaseProducerRun(db, req, companyId, sourceRunId) : true;
+}
+
+async function canReadAllPipelineCaseTaskSources(db: Db, req: Request, companyId: string, caseId: string) {
+  const rows = await db.select({ issueId: pipelineCaseIssueLinks.issueId }).from(pipelineCaseIssueLinks).where(and(
+    eq(pipelineCaseIssueLinks.companyId, companyId), eq(pipelineCaseIssueLinks.caseId, caseId)));
+  if (rows.length > 256) return false;
+  for (const row of rows) if (!await canReadPipelineCaseTaskSource(db, req, companyId, row.issueId)) return false;
+  return true;
+}
+
+async function canReadPipelineCaseDescendants(db: Db, req: Request, companyId: string, caseId: string) {
+  const descendants = await db.execute<{ id: string }>(sql`
+    with recursive descendants(id) as (
+      select id from pipeline_cases where company_id=${companyId} and parent_case_id=${caseId}
+      union
+      select child.id from pipeline_cases child join descendants parent on child.parent_case_id=parent.id
+        where child.company_id=${companyId}
+    ) select id from descendants limit 257
+  `);
+  if (descendants.length > 256) return false;
+  for (const child of descendants) if (!await canReadPipelineCaseBodySources(db, req, companyId, child.id)) return false;
+  return true;
+}
+
+async function requirePipelineCaseBodySources(db: Db, req: Request, companyId: string, caseId: string) {
+  if (!await canReadPipelineCaseBodySources(db, req, companyId, caseId)) throw notFound("Pipeline case not found");
+}
+
+async function readablePipelineCaseEventIds(db: Db, req: Request, companyId: string, caseId: string,
+  types?: string[], eventIds?: string[]) {
+  const events = await db.select({ id: pipelineCaseEvents.id, actorType: pipelineCaseEvents.actorType, runId: pipelineCaseEvents.runId,
+    payload: pipelineCaseEvents.payload }).from(pipelineCaseEvents).where(and(
+      eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId),
+      eventIds ? inArray(pipelineCaseEvents.id, eventIds) : undefined,
+      types && types.length > 0 ? inArray(pipelineCaseEvents.type, types) : undefined)).limit(257);
+  if (events.length > 256) return null;
+  for (const event of events) {
+    if (event.actorType === "agent" && (!event.runId ||
+      !await canReadPipelineCaseProducerRun(db, req, companyId, event.runId))) return null;
+    const payloadIssueId = event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+      ? (event.payload as Record<string, unknown>).issueId : null;
+    if (typeof payloadIssueId === "string" &&
+      (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payloadIssueId) ||
+        !await canReadPipelineCaseTaskSource(db, req, companyId, payloadIssueId))) return null;
+  }
+  return events.map(event => event.id);
+}
+
+async function requirePipelineCaseEventSources(db: Db, req: Request, companyId: string, caseId: string): Promise<string[]> {
+  // Match the case-body proof's bounded retry on no-wait session/run locks;
+  // retries re-run the same exact per-event source checks with current auth.
+  const eventIds = await retryPipelineCasePrivacyProof(db, "pipeline_case_event_source", () =>
+    readablePipelineCaseEventIds(db, req, companyId, caseId));
+  if (!eventIds) throw notFound("Pipeline case events not found");
+  return eventIds;
 }
 
 async function getStagesByKey(db: Db, pipelineId: string) {
@@ -778,9 +985,13 @@ async function assertIssueLinkMutationAllowed(
   await input.issuesSvc.assertCheckoutOwner(input.issue.id, actorAgentId, runId);
 }
 
-export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineService>[1] = {}) {
+export function pipelineRoutes(
+  db: Db,
+  options: Parameters<typeof pipelineService>[1] = {},
+  service: ReturnType<typeof pipelineService> = pipelineService(db, options),
+) {
   const router = Router();
-  const svc = pipelineService(db, options);
+  const svc = service;
   const outputsSvc = pipelineCaseOutputsService(db);
   const access = accessService(db);
   const issuesSvc = issueService(db);
@@ -870,18 +1081,70 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const requestedLimit = parseOptionalNonNegativeInteger(req.query.limit, "limit");
     if (requestedLimit === 0) throw badRequest("limit must be a positive integer");
     const limit = Math.min(requestedLimit ?? PIPELINE_ATTENTION_DEFAULT_LIMIT, PIPELINE_ATTENTION_MAX_LIMIT);
-    res.json(await listPipelineAttention(db, { companyId, caller, limit }));
+    const result = await listPipelineAttention(db, { companyId, caller, limit });
+    const suggestions = [];
+    for (const row of result.suggestions) {
+      if (await canReadPipelineCaseBodySources(db, req, companyId, row.case.id)) suggestions.push(row);
+    }
+    const reviews = [];
+    for (const row of result.reviews) {
+      if (await canReadPipelineCaseBodySources(db, req, companyId, row.case.id)) reviews.push(row);
+    }
+    res.json({ ...result, suggestions, reviews });
   });
 
   router.get("/companies/:companyId/case-events", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertPipelineCompanyAccess(req, companyId);
+    res.setHeader("Cache-Control", "private, no-store");
     const types = parseEventTypesQuery(req.query.types);
     const requestedLimit = parseOptionalNonNegativeInteger(req.query.limit, "limit");
     if (requestedLimit === 0) throw badRequest("limit must be a positive integer");
     const limit = Math.min(requestedLimit ?? COMPANY_CASE_EVENTS_DEFAULT_LIMIT, COMPANY_CASE_EVENTS_MAX_LIMIT);
     const offset = parseOptionalNonNegativeInteger(req.query.offset, "offset") ?? 0;
-    res.json(await listCompanyCaseEvents(db, { companyId, types, limit, offset }));
+    const result = await retryPipelineCasePrivacyProof(db, "pipeline_company_case_events", () => db.transaction(async raw => {
+      const tx = raw as unknown as Db;
+      // Match source writers' canonical order and hold both read locks through
+      // event/source checks and final projection. The exact ID snapshot also
+      // prevents later appended events from entering the projection.
+      await lockAnalyticalCompany(tx, companyId, "read");
+      await lockMemoryPrivacy(tx, companyId, "read");
+      await assertCurrentPipelineCompanyRead(tx, req, companyId);
+      const eventCaseRows = await tx.select({ id: pipelineCaseEvents.id, caseId: pipelineCaseEvents.caseId }).from(pipelineCaseEvents)
+        .where(and(eq(pipelineCaseEvents.companyId, companyId),
+          types && types.length > 0 ? inArray(pipelineCaseEvents.type, types) : undefined))
+        .orderBy(desc(pipelineCaseEvents.createdAt), desc(pipelineCaseEvents.id)).limit(10_001);
+      if (eventCaseRows.length > 10_000) {
+        throw new HttpError(503, "Company case-event history is temporarily unavailable; narrow the requested event types", {
+          code: "pipeline_case_events_unavailable",
+          retryable: true,
+        });
+      }
+      const eventIdsByCase = new Map<string, string[]>();
+      for (const row of eventCaseRows) eventIdsByCase.set(row.caseId, [...(eventIdsByCase.get(row.caseId) ?? []), row.id]);
+      const readableCaseIds: string[] = [];
+      const readableEventIds: string[] = [];
+      for (const [caseId, eventIds] of eventIdsByCase) {
+        // Keep this event-list proof scoped to the event types actually projected
+        // below. Full case history has a separate, stricter source proof.
+        const bodyReadable = await canReadPipelineCaseBodySources(tx, req, companyId, caseId);
+        let caseReadableEventIds: string[] | null = null;
+        try {
+          caseReadableEventIds = await readablePipelineCaseEventIds(tx, req, companyId, caseId, types, eventIds);
+        } catch (error) {
+          if (hasPostgresLockUnavailableCode(error)) throw error;
+        }
+        if (bodyReadable && caseReadableEventIds) {
+          readableCaseIds.push(caseId);
+          readableEventIds.push(...caseReadableEventIds);
+        }
+      }
+      const projection = await listCompanyCaseEvents(tx, { companyId, types, limit, offset,
+        caseIds: readableCaseIds, eventIds: readableEventIds });
+      await assertCurrentPipelineCompanyRead(tx, req, companyId);
+      return projection;
+    }));
+    res.json(result);
   });
 
   router.post("/companies/:companyId/pipelines", validate(createPipelineSchema), async (req, res) => {
@@ -939,7 +1202,15 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     assertPipelineCompanyAccess(req, companyId);
     const pipelineId = typeof req.query.pipelineId === "string" ? req.query.pipelineId : undefined;
     const parentCaseId = typeof req.query.parentCaseId === "string" ? req.query.parentCaseId : undefined;
-    res.json(await svc.listReviewCases({ companyId, pipelineId, parentCaseId }));
+    const rows = await svc.listReviewCases({ companyId, pipelineId, parentCaseId });
+    const readable = [];
+    for (const row of rows) {
+      if (!await canReadPipelineCaseBodySources(db, req, companyId, row.case.id)) continue;
+      const parentReadable = row.parentCase?.id
+        ? await canReadPipelineCaseBodySources(db, req, companyId, row.parentCase.id) : false;
+      readable.push({ ...row, parentCase: parentReadable ? row.parentCase : null });
+    }
+    res.json(readable);
   });
 
   router.post("/companies/:companyId/review-cases/bulk", validate(bulkReviewSchema), async (req, res) => {
@@ -1103,6 +1374,10 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         .limit(50),
     ]);
     if (!pipeline) throw notFound("Pipeline not found");
+    const readableFailedAutomationRows = [];
+    for (const row of failedAutomationRows) {
+      if (await canReadPipelineCaseBodySources(db, req, companyId, row.caseId)) readableFailedAutomationRows.push(row);
+    }
 
     const automationRoutineIds = stages.flatMap((stage) => {
       const routineId = stageAutomationRoutineId(stage.config);
@@ -1198,7 +1473,7 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         instructionsBody: automation?.instructionsBody ?? bodyByStageId.get(stage.id) ?? "",
       };
     });
-    const failedAutomations: PipelineHealthFailedAutomationInput[] = failedAutomationRows.map((row) => ({
+    const failedAutomations: PipelineHealthFailedAutomationInput[] = readableFailedAutomationRows.map((row) => ({
       stageId: row.stageId,
       stageKey: row.stageKey,
       stageName: row.stageName,
@@ -1608,25 +1883,35 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         parentCaseId ? eq(pipelineCases.parentCaseId, parentCaseId) : undefined,
         includeRetired ? undefined : isNull(pipelineCases.hiddenFromBoardAt),
         terminal === true ? isNotNull(pipelineCases.terminalKind) : terminal === false ? isNull(pipelineCases.terminalKind) : undefined,
-        q ? or(ilike(pipelineCases.title, `%${q}%`), ilike(pipelineCases.summary, `%${q}%`)) : undefined,
       ))
       .orderBy(asc(pipelineCases.createdAt));
-    const caseIds = rows.map((row) => row.case.id);
+    const visibilityRows = await Promise.all(rows.map(row => retryPipelineCasePrivacyProof(db,
+      "pipeline_case_list_row", async () => {
+      if (!await canReadPipelineCaseBodySourcesOnce(db, req, companyId, row.case.id)) return null;
+      const [tasksReadable, descendantsReadable] = await Promise.all([
+        canReadAllPipelineCaseTaskSources(db, req, companyId, row.case.id),
+        canReadPipelineCaseDescendants(db, req, companyId, row.case.id),
+      ]);
+      const parentReadable = row.parentCase?.id && row.parentPipeline?.id
+        ? await canReadPipelineCaseBodySourcesOnce(db, req, companyId, row.parentCase.id) : false;
+      return { row, tasksReadable, descendantsReadable, parentReadable };
+    })));
+    const readableRows = visibilityRows.filter((entry): entry is Exclude<typeof entry, null> => entry !== null)
+      .filter(({ row }) => !q || row.case.title.toLocaleLowerCase().includes(q.toLocaleLowerCase()) ||
+        (row.case.summary ?? "").toLocaleLowerCase().includes(q.toLocaleLowerCase()));
+    const caseIds = readableRows.map(({ row }) => row.case.id);
     const [activeWork, descendantActiveWorkCounts] = await Promise.all([
       loadActiveWorkForCases(db, companyId, caseIds),
       loadDescendantActiveWorkCountsForCases(db, companyId, caseIds),
     ]);
-    res.json(rows.map((row) => ({
-      case: row.case,
-      stage: row.stage,
-      parentCase: row.parentCase?.id && row.parentPipeline?.id
-        ? {
-            case: row.parentCase,
-            pipeline: row.parentPipeline,
-          }
-        : null,
-      activeWork: activeWork.get(row.case.id) ?? null,
-      descendantActiveWorkCount: descendantActiveWorkCounts.get(row.case.id) ?? 0,
+    res.json(await Promise.all(readableRows.map(async ({ row, tasksReadable, descendantsReadable, parentReadable }) => {
+      return {
+        case: row.case,
+        stage: row.stage,
+        parentCase: parentReadable ? { case: row.parentCase, pipeline: row.parentPipeline } : null,
+        activeWork: tasksReadable ? activeWork.get(row.case.id) ?? null : null,
+        descendantActiveWorkCount: descendantsReadable ? descendantActiveWorkCounts.get(row.case.id) ?? 0 : 0,
+      };
     })));
   });
 
@@ -1634,7 +1919,25 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const caseId = req.params.caseId as string;
     const companyId = await assertCaseAccess(db, req, caseId);
     const detail = await getCaseDetail(db, companyId, caseId);
-    res.json(detail);
+    const links = [];
+    for (const link of detail.links) {
+      if (await canReadPipelineCaseTaskSource(db, req, companyId, link.issueId, link.createdByRunId)) links.push(link);
+    }
+    const tasksReadable = links.length === detail.links.length;
+    const childrenReadable = await canReadPipelineCaseDescendants(db, req, companyId, caseId);
+    const parentReadable = detail.parentCase
+      ? await canReadPipelineCaseBodySources(db, req, companyId, detail.parentCase.case.id) : false;
+    const conversationReadable = detail.conversationSource?.issue
+      ? await canActorReadIssuePrivacy(db, req.actor, { id: detail.conversationSource.issue.id, companyId }) : false;
+    res.json({ ...detail, links,
+      activeWork: tasksReadable ? detail.activeWork : null,
+      parentCase: parentReadable ? detail.parentCase : null,
+      conversationSource: conversationReadable ? detail.conversationSource : null,
+      childrenSummary: childrenReadable ? detail.childrenSummary : {
+        childCount: 0, terminalChildCount: 0, loadedChildren: 0, descendantActiveWorkCount: 0,
+        total: 0, done: 0, dropped: 0, inMotion: 0,
+      },
+    });
   });
 
   router.get("/cases/:caseId/documents/:key", async (req, res) => {
@@ -1976,16 +2279,22 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         isNull(pipelineCases.hiddenFromBoardAt),
       ))
       .orderBy(asc(pipelineCases.createdAt));
-    const caseIds = rows.map((row) => row.case.id);
+    const readableRows = [];
+    for (const row of rows) {
+      if (await canReadPipelineCaseBodySources(db, req, companyId, row.case.id)) readableRows.push(row);
+    }
+    const caseIds = readableRows.map((row) => row.case.id);
     const [activeWork, descendantActiveWorkCounts] = await Promise.all([
       loadActiveWorkForCases(db, companyId, caseIds),
       loadDescendantActiveWorkCountsForCases(db, companyId, caseIds),
     ]);
-    res.json(rows.map((row) => ({
+    res.json(await Promise.all(readableRows.map(async (row) => ({
       ...row,
-      activeWork: activeWork.get(row.case.id) ?? null,
-      descendantActiveWorkCount: descendantActiveWorkCounts.get(row.case.id) ?? 0,
-    })));
+      activeWork: await canReadAllPipelineCaseTaskSources(db, req, companyId, row.case.id)
+        ? activeWork.get(row.case.id) ?? null : null,
+      descendantActiveWorkCount: await canReadPipelineCaseDescendants(db, req, companyId, row.case.id)
+        ? descendantActiveWorkCounts.get(row.case.id) ?? 0 : 0,
+    }))));
   });
 
   router.patch("/cases/:caseId", validate(casePatchSchema), async (req, res) => {
@@ -2027,6 +2336,7 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
       force: req.body.force,
       suggestionId: req.body.acceptSuggestionId,
       actor,
+      privacyActor: req.actor,
     }));
   });
 
@@ -2085,17 +2395,22 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const actor = actorForMutation(req);
     const conversationSource = await resolvePipelineCaseConversationSource(db, companyId, caseId);
     if (conversationSource?.isActive) {
+      if (!await canActorReadIssuePrivacy(db, req.actor, { id: conversationSource.issue.id, companyId }))
+        throw notFound("Pipeline case conversation not found");
       res.json({ issue: conversationSource.issue, created: false });
       return;
     }
     const detail = await getCaseDetail(db, companyId, caseId);
     const [bodyDocumentContext, outputSummaries] = await Promise.all([
       loadPipelineConversationBodyDocumentContext(db, { companyId, caseId }),
-      outputsSvc.listCaseOutputs(companyId, caseId).then((outputs) => summarizePipelineCaseOutputsForContext(outputs)),
+      outputsSvc.listCaseOutputs(companyId, caseId, (issueId, sourceRunId) => canReadPipelineCaseTaskSource(db, req, companyId, issueId, sourceRunId))
+        .then((outputs) => summarizePipelineCaseOutputsForContext(outputs)),
     ]);
     const result = await db.transaction(async (tx) => {
       const existingConversationSource = await resolvePipelineCaseConversationSource(tx, companyId, caseId);
       if (existingConversationSource?.isActive) {
+        if (!await canActorReadIssuePrivacy(tx, req.actor, { id: existingConversationSource.issue.id, companyId }))
+          throw notFound("Pipeline case conversation not found");
         return { issue: existingConversationSource.issue, created: false };
       }
       const [issue] = await tx.insert(issueRows).values({
@@ -2117,6 +2432,20 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         role: "conversation",
         createdByRunId: actor.type === "agent" ? actor.runId : null,
       });
+      const sourceEvents = await tx.select({ runId: pipelineCaseEvents.runId }).from(pipelineCaseEvents).where(and(
+        eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId),
+        eq(pipelineCaseEvents.type, "updated"), eq(pipelineCaseEvents.actorType, "agent"),
+        sql`${pipelineCaseEvents.payload}->>'materialChanged' = 'true'`, isNotNull(pipelineCaseEvents.runId)));
+      const privacySources = [
+        ...(detail.case.originRunId ? [{ sourceKind: "run" as const, sourceId: detail.case.originRunId }] : []),
+        ...sourceEvents.map(row => ({ sourceKind: "run" as const, sourceId: row.runId! })),
+        ...outputSummaries.items.flatMap(item => item.sourceRunId ? [{ sourceKind: "run" as const, sourceId: item.sourceRunId }] : []),
+        ...outputSummaries.items.map(item => ({ sourceKind: "issue" as const, sourceId: item.sourceIssue.id })),
+      ];
+      if (privacySources.length > 256) throw forbidden("Conversation source history is too large to retain safely.");
+      if (privacySources.length) await tx.insert(issuePrivacySources).values(privacySources.map(source => ({
+        companyId, issueId: issue!.id, ...source,
+      }))).onConflictDoNothing();
       if (bodyDocumentContext.bodyDocument) {
         await tx.insert(issueDocuments).values({
           companyId,
@@ -2152,13 +2481,18 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
         eq(issueRows.companyId, companyId),
       ))
       .orderBy(asc(pipelineCaseIssueLinks.createdAt));
-    res.json(links);
+    const readableLinks = [];
+    for (const link of links) {
+      if (await canReadPipelineCaseTaskSource(db, req, companyId, link.issue.id, link.link.createdByRunId)) readableLinks.push(link);
+    }
+    res.json(readableLinks);
   });
 
   router.get("/cases/:caseId/outputs", async (req, res) => {
     const caseId = req.params.caseId as string;
     const companyId = await assertCaseAccess(db, req, caseId);
-    res.json(await outputsSvc.listCaseOutputs(companyId, caseId));
+    res.json(await outputsSvc.listCaseOutputs(companyId, caseId,
+      (issueId, sourceRunId) => canReadPipelineCaseTaskSource(db, req, companyId, issueId, sourceRunId)));
   });
 
   router.post("/cases/:caseId/issue-links", validate(createIssueLinkSchema), async (req, res) => {
@@ -2235,36 +2569,71 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
 
   router.get("/cases/:caseId/events", async (req, res) => {
     const caseId = req.params.caseId as string;
-    const companyId = await assertCaseAccess(db, req, caseId);
+    const companyId = await resolveCaseCompanyId(db, caseId);
+    assertPipelineCompanyAccess(req, companyId);
+    res.setHeader("Cache-Control", "private, no-store");
     const pagination = parseCaseEventsQuery(req.query);
-    res.json(await svc.listCaseEventsPage(companyId, caseId, pagination));
+    const projection = await retryPipelineCasePrivacyProof(db, "pipeline_case_events", () => db.transaction(async raw => {
+      const tx = raw as unknown as Db;
+      await lockAnalyticalCompany(tx, companyId, "read");
+      await lockMemoryPrivacy(tx, companyId, "read");
+      await assertCurrentPipelineCompanyRead(tx, req, companyId);
+      if (!await canReadPipelineCaseBodySources(tx, req, companyId, caseId))
+        throw notFound("Pipeline case events not found");
+      const eventIds = await readablePipelineCaseEventIds(tx, req, companyId, caseId);
+      if (!eventIds) throw notFound("Pipeline case events not found");
+      const result = await svc.listCaseEventsPage(companyId, caseId, { ...pagination, eventIds, queryDb: tx });
+      await assertCurrentPipelineCompanyRead(tx, req, companyId);
+      return result;
+    }));
+    res.json(projection);
   });
 
   router.get("/cases/:caseId/children/tree", async (req, res) => {
     const caseId = req.params.caseId as string;
     const companyId = await assertCaseAccess(db, req, caseId);
-    res.json(await getCaseChildrenTree(db, companyId, caseId));
+    const tree = await getCaseChildrenTree(db, companyId, caseId);
+    const pending = [tree.case];
+    while (pending.length) {
+      const node = pending.pop()!;
+      if (!await canReadPipelineCaseBodySources(db, req, companyId, node.id)) throw notFound("Pipeline case tree not found");
+      for (const group of node.childGroups) pending.push(...group.cases);
+    }
+    res.json(tree);
   });
 
   router.get("/cases/:caseId/rollup", async (req, res) => {
     const caseId = req.params.caseId as string;
     const companyId = await assertCaseAccess(db, req, caseId);
+    if (!await canReadAllPipelineCaseTaskSources(db, req, companyId, caseId)) throw notFound("Pipeline case not found");
     res.json(await svc.getCaseRollup(companyId, caseId));
   });
 
   router.get("/cases/:caseId/context-pack", async (req, res) => {
     const caseId = req.params.caseId as string;
     const companyId = await assertCaseAccess(db, req, caseId);
+    res.setHeader("Cache-Control", "private, no-store");
+    const eventIds = await requirePipelineCaseEventSources(db, req, companyId, caseId);
     const detail = await getCaseDetail(db, companyId, caseId);
     const [events, outputs, childOutcomes] = await Promise.all([
       svc.listCaseEventsPage(companyId, caseId, {
         limit: PIPELINE_CONTEXT_PACK_EVENT_LIMIT,
         order: "desc",
+        eventIds,
       }),
-      outputsSvc.listCaseOutputs(companyId, caseId),
+      outputsSvc.listCaseOutputs(companyId, caseId, (issueId, sourceRunId) =>
+        canReadPipelineCaseTaskSource(db, req, companyId, issueId, sourceRunId)),
       getChildOutcomeSummaries(db, companyId, caseId),
     ]);
     const outputSummaries = summarizePipelineCaseOutputsForContext(outputs);
+    const readableLinks = [];
+    for (const link of detail.links) {
+      if (await canReadPipelineCaseTaskSource(db, req, companyId, link.issueId, link.createdByRunId)) readableLinks.push(link);
+    }
+    const readableChildOutcomes = [];
+    for (const child of childOutcomes) {
+      if (await canReadPipelineCaseBodySources(db, req, companyId, child.id)) readableChildOutcomes.push(child);
+    }
     res.json({
       case: {
         id: detail.case.id,
@@ -2278,9 +2647,9 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
       },
       stage: detail.stage,
       allowedTransitions: detail.allowedNextStages,
-      linkedIssues: detail.links,
+      linkedIssues: readableLinks,
       blockers: detail.blockers,
-      childOutcomes,
+      childOutcomes: readableChildOutcomes,
       outputSummaries,
       events: [...events.items].reverse(),
     });
@@ -2323,6 +2692,7 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
       expectedVersion: req.body.expectedVersion,
       cleanup: req.body.cleanup,
       actor,
+      privacyActor: req.actor,
     }));
   });
 
@@ -2332,7 +2702,7 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const companyId = await assertCaseAccess(db, req, caseId);
     await assertCurrentStageAutomationTargetWriteAccess(db, req, { access, companyId, caseId, automationId });
     const actor = actorForMutation(req);
-    res.json(await svc.retryAutomation({ companyId, caseId, automationId, actor }));
+    res.json(await svc.retryAutomation({ companyId, caseId, automationId, actor, privacyActor: req.actor }));
   });
 
   router.post("/cases/:caseId/automation/current-stage/rerun", async (req, res) => {
@@ -2340,7 +2710,7 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
     const companyId = await assertCaseAccess(db, req, caseId);
     await assertCurrentStageAutomationTargetWriteAccess(db, req, { access, companyId, caseId });
     const actor = actorForMutation(req);
-    res.json(await svc.rerunCurrentStageAutomation({ companyId, caseId, actor }));
+    res.json(await svc.rerunCurrentStageAutomation({ companyId, caseId, actor, privacyActor: req.actor }));
   });
 
   return router;

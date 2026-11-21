@@ -1,0 +1,62 @@
+{
+  "purpose": "RECOVERY ONLY; no qualification, activation, publication, or merge claim",
+  "baseCheckpoint": {
+    "path": "/workspace/v10-preparation/r55-recovery-prepared-nov01",
+    "manifestSha256": "df4a821fd6ebeeeaa3a0dc83fa793deb4bca397ba3a7e5cb970b34cbd3b51f9e",
+    "head": "c8ce5b98db6bc5aa8e9ce87cdeb4c8efab996fae"
+  },
+  "captureComponents": {
+    "native-context-planner-r88-candidate": {
+      "manifestSha256": "5176575ac9ddab7244f5dedd2cd17fbad52a8c5e163524678c8c02e1f61ebb4b",
+      "sourceCount": 16,
+      "status": "R88 full server TSC passed; actual Native nine-case run failed, one pass/eight skipped"
+    },
+    "native-context-planner-fence-r89-candidate": {
+      "manifestSha256": "7a1e52df5e167de5eaf2f906aeb5f7697abe50603ec79f01c980fb9e7f7f7483",
+      "sourceCount": 17,
+      "status": "R89 focused context tests passed; old-source negative control failed as expected; no full Native acceptance"
+    },
+    "host-r38.4.4": {
+      "sourcePinsSha256": "b97defa64ea721b95808023a807b17acf2ee628c6ae2f98c623b4b0c08bcbeef",
+      "sourceCount": 27,
+      "status": "Frozen failed-but-restored candidate; typed/Oxc result is not a qualification claim. R38.4.5 was still in progress at capture."
+    },
+    "c7-r2": {
+      "pinsSha256": "c3d73d8a40bff082c963257cbcd787dce1bffc562809280ee12a03f46b7a1da3",
+      "patchSha256": "cd168892bb720811e02ed142696cb6f030548c9a704528d4957822d7f250d6f9",
+      "sourceCount": 11,
+      "status": "Owner-frozen; 59 Host checks, ten focused Vitest checks and full TypeScript check passed; combined PG remains pending; no deployed/final guard claim."
+    },
+    "paid39": {
+      "currentPatchSha256": "21ba275512a5273ae9de240d31fdbae1ad5a007e38a2f88ef33047947d3a7f94",
+      "finalSourcePinsSha256": "8dc8825fd4940f69435dcedaedb5f5e091d3d3cf237825b343e39866ba0e93a3",
+      "toolCopySourceCount": 13,
+      "status": "Private current candidate only; opaque-MCP review is separately included, no full Paid39 independent review was available at capture. R55 is the base checkpoint for previously frozen source cohorts."
+    },
+    "opaque-mcp": {
+      "sourcePinsSha256": "cfc32893d79b166f676424ce76da01c0ba2ccf81aecb6a174f680a8b7da2129c",
+      "patchSha256": "0f3ac2f76b51551536b828e073fb8e7a41e31d32f1cba73df13a2fd0c8991b82",
+      "sourceCount": 9,
+      "status": "Frozen 9-file patch; final source-stability, entry and full-server TypeScript exit receipts included; lifecycle reviewer receipt included separately."
+    },
+    "runtime-unavailable-help": {
+      "sourceCount": 4,
+      "status": "Root-reviewed customer copy and private metadata/navigation/link preflight passed 28 entries. Not committed, paired-locale review/search regeneration remains pending."
+    }
+  },
+  "sourceSelection": "Latest frozen private source candidates since R55: Native R88/R89; Host R38.4.4 (R38.4.5 was still mutable); C7R2; Paid39 new tool-copy sources; opaque-MCP final 9-file patch; four Help docs; stable reviewer receipts.",
+  "excluded": [
+    "Main source/git changes and staged state",
+    "node_modules and dependency stores",
+    "dist/target/build outputs",
+    "raw PostgreSQL data",
+    "provider packs",
+    "active/growing logs",
+    "Help metadata-view symlink tree",
+    "secrets/environment files",
+    "R38.4.5 in-progress candidate"
+  ],
+  "captureRules": "Pinned candidate file hashes were checked before capture. Artifact aliases were resolved once to bounded regular files inside workspace or preparation roots; original alias and resolved path are recorded. Every selected file was re-read/rehashed after archive construction.",
+  "reviewStatus": "Opaque-MCP and C7 reviewer receipts are included. No full Paid39 independent review receipt was available at capture.",
+  "qualificationStatus": "Recovery only. Native R88 broad run failed; R89 is focused only; Host R38.4.4 has failed source check; C7 combined PG pending; Paid39 unqualified; Help search/paired review pending."
+}

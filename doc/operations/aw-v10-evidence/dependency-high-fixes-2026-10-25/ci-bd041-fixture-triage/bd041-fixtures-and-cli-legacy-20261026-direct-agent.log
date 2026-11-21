@@ -1,0 +1,15 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > returns immutable validated output, resumes after recovery and never creates a Task
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > recovers a lost dispatch binding through the same wake receipt without repeating the execution
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > blocks prompt hydration and result submission when the initiating member is suspended
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > fails missing output and cancels the child when the call deadline expires
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > preserves a failed asynchronous call and follows its published failure branch
+ ✓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > erases delegated payloads, queues log erasure and blocks late or restored agent writes 1645ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 5 skipped (6)
+   Start at  01:21:57
+   Duration  18.94s (transform 9.26s, setup 102ms, import 13.27s, tests 5.43s, environment 0ms)
+

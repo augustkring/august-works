@@ -1,0 +1,24 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "db44429c7879bf28eb7fd9037e29137f5db2ee113d6b37b35a77857c15878f01",
+    "server/src/__tests__/openshell-native-conformance-proof-maximum.test.ts": "77edab11d2fff3d8228b9019d28814580f6aa7b75841e1418e6b1fafe018a1a7",
+    "server/src/__tests__/v7-governance.integration.test.ts": "479e180a58b4a1b5bc913d4db3d3629e6d55599de2854213847a59826d074a8e",
+    "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts": "51bb670c93e6d1258d1ac851dde46b61e5cc9a758ddd6d4d9ab4fbdc202cc9de",
+    "server/src/services/ai-governance/governance-service.ts": "39270cb855e4728217ad151274bff188ab628a50a881b6c9b60a18a3f27fe2b6",
+    "server/src/services/execution-continuation.ts": "5dedef85ce23cd24d2a7d618e7a82c27a7063d1c7e6cb5ddb35647db17f3e249",
+    "server/src/services/execution-sandbox/native-host-bridge.ts": "61d329a654621837fd847e889c54568bec15cc0f8b57e6e5247b84975529a807",
+    "server/src/services/execution-sandbox/openshell-backend.ts": "22e5ff4be83b9df19be14d4346c043ea68bc3cc5664aa1fa981bf10790bb227d",
+    "server/src/services/execution-sandbox/openshell-policy.ts": "3d8007fb633771d93da1f42f9982dcff818db60a2b06204c335baf1f1d84d779",
+    "server/src/services/execution-sandbox/sandbox-service.ts": "4074424f317522542743f48d838a059c82ee4def496c32e5384670fbd5493eb2",
+    "server/src/services/native-direct-input.ts": "7a1f7653ca000b0d6b7b801260934d7eb7130dd377e32d170df911fcb4cf76fa",
+    "server/src/services/native-runtime/native-execution-input.test.ts": "c96c3d8306588f643324818877d4f9ce02b859a73299815a0967eba1946fb0b6",
+    "server/src/services/native-runtime/native-execution-input.ts": "e6af196873881401278db70e36419d9ceea3750dd961bc00aabd3331f47334d3",
+    "server/src/services/native-runtime/native-interaction-bridge.ts": "1d88b7d89868884d7b2c2de0e1ed322c99018f9930b0deb1f1b31f20524cbe1d",
+    "server/src/services/saas/platform.ts": "f5294702ef6b8748144b946224e0d70212c20749a2dd863092467c18b263e1ff",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "allPinsUnchanged": true
+}

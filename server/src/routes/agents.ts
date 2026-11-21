@@ -1,4 +1,4 @@
-import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
+import {assertAnalyticalContextPayloadAccess,assertAnalyticalContextPayloadAccessBatch} from "../services/analytical-context-authority.js";
 import { resolveAgentAppearance, agentAvatarUrl } from "@paperclipai/shared";
 import { listOpenRouterModels } from "../services/openrouter-models.js";
 import { prepareManagedAiRuntime, assertManagedAiProjectAuth, stripAiAuthBindings } from "../services/ai-connection-runtime.js";
@@ -10,6 +10,7 @@ import { assertAiConnectionCreateAccess, canInstallSharedAiConnectionForNewAgent
 import { isAiConnectionCompatible } from "@paperclipai/shared";
 import { applyConnectorSkills, resolveConnectorAssignments, annotateConnectorSkills, isConnectorSkill } from "../services/connector-runtime.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
+import { admitAgentSelfApiRead } from "../services/agent-api-rate-limit.js";
 import { paperclipRunnerTransitionConfig, normalizeLegacyRunnerProvider, isPaperclipRunnerProvider } from "@paperclipai/adapter-utils";
 import { executionProjectionForRun, executionProjectionsForRuns } from "../services/execution-projection.js";
 import { Router, type NextFunction, type Request, type Response } from "express";
@@ -83,7 +84,7 @@ import {
   syncInstructionsBundleConfigFromFilePath,
   workspaceOperationService,
 } from "../services/index.js";
-import { badRequest, conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
+import { badRequest, conflict, forbidden, HttpError, notFound, tooManyRequests, unprocessable } from "../errors.js";
 import { ONBOARDING_FIRST_TASK_SKILL_KEY, PAPERCLIP_CORE_SKILL_KEYS } from "../services/company-skills.js";
 import { createRunSecretRedactionRegistry } from "../services/run-secret-redaction.js";
 import { assertAuthenticated, assertBoard, assertCompanyAccess, assertInstanceAdmin, buildActorSecretContext, getAccessibleResource, getActorInfo, hasCompanyAccess } from "./authz.js";
@@ -445,6 +446,8 @@ async function withHireRunLock<T>(key: string, fn: () => Promise<T>): Promise<T>
 export function agentRoutes(
   db: Db,
   options: {
+    /** Existing server-owned instance for composed applications; never request-controlled. */
+    heartbeat?: ReturnType<typeof heartbeatService>;
     chatRunRetries?: Pick<ChatChannelService, "prepareFailedChatRunRetry" | "processFailedChatRunRetry">;
     pluginWorkerManager?: PluginWorkerManager;
     /** The active deployment mode. The confidential transport guard reads it. */
@@ -714,16 +717,42 @@ export function agentRoutes(
 
   options.onSetupTokenLoginService?.(setupTokenLoginService);
 
+  function publicRun<T extends { id: string; runnerProfileJson?: unknown; nativeInputSourceProtocolVersion?: number }>(run: T | null) {
+    if (run === null) return null;
+    const { runnerProfileJson: _runnerProfileJson, nativeInputSourceProtocolVersion: _nativeInputSourceProtocolVersion, ...fields } = run;
+    return fields;
+  }
+
   const runRedactions = createRunSecretRedactionRegistry(db);
   async function redactRunResponse<T>(req:Request,companyId:string,runId:string,value:T) {
-    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId});
+    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId},undefined,{privacyLockMode:req.method==="GET"||req.method==="HEAD"?"read":"write"});
     return runRedactions.redactForRun(companyId,runId,value);
   }
   async function redactRunResponses<T extends {id:string}>(req:Request,companyId:string,runs:T[]) {
-    for(const run of runs)await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId:run.id});
-    return runRedactions.redactForRuns(companyId,runs);
+    const runIds=[...new Set(runs.map(run=>run.id))];
+    const readableRunIds=new Set<string>();
+    const lockMode=req.method==="GET"||req.method==="HEAD"?"read":"write";
+    for(let offset=0;offset<runIds.length;offset+=256){
+      const batch=runIds.slice(offset,offset+256);
+      try{
+        await assertAnalyticalContextPayloadAccessBatch(db,companyId,req.actor,[],undefined,
+          {directRunIds:batch,privacyLockMode:lockMode});
+        batch.forEach(id=>readableRunIds.add(id));
+      }catch(error){
+        if(!(error instanceof HttpError&&error.status===403))throw error;
+        for(const id of batch){
+          try{
+            await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId:id},undefined,{privacyLockMode:lockMode});
+            readableRunIds.add(id);
+          }catch(rowError){
+            if(!(rowError instanceof HttpError&&rowError.status===403))throw rowError;
+          }
+        }
+      }
+    }
+    return runRedactions.redactForRuns(companyId,runs.filter(run=>readableRunIds.has(run.id)));
   }
-  const heartbeat = heartbeatService(db, {
+  const heartbeat = options.heartbeat ?? heartbeatService(db, {
     pluginWorkerManager: options.pluginWorkerManager,
   });
   const providerTraces = providerTraceStore(db);
@@ -3312,7 +3341,6 @@ export function agentRoutes(
   async function testManagedEnvironment(adapterType: string, context: Parameters<ReturnType<typeof requireServerAdapter>["testEnvironment"]>[0], binding: AiConnectionBinding) {
     await assertManagedAiProjectAuth(context.config, binding.provider, context.executionTarget);
     const result = await requireServerAdapter(adapterType).testEnvironment(context);
-    if (result.status === "fail") return result;
     // The resolved method, not binding.method — on a responsible_user binding
     // that field is wire-compat only and the default connection decides.
     const resolvedMethod = (context.config as { managedAiConnection?: { method?: string } }).managedAiConnection?.method;
@@ -3342,6 +3370,7 @@ export function agentRoutes(
       }
       return result;
     }
+    if (result.status === "fail") return result;
     if (!result.checks.some(check => check.code.includes("hello_probe"))) {
       const providerAdapter = { anthropic: "claude_local", openai: "codex_local", openrouter: "opencode_local", xai: "grok_local" }[binding.provider];
       const probe = await requireServerAdapter(providerAdapter).testEnvironment({ ...context, adapterType: providerAdapter, config: { ...context.config, engine: "cli" } });
@@ -4145,9 +4174,18 @@ export function agentRoutes(
   });
 
   router.get("/agents/me", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
     if (req.actor.type !== "agent" || !req.actor.agentId) {
       res.status(401).json({ error: "Agent authentication required" });
       return;
+    }
+    const admission = await admitAgentSelfApiRead(db, req.actor.agentId);
+    if (!admission.allowed) {
+      res.setHeader("Retry-After", String(admission.retryAfterSeconds));
+      throw tooManyRequests("Agent self-identity read limit reached. Retry after the indicated delay.", {
+        code: "agent_self_read_rate_limited",
+        retryAfterSeconds: admission.retryAfterSeconds,
+      });
     }
     const agent = await svc.getById(req.actor.agentId);
     if (!agent) {
@@ -6013,7 +6051,7 @@ export function agentRoutes(
       });
     }
 
-    res.status(202).json(run);
+    res.status(202).json(publicRun(run));
   };
 
   router.post("/agents/:id/wakeup", validate(wakeAgentSchema), async (req, res) => {
@@ -6138,7 +6176,7 @@ export function agentRoutes(
       });
     }
 
-    res.status(202).json(run);
+    res.status(202).json(publicRun(run));
   });
 
   router.post("/agents/:id/claude-login", async (req, res) => {
@@ -6819,7 +6857,7 @@ export function agentRoutes(
       req, run.companyId,
       run.id,
       redactCurrentUserValue(
-        { ...decoratedRun, execution: await executionProjectionForRun(db, run.companyId, run.id), identityHistory: await listRunIdentityContexts(db, run.companyId, run.id), retryExhaustedReason, outputSilence: await heartbeat.buildRunOutputSilence(run) },
+        { ...publicRun(decoratedRun), execution: await executionProjectionForRun(db, run.companyId, run.id), identityHistory: await listRunIdentityContexts(db, run.companyId, run.id), retryExhaustedReason, outputSilence: await heartbeat.buildRunOutputSilence(run) },
         await getCurrentUserRedactionOptions(),
       ),
     ));
@@ -6852,7 +6890,7 @@ export function agentRoutes(
       });
     }
 
-    res.json(run);
+    res.json(publicRun(run));
   });
 
   router.post(
@@ -7105,7 +7143,7 @@ export function agentRoutes(
       "Heartbeat run not found",
     );
     if (!run) return;
-    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
+    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id},undefined,{privacyLockMode:"read"});
     const inspection = await providerTraces.inspect(run.id, run.companyId);
     await logActivity(db, {
       companyId: run.companyId,
@@ -7236,7 +7274,7 @@ export function agentRoutes(
         "Heartbeat run not found",
       );
       if (!run) return;
-      await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
+      await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id},undefined,{privacyLockMode:"read"});
       const download = await providerTraces.download(run.id, run.companyId);
       if (!download) throw notFound("Provider trace not found");
       await logActivity(db, {
@@ -7328,7 +7366,7 @@ export function agentRoutes(
     if (!run) return;
     if (!(await assertRunTelemetryReadAllowed(req, res, run.companyId))) return;
 
-    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
+    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id},undefined,{privacyLockMode:"read"});
     const context = asRecord(run.contextSnapshot);
     const executionWorkspaceId = asNonEmptyString(context?.executionWorkspaceId);
     const operations = await workspaceOperations.listForRun(runId, executionWorkspaceId);

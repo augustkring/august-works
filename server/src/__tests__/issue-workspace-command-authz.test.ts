@@ -67,6 +67,16 @@ const mockDb = vi.hoisted(() => ({
 }));
 
 function registerRouteMocks() {
+  // This route fixture isolates command authorization; it has no PostgreSQL
+  // source graph. Keep source admission separate from the real command guard.
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    canActorReadIssuePrivacy: vi.fn(async () => true),
+  }));
+  vi.doMock("../services/analytical-context-authority.js", async () => ({
+    ...await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js"),
+    assertAnalyticalContextPayloadAccess: vi.fn(async () => undefined),
+  }));
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
   }));
@@ -192,6 +202,8 @@ function makeIssue(overrides: Record<string, unknown> = {}) {
 describe("issue workspace command authorization", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.doUnmock("../services/authorization.js");
+    vi.doUnmock("../services/analytical-context-authority.js");
     vi.doUnmock("../services/access.js");
     vi.doUnmock("../services/activity-log.js");
     vi.doUnmock("../services/agents.js");

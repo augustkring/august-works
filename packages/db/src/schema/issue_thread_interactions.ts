@@ -6,7 +6,7 @@ import type {
   IssueThreadInteractionResult,
 } from "@paperclipai/shared";
 import { sql } from "drizzle-orm";
-import { pgTable, uuid, text, timestamp, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, index, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { agents } from "./agents.js";
 import { companies } from "./companies.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
@@ -70,6 +70,7 @@ export const issueThreadInteractions = pgTable(
       table.issueId,
       table.status,
     ),
+    companyIssueIdUq: unique("issue_thread_interactions_company_issue_id_uq").on(table.companyId, table.issueId, table.id),
     companyIssueIdempotencyUq: uniqueIndex("issue_thread_interactions_company_issue_idempotency_uq")
       .on(table.companyId, table.issueId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} IS NOT NULL`),

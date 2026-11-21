@@ -4,6 +4,7 @@ import {
   specialistCompletionContract,
   type SpecialistKey,
   type PackageRelease,
+  FIRST_PARTY_SUPPORT_PACKAGE_KEY,
 } from "@paperclipai/shared";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 /** Narrow automatic updates: every execution-relevant field and pin unchanged. */
@@ -31,6 +32,26 @@ export function packageReleaseBlockers(
     result.push("Release qualification is expired or dated in the future");
   if (release.releaseEvidence.unresolvedCritical.length)
     result.push("Critical release findings remain unresolved");
+  if (release.manifest.audience === "first_party_support") {
+    if (
+      release.packageKey !== FIRST_PARTY_SUPPORT_PACKAGE_KEY ||
+      release.manifest.maximumRisk !== "C1" ||
+      release.manifest.actionClasses.length !== 1 ||
+      release.manifest.actionClasses[0] !== "internal_draft" ||
+      release.manifest.requiredConnections.length !== 0 ||
+      release.manifest.optionalConnections.length !== 0 ||
+      release.manifest.memoryPolicy !== "no_persistent_memory" ||
+      release.manifest.commercialProductKey !== null ||
+      release.manifest.sandboxAssurance !== "read_only_no_code_execution" ||
+      release.manifest.runtimeProviders.length !== 1 ||
+      release.manifest.runtimeProviders[0] !== "paperclip_native" ||
+      release.manifest.requiredKnowledge.length === 0 ||
+      release.components.some((component) => ["workflow_template", "routine_template", "use_case_template", "onboarding_template"].includes(component.type))
+    ) result.push("First-party support release exceeds its fixed read-only draft contract");
+    for (const dimension of ["sbom", "signature", "scan", "evaluations", "protectedHoldout"] as const)
+      if (!release.releaseEvidence[dimension])
+        result.push(`First-party support release requires protected ${dimension} evidence`);
+  }
   if (release.manifest.audience === "customer") {
     if (SPECIALIST_KEYS.includes(release.packageKey as SpecialistKey)) {
       const key = release.packageKey as SpecialistKey,

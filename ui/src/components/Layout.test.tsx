@@ -2,9 +2,14 @@
 
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FEEDBACK_CONTACTS } from "@paperclipai/shared";
+import { queryKeys } from "../lib/queryKeys";
+import { TooltipProvider } from "./ui/tooltip";
 import { Layout } from "./Layout";
+import { Layout as ProductionLayout } from "./Layout.production";
 
 const mockHealthApi = vi.hoisted(() => ({
   get: vi.fn(),
@@ -42,6 +47,9 @@ let currentPathname = "/PAP/dashboard";
 
 vi.mock("@/lib/router", () => ({
   Outlet: () => <div>Outlet content</div>,
+  Link: ({ to, ...props }: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & { to: string }) => (
+    <a href={to} {...props} />
+  ),
   useLocation: () => ({
     pathname: currentPathname,
     search: "",
@@ -69,6 +77,44 @@ vi.mock("./Sidebar", () => ({
       Main company nav
     </div>
   ),
+}));
+
+vi.mock("./Sidebar.production", () => ({
+  Sidebar: () => <div>Main production company nav</div>,
+}));
+
+vi.mock("./SidebarShell.production", () => ({
+  SidebarShell: ({ children }: { children: ReactNode }) => <div data-testid="production-sidebar-shell">{children}</div>,
+}));
+
+vi.mock("./SecondarySidebar.production", () => ({
+  SecondarySidebar: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("./CompanySettingsSidebar.production", () => ({ CompanySettingsSidebar: () => null }));
+vi.mock("./CompanySettingsNav", () => ({ CompanySettingsNav: () => null }));
+vi.mock("./AppsSidebar.production", () => ({ AppsSidebar: () => null }));
+vi.mock("./AppConnectionSidebar.production", () => ({ AppDetailSidebar: () => null }));
+vi.mock("./BreadcrumbBar.production", () => ({ BreadcrumbBar: () => <div>Production breadcrumbs</div> }));
+vi.mock("./ExperienceObservationCollector", () => ({ ExperienceObservationCollector: () => null }));
+vi.mock("./RouteErrorBoundary", () => ({ RouteErrorBoundary: ({ children }: { children: ReactNode }) => <>{children}</> }));
+vi.mock("./StandaloneBrowserControls", () => ({ StandaloneBrowserControls: () => null }));
+vi.mock("./PropertiesPanel", () => ({ PropertiesPanel: () => null }));
+vi.mock("./CommandPalette", () => ({ CommandPalette: () => null }));
+vi.mock("./NewIssueDialog", () => ({ NewIssueDialog: () => null }));
+vi.mock("./NewProjectDialog", () => ({ NewProjectDialog: () => null }));
+vi.mock("./NewGoalDialog", () => ({ NewGoalDialog: () => null }));
+vi.mock("./NewAgentDialog", () => ({ NewAgentDialog: () => null }));
+vi.mock("./KeyboardShortcutsCheatsheet", () => ({ KeyboardShortcutsCheatsheet: () => null }));
+vi.mock("./ToastViewport", () => ({ ToastViewport: () => null }));
+vi.mock("./MobileBottomNav", () => ({ MobileBottomNav: () => null }));
+vi.mock("./WorktreeBanner", () => ({ WorktreeBanner: () => null }));
+vi.mock("./DevRestartBanner", () => ({ DevRestartBanner: () => null }));
+vi.mock("./PluginAppShellOverlays", () => ({ PluginAppShellOverlays: () => null }));
+
+vi.mock("../hooks/useV9CurrentAccount", () => ({
+  hasCurrentV9Session: () => false,
+  useV9CurrentAccount: () => ({ localImplicit: false, userId: "user-1", settled: false, failed: false, authorityEpoch: 0, sessionId: "session-1" }),
 }));
 
 vi.mock("./CompanySettingsSidebar", () => ({
@@ -370,6 +416,54 @@ describe("Layout", () => {
     });
   });
 
+  it("keeps Help, language, and the first-party feedback composer in the production shell", async () => {
+    const root = createRoot(container);
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({
+      progressive_shell_v9: false,
+      customer_feedback_v9: true,
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData(queryKeys.instance.experimentalSettings, {
+      progressive_shell_v9: false,
+      customer_feedback_v9: true,
+    });
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <ProductionLayout />
+          </TooltipProvider>
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+
+    expect(container.querySelector(`a[href="${FEEDBACK_CONTACTS.support}"]`)).not.toBeNull();
+    expect(container.querySelector("select")).not.toBeNull();
+    expect(container.textContent).toContain("Outlet content");
+    expect(container.textContent).toContain("Production breadcrumbs");
+
+    await act(async () => {
+      document.dispatchEvent(
+        new CustomEvent("paperclip:open-feedback", {
+          detail: { returnFocus: "global_feedback" },
+        }),
+      );
+    });
+    await flushReact();
+
+    expect(document.body.textContent).toContain("Share feedback");
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    queryClient.clear();
+  });
+
   it("scopes the Streamlined task-detail surface while preserving balanced horizontal gutters", async () => {
     currentPathname = "/PAP/issues/PAP-1";
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({
@@ -626,7 +720,7 @@ describe("Layout", () => {
     await flushReact();
     await flushReact();
 
-    const selector = container.querySelector("select");
+    const selector = container.querySelector<HTMLSelectElement>('select[aria-label="Page section"]');
     expect(selector).not.toBeNull();
     expect(selector?.value).toBe("secrets");
     const selectorText = selector?.textContent?.toLowerCase() ?? "";

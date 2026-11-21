@@ -1,0 +1,616 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/company-portability.test.ts (96 tests | 35 failed) 18658ms
+     × exports default sidebar order into the Paperclip extension and manifest 174ms
+     × builds export previews without tasks by default 104ms
+     × exports portable project workspace metadata and remaps it on import 3ms
+     × normalizes invalid imported project icon names to null 10ms
+     × infers portable git metadata from a local checkout without task warning fan-out 49ms
+     × collapses repeated task workspace warnings into one summary per missing workspace 1ms
+     × exports project env as portable inputs without concrete values 1ms
+     × reads project env inputs back from .paperclip.yaml during preview import 1ms
+     × exports routines as recurring task packages with Paperclip routine extensions 2ms
+     × skips built-in managed agents and routines during export 3ms
+     × imports recurring task packages as routines instead of one-time issues 6ms
+     × pauses imported agents and routines when pauseAutomations is requested 4ms
+     × leaves imported agents and routines active when pauseAutomations is absent 4ms
+     × migrates legacy schedule.recurrence imports into routine triggers 7ms
+     × imports recurring tasks without a project or assignee as paused routines 2ms
+     × carries labels by name through export and import round-trip 11ms
+     × reuses existing target labels on name collision and keeps the target color 1ms
+     × drops unresolvable raw labelIds from old bundles with a warning instead of failing 2ms
+     × carries blockers, documents, work products, and monitors through export and import 2ms
+     × skips blockers and documents of tasks excluded from the import selection 1ms
+     × carries task timestamps and parent links through export and import 2ms
+     × drops self-referencing and cyclic parent links from a hand-built bundle with warnings 2ms
+     × carries issue attachments as content-addressed blobs through export and import 2ms
+     × skips attachment export with a per-task warning when storage is unavailable 1ms
+     × skips all attachment imports with one warning when the target has no storage 1ms
+     × fails closed when a bundle blob does not match its declared sha256 1ms
+     × skips oversized and missing-blob attachments with warnings instead of failing 4872ms
+     × carries embedded asset images through export and import with rewritten references 2ms
+     × skips embedded image references that are foreign or dangling with one aggregate warning 1ms
+     × leaves embedded image references untouched when their blob is missing at import 1ms
+     × prunes embedded asset entries and blobs when the referencing files are excluded from the export selection 1ms
+     × preserves issue comment presentation fields through export and import 1ms
+     × does not export raw comment author user ids 1ms
+     × downgrades user-authored imported comments to system when no importing user exists 1ms
+     × resolves issue assignee to existing agent when agent is skipped 1ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 35 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports default sidebar order into the Paperclip extension and manifest
+ZodError: [
+  {
+    "expected": "string",
+    "code": "invalid_type",
+    "path": [
+      "privacyOwnerUserId"
+    ],
+    "message": "Invalid input: expected string, received object"
+  },
+  {
+    "expected": "string",
+    "code": "invalid_type",
+    "path": [
+      "personalOwnerUserId"
+    ],
+    "message": "Invalid input: expected string, received object"
+  },
+  {
+    "expected": "array",
+    "code": "invalid_type",
+    "path": [
+      "sourceIssueIds"
+    ],
+    "message": "Invalid input: expected array, received object"
+  },
+  {
+    "expected": "array",
+    "code": "invalid_type",
+    "path": [
+      "sourceProjectIds"
+    ],
+    "message": "Invalid input: expected array, received object"
+  }
+]
+ ❯ buildManifestFromPackageFiles src/services/company-portability.ts:3417:39
+    3415|       .filter((entry): entry is CompanyPortabilityProjectWorkspaceMani…
+    3416|     manifest.projects.push({
+    3417|       ...portableProjectPrivacySchema.parse(extension),
+       |                                       ^
+    3418|       slug,
+    3419|       name: asString(frontmatter.name) ?? slug,
+ ❯ Object.exportBundle src/services/company-portability.ts:4915:20
+ ❯ src/__tests__/company-portability.test.ts:945:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > builds export previews without tasks by default
+ZodError: [
+  {
+    "expected": "string",
+    "code": "invalid_type",
+    "path": [
+      "privacyOwnerUserId"
+    ],
+    "message": "Invalid input: expected string, received object"
+  },
+  {
+    "expected": "string",
+    "code": "invalid_type",
+    "path": [
+      "personalOwnerUserId"
+    ],
+    "message": "Invalid input: expected string, received object"
+  },
+  {
+    "expected": "array",
+    "code": "invalid_type",
+    "path": [
+      "sourceIssueIds"
+    ],
+    "message": "Invalid input: expected array, received object"
+  },
+  {
+    "expected": "array",
+    "code": "invalid_type",
+    "path": [
+      "sourceProjectIds"
+    ],
+    "message": "Invalid input: expected array, received object"
+  }
+]
+ ❯ buildManifestFromPackageFiles src/services/company-portability.ts:3417:39
+    3415|       .filter((entry): entry is CompanyPortabilityProjectWorkspaceMani…
+    3416|     manifest.projects.push({
+    3417|       ...portableProjectPrivacySchema.parse(extension),
+       |                                       ^
+    3418|       slug,
+    3419|       name: asString(frontmatter.name) ?? slug,
+ ❯ exportBundle src/services/company-portability.ts:4915:20
+ ❯ Object.previewExport src/services/company-portability.ts:5011:22
+ ❯ src/__tests__/company-portability.test.ts:1317:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports portable project workspace metadata and remaps it on import
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:1501:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > normalizes invalid imported project icon names to null
+Error: Task and project source release across organizations requires an authorized publication operation
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ validateCopySources src/services/company-portability.ts:3625:51
+ ❯ Object.importBundle src/services/company-portability.ts:5468:31
+ ❯ src/__tests__/company-portability.test.ts:1650:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > infers portable git metadata from a local checkout without task warning fan-out
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:1731:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > collapses repeated task workspace warnings into one summary per missing workspace
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:1835:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports project env as portable inputs without concrete values
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:2443:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > reads project env inputs back from .paperclip.yaml during preview import
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:2489:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports routines as recurring task packages with Paperclip routine extensions
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:2625:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips built-in managed agents and routines during export
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:2759:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports recurring task packages as routines instead of one-time issues
+Error: Task and project source release across organizations requires an authorized publication operation
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ validateCopySources src/services/company-portability.ts:3625:51
+ ❯ Object.importBundle src/services/company-portability.ts:5468:31
+ ❯ src/__tests__/company-portability.test.ts:2867:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > pauses imported agents and routines when pauseAutomations is requested
+Error: Task and project source release across organizations requires an authorized publication operation
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ validateCopySources src/services/company-portability.ts:3625:51
+ ❯ Object.importBundle src/services/company-portability.ts:5468:31
+ ❯ src/__tests__/company-portability.test.ts:3040:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > leaves imported agents and routines active when pauseAutomations is absent
+Error: Task and project source release across organizations requires an authorized publication operation
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ validateCopySources src/services/company-portability.ts:3625:51
+ ❯ Object.importBundle src/services/company-portability.ts:5468:31
+ ❯ src/__tests__/company-portability.test.ts:3111:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > migrates legacy schedule.recurrence imports into routine triggers
+Error: Task and project source release across organizations requires an authorized publication operation
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ validateCopySources src/services/company-portability.ts:3625:51
+ ❯ Object.importBundle src/services/company-portability.ts:5468:31
+ ❯ src/__tests__/company-portability.test.ts:3191:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports recurring tasks without a project or assignee as paused routines
+Error: Task and project source release across organizations requires an authorized publication operation
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ validateCopySources src/services/company-portability.ts:3625:51
+ ❯ Object.importBundle src/services/company-portability.ts:5468:31
+ ❯ src/__tests__/company-portability.test.ts:3243:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries labels by name through export and import round-trip
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:4075:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > reuses existing target labels on name collision and keeps the target color
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:4153:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > drops unresolvable raw labelIds from old bundles with a warning instead of failing
+Error: Task and project source release across organizations requires an authorized publication operation
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ validateCopySources src/services/company-portability.ts:3625:51
+ ❯ Object.importBundle src/services/company-portability.ts:5468:31
+ ❯ src/__tests__/company-portability.test.ts:4195:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries blockers, documents, work products, and monitors through export and import
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:4379:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips blockers and documents of tasks excluded from the import selection
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:4506:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries task timestamps and parent links through export and import
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:4602:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > drops self-referencing and cyclic parent links from a hand-built bundle with warnings
+Error: Task and project source release across organizations requires an authorized publication operation
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ validateCopySources src/services/company-portability.ts:3625:51
+ ❯ Object.importBundle src/services/company-portability.ts:5468:31
+ ❯ src/__tests__/company-portability.test.ts:4710:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries issue attachments as content-addressed blobs through export and import
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:4850:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips attachment export with a per-task warning when storage is unavailable
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:4941:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips all attachment imports with one warning when the target has no storage
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:4956:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > fails closed when a bundle blob does not match its declared sha256
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:4984:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips oversized and missing-blob attachments with warnings instead of failing
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:5039:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries embedded asset images through export and import with rewritten references
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:5143:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips embedded image references that are foreign or dangling with one aggregate warning
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:5248:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > leaves embedded image references untouched when their blob is missing at import
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:5267:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > prunes embedded asset entries and blobs when the referencing files are excluded from the export selection
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:5301:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > preserves issue comment presentation fields through export and import
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:5498:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > does not export raw comment author user ids
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:5572:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > downgrades user-authored imported comments to system when no importing user exists
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:5619:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/35]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > resolves issue assignee to existing agent when agent is skipped
+Error: Current organization access is required for export
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ Object.exportBundle src/services/company-portability.ts:4110:41
+ ❯ src/__tests__/company-portability.test.ts:6143:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/35]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  35 failed | 61 passed (96)
+   Start at  20:36:07
+   Duration  52.09s (transform 20.89s, setup 270ms, import 32.57s, tests 18.66s, environment 0ms)
+

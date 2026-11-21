@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { documents, issueDocuments, issues } from "@paperclipai/db";
+import { issues } from "@paperclipai/db";
 import { ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY, type SourceTrustMetadata } from "@paperclipai/shared";
-import { documentService } from "./documents.js";
+import { documentService, type DocumentRevisionSourceCapture } from "./documents.js";
 
 export { ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY };
 export const ISSUE_CONTINUATION_SUMMARY_TITLE = "Continuation Summary";
@@ -211,27 +211,14 @@ export function buildContinuationSummaryMarkdown(input: {
 export async function getIssueContinuationSummaryDocument(
   db: Db,
   issueId: string,
+  options: { onSourceCapture?: (capture: DocumentRevisionSourceCapture | null) => void } = {},
 ): Promise<IssueContinuationSummaryDocument | null> {
-  const row = await db
-    .select({
-      key: issueDocuments.key,
-      title: documents.title,
-      body: documents.latestBody,
-      latestRevisionId: documents.latestRevisionId,
-      latestRevisionNumber: documents.latestRevisionNumber,
-      sourceTrust: documents.sourceTrust,
-      updatedAt: documents.updatedAt,
-    })
-    .from(issueDocuments)
-    .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
-    .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY)))
-    .then((rows) => rows[0] ?? null);
-
+  const row = await documentService(db).getIssueDocumentByKey(issueId, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY, options);
   if (!row) return null;
   return {
     key: ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY,
     title: row.title,
-    body: row.body,
+    body: row.body!,
     latestRevisionId: row.latestRevisionId,
     latestRevisionNumber: row.latestRevisionNumber,
     sourceTrust: row.sourceTrust ?? null,

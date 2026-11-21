@@ -1,0 +1,7 @@
+{
+  "candidate": "69",
+  "pinsSha256": "852d9387a7fa46f3bae0acf9e228876a228307dfe12eef4b16926c3d693ca3aa",
+  "runnerSha256": "912b9345b5df69d1794d0305a2e4f7b9a636639fed2dcf9827b3bf1b81818ff4",
+  "status": "actual Worker failed before dispatch; Oxc/shared/DB/server TypeScript passed; no successful provider response",
+  "restore": "pinned sources restored to pre-snapshot source bytes and modes; compiled outputs and tsbuildinfo restored byte-for-byte"
+}

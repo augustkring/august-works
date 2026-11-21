@@ -1,0 +1,78 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts (82 tests | 1 failed | 79 skipped) 67950ms
+     × allows an agent to reject a pending review confirmation by default 2750ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows an agent to reject a pending review confirmation by default
+AssertionError: expected "vi.fn()" to be called with arguments: [ Anything, …(3) ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   Anything,
++   {
++     "assigneeAgentId": "11111111-1111-4111-8111-111111111111",
++     "assigneeUserId": null,
++     "companyId": "company-1",
++     "createdByUserId": "local-board",
++     "executionPolicy": null,
++     "executionState": null,
++     "goalId": null,
++     "hiddenAt": null,
++     "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
++     "identifier": "PAP-1714",
++     "parentId": null,
++     "priority": "medium",
++     "projectId": null,
++     "status": "in_progress",
++     "title": "Persist interactions",
++     "workMode": "standard",
++   },
+    "interaction-agent-reject",
+    {
+      "reason": "Needs changes",
+    },
+-   ObjectContaining {
++   {
+      "agentId": "11111111-1111-4111-8111-111111111111",
+-     "requestActor": ObjectContaining {
++     "requestActor": {
+        "agentId": "11111111-1111-4111-8111-111111111111",
++       "companyId": "company-1",
+        "runId": "d2222222-2222-4222-8222-222222222222",
+        "type": "agent",
+      },
+-     "resolverPolicyRestriction": "anyone",
++     "resolverPolicyRestriction": null,
++     "runId": "d2222222-2222-4222-8222-222222222222",
++     "userId": null,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2493:54
+    2491|
+    2492|     expect(res.status, String(app.locals.routeError?.stack ?? app.loca…
+    2493|     expect(mockInteractionService.rejectInteraction).toHaveBeenCalledW…
+       |                                                      ^
+    2494|       expect.anything(),
+    2495|       "interaction-agent-reject",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed | 79 skipped (82)
+   Start at  14:46:41
+   Duration  69.42s (transform 50.78s, setup 216ms, import 749ms, tests 67.95s, environment 0ms)
+

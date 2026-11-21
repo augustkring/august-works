@@ -1,0 +1,35 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > returns immutable validated output, resumes after recovery and never creates a Task
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > recovers a lost dispatch binding through the same wake receipt without repeating the execution
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > blocks prompt hydration and result submission when the initiating member is suspended
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > fails missing output and cancels the child when the call deadline expires
+ ↓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > preserves a failed asynchronous call and follows its published failure branch
+ × src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > erases delegated payloads, queues log erasure and blocks late or restored agent writes 1643ms
+   → expected 'runtime_asset_erasure' to be 'run_log_erasure' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > erases delegated payloads, queues log erasure and blocks late or restored agent writes
+AssertionError: expected 'runtime_asset_erasure' to be 'run_log_erasure' // Object.is equality
+
+Expected: "run_log_erasure"
+Received: "runtime_asset_erasure"
+
+ ❯ src/services/workflows/workflow-direct-agent.test.ts:214:41
+    212|     const jobs = memoryJobService(db, { runLogStore: logStore });
+    213|     const claimed = await jobs.claimNext(new Date());
+    214|     expect(claimed?.sourceRefJson.kind).toBe("run_log_erasure");
+       |                                         ^
+    215|     await jobs.executeClaimed(claimed!);
+    216|     expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id,…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  01:08:24
+   Duration  19.93s (transform 9.95s, setup 78ms, import 14.07s, tests 5.65s, environment 0ms)
+

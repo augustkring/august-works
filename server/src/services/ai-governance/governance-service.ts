@@ -34,6 +34,8 @@ import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
+import { companySkillService } from "../company-skills.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { conflict, notFound } from "../../errors.js";
 import {
   classifyGovernanceChange,
@@ -186,6 +188,24 @@ export function aiGovernanceService(db: Db) {
           "Create a matching independently verified orchestration plan before activating this use case",
         );
     }
+    // Native execution lazily reconciles the required Platform Skill inventory
+    // at first Run admission. That inventory is part of the immutable governance
+    // authority hash, so admit it for this exact agent/Human before capturing the
+    // deployment snapshot. Run admission still pins and rechecks the Skill; this
+    // does not grant capabilities or refresh a deployment after binding.
+    const platformActor: AuthorizationActor = {
+      type: "agent",
+      source: "none",
+      companyId,
+      agentId: input.agentId,
+      onBehalfOfUserId: v7HumanActorId(actor),
+    };
+    await companySkillService(tx).requiredPlatformSkill(
+      companyId,
+      platformActor,
+      blenteraPlatformContractHashes(),
+      { admitContractRefresh: true },
+    );
     const [prior] = await tx
       .select()
       .from(aiUseCaseDeployments)

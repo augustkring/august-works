@@ -1,0 +1,12 @@
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/SHA256SUMS
+f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-binary.path
+dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-binary.sha256
+3c5e3f52090c82e83089d8cdacd83699534afd7739fd59b5246196442149effa  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-runner.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-snapshot.exit
+98af21b315444853ed6671997217eea864d512020d3ee2d67f86933b3f947f29  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-snapshot.log
+45959720912075095359176108c158f170d695a35d1bbdf143c728528ef9543d  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-source-pins.json
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-syntax.exit
+5cde55352c081dfc93d535e1c9e485f3702b02823c21415f34811f870c0d1519  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-syntax.log
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-test.exit
+5daedd627c04ef415f44233c9197363ec1edf5f6b38794058c5b47dad220dd14  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1-test.log
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  doc/operations/aw-v10-evidence/v7-conversation-financial-real-frame-2026-10-26/r35/conversation-known-cost-v5-skill-0551-20261026-r1.exit

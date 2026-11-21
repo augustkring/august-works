@@ -1,0 +1,145 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.718382549006492,
+      "filesAdvised": 397262,
+      "memoryAfter": 5819011072,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "bafea5850649c61ca27cbe7f37c1f0182382e11d0a38cd14e288f9b9d4fd4649",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/__tests__/chat-channels.integration.test.ts",
+    "-t",
+    "migrates Telegram basic-group reach and topic tasks"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 4.859300679527223e-05,
+  "sourceManifest": "linked-human-telegram-lineage-negative-boundaries-r559-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 30.234839504992124,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 2155261952,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 735353,
+      "parentPid": 735306,
+      "executable": "node",
+      "rssBytes": 1043902464,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 735377,
+      "parentPid": 735353,
+      "executable": "node",
+      "rssBytes": 900567040,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 735477,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 72626176
+    },
+    {
+      "pid": 735476,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 55795712
+    },
+    {
+      "pid": 735462,
+      "parentPid": 735377,
+      "executable": "postgres",
+      "rssBytes": 24588288
+    },
+    {
+      "pid": 735463,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 13164544
+    },
+    {
+      "pid": 735469,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 8843264
+    },
+    {
+      "pid": 735470,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 7892992
+    },
+    {
+      "pid": 735471,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 7208960
+    },
+    {
+      "pid": 735467,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 5529600
+    },
+    {
+      "pid": 735466,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 5431296
+    },
+    {
+      "pid": 735464,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 5287936
+    },
+    {
+      "pid": 735465,
+      "parentPid": 735462,
+      "executable": "postgres",
+      "rssBytes": 4423680
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 21,
+  "observedPostgresRelatedPids": [
+    735416,
+    735426,
+    735449,
+    735459,
+    735462,
+    735463,
+    735464,
+    735465,
+    735466,
+    735467,
+    735469,
+    735470,
+    735471,
+    735474,
+    735475,
+    735476,
+    735477
+  ],
+  "uniqueTempRoot": "/var/tmp/mpg-0rmqciff",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 123,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+}

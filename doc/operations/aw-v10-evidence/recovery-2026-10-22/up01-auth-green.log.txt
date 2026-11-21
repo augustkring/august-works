@@ -1,0 +1,27 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/agent-auth-middleware.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-auth-middleware.test.ts [ server/src/__tests__/agent-auth-middleware.test.ts ]
+Error: Failed to resolve entry for package "@paperclipai/plugin-sdk". The package may have incorrect main/module/exports specified in its package.json.
+ ❯ src/services/environment-runtime.ts:1:1
+      1| import { readEnvironmentCreationCleanupError } from "@paperclipai/plug…
+       | ^
+      2| import { remoteTerminationReceipt } from "./remote-execution-terminati…
+      3| import { createHash, randomUUID } from "node:crypto";
+ ❯ src/services/heartbeat.ts:592:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  19:01:35
+   Duration  42.11s (transform 28.95s, setup 171ms, import 0ms, tests 0ms, environment 0ms)
+

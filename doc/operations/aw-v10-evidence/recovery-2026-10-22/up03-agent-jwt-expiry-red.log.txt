@@ -1,0 +1,48 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/agent-auth-jwt.test.ts (23 tests | 1 failed | 22 skipped) 24ms
+     × rejects at the exact expiry instant after a valid pre-expiry read 21ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-auth-jwt.test.ts > agent local JWT > rejects at the exact expiry instant after a valid pre-expiry read
+AssertionError: expected { sub: 'agent-1', …(10) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "adapter_type": "claude_local",
+  "aud": "paperclip-api",
+  "company_id": "company-1",
+  "exp": 1767225601,
+  "iat": 1767225600,
+  "instance_id": "default",
+  "iss": "paperclip",
+  "jti": undefined,
+  "responsible_user_id": null,
+  "run_id": "run-1",
+  "sub": "agent-1",
+}
+
+ ❯ src/__tests__/agent-auth-jwt.test.ts:121:41
+    119|     expect(verifyLocalAgentJwt(token!)).not.toBeNull();
+    120|     vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+    121|     expect(verifyLocalAgentJwt(token!)).toBeNull();
+       |                                         ^
+    122|   });
+    123|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 22 skipped (23)
+   Start at  01:04:01
+   Duration  8.37s (transform 4.95s, setup 210ms, import 7.68s, tests 24ms, environment 0ms)
+

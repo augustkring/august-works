@@ -116,6 +116,7 @@ interface AwsSecretsManagerGateway {
     Name?: string;
     VersionId?: string;
   }>;
+  describeSecret?(input: { SecretId: string }): Promise<{ ARN?: string; Name?: string; DeletedDate?: string | number | Date | null }>;
   deleteSecret(input: {
     SecretId: string;
     RecoveryWindowInDays: number;
@@ -869,9 +870,13 @@ function awsProviderSafeMessage(code: SecretProviderClientErrorCode): string {
   }
 }
 
-function normalizeAwsError(operation: string, error: unknown): never {
+function normalizeAwsError(operation: string, error: unknown, notFoundIsAbsence = true): never {
   const rawMessage = error instanceof Error ? error.message : String(error);
-  const code = classifyAwsProviderError(rawMessage);
+  const classified = classifyAwsProviderError(rawMessage);
+  // A DNS ENOTFOUND or generic NotFound string is not provider absence proof.
+  const code = !notFoundIsAbsence && classified === "not_found"
+    ? /\bENOTFOUND\b/i.test(rawMessage) ? "provider_unavailable" : "provider_error"
+    : classified;
   throw new SecretProviderClientError({
     code,
     provider: "aws_secrets_manager",
@@ -926,6 +931,10 @@ class AwsSecretsManagerJsonGateway implements AwsSecretsManagerGateway {
       Name?: string;
       VersionId?: string;
     }>("GetSecretValue", input);
+  }
+
+  describeSecret(input: { SecretId: string }) {
+    return this.call<{ ARN?: string; Name?: string; DeletedDate?: number }>("DescribeSecret", input);
   }
 
   deleteSecret(input: {
@@ -1358,13 +1367,45 @@ export function createAwsSecretsManagerProvider(
           }
           return;
         }
-        await gateway.deleteSecret({
-          SecretId: secretId,
-          RecoveryWindowInDays: config.deleteRecoveryWindowDays,
-        });
       } catch (error) {
-        normalizeAwsError(input.mode === "archive" ? "updateSecretVersionStage" : "deleteSecret", error);
+        normalizeAwsError("updateSecretVersionStage", error);
       }
+      const pending = () => new SecretProviderClientError({ code: "conflict", provider: "aws_secrets_manager",
+        operation: "deleteSecret", message: "AWS secret deletion is awaiting original-provider absence confirmation." });
+      // A name can be reused. Destructive deletion and metadata closure require
+      // the immutable original ARN, with both stored references agreeing.
+      if (!/^arn:[a-z0-9-]+:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[^\s]+$/.test(secretId) ||
+          input.externalRef?.trim() && input.externalRef.trim() !== material.secretId.trim() || !gateway.describeSecret)
+        throw pending();
+      const describeOriginal = async () => {
+        let metadata;
+        try { metadata = await gateway.describeSecret!({ SecretId: secretId }); }
+        catch (error) {
+          // Accept only AWS's explicit metadata response, never a generic 404,
+          // DNS ENOTFOUND, timeout, DeleteSecret ACK or an absent local row.
+          const missing = error instanceof SecretProviderClientError
+            ? error.provider === "aws_secrets_manager" && error.operation === "DescribeSecret" &&
+              /^(?:[A-Za-z0-9_.-]+#)?ResourceNotFoundException(?::|$)/.test(error.rawMessage ?? "")
+            : error instanceof Error && error.name === "ResourceNotFoundException";
+          if (missing) return null;
+          normalizeAwsError("describeSecret", error, false);
+        }
+        if (!metadata || metadata.ARN !== secretId) throw pending();
+        return metadata;
+      };
+      const before = await describeOriginal();
+      if (!before) return;
+      if (before.DeletedDate !== undefined && before.DeletedDate !== null) throw pending();
+      let deletionFailed = false, deletionError: unknown;
+      try { await gateway.deleteSecret({ SecretId: secretId, RecoveryWindowInDays: config.deleteRecoveryWindowDays }); }
+      catch (error) { deletionFailed = true; deletionError = error; }
+      // The response only schedules deletion (minimum recovery period 7 days).
+      // A lost response can still have scheduled it; inspect metadata before
+      // retrying later, without resetting a known existing recovery window.
+      const after = await describeOriginal();
+      if (!after) return;
+      if (deletionFailed) normalizeAwsError("deleteSecret", deletionError, false);
+      throw pending();
     },
     healthCheck,
   };

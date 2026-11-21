@@ -1,0 +1,83 @@
+{
+  "recordedAt": "2026-10-23T00:05:26.085519+00:00",
+  "scope": "Original persisted MemoryJob read authority for GET company memory/jobs and native index maintenance history; source qualification helper shared with later live delivery owner.",
+  "ownedSourceSha256": {
+    "server/src/services/memory/memory-jobs.ts": "5289bb0614c8346660575d2ae7d40f0c2a2e4c0f7b257ad22f6893fe04abd22e",
+    "server/src/services/memory/derived-memory.ts": "fba3b81f80d0917c3989e1ed32ee17dd7b2b14772bec5ad143b8b1287bcdd2f7",
+    "server/src/services/experience/memory-maintenance-history.ts": "55152870a519e1ffba0db548caf74e2786c7c25c42a19d3345fd3a45aa9b1e7c",
+    "server/src/routes/memory.ts": "312e5568023b8b091edd11f41e0cabea55474aba3ec465327e9a539e77fdb086",
+    "server/src/__tests__/memory-job-read-authority.integration.test.ts": "59c47609e19ac845d01a68711dbd4145e99b86ae78d05872027d9feb10f44571"
+  },
+  "command": "source /workspace/v10-preparation/env.sh; NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/memory-job-read-authority.integration.test.ts --maxWorkers=1",
+  "fixture": "Actual embedded PostgreSQL, original full migrator, pool maximum3; disposable cluster cleanup completed for all four attempts.",
+  "attempts": [
+    {
+      "session": 83450,
+      "log": "up03-memory-job-read-red.log",
+      "pins": "up03-memory-job-read-red-before.sha256",
+      "exitCode": 1,
+      "result": "setup failure: missing experimental dependency core_stewards_v7;4 tests skipped; no semantic RED",
+      "durationSeconds": 87.6,
+      "sourceNote": "Production unchanged; corrected only new fixture to exact dependencies from original maintenance owner. An after-check saved after correction reports fixture mismatch; earlier live check before correction showed all11 exact."
+    },
+    {
+      "session": 33956,
+      "log": "up03-memory-job-read-red-2.log",
+      "pins": "up03-memory-job-read-red-2-before.sha256",
+      "exitCode": 1,
+      "result": "4 tests failed with8 semantic assertions against original production; no fixture failures",
+      "durationSeconds": 79.01,
+      "sourceVerification": "All11 pinned files verified unchanged after actual exit; B freeze acknowledgment arrived after launch, not described as upfront full-graph hold."
+    },
+    {
+      "session": 49953,
+      "log": "up03-memory-job-read-green.log",
+      "pins": "up03-memory-job-read-green-before.sha256",
+      "exitCode": 1,
+      "result": "4 tests failed: new pagination raw Date parameter encoding error; no PASS claim",
+      "durationSeconds": 86.02,
+      "sourceVerification": "All12 pinned files verified unchanged after actual exit."
+    },
+    {
+      "session": 17348,
+      "log": "up03-memory-job-read-green-2.log",
+      "pins": "up03-memory-job-read-green-2-before.sha256",
+      "exitCode": 0,
+      "result": "4 tests passed",
+      "durationSeconds": 92.57,
+      "testSeconds": 28.9,
+      "sourceVerification": "All12 pinned files verified unchanged after actual exit. Later B-owned source changes are not retrospectively qualified by this run."
+    }
+  ],
+  "assertedCases": [
+    "Actual privateCreate -> share -> Human review -> native index enqueue: original Human reads job; another current company administrator receives no API job or history entry.",
+    "51 newer inaccessible private-source jobs do not displace an older accessible job from API50/history10 output limits.",
+    "Changed source payload/version with retained old job recordVersions is withheld on both surfaces.",
+    "Actual native index completion followed by actual forget: only original requesting Human retains source_unavailable history with null receipt/count; another administrator and full-job API receive no erased job."
+  ],
+  "implementation": [
+    "Actual persisted tenant+job lookup; current canonical Human/company owner-admin admission; operation-specific strict source/result shape and current native source ACL/version checks. Event details and historical requester never supply authority.",
+    "Shared bounded keyset scan filters before output limit. Cursor compares native PostgreSQL tuple selected by held company+job UUID, preserving submillisecond timestamp precision.",
+    "One private5s cooperative deadline checked around candidate/source/authority awaits and propagated through original derivedRoots/observationLineage/modelLineage budget callbacks; ordinary callers keep prior behavior.",
+    "Separate own source-free index tombstone requires unique original native completion receipt, actual current requesting Human, job/company/action/time/result-shape binding and current manager. It never makes the full-job boolean guard true and exposes no receipt/count/source/result."
+  ],
+  "limits": [
+    "Only these4 index-job API/history scenarios have actual current PG qualification in this checkpoint; native capture/model/compaction/reflection/result-proposal/retention/standalone-live branches need additional independent fixtures.",
+    "Successful dedupe may change input versions. Historical successes without actual post-effect version proof are withheld; no version-ignore bypass or invented history repair.",
+    "Generic retention/erasure jobs lack enumerable complete readable sources and are withheld by the full-job guard. Missing/erased/malformed source metadata does not imply public.",
+    "Already-running original Memory8s or analytical payload30s helper can overshoot cooperative5s deadline before returning. No cancellation or hard5s wall-time guarantee is claimed.",
+    "No reconstruction or qualification of already-lost Context/provenance; unused native run source-qualification flag and mixed-writer/upgrade admission remain open.",
+    "RED used0507 schema; current attempts used Root0508 migration. This checkpoint does not independently qualify Root entire0508 tombstone migration portfolio.",
+    "No current normal-server/workspace typecheck or all-live qualification is claimed. Later environment-interrupted parent attempts have no verdict; prior closed4PASS remains valid."
+  ],
+  "artifactsSha256": {
+    "up03-memory-job-read-red.log": "c87d9c04c45c56b6ab3f6997ef734c5393648b34d9f4dedd23245c7112dbf4b7",
+    "up03-memory-job-read-red-2.log": "74c730c45034ffc17174fb87704fcb625edb9e517330338809ee29c782d204e4",
+    "up03-memory-job-read-green.log": "237bc9b47b747e9090bcdf71ee17a9b31f0b7e317602d3661b4e9dd843c56888",
+    "up03-memory-job-read-green-2.log": "1d11640edf01bac25c61af35d9058892f86d84d84b136f08f613d0bb4860657d",
+    "up03-memory-job-read-red-before.sha256": "c51870debd332a770a8392c8799898550949cc320e387de031ebcad6bc7cca77",
+    "up03-memory-job-read-red-2-before.sha256": "7468ad877c514602fb8b26871fe038a1c26c96c24204ff2efd5225df79f2d5a1",
+    "up03-memory-job-read-green-before.sha256": "4ec5ac79bdf1c8dcdb9b214714b3b806412fb14da3dda9611d916b6b82bfb005",
+    "up03-memory-job-read-green-2-before.sha256": "bc5435b24998bd0fe0186c5ca3994fb35a1ade52e1e76a391e62fd6793dc9613"
+  }
+}

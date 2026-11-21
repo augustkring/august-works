@@ -1,0 +1,145 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[21:34:06] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"14179c46-818c-4ce8-9343-45f576b2dad3","actorAgentId":"13016b8a-c780-417d-b156-b37c0dd25fdc","responsibleUserId":"4442071e-f9c3-4479-83fa-860cc9cd5df1"}[39m
+[21:34:06] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"7297b4e0-c835-49f8-9846-45a20c73a24b","actorAgentId":"cef1a7e2-7958-4d4c-b7c9-9b2fe054b491","responsibleUserId":"7c720ad1-65e2-4394-ad10-0494c7eb8608"}[39m
+[21:34:08] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"ca78f07a-ab2b-4d04-8415-4c6ff076360a","actorAgentId":"c84791a4-1f85-4a4d-a142-911e1f81fcdb","responsibleUserId":"18912e43-7cfa-4079-ba97-09c5ad515b54"}[39m
+[21:34:57] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"7dc2435d-919c-457f-a4db-8230b366aba8","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Native Memory search index is unavailable",
+      "stack":
+          Error: Native Memory search index is unavailable
+              at conflict (/workspace/blentera-v10/server/src/errors.ts:29:10)
+              at assertNativeMemoryIndex (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.ts:50:11)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeMemoryMaintenance (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.ts:65:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:515:124
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:508:29)
+              at execute (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:50:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:136:25
+      "status": 409
+    }
+[21:34:58] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"589ccb86-9b2e-4492-8ff5-9ae4f03d97cd","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Native Memory search index is unavailable",
+      "stack":
+          Error: Native Memory search index is unavailable
+              at conflict (/workspace/blentera-v10/server/src/errors.ts:29:10)
+              at assertNativeMemoryIndex (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.ts:50:11)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeMemoryMaintenance (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.ts:65:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:515:124
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:508:29)
+              at execute (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:50:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:136:25
+      "status": 409
+    }
+[21:34:58] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"9d7f7fc9-21cf-4726-9c7d-74d9cc03d51a","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Native Memory search index is unavailable",
+      "stack":
+          Error: Native Memory search index is unavailable
+              at conflict (/workspace/blentera-v10/server/src/errors.ts:29:10)
+              at assertNativeMemoryIndex (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.ts:50:11)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeMemoryMaintenance (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.ts:65:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:515:124
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:508:29)
+              at execute (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:50:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:136:25
+      "status": 409
+    }
+[21:34:58] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"335f02ba-84aa-4121-b36a-aac675d9d709","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Memory job lease was lost",
+      "stack":
+          Error: Memory job lease was lost
+              at conflict (/workspace/blentera-v10/server/src/errors.ts:29:10)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:513:83
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:508:29)
+              at /workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:154:5
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+      "status": 409
+    }
+[21:35:01] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"1515db42-1507-4f1d-83e0-de82976ffacb","operationType":"index_refresh"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Memory maintenance requires a current owner or administrator",
+      "stack":
+          Error: Memory maintenance requires a current owner or administrator
+              at forbidden (/workspace/blentera-v10/server/src/errors.ts:21:10)
+              at memoryMaintenanceSources (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.ts:22:88)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeMemoryMaintenance (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.ts:59:19)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:515:124
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:508:29)
+              at execute (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:50:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:208:13
+      "status": 403
+    }
+[21:35:01] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"138a95ff-1fe4-4369-be9d-1b72c1fa478d","operationType":"dedupe"}[39m
+    err: {
+      "type": "DrizzleQueryError",
+      "message": "Failed query: update \"memory_jobs\" set \"status\" = $1, \"execution_owner_id\" = $2, \"lease_expires_at\" = $3, \"finished_at\" = $4, \"result_summary\" = $5, \"result_json\" = $6, \"error_code\" = $7, \"error\" = $8, \"updated_at\" = $9 where (\"memory_jobs\".\"id\" = $10 and \"memory_jobs\".\"status\" = $11 and \"memory_jobs\".\"execution_owner_id\" = $12)\nparams: succeeded,,,2026-10-22T21:35:01.355Z,Native Memory maintenance completed.,{\"scannedRecordCount\":2,\"supersededCount\":1,\"canonicalRecordCount\":1},,,2026-10-22T21:35:01.355Z,138a95ff-1fe4-4369-be9d-1b72c1fa478d,running,memory-job-worker:427f938f-0b33-42fa-82b3-bd3d6aa8af80: injected receipt fault",
+      "stack":
+          Error: Failed query: update "memory_jobs" set "status" = $1, "execution_owner_id" = $2, "lease_expires_at" = $3, "finished_at" = $4, "result_summary" = $5, "result_json" = $6, "error_code" = $7, "error" = $8, "updated_at" = $9 where ("memory_jobs"."id" = $10 and "memory_jobs"."status" = $11 and "memory_jobs"."execution_owner_id" = $12)
+          params: succeeded,,,2026-10-22T21:35:01.355Z,Native Memory maintenance completed.,{"scannedRecordCount":2,"supersededCount":1,"canonicalRecordCount":1},,,2026-10-22T21:35:01.355Z,138a95ff-1fe4-4369-be9d-1b72c1fa478d,running,memory-job-worker:427f938f-0b33-42fa-82b3-bd3d6aa8af80
+              at PostgresJsPreparedQuery.queryWithCache (file:///workspace/blentera-v10/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at settle (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:332:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:517:11
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:508:29)
+              at execute (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:50:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-maintenance.test.ts:216:15
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+          caused by: PostgresError: injected receipt fault
+              at ErrorResponse (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30)
+              at handle (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6)
+              at Socket.data (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9)
+              at Socket.emit (node:events:514:28)
+              at addChunk (node:internal/streams/readable:568:12)
+              at readableAddChunkPushByteMode (node:internal/streams/readable:519:3)
+              at Socket.Readable.push (node:internal/streams/readable:399:5)
+              at TCP.onStreamRead (node:internal/stream_base_commons:189:23)
+      "query": "update \"memory_jobs\" set \"status\" = $1, \"execution_owner_id\" = $2, \"lease_expires_at\" = $3, \"finished_at\" = $4, \"result_summary\" = $5, \"result_json\" = $6, \"error_code\" = $7, \"error\" = $8, \"updated_at\" = $9 where (\"memory_jobs\".\"id\" = $10 and \"memory_jobs\".\"status\" = $11 and \"memory_jobs\".\"execution_owner_id\" = $12)",
+      "params": [
+        "succeeded",
+        null,
+        null,
+        "2026-10-22T21:35:01.355Z",
+        "Native Memory maintenance completed.",
+        "{\"scannedRecordCount\":2,\"supersededCount\":1,\"canonicalRecordCount\":1}",
+        null,
+        null,
+        "2026-10-22T21:35:01.355Z",
+        "138a95ff-1fe4-4369-be9d-1b72c1fa478d",
+        "running",
+        "memory-job-worker:427f938f-0b33-42fa-82b3-bd3d6aa8af80"
+      ]
+    }
+
+ Test Files  3 passed (3)
+      Tests  49 passed (49)
+   Start at  21:32:43
+   Duration  162.65s (transform 46.99s, setup 720ms, import 95.34s, tests 65.11s, environment 0ms)
+

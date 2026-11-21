@@ -1,0 +1,56 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts (33 tests | 2 failed) 126496ms
+     × canonicalizes paperclip artifact metadata before creating a work product 1849ms
+     × rejects paperclip artifact metadata that references another issue's attachment 1408ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > canonicalizes paperclip artifact metadata before creating a work product
+AssertionError: TypeError: db.select is not a function: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-attachment-routes.test.ts:801:55
+    799|       });
+    800|
+    801|     expect(res.status, String(app.locals.routeError)).toBe(201);
+       |                                                       ^
+    802|     expect(mockWorkProductService.createForIssue).toHaveBeenCalledWith(
+    803|       issue.id,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > rejects paperclip artifact metadata that references another issue's attachment
+AssertionError: TypeError: db.select is not a function: expected 500 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 500
+
+ ❯ src/__tests__/issue-attachment-routes.test.ts:848:55
+    846|       });
+    847|
+    848|     expect(res.status, String(app.locals.routeError)).toBe(422);
+       |                                                       ^
+    849|     expect(res.body.error).toBe("Attachment artifact must reference an…
+    850|     expect(mockWorkProductService.createForIssue).not.toHaveBeenCalled…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 31 passed (33)
+   Start at  12:55:26
+   Duration  127.59s (transform 32.12s, setup 278ms, import 411ms, tests 126.50s, environment 0ms)
+

@@ -37,6 +37,7 @@ export type {
   NativeRunEvent,
   NativeRunResult,
   NativeRuntimeAssetReference,
+  NativeConfirmedRunBinding,
   NativeRuntimeContextSnapshot,
   NativeSession,
   NativeSessionBackend,
@@ -60,6 +61,8 @@ export type DurablePrpControlPlane =
   import("@paperclipai/paperclip-runner").DurablePrpControlPlane;
 export type PaperclipSemanticDispatcher =
   import("@paperclipai/paperclip-runner").PaperclipSemanticDispatcher;
+export type NativeMcpLaunchBinding =
+  import("@paperclipai/paperclip-runner").NativeMcpLaunchBinding;
 
 const sourceUrl = new URL(
   "../../../../packages/paperclip-runner/src/index.ts",
@@ -69,6 +72,14 @@ const runner = (await import(sourceUrl.href)) as RunnerModule;
 
 export const DurablePrpControlPlane = runner.DurablePrpControlPlane;
 export const runnerCodexDynamicToolsFit = runner.runnerCodexDynamicToolsFit;
+export const nativeSystemInstructions = runner.nativeSystemInstructions;
+export const nativeTaskConstraints = runner.nativeTaskConstraints;
+export const createCodexTaskEnvelope = runner.createCodexTaskEnvelope;
+export const PRP_COMPLETION_TOOL_NAME = runner.PRP_COMPLETION_TOOL_NAME;
+export const PRP_BLOCK_TOOL_NAME = runner.PRP_BLOCK_TOOL_NAME;
+export const PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA = runner.PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA;
+export const PRP_BLOCK_RESULT_PROVIDER_INPUT_SCHEMA = runner.PRP_BLOCK_RESULT_PROVIDER_INPUT_SCHEMA;
+export const codexSemanticToolSpecs = runner.codexSemanticToolSpecs;
 export const inspectWarmRunTransition = runner.inspectWarmRunTransition;
 export const readRunnerdArtifactBinding = runner.readRunnerdArtifactBinding;
 export const NativeSessionCleanupQuarantinedError =
@@ -78,6 +89,7 @@ export const NativeSessionProtocolIntegrityError =
 export const PaperclipSemanticDispatcher = runner.PaperclipSemanticDispatcher;
 export const CAPABILITY_SEMANTIC_TOOL_CATALOG =
   runner.CAPABILITY_SEMANTIC_TOOL_CATALOG;
+export const paperclipSemanticAction = runner.paperclipSemanticAction;
 export const HarnessRuntimeRequestResolutionError =
   runner.HarnessRuntimeRequestResolutionError;
 export const NATIVE_RUNTIME_ASSET_SCHEMA = runner.NATIVE_RUNTIME_ASSET_SCHEMA;
@@ -89,6 +101,8 @@ export const acpxRuntimeSessionDirectoryName =
 export const canonicalNativeRuntimeContextDigest =
   runner.canonicalNativeRuntimeContextDigest;
 export const createNativeSessionBackend = runner.createNativeSessionBackend;
+export const nativeMcpLaunchBinding = runner.nativeMcpLaunchBinding;
+export const validateNativeMcpLaunchBinding = runner.validateNativeMcpLaunchBinding;
 export const createPaperclipRunnerAuthorizedToolSet =
   runner.createPaperclipRunnerAuthorizedToolSet;
 export const createRunnerdCodexTransport: (
@@ -100,6 +114,7 @@ export const defaultCapabilityRunnerdBinary =
 export const executeNativeSession = runner.executeNativeSession;
 export const applyNativeSessionGoalControl =
   runner.applyNativeSessionGoalControl;
+export const buildNativeModelEnvelope = runner.buildNativeModelEnvelope;
 export const completeRetainedNativeSessionCleanup = runner.completeRetainedNativeSessionCleanup;
 export const settleRetainedRunnerdSession = runner.settleRetainedRunnerdSession;
 export const retainedRunnerdMaintenanceIsIdle =

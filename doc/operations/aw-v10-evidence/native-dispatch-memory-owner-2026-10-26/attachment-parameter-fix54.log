@@ -1,0 +1,28 @@
+Copied and verified source files 120
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed | 41 skipped) 5339ms
+     × qualifies only the current PG attachment bytes staged by executor admission 1638ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_event_source_binding_mismatch
+ ❯ PaperclipControlPlanePort.appendEvent src/services/native-runtime/paperclip-control-plane-port.ts:199:13
+    197|         !(event.sourceKind === "control_plane" && this.#binding.intern…
+    198|           event.sourceInstanceId === this.#binding.internalDraftSource…
+    199|       throw new Error("native_event_source_binding_mismatch");
+       |             ^
+    200|     }
+    201|     if (event.sourceKind !== "control_plane" || event.sourceInstanceId…
+ ❯ ../packages/paperclip-runner/src/native-session-runtime.ts:976:42
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  02:50:59
+   Duration  18.94s (transform 9.94s, setup 70ms, import 13.41s, tests 5.34s, environment 0ms)
+

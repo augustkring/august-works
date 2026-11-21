@@ -1,0 +1,51 @@
+{
+  "kind": "v10-128-role-pack-tool-selection-source-pins",
+  "measuredAt": "2026-10-28T19:27:07Z",
+  "runtime": {
+    "node": "v24.19.0",
+    "pnpm": "9.15.4",
+    "vitest": "4.1.11"
+  },
+  "currentWorktree": {
+    "server/src/services/agent-runtime-fabric.ts": "6f241e0102c15da8956a71f724deef458070d47d1dbb37bf30d8849371205bc8",
+    "server/src/services/capability-resolver.ts": "014ccda5e9ab9a56e77cc63c2302af0be8f852350c93e35251d2512b0c027ec1",
+    "server/src/services/workflows/workflow-capability-resolver.ts": "725ced7faa550f754cc828d53fb4e67d22624d0c5efa8095a79bef3186f7936c",
+    "server/src/services/capability-resolver.test.ts": "aad4ac76ab91bfabf469a8199b312c73a8b41336c05aea7d347c90e9371f089b",
+    "server/src/__tests__/agent-runtime-fabric-v5.test.ts": "aa7d101850d7d64206595fff0040187c9ed78b2d1220c4b0b2379bc44d3d5f76",
+    "server/src/services/scoped-runtime-actions.ts": "9866a73da491888a0afee396cdb382370b08944c1d9d6c99e30e2d0ece1d4e41",
+    "server/src/services/tool-gateway.ts": "42ff20943120f7033354b7ccfdee841e4d0d18cf476d2b0dc248328781f4f180",
+    "server/src/services/agent-native-operation-manifest.ts": "8bfc90d76744eebd938c7f90348495b641119ba056b6beb1e78d6008098b59cc",
+    "server/src/services/platform-skill-admission.ts": "7ec9732ddaa461401f3213d8d72e24a0433de92d0e966d487d27bbfd04623db8",
+    "server/src/services/company-skills.ts": "6f31a67a8eac5aca9dcf41a3dd81277b8fa831c9a0aaa5a2d4744a900cb97f66",
+    "skills-releases/blentera-platform/releases.json": "de3c45896a6b7d4b5e8c56bbf5d28a8d10d36dcce473ac12752e8ce6199ecfc8"
+  },
+  "earlierPassingPostgresRun": {
+    "time": "2026-10-28T19:00:13Z",
+    "server/src/services/agent-runtime-fabric.ts": "391432b36475f6c5a9ea0952460cc12dce748e3efb3c9110e7237f1d834e98ce",
+    "server/src/services/capability-resolver.ts": "014ccda5e9ab9a56e77cc63c2302af0be8f852350c93e35251d2512b0c027ec1",
+    "server/src/services/workflows/workflow-capability-resolver.ts": "725ced7faa550f754cc828d53fb4e67d22624d0c5efa8095a79bef3186f7936c",
+    "server/src/services/capability-resolver.test.ts": "aad4ac76ab91bfabf469a8199b312c73a8b41336c05aea7d347c90e9371f089b",
+    "server/src/__tests__/agent-runtime-fabric-v5.test.ts": "0c313bea3909c479ef197566c5463c3359e3797ed6ce0fb835a183a2c9a4aa8d"
+  },
+  "comparison": {
+    "server/src/services/agent-runtime-fabric.ts": "changed",
+    "server/src/services/capability-resolver.ts": "unchanged",
+    "server/src/services/workflows/workflow-capability-resolver.ts": "unchanged",
+    "server/src/services/capability-resolver.test.ts": "unchanged",
+    "server/src/__tests__/agent-runtime-fabric-v5.test.ts": "changed"
+  },
+  "fixture": {
+    "test": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+    "database": "startEmbeddedPostgresTestDatabase(\"aw-v5-runtime-\") from @paperclipai/db test helper; ephemeral embedded PostgreSQL cluster with current migrations",
+    "seed": "seedV5Presences and enableV5ForTest",
+    "externalCalls": "MCP remote HTTP is a local vi.fn synthetic response; no real provider/network call"
+  },
+  "claims": "Current pins are a measurement of the shared dirty worktree, not proof that these exact bytes were loaded by the earlier passing run or the later admission-blocked run.",
+  "currentPostgresRun": {
+    "command": "flock -x /workspace/v10-preparation/v10-pg-tests.lock pnpm exec vitest run server/src/__tests__/agent-runtime-fabric-v5.test.ts -t 'routes guest connected tools through current local authority and denies writes/revoked result disclosure|selects only Role Pack catalog UUIDs and rejects task-blocked or drifted tool pins' --no-file-parallelism --maxWorkers=1",
+    "result": "PASS; 2 selected passed, 6 skipped; actual tool output transcribed in qualification.md",
+    "startTime": "19:25:53 UTC",
+    "duration": "38.12s",
+    "fixtureSourceSnapshot": "source was executed after the shared flock became available; no file edits occurred during execution"
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "root": "/workspace/blentera-v10",
+  "head": "fdd850d9afc2d1289a7d1eef4259bd67fefe5d68",
+  "statusPorcelain": "M .github/workflows/aw-v9-coverage.yml\n M scripts/platform-skill-migration-register.mjs\n M scripts/platform-skill-migration-register.test.mjs\n M server/src/__tests__/helpers/managed-native-conversation-frame.ts\n M server/src/__tests__/v7-worker-model-gateway.integration.test.ts\n M server/src/modules/wake-queue/adapters/postgres.test.ts\n M server/src/services/native-direct-input.ts\n M server/src/services/native-runtime/managed-native-browser.fixture.ts\n M server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts\n M server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts\n M server/src/services/tool-gateway.ts",
+  "files": {
+    ".nvmrc": {
+      "sha256": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+      "bytes": 8,
+      "mtimeNs": 1794226789204376584
+    },
+    "package.json": {
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "bytes": 14972,
+      "mtimeNs": 1794226790631675063
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "bytes": 634978,
+      "mtimeNs": 1794226790807960284
+    },
+    "server/package.json": {
+      "sha256": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "bytes": 6179,
+      "mtimeNs": 1794226790837478863
+    },
+    "server/src/__tests__/business-experiment-recording.integration.test.ts": {
+      "sha256": "e246b793c59bf264574f269321c4fd24b5b296d23d7d1e97aca93514bf6be6d3",
+      "bytes": 31122,
+      "mtimeNs": 1794226790843115094
+    },
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": {
+      "sha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb",
+      "bytes": 210079,
+      "mtimeNs": 1794350044778605461
+    },
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": {
+      "sha256": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+      "bytes": 27192,
+      "mtimeNs": 1794332547705166850
+    },
+    "server/src/__tests__/helpers/managed-native-conversation-frame.ts": {
+      "sha256": "a51eee559ffb881daeecb2efce11dd2957708cde955443454ebb761350736fb8",
+      "bytes": 82241,
+      "mtimeNs": 1794408179717443585
+    },
+    "server/src/__tests__/v7-worker-model-gateway.integration.test.ts": {
+      "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b",
+      "bytes": 138576,
+      "mtimeNs": 1794408609892832686
+    },
+    "server/src/modules/wake-queue/adapters/postgres.test.ts": {
+      "sha256": "59e63fb9725bcb2a9b9ea84511dab36fa64669cfac1f89cb3649111fe2c33ab9",
+      "bytes": 84522,
+      "mtimeNs": 1794408179713263264
+    },
+    "server/src/services/heartbeat.ts": {
+      "sha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+      "bytes": 1280957,
+      "mtimeNs": 1794405375206868754
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "70e652c90580dbd094d8fed2b62b1306604dba3381ecd5a9c17cac638240f1ca",
+      "bytes": 616486,
+      "mtimeNs": 1794408609892268669
+    },
+    "server/src/services/native-runtime/managed-native-browser.fixture.ts": {
+      "sha256": "3e23ffa933a3f96a70c099f7f558df59103d5cb51e397cdbe05ed9df524a3360",
+      "bytes": 188297,
+      "mtimeNs": 1794408179721432808
+    },
+    "server/src/services/native-runtime/native-execution-input.test.ts": {
+      "sha256": "18ad2db8f88d675dac8cc3a4854fd6928b3c79e733e878e51f4cb03e308ad3b0",
+      "bytes": 136739,
+      "mtimeNs": 1794342776160333730
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "sha256": "38208e432d22845713799fcd71c109e23f5f3c9651acca14ee1fa7925fd60296",
+      "bytes": 132857,
+      "mtimeNs": 1794380779668481402
+    },
+    "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts": {
+      "sha256": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1",
+      "bytes": 25229,
+      "mtimeNs": 1794408179727787949
+    },
+    "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts": {
+      "sha256": "f3fe8f2a1a60ef4482b8cbe15937093d88cde575feff98f5aa296f46de0f3459",
+      "bytes": 138175,
+      "mtimeNs": 1794408179717443585
+    },
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": {
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+      "bytes": 14778,
+      "mtimeNs": 1794233716228964467
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "bytes": 9673,
+      "mtimeNs": 1794234187638120900
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": {
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "bytes": 8437,
+      "mtimeNs": 1794229120874977950
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "bytes": 12734,
+      "mtimeNs": 1794228810066234987
+    },
+    "server/src/services/tool-gateway.ts": {
+      "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
+      "bytes": 586044,
+      "mtimeNs": 1794408808160218036
+    },
+    "server/vitest.config.ts": {
+      "sha256": "1c32f3f46cb9206de3cdbb1745d43abf17bd2b5c385183675835ba928c2d31b3",
+      "bytes": 1883,
+      "mtimeNs": 1794226791073414900
+    }
+  },
+  "qualificationInputPaths": [
+    "server/src/services/heartbeat.ts",
+    "server/src/services/native-direct-input.ts",
+    "server/src/services/native-runtime/native-execution-input.ts",
+    "server/src/services/native-runtime/native-project-repository-source.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
+    "server/src/services/native-runtime/native-execution-input.test.ts",
+    "server/src/services/native-runtime/native-project-repository-source.test.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+    "server/vitest.config.ts",
+    "server/package.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    ".nvmrc",
+    "server/src/__tests__/business-experiment-recording.integration.test.ts"
+  ],
+  "scope": "exact involved production/tests and tool configuration plus dirty server/package files; HEAD identifies unchanged repository bytes, not a loaded-module trace",
+  "fixturePoolMax": null,
+  "fixturePoolScope": "Read actual fixture createDb options; not inferred by this harness",
+  "sourceWritesByThisHarness": false
+}

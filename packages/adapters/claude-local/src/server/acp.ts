@@ -1,3 +1,4 @@
+import { admitPaidModelProbe } from "@paperclipai/adapter-utils/paid-model-probe";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -612,6 +613,8 @@ export async function probeClaudeAcpSandboxLogin(input: {
   target: AdapterExecutionTarget | null;
   env?: Record<string, string>;
 }): Promise<AdapterEnvironmentCheck[]> {
+  const checks: AdapterEnvironmentCheck[] = [];
+  if (!admitPaidModelProbe(checks)) return checks;
   const { config, target } = input;
   const targetIsRemote = target?.kind === "remote";
   const targetIsSandbox = target?.kind === "remote" && target.transport === "sandbox";

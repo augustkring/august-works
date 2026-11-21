@@ -13,6 +13,7 @@ import {
   validateExecutionReconciliation,
   markExecutionReconciliation,
   deliverReconciledExecutions,
+  verifyNativeWorkspaceDestructionReceipt,
 } from "../execution-recovery-resolution.js";
 import { randomUUID } from "node:crypto";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
@@ -23,6 +24,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   agents,
+  authUsers,
+  companyMemberships,
   companies,
   createDb,
   heartbeatRunEvents,
@@ -122,6 +125,27 @@ const support = externalDatabaseUrl
       });
       return { companyId, agentId, issueId, runId };
     }
+    it("does not allow reconstruction from saved attachments without an exact native Stop and Destroy receipt", async () => {
+      const source = await seed();
+      await db.update(heartbeatRuns).set({ resultJson: { workspaceRestoreFailure: "restore_failed" } })
+        .where(eq(heartbeatRuns.id, source.runId));
+      const decision = {
+        runId: source.runId,
+        providerStopped: true as const,
+        actionOutcome: "not_performed" as const,
+        outcomeEvidence: "No uncertain external action was replayed.",
+        workspaceReconstruction: {
+          confirmed: true as const,
+          destructionReceiptHash: "a".repeat(64),
+          selectedSources: [{ attachmentId: randomUUID(), sha256: "b".repeat(64) }],
+        },
+      };
+      expect(await verifyNativeWorkspaceDestructionReceipt({ db, companyId: source.companyId, runId: source.runId })).toBeNull();
+      await expect(validateExecutionReconciliation({
+        db, companyId: source.companyId, issueId: source.issueId, agentId: source.agentId,
+        sourceRunId: source.runId, decision,
+      })).rejects.toThrow("destruction receipt is not current or verifiable");
+    });
     it.each(["verified", "unproven", "unknown_action"] as const)(
       "preserves saved work and a queued request at a controlled recovery boundary (%s)",
       async (mode) => {
@@ -234,11 +258,19 @@ const support = externalDatabaseUrl
         fingerprint: source.runId, ownerType: "board", returnOwnerAgentId: source.agentId,
         status: "resolved", outcome: "blocked", evidence, nextAction: "Preserve this hold.",
       }).returning();
-      if (mode === "manual_reblock") await issueService(db).update(source.issueId, { status: "blocked", actorUserId: "operator" });
+      const operatorUserId = randomUUID();
+      if (mode === "manual_reblock" || mode === "dependency_edit") {
+        const now = new Date();
+        await db.insert(authUsers).values({ id: operatorUserId, name: "Recovery operator", email: `${operatorUserId}@test.invalid`,
+          emailVerified: true, createdAt: now, updatedAt: now });
+        await db.insert(companyMemberships).values({ companyId: source.companyId, principalType: "user", principalId: operatorUserId,
+          status: "active", membershipRole: "member" });
+      }
+      if (mode === "manual_reblock") await issueService(db).update(source.issueId, { status: "blocked", actorUserId: operatorUserId });
       if (mode === "dependency_edit") {
         const blockerId = randomUUID();
         await db.insert(issues).values({ id: blockerId, companyId: source.companyId, title: "Human dependency", status: "todo" });
-        await issueService(db).update(source.issueId, { blockedByIssueIds: [blockerId], actorUserId: "operator" });
+        await issueService(db).update(source.issueId, { blockedByIssueIds: [blockerId], actorUserId: operatorUserId });
       }
       const comment = mode === "queued_comment" ? await issueService(db).addComment(source.issueId, "Also explain the result", { userId: "operator" }) : null;
       const retire = vi.fn(() => true);

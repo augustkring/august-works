@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/company-skills-service.test.ts
+test_pattern=reserves the platform operating Skill|rejects unbundled package imports that claim reserved Paperclip skill keys|does not retouch unchanged bundled skills during list refresh

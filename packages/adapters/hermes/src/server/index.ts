@@ -18,6 +18,11 @@ function readNonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+function retainedSession(sessionId: string, record: Record<string, unknown>) {
+  const hash = readNonEmptyString(record.hermesProfileHash);
+  return { sessionId, ...(hash && /^[a-f0-9]{64}$/.test(hash) ? { hermesProfileHash: hash } : {}) };
+}
+
 /**
  * Session codec for structured validation and migration of session parameters.
  *
@@ -32,7 +37,7 @@ export const sessionCodec: AdapterSessionCodec = {
       readNonEmptyString(record.sessionId) ??
       readNonEmptyString(record.session_id);
     if (!sessionId) return null;
-    return { sessionId };
+    return retainedSession(sessionId, record);
   },
   serialize(params: Record<string, unknown> | null) {
     if (!params) return null;
@@ -40,7 +45,7 @@ export const sessionCodec: AdapterSessionCodec = {
       readNonEmptyString(params.sessionId) ??
       readNonEmptyString(params.session_id);
     if (!sessionId) return null;
-    return { sessionId };
+    return retainedSession(sessionId, params);
   },
   getDisplayId(params: Record<string, unknown> | null) {
     if (!params) return null;

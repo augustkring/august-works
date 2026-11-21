@@ -1,0 +1,352 @@
+{
+  "sourceChecks": [
+    {
+      "path": "server/src/services/explicit-native-continuation.test.ts",
+      "qualification": "explicit-native-continuation-current-r2-20261029",
+      "capturedSha256": "9a00eae40a38e881a91a16feb17db647be9ab6a732618fca83a491feddef55ab",
+      "currentSha256": "9a00eae40a38e881a91a16feb17db647be9ab6a732618fca83a491feddef55ab",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/services/explicit-native-continuation.ts",
+      "qualification": "explicit-native-continuation-current-r2-20261029",
+      "capturedSha256": "73829a4cc69a291f160c7b618d08c1f12d00298d66be2ea53ff2122bcd5f18b1",
+      "currentSha256": "73829a4cc69a291f160c7b618d08c1f12d00298d66be2ea53ff2122bcd5f18b1",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "qualification": "explicit-native-continuation-current-r2-20261029",
+      "capturedSha256": "aaeff9959e6a3dc675b111256dbf22d30b96fcdc2b67d042c8968b7c769e50cf",
+      "currentSha256": "aaeff9959e6a3dc675b111256dbf22d30b96fcdc2b67d042c8968b7c769e50cf",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "qualification": "explicit-native-continuation-current-r2-20261029",
+      "capturedSha256": "a8b4b40f4fc835e879d7401ee8bed7e921c6b7fd67a6c5deb4890f37b54c4d3c",
+      "currentSha256": "a8b4b40f4fc835e879d7401ee8bed7e921c6b7fd67a6c5deb4890f37b54c4d3c",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/__tests__/helpers/current-human-source-fixture.ts",
+      "qualification": "explicit-native-continuation-current-r2-20261029",
+      "capturedSha256": "6c128c2a36f7895a40820c09f846aa6ae5c168f0a772bd568ff3154ebbfad7fb",
+      "currentSha256": "6c128c2a36f7895a40820c09f846aa6ae5c168f0a772bd568ff3154ebbfad7fb",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/services/native-runtime/chat-attachment-read.test.ts",
+      "qualification": "chat-attachment-read-current-r2-20261029",
+      "capturedSha256": "5210654627edd91ab65edb0c12f162b35014be60093218f4629600df70137691",
+      "currentSha256": "5210654627edd91ab65edb0c12f162b35014be60093218f4629600df70137691",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/services/native-runtime/chat-attachment-read.ts",
+      "qualification": "chat-attachment-read-current-r2-20261029",
+      "capturedSha256": "f059c9de9b2c973fe4f8b32b51b670e526b9b9fc67bee8156e4a5bc0ce0107cd",
+      "currentSha256": "f059c9de9b2c973fe4f8b32b51b670e526b9b9fc67bee8156e4a5bc0ce0107cd",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "qualification": "chat-attachment-read-current-r2-20261029",
+      "capturedSha256": "a026f0abb6addc7218658302cc25edadd24e3faf5cb90c5d19e8562e2f12cf31",
+      "currentSha256": "a026f0abb6addc7218658302cc25edadd24e3faf5cb90c5d19e8562e2f12cf31",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/services/platform-skill-admission.ts",
+      "qualification": "chat-attachment-read-current-r2-20261029",
+      "capturedSha256": "7ec9732ddaa461401f3213d8d72e24a0433de92d0e966d487d27bbfd04623db8",
+      "currentSha256": "7ec9732ddaa461401f3213d8d72e24a0433de92d0e966d487d27bbfd04623db8",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/services/company-skills.ts",
+      "qualification": "chat-attachment-read-current-r2-20261029",
+      "capturedSha256": "6f31a67a8eac5aca9dcf41a3dd81277b8fa831c9a0aaa5a2d4744a900cb97f66",
+      "currentSha256": "6f31a67a8eac5aca9dcf41a3dd81277b8fa831c9a0aaa5a2d4744a900cb97f66",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/__tests__/helpers/current-human-membership-fixture.ts",
+      "qualification": "chat-attachment-read-current-r2-20261029",
+      "capturedSha256": "b83122c2a9e77484539cd4c6117a811c71d3b17150af2aa120736196655bebb5",
+      "currentSha256": "b83122c2a9e77484539cd4c6117a811c71d3b17150af2aa120736196655bebb5",
+      "matchesCurrentSource": true
+    }
+  ],
+  "archives": [
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-test.log.gz",
+      "rawSha256": "2eb9acb2327a7097a59b7f6442096010092d32c4ad6a8736406f74972325d0fa",
+      "rawBytes": 29355,
+      "storedSha256": "fd95386c322fecb2597151f19f3a0dcf1ef841413c667e69a93c05ba4034219e"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-test.exit",
+      "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "rawBytes": 2,
+      "storedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029.exit",
+      "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "rawBytes": 2,
+      "storedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-runner.txt",
+      "rawSha256": "ab1a68b14ec12131434bee3efb3b583b02f3e7dd83c545c6db29d9d1a5e873ce",
+      "rawBytes": 95,
+      "storedSha256": "ab1a68b14ec12131434bee3efb3b583b02f3e7dd83c545c6db29d9d1a5e873ce"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-source-pins.json.gz",
+      "rawSha256": "62f9b8751fb90e825d999c5809328bc77be518dcd2e68392bc2b721d3ecc846e",
+      "rawBytes": 178795,
+      "storedSha256": "e988d2dcd177427efcf1e635c7e8d834baece67264868f66fbd540554ecc1919"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-source-pins.source.patch.gz",
+      "rawSha256": "64924da2aba63268c021def4fad3676688b4c63f82f0179396356cf3a3b71e8c",
+      "rawBytes": 448410,
+      "storedSha256": "bf9fc9a3eae9f80576398ee13fab404728e7c43597f5c8c78eff215dde2486a5"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-syntax.log.gz",
+      "rawSha256": "cd2e8ee7137810d3a22b86aafd750befae3698f0b968a6621106f818b10557e8",
+      "rawBytes": 61,
+      "storedSha256": "867062fefe747e7b274dc20390b6d4610b0cb8b790d373fa91e891df24592b3b"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-snapshot.log.gz",
+      "rawSha256": "df9870419eba5da31d7890b250ab2f615920608d7fb7f778595ed471e0d2a245",
+      "rawBytes": 38,
+      "storedSha256": "3cfb1e318fd4374f599801a349fb4ce2af656780f15c78afa7692189856b8e45"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "explicit-native-continuation-current-r1-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65,
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-test.log.gz",
+      "rawSha256": "77afc5e0a2092cc45398cfb85400135b369baf947b308eefa11a4c42a21d5e7f",
+      "rawBytes": 26354,
+      "storedSha256": "53b38170a8211be506385805ae6a546c320ae416ba12c30010ff20802dce2b4e"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-test.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-runner.txt",
+      "rawSha256": "ab1a68b14ec12131434bee3efb3b583b02f3e7dd83c545c6db29d9d1a5e873ce",
+      "rawBytes": 95,
+      "storedSha256": "ab1a68b14ec12131434bee3efb3b583b02f3e7dd83c545c6db29d9d1a5e873ce"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-source-pins.json.gz",
+      "rawSha256": "30636e2cf7ab0e7c0099cf11e2529e114d303729510b5bac08a529759a086b22",
+      "rawBytes": 179121,
+      "storedSha256": "4a6b14028c46e0c65e033d1691b0ce4b90f2fa42e444803a7e9be9562e42ec53"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-source-pins.source.patch.gz",
+      "rawSha256": "67ac6561c77aa62bca26e3a63c4e09002b1a7275928eb434acfb84bb1e3937f8",
+      "rawBytes": 473840,
+      "storedSha256": "ed410d422677c7ef58c68831f51c9957048d5dac96fd307dee65b89f0a8d4f55"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-syntax.log.gz",
+      "rawSha256": "c4c30838f2fed302510cb5b195f9cdd0d33c1c6a236498280aedebdece9300c8",
+      "rawBytes": 61,
+      "storedSha256": "36a40a042239518a4824477ec5f06a928d93eedee409ae2b7f35f8e45ea7f980"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-snapshot.log.gz",
+      "rawSha256": "7f4fe07726fe8d6b501492f80e78b302e36216c54dc60fda3fafebe530ca719f",
+      "rawBytes": 38,
+      "storedSha256": "4af9958a79791237635f627611cb9f315556885e444b98051a14a1fb6faa6a3b"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "explicit-native-continuation-current-r2-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65,
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-test.log.gz",
+      "rawSha256": "4d4198373ad9e88d5d60672644532382b649e021eec975585227948e3b159dcd",
+      "rawBytes": 6560,
+      "storedSha256": "9b4399cdeb338e0242f212cc4da9329c46b282f94618a9dc6396dc67a056a668"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-test.exit",
+      "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "rawBytes": 2,
+      "storedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029.exit",
+      "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "rawBytes": 2,
+      "storedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-runner.txt",
+      "rawSha256": "1fc2618bef18e0e9c1ed4325cbf1840e5ed6230e711b0c2d9002504b0e7cbd4b",
+      "rawBytes": 102,
+      "storedSha256": "1fc2618bef18e0e9c1ed4325cbf1840e5ed6230e711b0c2d9002504b0e7cbd4b"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-source-pins.json.gz",
+      "rawSha256": "1ba481d4073c38c4929b9d88570b1c59b6e19689861687d511c6d0def874e671",
+      "rawBytes": 178723,
+      "storedSha256": "68fb05078adafa1ab12662b480ef31f2ba0b0166df7a668d3c3d1c8e495f03dc"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-source-pins.source.patch.gz",
+      "rawSha256": "d16117155ae6b0acc67daa6a365c750638bcb352530ba2bb16305823f119b164",
+      "rawBytes": 453319,
+      "storedSha256": "885f63c33bccfa6f0da626cc9d4b13ebf26eba6f56362a3500d38570e816f0d6"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-syntax.log.gz",
+      "rawSha256": "cd2e8ee7137810d3a22b86aafd750befae3698f0b968a6621106f818b10557e8",
+      "rawBytes": 61,
+      "storedSha256": "867062fefe747e7b274dc20390b6d4610b0cb8b790d373fa91e891df24592b3b"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-snapshot.log.gz",
+      "rawSha256": "df9870419eba5da31d7890b250ab2f615920608d7fb7f778595ed471e0d2a245",
+      "rawBytes": 38,
+      "storedSha256": "3cfb1e318fd4374f599801a349fb4ce2af656780f15c78afa7692189856b8e45"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "chat-attachment-read-current-r1-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65,
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-test.log.gz",
+      "rawSha256": "97b1ceef2105b776a64751b2b318700969f3217777acbdb30afa57e1953018cb",
+      "rawBytes": 4425,
+      "storedSha256": "a45f08ef45149f3da6ccf7f15c83ac1fecc2f0bcd2d01b8f18af05bbffa053f9"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-test.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-runner.txt",
+      "rawSha256": "1fc2618bef18e0e9c1ed4325cbf1840e5ed6230e711b0c2d9002504b0e7cbd4b",
+      "rawBytes": 102,
+      "storedSha256": "1fc2618bef18e0e9c1ed4325cbf1840e5ed6230e711b0c2d9002504b0e7cbd4b"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-source-pins.json.gz",
+      "rawSha256": "86e054e1f9a18478fd9a8b1292ba5ad3a74f0c91a314fba91eb22462fd7afb6d",
+      "rawBytes": 179049,
+      "storedSha256": "14d1995c09954db15d0e00b277442c73f28e92667c782097af967a1ab6cec4eb"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-source-pins.source.patch.gz",
+      "rawSha256": "f39d49f1f6e21eb3ff706fde7035120aaa818d8a90619a38a976b23b45511c5a",
+      "rawBytes": 476152,
+      "storedSha256": "427fdca76d2258dae3adefaf13fc034617d9b2711cab8973c59f66a99ad3b34d"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-syntax.log.gz",
+      "rawSha256": "c4c30838f2fed302510cb5b195f9cdd0d33c1c6a236498280aedebdece9300c8",
+      "rawBytes": 61,
+      "storedSha256": "36a40a042239518a4824477ec5f06a928d93eedee409ae2b7f35f8e45ea7f980"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-snapshot.log.gz",
+      "rawSha256": "7f4fe07726fe8d6b501492f80e78b302e36216c54dc60fda3fafebe530ca719f",
+      "rawBytes": 38,
+      "storedSha256": "4af9958a79791237635f627611cb9f315556885e444b98051a14a1fb6faa6a3b"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "chat-attachment-read-current-r2-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65,
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    }
+  ],
+  "limits": [
+    "Fixture-only scoped integration qualification; no physical provider/browser or whole-workspace PASS claimed.",
+    "Original CI titles without final stack were not treated as proof of a production defect.",
+    "r1 failing attempts preserved; r2 whole-file passes supersede them."
+  ]
+}

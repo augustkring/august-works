@@ -1,0 +1,89 @@
+{
+  "status": "passed",
+  "testFile": "src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+  "testPattern": ".",
+  "result": "1 passed, 0 failed; exact pinned managed OpenCode binary and authenticated browser path",
+  "sourcePinsSha256": "d462312c985e0b0f07e85e6c2d801436990056bf7847d77d3c37d00933fe546a",
+  "sourcePatchSha256": "4057edfc330b37c38b1f5c7693aaaf53e6966388ec7291a9ceb5205f0e533c42",
+  "binarySha256": "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080",
+  "logSecretScanCounts": {
+    "snapshot.log": {
+      "bearer": 0,
+      "jwt": 0,
+      "session_token": 0,
+      "credential_fields": 0
+    },
+    "syntax.log": {
+      "bearer": 0,
+      "jwt": 0,
+      "session_token": 0,
+      "credential_fields": 0
+    },
+    "test.log": {
+      "bearer": 0,
+      "jwt": 0,
+      "session_token": 0,
+      "credential_fields": 0
+    }
+  },
+  "artifacts": {
+    "binary.path": {
+      "bytes": 124,
+      "sha256": "f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99"
+    },
+    "binary.sha256": {
+      "bytes": 65,
+      "sha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    "exit": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "runner.txt": {
+      "bytes": 125,
+      "sha256": "d845b259a2ec7b4aaf7818a0f9879c23e0d116729850777b26317e694883cec0"
+    },
+    "snapshot.exit": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "snapshot.log.gz": {
+      "bytes": 55,
+      "sha256": "40f78baa6eb37d639ef6dd5d13356b56b988673745304c9a61c8edaf48617669"
+    },
+    "source-pins.json": {
+      "bytes": 168608,
+      "sha256": "d462312c985e0b0f07e85e6c2d801436990056bf7847d77d3c37d00933fe546a"
+    },
+    "source-pins.source-files/server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts": {
+      "bytes": 10634,
+      "sha256": "dbc83674ccc2908b11d753e90a8a12d95e6c9656d8e00888dd20aa3a98286cb8"
+    },
+    "source-pins.source.patch.gz": {
+      "bytes": 50566,
+      "sha256": "cfc290b23bad69e82e2ff14159c35d6f107a9f8cda501dc24b19d12504211d62"
+    },
+    "syntax.exit": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "syntax.log.gz": {
+      "bytes": 76,
+      "sha256": "efdf2a665476d106236d62f24417c66fae96188fa0f5081f0b9b490df7ad986e"
+    },
+    "test.exit": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "test.log.gz": {
+      "bytes": 5161,
+      "sha256": "1e626ba5614f3b3278f6ec1ab2686b53e1792b4cd40b51f9922f9d465c1fa257"
+    },
+    "README.md": {
+      "bytes": 2683,
+      "sha256": "bed0a86513e8cec8a0c673a3d762f7f47c2b0b6246300efd17fb197688446aaa"
+    }
+  },
+  "sourceCommitAtArchive": "c9743bc44c4f697eb4bd4971c48fbfc58b0a3e67",
+  "limits": "Runtime was the pinned managed OpenCode fixture; Messages transport was the controlled local fixture broker. Browser used the actual UI/app with the same qualified heartbeat and source receipt path."
+}

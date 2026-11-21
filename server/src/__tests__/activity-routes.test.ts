@@ -46,14 +46,15 @@ vi.mock("../services/agent-action-audit.js", () => ({
   agentActionAuditService: () => mockAgentActionAuditService,
 }));
 
-async function createApp(
-  actor: Record<string, unknown> = {
+const boardReader = {
     type: "board",
     userId: "user-1",
     companyIds: ["company-1"],
     source: "session",
     isInstanceAdmin: false,
-  },
+};
+async function createApp(
+  actor: Record<string, unknown> = boardReader,
 ) {
   vi.resetModules();
   const [{ errorHandler }, { activityRoutes }] = await Promise.all([
@@ -145,6 +146,7 @@ describe.sequential("activity routes", () => {
     expect(res.status).toBe(200);
     expect(mockAgentActionAuditService.list).toHaveBeenCalledWith({
       companyId: "company-1",
+      reader: boardReader,
       actorScope: "all",
       limit: 50,
     });
@@ -193,6 +195,7 @@ describe.sequential("activity routes", () => {
     expect(res.status).toBe(200);
     expect(mockAgentActionAuditService.list).toHaveBeenCalledWith({
       companyId: "company-1",
+      reader: boardReader,
       actorScope: "all",
       actorType: "system",
       limit: 50,
@@ -215,6 +218,7 @@ describe.sequential("activity routes", () => {
     expect(res.status).toBe(200);
     expect(mockActivityService.list).toHaveBeenCalledWith({
       companyId: "company-1",
+      reader: boardReader,
       agentId: undefined,
       entityType: undefined,
       entityId: undefined,
@@ -233,6 +237,7 @@ describe.sequential("activity routes", () => {
     expect(res.status).toBe(200);
     expect(mockActivityService.list).toHaveBeenCalledWith({
       companyId: "company-1",
+      reader: boardReader,
       agentId: undefined,
       entityType: "issue",
       entityId: undefined,

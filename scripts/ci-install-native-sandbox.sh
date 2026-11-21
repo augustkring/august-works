@@ -6,18 +6,31 @@ if [[ "${GITHUB_ACTIONS:-}" != "true" || "${RUNNER_OS:-}" != "Linux" ]]; then
   exit 1
 fi
 
-# A stalled runner package mirror must not consume the whole test job. Keep
-# downloads bounded and fail normally if the native prerequisite cannot install.
-aw_apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
-timeout --kill-after=10s 180s sudo apt-get "${aw_apt_options[@]}" update
-timeout --kill-after=10s 180s sudo apt-get "${aw_apt_options[@]}" install --yes --no-install-recommends bubblewrap
+# Reuse the runner's native tools when present. The final sandbox probe below
+# remains authoritative; apt is only needed when a required binary is missing.
+aw_packages=()
+command -v bwrap >/dev/null || aw_packages+=(bubblewrap)
+command -v prlimit >/dev/null || aw_packages+=(util-linux)
 
 # Ubuntu restricts capabilities in unprivileged user namespaces unless the
 # executable has an explicit AppArmor grant. Keep the host policy enabled and
 # grant namespaces only to the native sandbox binary, on this CI runner.
+aw_restricted_userns=false
 if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]] &&
    [[ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" == "1" ]]; then
-  timeout --kill-after=10s 180s sudo apt-get "${aw_apt_options[@]}" install --yes --no-install-recommends apparmor
+  aw_restricted_userns=true
+  command -v apparmor_parser >/dev/null || aw_packages+=(apparmor)
+fi
+
+if ((${#aw_packages[@]})); then
+  bash "$(dirname -- "${BASH_SOURCE[0]}")/ci-canonicalize-ubuntu-apt-mirrors.sh"
+  # A stalled runner package mirror must not consume the whole test job.
+  aw_apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+  timeout --kill-after=10s 180s sudo apt-get "${aw_apt_options[@]}" update
+  timeout --kill-after=10s 180s sudo apt-get "${aw_apt_options[@]}" install --yes --no-install-recommends "${aw_packages[@]}"
+fi
+
+if [[ "$aw_restricted_userns" == true ]]; then
   aw_profile=$(mktemp "$RUNNER_TEMP/aw-ci-bwrap-XXXXXX")
   trap 'rm -f "$aw_profile"' EXIT
   cat > "$aw_profile" <<'PROFILE'

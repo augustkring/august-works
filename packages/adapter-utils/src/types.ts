@@ -5,7 +5,7 @@
 import type { SshRemoteExecutionSpec } from "./ssh.js";
 import type { AdapterExecutionTarget } from "./execution-target.js";
 import type { RuntimeStatusSink } from "./runtime-progress.js";
-import type { ExecutionContinuationEnvelope, NativeFinalizationResult } from "@paperclipai/shared";
+import type { PlatformSkillIdentity, ExecutionContinuationEnvelope, NativeFinalizationResult } from "@paperclipai/shared";
 
 export interface AdapterAgent {
   id: string;
@@ -158,6 +158,16 @@ export interface AdapterInvocationMeta {
   context?: Record<string, unknown>;
 }
 
+/** Process identity reported by the adapter execution boundary. Remote marker
+ * identity is accepted only after heartbeat validates the current run/lease. */
+export interface AdapterSpawnInfo {
+  pid: number;
+  processGroupId: number | null;
+  startedAt: string;
+  identitySource?: "remote_marker";
+  remoteRunnerInstanceId?: string;
+}
+
 export interface AdapterRuntimeMcpServer {
   name: string;
   url: string;
@@ -195,6 +205,11 @@ export interface AdapterRuntimeEvent {
 }
 
 export interface AdapterExecutionContext {
+  /** Server-owned immutable operating procedure identity, never adapter config
+   * or a customer-provided permission grant. */
+  platformSkillAdmission?: PlatformSkillIdentity;
+  /** Server-computed contracts for that admission; not a caller claim. */
+  platformSkillContracts?: { operationManifestHash: string; toolCatalogContractHash: string };
   /** Server-owned V5 binding, supplied after current local authorization. */
   providerRuntime?: {
     providerType?: string;
@@ -241,7 +256,7 @@ export interface AdapterExecutionContext {
    * remote operation.
    */
   onDispatch?: () => void;
-  onSpawn?: (meta: { pid: number; processGroupId: number | null; startedAt: string }) => Promise<void>;
+  onSpawn?: (meta: AdapterSpawnInfo) => Promise<void>;
   authToken?: string;
   /**
    * The injected OpenTelemetry startup trace context (tracer + root

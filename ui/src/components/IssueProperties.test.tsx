@@ -16,6 +16,7 @@ import type { Issue, IssueDocument } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IssueProperties } from "./IssueProperties";
 import { queryKeys } from "../lib/queryKeys";
+import { i18n } from "../i18n";
 
 const mockAgentsApi = vi.hoisted(() => ({
   list: vi.fn(),
@@ -514,6 +515,29 @@ describe("IssueProperties", () => {
     document.body.innerHTML = "";
   });
 
+  it("shows the task properties panel in Danish without English labels (I18N-DA2)", async () => {
+    await act(async () => { await i18n.changeLanguage("da"); });
+    try {
+      const root = renderProperties(container, {
+        issue: createIssue(),
+        childIssues: [],
+        onUpdate: vi.fn(),
+        inline: true,
+      });
+      await flush();
+      const text = container.textContent ?? "";
+      for (const danish of ["Ansvarlig", "Projekt", "Etiketter", "Relationer", "Oprettet", "Opdateret"]) {
+        expect(text, `missing Danish label ${danish}`).toContain(danish);
+      }
+      for (const english of ["Priority", "Assignee", "Labels", "Relationships", "Created", "Updated", "Blocked by", "Subtasks"]) {
+        expect(text, `English label ${english} in Danish panel`).not.toContain(english);
+      }
+      act(() => root.unmount());
+    } finally {
+      await act(async () => { await i18n.changeLanguage("en"); });
+    }
+  });
+
   it("marks the task-detail property typography and section rhythm", () => {
     const root = renderProperties(container, {
       issue: createIssue(),
@@ -527,8 +551,11 @@ describe("IssueProperties", () => {
     expect(surface?.classList).toContain("pl-4");
     expect(surface?.querySelectorAll('[data-property-section="true"]').length).toBeGreaterThan(1);
     expect(surface?.querySelector('[data-property-value="true"]')).not.toBeNull();
+    // Section headings use full-strength muted text: /70 failed WCAG 1.4.3 (2.71:1).
     expect(surface?.querySelector('[data-property-section="true"] > div')?.classList)
-      .toContain("text-muted-foreground/70");
+      .toContain("text-muted-foreground");
+    expect(surface?.querySelector('[data-property-section="true"] > div')?.classList)
+      .not.toContain("text-muted-foreground/70");
     const projectLabel = surface?.querySelector('[data-property-label="Project"]');
     const labelsLabel = surface?.querySelector('[data-property-label="Labels"]');
     if (!projectLabel || !labelsLabel) throw new Error("Expected Project and Labels rows");

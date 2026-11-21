@@ -4,6 +4,7 @@ import { projectToolContext } from "../services/project-tool-context.js";
 import { callProjectTool, projectToolDefinitions } from "../services/project-tools.js";
 import { assertCompanyAccess } from "./authz.js";
 import { forbidden } from "../errors.js";
+import { selectMcpProtocolVersion } from "../services/mcp-http.js";
 
 /** Mounted after actor middleware; connection-scoped tokens cannot authenticate here. */
 export function projectToolRoutes(db: Db) {
@@ -13,7 +14,7 @@ export function projectToolRoutes(db: Db) {
     assertCompanyAccess(req, context.run.companyId);
     const { id = null, method, params } = req.body;
     const send = (result: unknown) => res.json({ jsonrpc: "2.0", id, result });
-    if (method === "initialize") return send({ protocolVersion: "2025-03-26", capabilities: { tools: { listChanged: false } }, serverInfo: { name: "paperclip-project-tools", version: "1" } });
+    if (method === "initialize") return send({ protocolVersion: selectMcpProtocolVersion(params?.protocolVersion), capabilities: { tools: { listChanged: false } }, serverInfo: { name: "blentera-project-tools", version: "1" } });
     if (method === "notifications/initialized") return res.status(202).end();
     const definitions = projectToolDefinitions(context.issue.workMode, true);
     if (method === "tools/list") return send({ tools: definitions });

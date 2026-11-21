@@ -1,0 +1,196 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx (29 tests | 10 failed) 3860ms
+     × fences a removal count after held access refresh: account 166ms
+     × fences a removal count after held access refresh: renewed session 130ms
+     × fences a removal count after held access refresh: withdraw and restore 137ms
+     × fences a removal count after held access refresh: company 150ms
+     × fences a removal count after held access refresh: unmount 108ms
+     × denies dispatch when the same Human's session changes after clicking 103ms
+     × suppresses a late removal success before refresh begins 137ms
+     × suppresses a late removal error before refresh begins 91ms
+     × suppresses Approve human acknowledgement after a held refresh and session renewal 34ms
+     × suppresses Reject human acknowledgement after a held refresh and session renewal 34ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: account
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: renewed session
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: withdraw and restore
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: company
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: unmount
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "body": "1 assigned task cleaned up.",
+        "title": "Member removed",
+        "tone": "success",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/pages/CompanyAccess.test.tsx:438:35
+    436|         expect(pushToastMock).toHaveBeenCalledWith({ title: "Member re…
+    437|       } else {
+    438|         expect(pushToastMock).not.toHaveBeenCalled();
+       |                                   ^
+    439|         expect(invalidate.mock.calls).toHaveLength(change === "withdra…
+    440|       }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > denies dispatch when the same Human's session changes after clicking
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "company-1",
+      "member-1",
+      Object {
+        "reassignment": null,
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/pages/CompanyAccess.test.tsx:463:35
+    461|     });
+    462|     await flushReact();
+    463|     expect(archiveMemberMock).not.toHaveBeenCalled();
+       |                                   ^
+    464|     expect(pushToastMock).not.toHaveBeenCalled();
+    465|     await act(async () => { root.unmount(); });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal success before refresh begins
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "body": "719 assigned tasks cleaned up.",
+        "title": "Member removed",
+        "tone": "success",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/pages/CompanyAccess.test.tsx:491:31
+    489|     await act(async () => { finish(); });
+    490|     await flushReact();
+    491|     expect(pushToastMock).not.toHaveBeenCalled();
+       |                               ^
+    492|     expect(invalidate).not.toHaveBeenCalled();
+    493|     await act(async () => { root.unmount(); });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal error before refresh begins
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "body": "Private old account error",
+        "title": "Failed to remove member",
+        "tone": "error",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/pages/CompanyAccess.test.tsx:491:31
+    489|     await act(async () => { finish(); });
+    490|     await flushReact();
+    491|     expect(pushToastMock).not.toHaveBeenCalled();
+       |                               ^
+    492|     expect(invalidate).not.toHaveBeenCalled();
+    493|     await act(async () => { root.unmount(); });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Approve human acknowledgement after a held refresh and session renewal
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "title": "Join request approved",
+        "tone": "success",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/pages/CompanyAccess.test.tsx:515:31
+    513|     await act(async () => { release(); });
+    514|     await flushReact();
+    515|     expect(pushToastMock).not.toHaveBeenCalled();
+       |                               ^
+    516|     await act(async () => { root.unmount(); });
+    517|     client.clear();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Reject human acknowledgement after a held refresh and session renewal
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "title": "Join request rejected",
+        "tone": "success",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/pages/CompanyAccess.test.tsx:515:31
+    513|     await act(async () => { release(); });
+    514|     await flushReact();
+    515|     expect(pushToastMock).not.toHaveBeenCalled();
+       |                               ^
+    516|     await act(async () => { root.unmount(); });
+    517|     client.clear();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 19 passed (29)
+   Start at  18:52:46
+   Duration  33.90s (transform 15.77s, setup 150ms, import 23.76s, tests 3.86s, environment 5.28s)
+

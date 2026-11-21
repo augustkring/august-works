@@ -1,0 +1,64 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[00:52:50] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"ced2b346-5eea-4003-bc6b-e3058b501609","actorAgentId":"27ea9787-ce4f-44e6-96a6-420eb10d193b","responsibleUserId":"b789faf1-563d-4dce-8cf7-a0b578c299b2"}[39m
+[00:52:50] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"ced2b346-5eea-4003-bc6b-e3058b501609","actorAgentId":"27ea9787-ce4f-44e6-96a6-420eb10d193b","responsibleUserId":"b789faf1-563d-4dce-8cf7-a0b578c299b2"}[39m
+[00:52:50] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"b870eee1-938f-4952-92af-898992e73d35","actorAgentId":"154c6de5-8972-4b4f-9bf3-480b6f05e228","responsibleUserId":"cd1f9b40-4820-423d-9ffe-2f06b3280fb5"}[39m
+[00:52:50] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"b870eee1-938f-4952-92af-898992e73d35","actorAgentId":"154c6de5-8972-4b4f-9bf3-480b6f05e228","responsibleUserId":"cd1f9b40-4820-423d-9ffe-2f06b3280fb5"}[39m
+ ❯ |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts (5 tests | 1 failed) 13651ms
+     × rejects an actually persisted malformed scoped key instead of broadening it to standard 71ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > rejects an actually persisted malformed scoped key instead of broadening it to standard
+AssertionError: expected { kind: 'standard' } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "kind": "standard",
+}
+
+ ❯ src/__tests__/live-events-agent-key-authority.integration.test.ts:84:65
+     82|     expect(stored?.revokedAt).toBeNull();
+     83|     expect(agentApiKeyScopeSchema.safeParse(stored?.scopeConfig).succe…
+     84|     expect.soft(normalizeAgentApiKeyScope(stored?.scopeConfig)).toBeNu…
+       |                                                                 ^
+     85|     const live = await server(fixture);
+     86|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > rejects an actually persisted malformed scoped key instead of broadening it to standard
+AssertionError: expected { kind: 'open' } to deeply equal { kind: 'denied', status: 403 }
+
+- Expected
++ Received
+
+  {
+-   "kind": "denied",
+-   "status": 403,
++   "kind": "open",
+  }
+
+ ❯ src/__tests__/live-events-agent-key-authority.integration.test.ts:91:23
+     89|         once(live.socket, "unexpected-response").then(([, response]) =…
+     90|       ]);
+     91|       expect(outcome).toEqual({ kind: "denied", status: 403 });
+       |                       ^
+     92|     } finally { await live.close(); }
+     93|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  00:52:18
+   Duration  32.13s (transform 10.38s, setup 254ms, import 17.38s, tests 13.65s, environment 0ms)
+

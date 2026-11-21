@@ -69,12 +69,15 @@ import {
   projectedConnectionHeaders,
   projectConnectionMethodToolInputSchema,
   projectConnectionMethodToolArguments,
+  loadGitHubGrantMetadata,
   toolAccessService,
 } from "../services/tool-access.js";
 import { accessService } from "../services/access.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { projectToolConnectionLifecycle } from "../services/tool-connection-lifecycle.js";
 import { toolAccessPolicyService } from "../services/tool-access-policy.js";
 import { secretService } from "../services/secrets.js";
+import { RAILWAY_API_URL, RAILWAY_MCP_URL, RAILWAY_QUERIES, RAILWAY_TOOLS } from "../services/railway.js";
 import {
   canonicalToolArguments,
   signToolArguments,
@@ -727,6 +730,7 @@ async function createRemoteToolFixture(
   input: {
     riskLevel?: "read" | "write" | "destructive";
     quarantined?: boolean;
+    fixedRailway?: boolean;
   } = {},
 ) {
   const [application] = await db
@@ -793,6 +797,23 @@ async function createRemoteToolFixture(
       quarantineReason: input.quarantined ? "pending_review" : null,
     })
     .returning();
+  if (input.fixedRailway) {
+    const secret = await secretService(db).create(companyId, {
+      provider: "local_encrypted", name: `Railway Test tab ${randomUUID()}`, value: "fixed-railway-test-tab-token",
+    });
+    const refs = [{ configPath: "oauth.access_token", secretId: secret.id, versionSelector: "latest", required: true }];
+    const config = { url: RAILWAY_MCP_URL, sourceTemplateKey: "railway", connectionMethodKey: "mcp-oauth", railwayApiStatus: "available" };
+    const [fixedConnection] = await db.update(toolConnections).set({ authKind: "oauth", credentialSource: "paperclip_vault",
+      credentialSecretRefs: refs, config, transportConfig: config }).where(eq(toolConnections.id, connection!.id)).returning();
+    await db.update(connectionGrants).set({ credentialSecretRefs: refs }).where(eq(connectionGrants.connectionId, connection!.id));
+    await db.insert(companySecretBindings).values({ companyId, secretId: secret.id, targetType: "tool_connection",
+      targetId: connection!.id, configPath: "oauth.access_token", versionSelector: "latest", required: true });
+    const contract = RAILWAY_TOOLS.find(tool => tool.name === "paperclip-railway-list-projects")!;
+    const [fixedEntry] = await db.update(toolCatalogEntries).set({ toolName: contract.name,
+      inputSchema: contract.inputSchema, title: contract.title, description: contract.description,
+      annotations: contract.annotations }).where(eq(toolCatalogEntries.id, catalogEntry!.id)).returning();
+    return { application: application!, connection: fixedConnection!, catalogEntry: fixedEntry! };
+  }
   return {
     application: application!,
     connection: connection!,
@@ -801,6 +822,31 @@ async function createRemoteToolFixture(
 }
 
 describeEmbeddedPostgres("tool access service", () => {
+  it("bounds full GitHub repository access pagination before returning a partial snapshot", async () => {
+    let calls = 0;
+    const request = vi.fn(async (input: string | URL | Request) => {
+      calls += 1;
+      const url = new URL(String(input));
+      if (url.pathname === "/user") return new Response(JSON.stringify({ id: 42, login: "octocat" }), { status: 200 });
+      if (url.pathname === "/user/installations") {
+        return new Response(JSON.stringify({ installations: Array.from({ length: 100 }, (_, index) => ({
+          id: index + 1, repository_selection: "selected", html_url: `https://github.com/settings/installations/${index + 1}`,
+        })) }), { status: 200 });
+      }
+      if (/^\/user\/installations\/\d+\/repositories$/.test(url.pathname)) {
+        const page = Number(url.searchParams.get("page"));
+        return new Response(JSON.stringify({ repositories: [{ id: 900 + page, full_name: `octocat/repo-${page}` }] }), {
+          status: 200,
+          headers: page === 1 ? { link: `<${url.origin}${url.pathname}?per_page=100&page=2>; rel="next"` } : {},
+        });
+      }
+      throw new Error(`unexpected request ${url}`);
+    }) as typeof fetch;
+    await expect(loadGitHubGrantMetadata("opaque-test-token", request, "paperclip"))
+      .rejects.toMatchObject({ details: { code: "github_access_refresh_incomplete" } });
+    expect(calls).toBe(200);
+  });
+
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<
     ReturnType<typeof startEmbeddedPostgresTestDatabase>
@@ -3367,470 +3413,114 @@ describeEmbeddedPostgres("tool access service", () => {
     expect(summary.lastChangedByName).toBe(agent.name);
   });
 
-  it("executes allowed test calls as a board user while attributing the selected agent", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
+  it("executes a fixed Railway Test-tab call with the real board actor and selected agent", async () => {
+    const company = await createCompany(db), userId = `railway-test-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, ["tools:use"]);
     const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Allow test call ${randomUUID()}`,
-      policyType: "allow",
-      priority: 100,
-      selectors: { connectionId: connection.id },
+    const { connection } = await createRemoteToolFixture(db, company.id, { fixedRailway: true });
+    await db.insert(toolPolicies).values({ companyId: company.id, name: randomUUID(), policyType: "allow",
+      priority: 100, selectors: { connectionId: connection.id } });
+    const workspaceId = randomUUID();
+    const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      expect(String(url)).toBe(RAILWAY_API_URL);
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixed-railway-test-tab-token");
+      expect(JSON.parse(String(init?.body))).toMatchObject({ query: RAILWAY_QUERIES.projects, variables: { workspaceId } });
+      return Response.json({ data: { projects: { edges: [] } } });
     });
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) =>
-      mcpHttpResponse({
-        jsonrpc: "2.0",
-        id: JSON.parse(String(init?.body)).id,
-        result: { content: [{ type: "text", text: "sent" }] },
-      }),
-    );
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com", body: "hi" },
-      })
-      .expect(200);
-
-    expect(res.body).toMatchObject({
-      decision: "allowed",
-      result: {
-        data: expect.objectContaining({
-          isError: false,
-          transport: "mcp_http",
-        }),
-      },
-    });
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      actorType: "user",
-      actorId: userId,
-      agentId: agent.id,
-      runId: null,
-      status: "succeeded",
-    });
-    const audits = await db
-      .select()
-      .from(toolAccessAuditEvents)
-      .where(eq(toolAccessAuditEvents.companyId, company.id));
-    expect(audits).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          action: "call_completed",
-          details: expect.objectContaining({
-            source: "test",
-            agentId: agent.id,
-            runId: null,
-          }),
-        }),
-      ]),
-    );
+    const app = createRouteApp(db, boardSessionActor(company.id, "operator", userId),
+      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }));
+    const response = await request(app).post(`/api/tool-connections/${connection.id}/test-calls`)
+      .send({ agentId: agent.id, toolName: "paperclip-railway-list-projects", parameters: { workspaceId } }).expect(200);
+    expect(response.body).toMatchObject({ decision: "allowed", invocationId: expect.any(String), result: expect.anything() });
+    expect(response.body.error).toBeUndefined();
+    expect(upstream).toHaveBeenCalledOnce();
+    const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, response.body.invocationId));
+    expect(invocation).toMatchObject({ actorType: "user", actorId: userId, agentId: agent.id, runId: null, status: "succeeded" });
+    expect(await db.select().from(toolAccessAuditEvents).where(eq(toolAccessAuditEvents.companyId, company.id)))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ actorType: "user", actorId: userId, action: "call_completed",
+        details: expect.objectContaining({ source: "test", agentId: agent.id, runId: null }) })]));
   });
 
-  it("turns ask-first test calls into real pending action requests", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
+  it("preserves fixed Railway Test-tab approval, status and fresh rerun semantics", async () => {
+    const company = await createCompany(db), userId = `railway-review-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, ["tools:use"]);
     const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
+    const { connection } = await createRemoteToolFixture(db, company.id, { fixedRailway: true });
+    await db.insert(toolPolicies).values({ companyId: company.id, name: randomUUID(), policyType: "require_approval",
+      priority: 100, selectors: { connectionId: connection.id } });
+    const workspaceId = randomUUID();
+    const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      expect(String(url)).toBe(RAILWAY_API_URL);
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixed-railway-test-tab-token");
+      expect(JSON.parse(String(init?.body))).toMatchObject({ query: RAILWAY_QUERIES.projects, variables: { workspaceId } });
+      return Response.json({ data: { projects: { edges: [] } } });
     });
-    const fetchMock = vi.spyOn(globalThis, "fetch");
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-
-    expect(res.body).toMatchObject({
-      decision: "ask_first",
-      actionRequestId: expect.any(String),
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    const [actionRequest] = await db
-      .select()
-      .from(toolActionRequests)
-      .where(eq(toolActionRequests.id, res.body.actionRequestId));
-    expect(actionRequest).toMatchObject({
-      companyId: company.id,
-      issueId: null,
-      status: "pending",
-      requestedByUserId: userId,
-      requestedByAgentId: null,
-    });
-    expect(actionRequest!.signedArguments).toBeTruthy();
-    const events = await db
-      .select()
-      .from(toolCallEvents)
-      .where(eq(toolCallEvents.companyId, company.id));
-    expect(events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          eventType: "approval_requested",
-          actionRequestId: actionRequest!.id,
-          metadata: expect.objectContaining({ source: "test" }),
-        }),
-      ]),
-    );
-  });
-
-  it("cancels an ask-first test request when approval signing is unavailable", async () => {
-    vi.stubEnv("PAPERCLIP_TOOL_ACTION_SIGNING_SECRET", "");
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first without signing ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: " " }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(500);
-
-    expect(res.body).toMatchObject({
-      reasonCode: "signing_secret_unconfigured",
-      error: expect.stringContaining("PAPERCLIP_TOOL_ACTION_SIGNING_SECRET"),
-    });
-    const [actionRequest] = await db
-      .select()
-      .from(toolActionRequests)
-      .where(eq(toolActionRequests.companyId, company.id));
-    expect(actionRequest).toMatchObject({
-      status: "cancelled",
-      signedArguments: null,
-    });
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      status: "failed",
-      errorCode: "signing_secret_unconfigured",
-    });
-  });
-
-  it("audits ask-first test calls with the real board actor and selected agent", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-
-    const gatewayAudit = await db
-      .select()
-      .from(activityLog)
-      .where(
-        and(
-          eq(activityLog.companyId, company.id),
-          eq(activityLog.action, "tool_gateway.approval_requested"),
-        ),
-      );
-    expect(gatewayAudit).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          agentId: agent.id,
-          details: expect.objectContaining({
-            source: "test",
-            actionRequestId: res.body.actionRequestId,
-            invocationId: res.body.invocationId,
-          }),
-        }),
-      ]),
-    );
-
-    const dedicatedAudit = await db
-      .select()
-      .from(toolAccessAuditEvents)
-      .where(eq(toolAccessAuditEvents.companyId, company.id));
-    expect(dedicatedAudit).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          details: expect.objectContaining({
-            source: "test",
-            agentId: agent.id,
-            actionRequestId: res.body.actionRequestId,
-            runId: null,
-          }),
-        }),
-      ]),
-    );
-  });
-
-  it("drives an ask-first test call through its live lifecycle (waiting → approved/done with the real result)", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const gateway = createToolGatewayService(db, {
-      toolActionSigningSecret: "test-secret",
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      gateway,
-    );
-
-    // 1. Park the call as a pending action request.
-    const created = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com", body: "hi" },
-      })
-      .expect(200);
-    const actionRequestId = created.body.actionRequestId as string;
-    expect(actionRequestId).toEqual(expect.any(String));
-
-    // 2. Status starts as "waiting" and surfaces the redacted "Where" snapshot.
-    const waiting = await request(app)
-      .get(
-        `/api/tool-connections/${connection.id}/test-calls/${actionRequestId}`,
-      )
-      .expect(200);
-    expect(waiting.body).toMatchObject({ actionRequestId, phase: "waiting" });
-    expect(waiting.body.parameters).toHaveProperty("to");
+    const gateway = createToolGatewayService(db, { toolActionSigningSecret: "test-secret" });
+    const app = createRouteApp(db, boardSessionActor(company.id, "operator", userId), gateway);
+    const body = { agentId: agent.id, toolName: "paperclip-railway-list-projects", parameters: { workspaceId } };
+    const created = await request(app).post(`/api/tool-connections/${connection.id}/test-calls`).send(body).expect(200);
+    expect(created.body).toMatchObject({ decision: "ask_first", actionRequestId: expect.any(String) });
+    expect(upstream).not.toHaveBeenCalled();
+    const [pending] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.id, created.body.actionRequestId));
+    expect(pending).toMatchObject({ status: "pending", requestedByUserId: userId, requestedByAgentId: null, issueId: null });
+    expect(pending!.signedArguments).toBeTruthy();
+    const waiting = await request(app).get(`/api/tool-connections/${connection.id}/test-calls/${pending!.id}`).expect(200);
+    expect(waiting.body).toMatchObject({ phase: "waiting", actionRequestId: pending!.id });
     expect(waiting.body.result).toBeUndefined();
-
-    // 3. Approving from the review queue is what runs the parked test call.
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) =>
-      mcpHttpResponse({
-        jsonrpc: "2.0",
-        id: JSON.parse(String(init?.body)).id,
-        result: { content: [{ type: "text", text: "sent" }] },
-      }),
-    );
-    await gateway.approveActionRequest({
-      companyId: company.id,
-      actionRequestId,
-      actor: { userId },
-    });
-    expect(fetchMock).toHaveBeenCalled();
-
-    // 4. Status mutates into the completed result shape with the real response.
-    const done = await request(app)
-      .get(
-        `/api/tool-connections/${connection.id}/test-calls/${actionRequestId}`,
-      )
-      .expect(200);
-    expect(done.body.phase).toBe("done");
+    await gateway.approveActionRequest({ companyId: company.id, actionRequestId: pending!.id, actor: { userId } });
+    const done = await request(app).get(`/api/tool-connections/${connection.id}/test-calls/${pending!.id}`).expect(200);
+    expect(done.body).toMatchObject({ phase: "done", result: expect.anything(), durationMs: expect.any(Number) });
     expect(done.body.error).toBeUndefined();
-    expect(done.body.result).toBeDefined();
-    expect(typeof done.body.durationMs).toBe("number");
-
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      status: "succeeded",
-      approvalState: "approved",
-    });
-  });
-
-  it("creates a fresh ask-first request when the Test tab reruns the same side-effecting action", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const gateway = createToolGatewayService(db, {
-      toolActionSigningSecret: "test-secret",
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      gateway,
-    );
-    const body = {
-      agentId: agent.id,
-      toolName: "send_email",
-      parameters: { to: "a@example.com", body: "hi" },
-    };
-
-    const first = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send(body)
-      .expect(200);
-
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) =>
-      mcpHttpResponse({
-        jsonrpc: "2.0",
-        id: JSON.parse(String(init?.body)).id,
-        result: { content: [{ type: "text", text: "sent" }] },
-      }),
-    );
-    await gateway.approveActionRequest({
-      companyId: company.id,
-      actionRequestId: first.body.actionRequestId as string,
-      actor: { userId },
-    });
-
-    const second = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send(body)
-      .expect(200);
-
-    expect(second.body).toMatchObject({
-      decision: "ask_first",
-      actionRequestId: expect.any(String),
-    });
-    expect(second.body.actionRequestId).not.toBe(first.body.actionRequestId);
-
-    const requests = await db
-      .select()
-      .from(toolActionRequests)
-      .where(eq(toolActionRequests.companyId, company.id));
+    expect(upstream).toHaveBeenCalledOnce();
+    const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, created.body.invocationId));
+    expect(invocation).toMatchObject({ actorType: "user", actorId: userId, agentId: agent.id, runId: null,
+      status: "succeeded", approvalState: "approved" });
+    const repeated = await request(app).post(`/api/tool-connections/${connection.id}/test-calls`).send(body).expect(200);
+    expect(repeated.body).toMatchObject({ decision: "ask_first", actionRequestId: expect.any(String) });
+    expect(repeated.body.actionRequestId).not.toBe(pending!.id);
+    expect(upstream).toHaveBeenCalledOnce();
+    const requests = await db.select().from(toolActionRequests).where(eq(toolActionRequests.companyId, company.id));
     expect(requests).toHaveLength(2);
-    expect(requests.map((row) => row.status).sort()).toEqual([
-      "approved",
-      "pending",
-    ]);
+    expect(requests.map(row => row.status).sort()).toEqual(["approved", "pending"]);
   });
 
-  it("reports a denied ask-first test call as denied without running the tool", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const gateway = createToolGatewayService(db, {
-      toolActionSigningSecret: "test-secret",
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      gateway,
-    );
-
-    const created = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-    const actionRequestId = created.body.actionRequestId as string;
-
-    const fetchMock = vi.spyOn(globalThis, "fetch");
-    await gateway.declineActionRequest({
-      companyId: company.id,
-      actionRequestId,
-      actor: { userId },
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    const denied = await request(app)
-      .get(
-        `/api/tool-connections/${connection.id}/test-calls/${actionRequestId}`,
-      )
-      .expect(200);
-    expect(denied.body.phase).toBe("denied");
-    expect(denied.body.result).toBeUndefined();
-
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      status: "denied",
-      approvalState: "rejected",
-    });
-  });
+  // Generic MCP action approval cannot qualify hidden inference. Keep access
+  // policy projection separate from admission, including repeated Test clicks.
+  for (const policyType of ["allow", "require_approval", "block"] as const) {
+    for (const signingConfigured of [true, false]) {
+      it(`projects ${policyType} access but fences opaque test calls (signing configured: ${signingConfigured})`, async () => {
+        vi.stubEnv("PAPERCLIP_TOOL_ACTION_SIGNING_SECRET", "");
+        const company = await createCompany(db);
+        const userId = `tool-tester-${randomUUID()}`;
+        await grantBoardUser(db, company.id, userId, ["tools:use"]);
+        const agent = await createAgent(db, company.id);
+        const { connection } = await createRemoteToolFixture(db, company.id);
+        await db.insert(toolPolicies).values({ companyId: company.id, name: randomUUID(),
+          policyType, priority: 100, selectors: { connectionId: connection.id } });
+        const gateway = createToolGatewayService(db, {
+          toolActionSigningSecret: signingConfigured ? "test-secret" : " ",
+        });
+        const app = createRouteApp(db, boardSessionActor(company.id, "operator", userId), gateway);
+        const fetchMock = vi.spyOn(globalThis, "fetch");
+        const access = await request(app)
+          .get(`/api/tool-connections/${connection.id}/test-agents/${agent.id}/access`).expect(200);
+        expect(access.body.access).toMatchObject({ connectionId: connection.id, toolCount: 1,
+          allowedCount: policyType === "allow" ? 1 : 0,
+          askFirstCount: policyType === "require_approval" ? 1 : 0,
+          offCount: policyType === "block" ? 1 : 0 });
+        for (let click = 0; click < 2; click++) {
+          const response = await request(app).post(`/api/tool-connections/${connection.id}/test-calls`)
+            .send({ agentId: agent.id, toolName: "send_email", parameters: { to: "a@example.com" } }).expect(409);
+          expect(response.body).toMatchObject({ reasonCode: "tool_model_effect_unqualified", code: "configuration_incomplete",
+            configurationIncomplete: { companyId: company.id, agentId: agent.id, actionUrl: "/apps" } });
+        }
+        expect(fetchMock).not.toHaveBeenCalled();
+        for (const table of [toolInvocations, toolActionRequests, toolAccessAuditEvents]) {
+          expect(await db.select().from(table).where(eq(table.companyId, company.id))).toEqual([]);
+        }
+      });
+    }
+  }
 
   it("404s a single-id test-call status fetch for a non-test-origin action request", async () => {
     const company = await createCompany(db);
@@ -3849,127 +3539,6 @@ describeEmbeddedPostgres("tool access service", () => {
     await request(app)
       .get(`/api/tool-connections/${connection.id}/test-calls/${randomUUID()}`)
       .expect(404);
-  });
-
-  it("returns off for blocked test calls without executing the remote tool", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Block ${randomUUID()}`,
-      policyType: "block",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const fetchMock = vi.spyOn(globalThis, "fetch");
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-
-    expect(res.body).toMatchObject({
-      decision: "off",
-      error: { reasonCode: "deny_policy_block" },
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      status: "denied",
-      errorCode: "deny_policy_block",
-      actorType: "user",
-      actorId: userId,
-      agentId: agent.id,
-      runId: null,
-    });
-  });
-
-  it("audits blocked test calls with the real board actor and selected agent", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Block ${randomUUID()}`,
-      policyType: "block",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-
-    const gatewayAudit = await db
-      .select()
-      .from(activityLog)
-      .where(
-        and(
-          eq(activityLog.companyId, company.id),
-          eq(activityLog.action, "tool_gateway.call_denied"),
-        ),
-      );
-    expect(gatewayAudit).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          agentId: agent.id,
-          details: expect.objectContaining({
-            source: "test",
-            invocationId: res.body.invocationId,
-            reasonCode: "deny_policy_block",
-          }),
-        }),
-      ]),
-    );
-
-    const dedicatedAudit = await db
-      .select()
-      .from(toolAccessAuditEvents)
-      .where(eq(toolAccessAuditEvents.companyId, company.id));
-    expect(dedicatedAudit).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          action: "call_denied",
-          reasonCode: "deny_policy_block",
-          details: expect.objectContaining({
-            source: "test",
-            agentId: agent.id,
-            runId: null,
-          }),
-        }),
-      ]),
-    );
   });
 
   it("denies test calls through agents the board user cannot task", async () => {
@@ -4810,6 +4379,53 @@ describeEmbeddedPostgres("tool access service", () => {
     await expect(service.getConnection(connection.id)).resolves.toMatchObject({
       id: connection.id,
     });
+  });
+
+  it("projects current OAuth and GitHub lifecycle from the grant endpoint", async () => {
+    const company = await createCompany(db);
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+    const userId = `lifecycle-owner-${randomUUID()}`;
+    await grantBoardUser(db, company.id, userId, [], "owner");
+    const service = createTestToolAccessService(db);
+    const connection = await service.createConnection(company.id, {
+      name: "GitHub lifecycle",
+      transport: "rest_api",
+      authKind: "oauth",
+      status: "active",
+      enabled: true,
+      config: { sourceTemplateKey: "github" },
+    }, { actorType: "user", actorId: userId });
+    const [grant] = await db.select().from(connectionGrants).where(and(
+      eq(connectionGrants.companyId, company.id), eq(connectionGrants.connectionId, connection.id),
+    ));
+    await db.update(connectionGrants).set({
+      providerTenant: {
+        oauth: { scopes: ["repo", "read:user"], accessTokenExpiresAt: expiresAt },
+        github: {
+          userId: "123", login: "octocat", installationCount: 1, repositoryCount: 2,
+          repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+          repositories: [{ id: "789", fullName: "octo/project", installationId: "456" }],
+          accessRevision: "access-version-1", lastAccessRefreshAt: "2026-10-28T00:00:00.000Z",
+          lastWebhookAt: "2026-10-27T23:00:00.000Z", webhookHealth: "healthy",
+        },
+      },
+    }).where(eq(connectionGrants.id, grant!.id));
+    const response = await request(createRouteApp(db, boardSessionActor(company.id, "owner", userId)))
+      .get(`/api/tool-connections/${connection.id}/grants`);
+    expect(response.status).toBe(200);
+    expect(response.body.grants[0].lifecycle).toMatchObject({
+      grantStatus: "active", scopeNames: ["read:user", "repo"], state: "PERMISSION_CHANGED",
+      reason: "provider_access_changed", action: "refresh_access",
+      credentialExpiresAt: expiresAt, accessVersion: "access-version-1",
+      webhook: { health: "healthy", lastDeliveryAt: "2026-10-27T23:00:00.000Z", expiry: "not_applicable" },
+      providerLifecycle: "not_reported", syncReconciliation: {
+        state: "required", mode: "github_repository_full_snapshot", accessRevision: "access-version-1",
+        accessRevisionKind: "local_access_revision", lastSuccessAt: null, lastFullReconciledAt: null,
+        gapDetection: "not_reported",
+      },
+    });
+    expect(response.body.grants[0].lifecycle).not.toHaveProperty("accessToken");
+    expect(response.body.grants[0].lifecycle).not.toHaveProperty("refreshToken");
   });
 
   it("installs the safe example fixture idempotently and smokes allow, deny, and audit paths", async () => {
@@ -7243,7 +6859,7 @@ describeEmbeddedPostgres("tool access service", () => {
     ).toBe(false);
   });
 
-  it.each(["none", "event", "same-time-refresh", "one-conflict"])(
+  it.each(["none", "event", "identity", "same-time-refresh", "one-conflict", "incomplete", "missed-webhook", "rate-limit", "bounded-fair", "leased-backoff"])(
     "binds a managed GitHub identity and protects refresh from concurrent access changes (%s)",
     async (concurrentChange) => {
       const company = await createCompany(db);
@@ -7251,8 +6867,10 @@ describeEmbeddedPostgres("tool access service", () => {
       await grantBoardUser(db, company.id, userId, [], "owner");
       const agent = await createAgent(db, company.id);
       const connector = fakeGitHubConnector(company.id, `agent:${agent.id}`);
+      let sweepNow = new Date();
       const service = createTestToolAccessService(db, {
         paperclipCloudConnector: connector,
+        now: () => sweepNow,
       });
       const actor = { actorType: "user" as const, actorId: userId };
       const githubDefinition = getConnectableAppDefinition("github")!;
@@ -7263,6 +6881,9 @@ describeEmbeddedPostgres("tool access service", () => {
         platform_shared: true,
       };
       let beforeRepositoryResponse = async () => {};
+      let forcePaginationCycle = false;
+      let forceRateLimit = false;
+      let repositoryIds = [1, 2, 3];
       vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
         const href = String(url);
         if (href === "https://api.github.com/user") {
@@ -7290,9 +6911,22 @@ describeEmbeddedPostgres("tool access service", () => {
           )
         ) {
           await beforeRepositoryResponse();
+          if (forceRateLimit) {
+            return new Response("rate limited", { status: 429, headers: {
+              "retry-after": "x".repeat(129),
+              "x-ratelimit-remaining": "0",
+              "x-ratelimit-reset": String(Math.floor(Date.now() / 1_000) + 7_200),
+            } });
+          }
+          if (forcePaginationCycle) {
+            return new Response(JSON.stringify({ total_count: 1, repositories: [{ id: 1, full_name: "paperclipai/repo-1" }] }), {
+              status: 200,
+              headers: { link: "<https://api.github.com/user/installations/101/repositories?per_page=100&page=2>; rel=\"next\"" },
+            });
+          }
           return mcpHttpResponse({
             total_count: 3,
-            repositories: [1, 2, 3].map((id) => ({
+            repositories: repositoryIds.map((id) => ({
               id,
               full_name: `paperclipai/repo-${id}`,
               description: "do-not-store",
@@ -7416,6 +7050,11 @@ describeEmbeddedPostgres("tool access service", () => {
         expect(
           grant!.credentialSecretRefs.map((ref) => ref.configPath),
         ).toEqual(["oauth.access_token"]);
+        expect(grant!.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+          state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+        });
+        expect(grant!.providerTenant?.github?.repositoryAccessReconciliation?.scopeHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(grant!.providerTenant?.github?.repositoryAccessReconciliation?.sourceIdentityHash).toMatch(/^[a-f0-9]{64}$/);
         expect(JSON.stringify(grant)).not.toContain("do-not-store");
         expect(connector.setWebhookBinding).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -7440,6 +7079,138 @@ describeEmbeddedPostgres("tool access service", () => {
             ),
         ).resolves.toHaveLength(1);
         vi.mocked(connector.setWebhookBinding).mockClear();
+        if (concurrentChange === "incomplete") {
+          forcePaginationCycle = true;
+          await expect(service.checkHealth(connected.connectionId, actor)).rejects.toMatchObject({ status: 502 });
+          let [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          const priorFullAt = latest?.providerTenant?.github?.repositoryAccessReconciliation?.lastFullReconciledAt;
+          expect(latest?.providerTenant?.github?.repositories).toHaveLength(3);
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "required", mode: "full", requiredReason: "provider_failure",
+            lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
+          forcePaginationCycle = false;
+          sweepNow = new Date(Date.parse(latest!.providerTenant!.github!.repositoryAccessReconciliation!.nextAttemptAt!) + 1);
+          await expect(service.sweepGitHubConnectionContinuity({ force: true })).resolves.toMatchObject({ refreshed: 1, failed: 0 });
+          [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
+          expect(Date.parse(latest!.providerTenant!.github!.repositoryAccessReconciliation!.lastFullReconciledAt!))
+            .toBeGreaterThan(Date.parse(priorFullAt!));
+          const [currentConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connected.connectionId));
+          expect(projectToolConnectionLifecycle(currentConnection!, latest!, sweepNow).syncReconciliation)
+            .toMatchObject({ state: "reconciled", cursor: "not_reported", watermark: "not_reported", gapDetection: "not_reported" });
+          return;
+        }
+        if (concurrentChange === "missed-webhook") {
+          const oldFullAt = grant!.providerTenant?.github?.repositoryAccessReconciliation?.lastFullReconciledAt;
+          repositoryIds = [4, 5];
+          sweepNow = new Date(Date.parse(grant!.providerTenant!.github!.repositoryAccessReconciliation!.nextAttemptAt!) + 1);
+          await expect(service.sweepGitHubConnectionContinuity({ force: true })).resolves.toMatchObject({ refreshed: 1, failed: 0 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositories?.map((repository) => repository.id)).toEqual(["4", "5"]);
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
+          expect(Date.parse(latest!.providerTenant!.github!.repositoryAccessReconciliation!.lastFullReconciledAt!))
+            .toBeGreaterThan(Date.parse(oldFullAt!));
+          expect(latest?.providerTenant?.github?.lastWebhookAt).toBe(grant!.providerTenant?.github?.lastWebhookAt);
+          return;
+        }
+        if (concurrentChange === "bounded-fair") {
+          const [baseConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connected.connectionId));
+          const priorTenant = grant!.providerTenant!;
+          const dueTenant = { ...priorTenant, github: { ...priorTenant.github!, repositoryAccessReconciliation: {
+            ...priorTenant.github!.repositoryAccessReconciliation!, state: "required" as const,
+            requiredReason: "source_event_invalidated" as const, nextAttemptAt: sweepNow.toISOString(),
+            lastAttemptAt: new Date(sweepNow.getTime() - 1_000).toISOString(),
+          } } };
+          await db.update(connectionGrants).set({ providerTenant: dueTenant, updatedAt: new Date(sweepNow.getTime() - 1_000) })
+            .where(eq(connectionGrants.id, grant!.id));
+          for (let index = 0; index < 5; index += 1) {
+            const { id: _connectionId, createdAt: _connectionCreatedAt, updatedAt: _connectionUpdatedAt, ...connectionValues } = baseConnection!;
+            const [cloneConnection] = await db.insert(toolConnections).values({
+              ...connectionValues, uid: randomUUID(), name: `GitHub bounded fairness ${index}`,
+              createdAt: sweepNow, updatedAt: sweepNow,
+            }).returning();
+            const { id: _grantId, createdAt: _grantCreatedAt, updatedAt: _grantUpdatedAt, ...grantValues } = grant!;
+            await db.insert(connectionGrants).values({
+              ...grantValues, connectionId: cloneConnection!.id, credentialSecretRefs: [],
+              providerTenant: dueTenant, createdAt: sweepNow, updatedAt: sweepNow,
+            });
+          }
+          const firstSweepAt = new Date(sweepNow);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ refreshed: 1, failed: 4, deferred: 1 });
+          const grants = await db.select().from(connectionGrants).where(and(
+            eq(connectionGrants.companyId, company.id), eq(connectionGrants.kind, "agent"),
+          ));
+          const dueAgain = grants.filter((item) => Date.parse(item.providerTenant?.github?.repositoryAccessReconciliation?.nextAttemptAt ?? "") <= sweepNow.getTime());
+          expect(dueAgain).toHaveLength(1);
+          const attemptTimes = grants.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === firstSweepAt.toISOString());
+          expect(attemptTimes).toHaveLength(5);
+          sweepNow = new Date(firstSweepAt.getTime() + 59_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 0, refreshed: 0, failed: 0, deferred: 0 });
+          const beforeRetry = await db.select().from(connectionGrants).where(and(
+            eq(connectionGrants.companyId, company.id), eq(connectionGrants.kind, "agent"),
+          ));
+          expect(beforeRetry.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === firstSweepAt.toISOString())).toHaveLength(5);
+          sweepNow = new Date(firstSweepAt.getTime() + 60_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 0, failed: 1 });
+          const settled = await db.select().from(connectionGrants).where(and(
+            eq(connectionGrants.companyId, company.id), eq(connectionGrants.kind, "agent"),
+          ));
+          expect(settled.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === firstSweepAt.toISOString()))
+            .toHaveLength(5);
+          expect(settled.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === sweepNow.toISOString()))
+            .toHaveLength(1);
+          return;
+        }
+        if (concurrentChange === "leased-backoff") {
+          const prior = grant!.providerTenant!.github!.repositoryAccessReconciliation!;
+          const firstSweepAt = new Date(sweepNow);
+          const leasedTenant = { ...grant!.providerTenant!, github: { ...grant!.providerTenant!.github!, repositoryAccessReconciliation: {
+            ...prior, state: "required" as const, requiredReason: "source_event_invalidated" as const,
+            nextAttemptAt: firstSweepAt.toISOString(), lastAttemptAt: new Date(firstSweepAt.getTime() - 1_000).toISOString(),
+            reconcileLeaseId: "another-worker", reconcileLeaseUntil: new Date(firstSweepAt.getTime() + 120_000).toISOString(),
+          } } };
+          await db.update(connectionGrants).set({ providerTenant: leasedTenant, updatedAt: new Date(firstSweepAt.getTime() - 1_000) })
+            .where(eq(connectionGrants.id, grant!.id));
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 0, failed: 0, deferred: 1 });
+          sweepNow = new Date(firstSweepAt.getTime() + 59_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 0, refreshed: 0, failed: 0, deferred: 0 });
+          sweepNow = new Date(firstSweepAt.getTime() + 60_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 0, failed: 0, deferred: 1 });
+          sweepNow = new Date(firstSweepAt.getTime() + 120_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 1, failed: 0, deferred: 0 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", lastAttemptAt: sweepNow.toISOString(),
+          });
+          return;
+        }
+        if (concurrentChange === "rate-limit") {
+          const prior = grant!.providerTenant!.github!.repositoryAccessReconciliation!;
+          await db.update(connectionGrants).set({ providerTenant: {
+            ...grant!.providerTenant!, github: { ...grant!.providerTenant!.github!, repositoryAccessReconciliation: {
+              ...prior, state: "required", requiredReason: "source_event_invalidated", nextAttemptAt: sweepNow.toISOString(),
+            } },
+          } }).where(eq(connectionGrants.id, grant!.id));
+          forceRateLimit = true;
+          await expect(service.sweepGitHubConnectionContinuity({ force: true })).resolves.toMatchObject({ refreshed: 0, failed: 1 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          const sync = latest!.providerTenant!.github!.repositoryAccessReconciliation!;
+          expect(sync).toMatchObject({ state: "required", requiredReason: "provider_failure", lastErrorCode: "github_rate_limited" });
+          expect(sync.lastFullReconciledAt).toBe(prior.lastFullReconciledAt);
+          expect(Date.parse(sync.rateLimitRetryAt!)).toBeGreaterThan(Date.now());
+          expect(Date.parse(sync.nextAttemptAt!)).toBeGreaterThanOrEqual(Date.parse(sync.rateLimitRetryAt!));
+          const [currentConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connected.connectionId));
+          const lifecycle = projectToolConnectionLifecycle(currentConnection!, latest!, sweepNow);
+          expect(lifecycle.syncReconciliation).toMatchObject({ state: "required", rateLimitState: "limited" });
+          expect(JSON.stringify(lifecycle)).not.toContain("retry-after");
+          expect(JSON.stringify(lifecycle)).not.toContain("x".repeat(129));
+          return;
+        }
         if (concurrentChange !== "none") {
           beforeRepositoryResponse = async () => {
             if (concurrentChange === "one-conflict")
@@ -7461,6 +7232,7 @@ describeEmbeddedPostgres("tool access service", () => {
                     ...(concurrentChange === "event"
                       ? { lastWebhookAt: new Date().toISOString() }
                       : {}),
+                    ...(concurrentChange === "identity" ? { userId: "99" } : {}),
                     installationIds: [],
                     installationCount: 0,
                     repositoryCount: 0,
@@ -7483,6 +7255,9 @@ describeEmbeddedPostgres("tool access service", () => {
               .where(eq(connectionGrants.id, grant!.id));
             expect(latest?.status).toBe("active");
             expect(latest?.providerTenant?.github?.repositoryCount).toBe(3);
+            expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+              state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+            });
             return;
           }
           await expect(
@@ -7504,6 +7279,10 @@ describeEmbeddedPostgres("tool access service", () => {
             service.checkHealth(connected.connectionId, actor),
           ).resolves.toMatchObject({ connection: { healthStatus: "ok" } });
           expect(connector.setWebhookBinding).toHaveBeenCalled();
+          const [refreshedGrant] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(refreshedGrant?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
         }
       } finally {
         githubDefinition.ownershipAvailability = previousOwnershipAvailability;
@@ -8896,7 +8675,7 @@ describeEmbeddedPostgres("tool access service", () => {
     }
   }, 15_000);
 
-  it("synchronizes shared OAuth credentials to the organization grant used by gateway calls", async () => {
+  it("synchronizes shared OAuth grant credentials without admitting an opaque gateway call", async () => {
     vi.stubEnv("PAPERCLIP_TOOL_OAUTH_SLACK_CLIENT_ID", "slack-client-id");
     vi.stubEnv(
       "PAPERCLIP_TOOL_OAUTH_SLACK_CLIENT_SECRET",
@@ -8915,6 +8694,7 @@ describeEmbeddedPostgres("tool access service", () => {
       {
         galleryKey: "slack",
         name: "Shared OAuth grant",
+        grantKind: "organization",
       },
       { actorType: "user", actorId: userId },
     );
@@ -8930,7 +8710,7 @@ describeEmbeddedPostgres("tool access service", () => {
     let gatewayAuthorization: string | null = null;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         return {
           ok: true,
           status: 200,
@@ -9040,9 +8820,10 @@ describeEmbeddedPostgres("tool access service", () => {
         toolName: "get_channel",
         parameters: { channel: "general" },
       })
-      .expect(200);
+      .expect(409)
+      .expect((response) => expect(response.body.reasonCode).toBe("tool_model_effect_unqualified"));
 
-    expect(gatewayAuthorization).toBe("Bearer shared-access-token");
+    expect(gatewayAuthorization).toBeNull();
   });
 
   it("creates and resolves an agent-initiated user authorization grant card", async () => {
@@ -9061,6 +8842,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connected = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack user auth",
+      grantKind: "organization",
     });
 
     const workspaceStarted = await service.startOAuth(
@@ -9076,7 +8858,7 @@ describeEmbeddedPostgres("tool access service", () => {
     ).searchParams.get("state")!;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         const userAuthorization =
           body.get("code") === "user-authorization-code";
@@ -9398,7 +9180,7 @@ describeEmbeddedPostgres("tool access service", () => {
       );
       vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           const code = (init?.body as URLSearchParams).get("code");
           expect(["personal-code", "personal-reconnect-code"]).toContain(code);
           const reconnecting = code === "personal-reconnect-code";
@@ -9752,7 +9534,7 @@ describeEmbeddedPostgres("tool access service", () => {
     );
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         return mcpHttpResponse({
           ok: true,
           access_token: "share-access-token",
@@ -9903,7 +9685,7 @@ describeEmbeddedPostgres("tool access service", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (url, init) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           const body = init?.body as URLSearchParams;
           if (body.get("grant_type") === "refresh_token") {
             expect(body.get("refresh_token")).toBe("personal-refresh-token");
@@ -10233,14 +10015,22 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(connectRes.body.connection).toMatchObject({
         status: "draft",
         enabled: false,
+        ownership: "platform_shared",
+        credentialPolicy: "per_user",
         credentialSecretRefs: [],
-        config: expect.objectContaining({ sourceTemplateKey: "slack" }),
+        config: expect.objectContaining({
+          sourceTemplateKey: "slack",
+          connectionMethodKey: "managed-oauth",
+        }),
       });
       const startUrl = new URL(connectRes.body.auth.startUrl);
       expect(`${startUrl.origin}${startUrl.pathname}`).toBe(
-        "https://slack.com/oauth/v2/authorize",
+        "https://slack.com/oauth/v2_user/authorize",
       );
       expect(startUrl.searchParams.get("client_id")).toBe("slack-client-id");
+      expect(startUrl.searchParams.get("scope")).toBe(
+        "channels:history,channels:read,chat:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,search:read.im,search:read.mpim,search:read.private,search:read.public",
+      );
       expect(startUrl.searchParams.get("code_challenge_method")).toBe("S256");
       expect(startUrl.searchParams.get("code_challenge")).toMatch(
         /^[A-Za-z0-9_-]{43}$/,
@@ -10248,28 +10038,81 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(startUrl.searchParams.get("redirect_uri")).toBe(
         `${origin}/api/tools/oauth/callback`,
       );
+
+      const ownAppConnectRes = await request(app)
+        .post(`/api/companies/${company.id}/tools/apps/connect`)
+        .set("Host", new URL(origin).host)
+        .set("Origin", origin)
+        .send({
+          galleryKey: "slack",
+          connectionMethodKey: "mcp-oauth",
+          name: "Slack own OAuth app",
+          oauthClient: {
+            clientId: "customer-slack-client-id",
+            clientSecret: "customer-slack-client-secret",
+          },
+        });
+      expect(ownAppConnectRes.status).toBe(201);
+      expect(ownAppConnectRes.body.connection).toMatchObject({
+        ownership: "customer",
+        credentialPolicy: "per_user",
+        config: expect.objectContaining({
+          connectionMethodKey: "mcp-oauth",
+          oauth: expect.objectContaining({
+            clientId: "customer-slack-client-id",
+            clientRegistrationSource: "manual",
+          }),
+        }),
+      });
+      const ownAppStartUrl = new URL(ownAppConnectRes.body.auth.startUrl);
+      expect(`${ownAppStartUrl.origin}${ownAppStartUrl.pathname}`).toBe(
+        "https://slack.com/oauth/v2_user/authorize",
+      );
+      expect(ownAppStartUrl.searchParams.get("client_id")).toBe("customer-slack-client-id");
+      expect(ownAppStartUrl.searchParams.get("scope")).toBe(startUrl.searchParams.get("scope"));
+
       const state = startUrl.searchParams.get("state");
       expect(state).toBeTruthy();
-      await expect(db.select().from(toolOauthStates)).resolves.toEqual([
-        expect.objectContaining({
-          state,
-          connectionId: connectRes.body.connectionId,
-          companyId: company.id,
-          createdByActorType: "user",
-          createdByActorId: "board-user",
-          createdBySessionId: null,
-        }),
-      ]);
+      await expect(db.select().from(toolOauthStates)).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            state,
+            connectionId: connectRes.body.connectionId,
+            companyId: company.id,
+            createdByActorType: "user",
+            createdByActorId: "board-user",
+            createdBySessionId: null,
+            requestedScopes: expect.arrayContaining([
+              "channels:history", "channels:read", "chat:write", "search:read.public",
+            ]),
+          }),
+          expect.objectContaining({
+            state: ownAppStartUrl.searchParams.get("state"),
+            connectionId: ownAppConnectRes.body.connectionId,
+            companyId: company.id,
+            createdByActorType: "user",
+            createdByActorId: "board-user",
+            createdBySessionId: null,
+            requestedScopes: expect.arrayContaining([
+              "channels:history", "channels:read", "chat:write", "search:read.public",
+            ]),
+          }),
+        ]),
+      );
 
       const fetchMock = vi
         .spyOn(globalThis, "fetch")
         .mockImplementation(async (url, init) => {
           const href = String(url);
-          if (href === "https://slack.com/api/oauth.v2.access") {
+          if (href === "https://slack.com/api/oauth.v2.user.access") {
             const body = init?.body as URLSearchParams;
             expect(body.get("grant_type")).toBe("authorization_code");
-            expect(body.get("code")).toBe("oauth-code");
-            expect(body.get("client_secret")).toBe("slack-client-secret");
+            expect(["oauth-code", "extra-scope-code"]).toContain(body.get("code"));
+            expect(body.get("client_secret")).toBe(
+              body.get("code") === "oauth-code"
+                ? "slack-client-secret"
+                : "customer-slack-client-secret",
+            );
             expect(body.get("code_verifier")).toBeTruthy();
             expect(body.get("redirect_uri")).toBe(
               `${origin}/api/tools/oauth/callback`,
@@ -10282,7 +10125,9 @@ describeEmbeddedPostgres("tool access service", () => {
                 refresh_token: "refresh-token",
                 expires_in: 3600,
                 token_type: "Bearer",
-                scope: "channels:read chat:write search:read",
+                scope: body.get("code") === "extra-scope-code"
+                  ? "channels:history,channels:read,chat:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,search:read.im,search:read.mpim,search:read.private,search:read.public,admin:everything"
+                  : "channels:history,channels:read,chat:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,search:read.im,search:read.mpim,search:read.private,search:read.public",
               }),
             } as Response;
           }
@@ -10318,22 +10163,69 @@ describeEmbeddedPostgres("tool access service", () => {
         .query({ state, code: "oauth-code" });
 
       expect(callbackRes.status).toBe(200);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(callbackRes.body.connection).toMatchObject({
         id: connectRes.body.connectionId,
         status: "active",
         enabled: true,
+        credentialPolicy: "per_user",
+        config: expect.objectContaining({
+          oauth: expect.objectContaining({
+            provider: "slack",
+            scopes: [
+              "channels:history", "channels:read", "chat:write",
+              "groups:history", "groups:read", "im:history", "im:read",
+              "mpim:history", "mpim:read", "search:read.im",
+              "search:read.mpim", "search:read.private", "search:read.public",
+            ],
+          }),
+        }),
+        credentialSecretRefs: [],
+      });
+      const [slackGrant] = await db
+        .select()
+        .from(connectionGrants)
+        .where(eq(connectionGrants.connectionId, connectRes.body.connectionId));
+      expect(slackGrant).toMatchObject({
+        kind: "user",
+        subjectUserId: "board-user",
+        status: "active",
+        providerTenant: {
+          oauth: {
+            scopes: [
+              "channels:history", "channels:read", "chat:write",
+              "groups:history", "groups:read", "im:history", "im:read",
+              "mpim:history", "mpim:read", "search:read.im",
+              "search:read.mpim", "search:read.private", "search:read.public",
+            ],
+          },
+        },
         credentialSecretRefs: [
-          expect.objectContaining({
-            configPath: "oauth.access_token",
-            label: "OAuth access token",
-          }),
-          expect.objectContaining({
-            configPath: "oauth.refresh_token",
-            label: "OAuth refresh token",
-          }),
+          expect.objectContaining({ configPath: "oauth.access_token", label: "OAuth access token" }),
+          expect.objectContaining({ configPath: "oauth.refresh_token", label: "OAuth refresh token" }),
         ],
       });
+      const ownAppDenied = await request(app)
+        .get("/api/tools/oauth/callback")
+        .set("Host", new URL(origin).host)
+        .query({
+          state: ownAppStartUrl.searchParams.get("state"),
+          code: "extra-scope-code",
+        });
+      expect(ownAppDenied.status).toBe(403);
+      expect(ownAppDenied.body.error).toBe(
+        "Slack returned permissions outside the consent request",
+      );
+      const [stillDraftOwnApp] = await db
+        .select()
+        .from(toolConnections)
+        .where(eq(toolConnections.id, ownAppConnectRes.body.connectionId));
+      expect(stillDraftOwnApp).toMatchObject({
+        status: "draft",
+        credentialPolicy: "per_user",
+        credentialSecretRefs: [],
+      });
+      expect(JSON.stringify(stillDraftOwnApp.config)).not.toContain("access-token");
       expect(callbackRes.body.actions.readOnly).toEqual([
         expect.objectContaining({
           toolName: "search_messages",
@@ -10367,11 +10259,23 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(redirectCallbackRes.headers.location).toBe(
         `/${company.issuePrefix}/apps/${redirectConnectRes.body.connectionId}/permissions?success=1`,
       );
-      expect(fetchMock).toHaveBeenCalledTimes(6);
-      await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(0);
+      expect(fetchMock).toHaveBeenCalledTimes(5);
+      const remainingOAuthStateConnections = await db
+        .select({ connectionId: toolOauthStates.connectionId })
+        .from(toolOauthStates);
+      expect(remainingOAuthStateConnections).toEqual([]);
       await expect(
-        db.select().from(companySecretBindings),
-      ).resolves.toHaveLength(6);
+        db
+          .select()
+          .from(companySecretBindings)
+          .where(
+            and(
+              eq(companySecretBindings.companyId, company.id),
+              eq(companySecretBindings.targetType, "tool_connection"),
+              eq(companySecretBindings.targetId, connectRes.body.connectionId),
+            ),
+          ),
+      ).resolves.toHaveLength(0);
       const [connection] = await db
         .select()
         .from(toolConnections)
@@ -10719,10 +10623,17 @@ describeEmbeddedPostgres("tool access service", () => {
         "other-session",
       ),
     );
+    const providerFetch = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => {
+        throw new Error("Wrong-session OAuth callback reached the provider");
+      },
+    );
     await request(otherSessionSameUserApp)
       .get("/api/tools/oauth/callback")
       .query({ state, code: "oauth-code" })
       .expect(403);
+    expect(providerFetch).not.toHaveBeenCalled();
+    await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(1);
 
     const downgradedActor = {
       ...initiatingActor,
@@ -10741,37 +10652,9 @@ describeEmbeddedPostgres("tool access service", () => {
       .query({ state, code: "oauth-code" })
       .expect(403);
 
-    await db
-      .delete(principalPermissionGrants)
-      .where(
-        and(
-          eq(principalPermissionGrants.companyId, company.id),
-          eq(principalPermissionGrants.principalType, "user"),
-          eq(principalPermissionGrants.principalId, "oauth-operator"),
-          eq(
-            principalPermissionGrants.permissionKey,
-            "tools:manage_connections",
-          ),
-        ),
-      );
-    await request(initiatingApp)
-      .get("/api/tools/oauth/callback")
-      .query({ state, code: "oauth-code" })
-      .expect(403);
-    await db.insert(principalPermissionGrants).values({
-      companyId: company.id,
-      principalType: "user",
-      principalId: "oauth-operator",
-      permissionKey: "tools:manage_connections",
-      scope: null,
-      grantedByUserId: "owner",
-    });
-
-    await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(1);
-
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         expect(body.get("grant_type")).toBe("authorization_code");
         expect(body.get("code")).toBe("oauth-code");
@@ -11921,6 +11804,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack refresh",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -11930,7 +11814,7 @@ describeEmbeddedPostgres("tool access service", () => {
     let refreshCallCount = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         if (body.get("grant_type") === "authorization_code") {
           return {
@@ -12067,6 +11951,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack invalid grant",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -12077,7 +11962,7 @@ describeEmbeddedPostgres("tool access service", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (url) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           return mcpHttpResponse({
             ok: true,
             access_token: "expired-access-token",
@@ -12120,7 +12005,7 @@ describeEmbeddedPostgres("tool access service", () => {
     let refreshCallCount = 0;
     fetchMock.mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         expect(body.get("grant_type")).toBe("refresh_token");
         expect(body.get("refresh_token")).toBe("single-use-refresh-token");
@@ -12190,6 +12075,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack stale invalid grant",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -12200,7 +12086,7 @@ describeEmbeddedPostgres("tool access service", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (url) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           return mcpHttpResponse({
             ok: true,
             access_token: "expired-access-token",
@@ -12246,7 +12132,7 @@ describeEmbeddedPostgres("tool access service", () => {
 
     fetchMock.mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         expect(body.get("refresh_token")).toBe("submitted-refresh-token");
         await secretService(db).rotate(refreshRef.secretId, {
@@ -12438,6 +12324,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack no refresh",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -12448,7 +12335,7 @@ describeEmbeddedPostgres("tool access service", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (url) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           return {
             ok: true,
             json: async () => ({
@@ -17782,10 +17669,9 @@ describeEmbeddedPostgres("tool access service", () => {
         toolName: "send_email",
         parameters: { to: "a@example.com" },
       })
-      .expect(200);
+      .expect(409);
     expect(deniedCall.body).toMatchObject({
-      decision: "off",
-      error: { reasonCode: "deny_default" },
+      reasonCode: "tool_model_effect_unqualified", code: "configuration_incomplete",
     });
     expect(fetchMock).not.toHaveBeenCalled();
 

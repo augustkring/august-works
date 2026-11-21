@@ -1,0 +1,15 @@
+{
+  "packages/db/src/migrations/0525_routine_source_identity.sql": "39a27c78ab50eee0644a52707f649d36fa55c6955ed8827e9611b4e54f6aa87d",
+  "packages/db/src/migrations/meta/_journal.json": "a513da69e57dc287afabc638dcf38899dfda3c1f68e5fc0f11adb67c260679e9",
+  "packages/db/src/migrations/meta/0525_snapshot.json": "4b9743fc8dfc2ce25aa0f00ea92d6002244ff410e12ec925d339b2f507cba461",
+  "packages/db/src/schema/routines.ts": "fd3ac84e120077428d98b91aab369df44127a113f87aaa1d3459b8621f977a65",
+  "server/src/services/routines.ts": "c555088156083ad1c3cbca96e143adca4696a9fa3397a18f01e75e77d45806af",
+  "server/src/services/routine-source-authority.ts": "071679b472540566e27f10e55e6fb0c359eb1baa3912cac496b39b7b266d8388",
+  "server/src/services/memory/memory-privacy.ts": "f342b89a3ac9db4898aba86fa07414d6f02809797d0685b04676632366ef7c7a",
+  "server/src/services/companies.ts": "bddb836c3a3e6da609687b9e9175463e5710f21aa5ab108b855112954b06e6f0",
+  "server/src/__tests__/routine-source-identity.integration.test.ts": "d4ee25de85cc477a4ab32c80572887fc2e67a2d55e5c675c93b0423b1725e384",
+  "server/src/__tests__/v9-routine-authoring.integration.test.ts": "b6add8e2b757ea0e88d6ff910c9f5c0440a5a85fffa06a755e676ddcef4c43ea",
+  "server/src/__tests__/routines-service.test.ts": "1e708a4df6961fc64363507e5b036dbf59c174cf4648ed7d6fd6350e6b534d7a",
+  "server/src/__tests__/typed-task-origin.integration.test.ts": "4ebaaa56a786b3bb20fdfc299e891560b581dd08c7d052327785b6286e33439e",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

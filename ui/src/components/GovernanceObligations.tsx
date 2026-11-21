@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "@/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   GOVERNANCE_FRAMEWORKS,
@@ -34,6 +35,7 @@ export function GovernanceObligations({
   companyId: string;
   userId: string;
 }) {
+  const { t } = useTranslation("experience");
   const [draft, setDraft] = useState(blank),
     cache = useQueryClient();
   const records = useQuery({
@@ -55,13 +57,9 @@ export function GovernanceObligations({
   ) => setDraft((current) => ({ ...current, [key]: value }));
   return (
     <section className="space-y-4 rounded-lg border p-4">
-      <h2 className="font-semibold">Reviewed obligations</h2>
+      <h2 className="font-semibold">{t("aiGovernance.obligations.heading")}</h2>
       <p className="text-muted-foreground">
-        Record applicability to this company with current authority and source
-        references. Uncertain or overdue obligations require review before
-        governed execution. A new review with the same framework, authority,
-        citation and scope supersedes the previous record while preserving
-        history.
+        {t("aiGovernance.obligations.intro")}
       </p>
       {(records.error || mutation.error) && (
         <p role="alert">{(records.error ?? mutation.error)?.message}</p>
@@ -69,13 +67,13 @@ export function GovernanceObligations({
       {records.data?.map((row) => (
         <p key={row.id}>
           {row.obligation.authority} · {row.obligation.citation} ·{" "}
-          {row.obligation.applicabilityState.replaceAll("_", " ")} · review{" "}
+          {t(`aiGovernance.obligations.enums.applicability.${row.obligation.applicabilityState}`)} · {t("aiGovernance.obligations.reviewDate")} {" "}
           {row.nextReviewAt.slice(0, 10)}
-          {row.obligation.analyticalPurpose && <> · analytical purpose {row.obligation.analyticalPurpose.status} · {row.obligation.analyticalPurpose.capabilities.join(", ")}</>}
+          {row.obligation.analyticalPurpose && <> · {t("aiGovernance.obligations.analyticalPurpose")} {t(`aiGovernance.obligations.enums.analyticalStatus.${row.obligation.analyticalPurpose.status}`)} · {row.obligation.analyticalPurpose.capabilities.map(value => t(`aiGovernance.obligations.enums.capability.${value}`)).join(", ")}</>}
         </p>
       ))}
       <label className="block space-y-2">
-        Framework
+        {t("aiGovernance.fields.framework")}
         <select
           className="block rounded-md border bg-background p-2"
           value={draft.framework}
@@ -88,21 +86,21 @@ export function GovernanceObligations({
         >
           {GOVERNANCE_FRAMEWORKS.map((value) => (
             <option key={value} value={value}>
-              {value.replaceAll("_", " ")}
+              {t(`aiGovernance.enums.framework.${value}`)}
             </option>
           ))}
         </select>
       </label>
       {(
         [
-          ["authority", "Authority"],
-          ["citation", "Citation"],
-          ["jurisdictionOrScope", "Jurisdiction or company scope"],
-          ["applicabilityFacts", "Actual applicability facts"],
-          ["requiredControl", "Required control"],
-          ["reviewTrigger", "Trigger for reassessment"],
-          ["sourceVersionOrDate", "Source version or date"],
-          ["sourceUrl", "Public HTTPS source reference"],
+          ["authority", t("aiGovernance.obligations.fields.authority")],
+          ["citation", t("aiGovernance.obligations.fields.citation")],
+          ["jurisdictionOrScope", t("aiGovernance.obligations.fields.scope")],
+          ["applicabilityFacts", t("aiGovernance.obligations.fields.applicabilityFacts")],
+          ["requiredControl", t("aiGovernance.obligations.fields.requiredControl")],
+          ["reviewTrigger", t("aiGovernance.obligations.fields.reviewTrigger")],
+          ["sourceVersionOrDate", t("aiGovernance.obligations.fields.sourceVersion")],
+          ["sourceUrl", t("aiGovernance.obligations.fields.sourceUrl")],
         ] as const
       ).map(([field, label]) => (
         <label key={field} className="block space-y-2">
@@ -114,7 +112,7 @@ export function GovernanceObligations({
         </label>
       ))}
       <label className="block space-y-2">
-        Applicability
+        {t("aiGovernance.obligations.fields.applicability")}
         <select
           className="block rounded-md border bg-background p-2"
           value={draft.applicabilityState}
@@ -128,7 +126,7 @@ export function GovernanceObligations({
           {["review_required", "uncertain", "applicable", "not_applicable"].map(
             (value) => (
               <option key={value} value={value}>
-                {value.replaceAll("_", " ")}
+                {t(`aiGovernance.obligations.enums.applicability.${value}`)}
               </option>
             ),
           )}
@@ -136,12 +134,12 @@ export function GovernanceObligations({
       </label>
       {(
         [
-          ["evidenceRequired", "Required evidence"],
-          ["controlRefs", "References to existing controls"],
+          ["evidenceRequired", t("aiGovernance.obligations.fields.evidenceRequired")],
+          ["controlRefs", t("aiGovernance.obligations.fields.controlRefs")],
         ] as const
       ).map(([field, label]) => (
         <label key={field} className="block space-y-2">
-          {label} (one per line)
+          {label} {t("aiGovernance.onePerLine")}
           <Textarea
             value={draft[field].join("\n")}
             onChange={(event) =>
@@ -158,13 +156,13 @@ export function GovernanceObligations({
       ))}
       {(
         [
-          ["effectiveFrom", "Effective from"],
-          ["effectiveUntil", "Effective until (optional)"],
-          ["nextReviewAt", "Next review"],
+          ["effectiveFrom", t("aiGovernance.obligations.fields.effectiveFrom")],
+          ["effectiveUntil", t("aiGovernance.obligations.fields.effectiveUntil")],
+          ["nextReviewAt", t("aiGovernance.obligations.fields.nextReview")],
         ] as const
       ).map(([field, label]) => (
         <label key={field} className="block space-y-2">
-          {label} (UTC)
+          {label} {t("aiGovernance.obligations.utcSuffix")}
           <Input
             type="date"
             value={draft[field]?.slice(0, 10) ?? ""}
@@ -177,22 +175,22 @@ export function GovernanceObligations({
         </label>
       ))}
       {draft.framework === "company_policy" && <fieldset className="space-y-4">
-        <legend className="font-medium">Analytical purpose</legend>
-        <p className="text-muted-foreground">Record the approved use of business objects for advisory analysis. Employee ranking and automated people decisions are outside this profile. Approval requires the accountable human review recorded here.</p>
-        {!draft.analyticalPurpose ? <Button variant="outline" onClick={() => set("analyticalPurpose", { status: "suspended", purpose: "management_intelligence", capabilities: ["metrics"], populationUnits: "business_objects", peopleImpact: "none", decisionBoundary: "advisory_only", maxRetentionDays: 30, permittedSensitivity: ["internal"], prohibitedUses: [], approvalRationale: "" })}>Add analytical purpose</Button> : <>
-          <label className="block space-y-2">Purpose status<select className="block rounded-md border bg-background p-2" value={draft.analyticalPurpose.status} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, status: event.target.value as "approved" | "suspended" })}><option value="suspended">Suspended</option><option value="approved">Approved after human review</option></select></label>
-          <label className="block space-y-2">Intended analytical purpose<select className="block rounded-md border bg-background p-2" value={draft.analyticalPurpose.purpose} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, purpose: event.target.value as "management_intelligence" | "process_intelligence" })}><option value="management_intelligence">Management intelligence</option><option value="process_intelligence">Process intelligence</option></select></label>
-          <fieldset className="space-y-2"><legend>Permitted capabilities</legend><div className="flex flex-wrap gap-4">{(["metrics", "strategy", "process", "forecast", "scenario", "experiment", "causal", "planning", "reviews"] as const).map(capability => <label key={capability} className="flex items-center gap-2"><input type="checkbox" checked={draft.analyticalPurpose!.capabilities.includes(capability)} onChange={() => { const current = draft.analyticalPurpose!; set("analyticalPurpose", { ...current, capabilities: current.capabilities.includes(capability) ? current.capabilities.filter(c => c !== capability) : [...current.capabilities, capability] }); }} />{capability}</label>)}</div></fieldset>
-          <fieldset className="space-y-2"><legend>Permitted sensitivity</legend><div className="flex flex-wrap gap-4">{(["internal", "confidential"] as const).map(level => <label key={level} className="flex items-center gap-2"><input type="checkbox" checked={draft.analyticalPurpose!.permittedSensitivity.includes(level)} onChange={() => { const current = draft.analyticalPurpose!; set("analyticalPurpose", { ...current, permittedSensitivity: current.permittedSensitivity.includes(level) ? current.permittedSensitivity.filter(c => c !== level) : [...current.permittedSensitivity, level] }); }} />{level}</label>)}</div></fieldset>
-          <label className="block space-y-2">Maximum analytical retention (days)<Input type="number" min={1} max={3650} value={draft.analyticalPurpose.maxRetentionDays} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, maxRetentionDays: Number(event.target.value) })} /></label>
-          <label className="block space-y-2">Approval rationale<Textarea value={draft.analyticalPurpose.approvalRationale} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, approvalRationale: event.target.value })} /></label>
-          <label className="block space-y-2">Prohibited uses (one per line)<Textarea value={draft.analyticalPurpose.prohibitedUses.join("\n")} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, prohibitedUses: event.target.value.split("\n").map(value => value.trim()).filter(Boolean) })} /></label>
-          <Button variant="ghost" onClick={() => set("analyticalPurpose", undefined)}>Remove analytical purpose from this review</Button>
+        <legend className="font-medium">{t("aiGovernance.obligations.analyticalPurpose")}</legend>
+        <p className="text-muted-foreground">{t("aiGovernance.obligations.analyticalPurposeIntro")}</p>
+        {!draft.analyticalPurpose ? <Button variant="outline" onClick={() => set("analyticalPurpose", { status: "suspended", purpose: "management_intelligence", capabilities: ["metrics"], populationUnits: "business_objects", peopleImpact: "none", decisionBoundary: "advisory_only", maxRetentionDays: 30, permittedSensitivity: ["internal"], prohibitedUses: [], approvalRationale: "" })}>{t("aiGovernance.obligations.addAnalyticalPurpose")}</Button> : <>
+          <label className="block space-y-2">{t("aiGovernance.obligations.fields.purposeStatus")}<select className="block rounded-md border bg-background p-2" value={draft.analyticalPurpose.status} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, status: event.target.value as "approved" | "suspended" })}><option value="suspended">{t("aiGovernance.obligations.enums.analyticalStatus.suspended")}</option><option value="approved">{t("aiGovernance.obligations.enums.analyticalStatus.approved")}</option></select></label>
+          <label className="block space-y-2">{t("aiGovernance.obligations.fields.intendedAnalyticalPurpose")}<select className="block rounded-md border bg-background p-2" value={draft.analyticalPurpose.purpose} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, purpose: event.target.value as "management_intelligence" | "process_intelligence" })}><option value="management_intelligence">{t("aiGovernance.obligations.enums.analyticalPurpose.management_intelligence")}</option><option value="process_intelligence">{t("aiGovernance.obligations.enums.analyticalPurpose.process_intelligence")}</option></select></label>
+          <fieldset className="space-y-2"><legend>{t("aiGovernance.obligations.fields.permittedCapabilities")}</legend><div className="flex flex-wrap gap-4">{(["metrics", "strategy", "process", "forecast", "scenario", "experiment", "causal", "planning", "reviews"] as const).map(capability => <label key={capability} className="flex items-center gap-2"><input type="checkbox" checked={draft.analyticalPurpose!.capabilities.includes(capability)} onChange={() => { const current = draft.analyticalPurpose!; set("analyticalPurpose", { ...current, capabilities: current.capabilities.includes(capability) ? current.capabilities.filter(c => c !== capability) : [...current.capabilities, capability] }); }} />{t(`aiGovernance.obligations.enums.capability.${capability}`)}</label>)}</div></fieldset>
+          <fieldset className="space-y-2"><legend>{t("aiGovernance.obligations.fields.permittedSensitivity")}</legend><div className="flex flex-wrap gap-4">{(["internal", "confidential"] as const).map(level => <label key={level} className="flex items-center gap-2"><input type="checkbox" checked={draft.analyticalPurpose!.permittedSensitivity.includes(level)} onChange={() => { const current = draft.analyticalPurpose!; set("analyticalPurpose", { ...current, permittedSensitivity: current.permittedSensitivity.includes(level) ? current.permittedSensitivity.filter(c => c !== level) : [...current.permittedSensitivity, level] }); }} />{t(`aiGovernance.obligations.enums.sensitivity.${level}`)}</label>)}</div></fieldset>
+          <label className="block space-y-2">{t("aiGovernance.obligations.fields.maxRetentionDays")}<Input type="number" min={1} max={3650} value={draft.analyticalPurpose.maxRetentionDays} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, maxRetentionDays: Number(event.target.value) })} /></label>
+          <label className="block space-y-2">{t("aiGovernance.obligations.fields.approvalRationale")}<Textarea value={draft.analyticalPurpose.approvalRationale} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, approvalRationale: event.target.value })} /></label>
+          <label className="block space-y-2">{t("aiGovernance.obligations.fields.prohibitedUses")} {t("aiGovernance.onePerLine")}<Textarea value={draft.analyticalPurpose.prohibitedUses.join("\n")} onChange={event => set("analyticalPurpose", { ...draft.analyticalPurpose!, prohibitedUses: event.target.value.split("\n").map(value => value.trim()).filter(Boolean) })} /></label>
+          <Button variant="ghost" onClick={() => set("analyticalPurpose", undefined)}>{t("aiGovernance.obligations.removeAnalyticalPurpose")}</Button>
         </>}
       </fieldset>}
       <div className="flex items-center justify-between gap-2">
         <Button variant="outline" onClick={() => setDraft(blank())}>
-          Cancel
+          {t("aiGovernance.cancel")}
         </Button>
         <Button
           disabled={
@@ -201,7 +199,7 @@ export function GovernanceObligations({
           }
           onClick={() => mutation.mutate()}
         >
-          Record accountable review
+          {t("aiGovernance.obligations.recordReview")}
         </Button>
       </div>
     </section>

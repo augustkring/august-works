@@ -1,0 +1,33 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/task-reassignment.test.ts (25 tests | 1 failed) 40544ms
+     × rejects conversations and the caller’s own task 357ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > rejects conversations and the caller’s own task
+AssertionError: expected [Function] to throw error including 'conversation_locked' but got 'Task source access is unavailable.'
+
+Expected: "conversation_locked"
+Received: "Task source access is unavailable."
+
+ ❯ src/services/native-runtime/task-reassignment.test.ts:162:46
+    160|     const f = await fixture();
+    161|     await db.update(issues).set({ conversationAgentId: f.agentId, conv…
+    162|     await expect(f.authority.execute(f.call)).rejects.toThrow("convers…
+       |                                              ^
+    163|     await expect(f.authority.execute({ ...f.call, arguments: { ...f.ca…
+    164|     expect(f.stopTaskForReassignment).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 541 passed (542)
+   Start at  13:21:44
+   Duration  171.27s (transform 27.82s, setup 632ms, import 72.25s, tests 96.89s, environment 0ms)
+

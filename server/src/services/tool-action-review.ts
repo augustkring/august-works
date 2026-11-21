@@ -11,6 +11,7 @@ import { conflict, forbidden, notFound } from "../errors.js";
 import { assertIssueThreadInteractionResolverAudience } from "./issue-thread-interaction-resolution.js";
 import { emitConnectionInvoked } from "./connector-telemetry.js";
 import { toolAccessPolicyService } from "./tool-access-policy.js";
+import { findGovernedToolDecisionWait } from "./governed-tool-decision-wait.js";
 import {
   logActivity,
   publishActivity,
@@ -183,6 +184,15 @@ export async function commitToolActionReview(
           eq(toolInvocations.companyId, input.companyId),
         ),
       );
+    // APR-E2E-12. A Task held in review only for this card (its assignee's
+    // governed tool decision) returns to todo when the card resolves, as the
+    // generic confirmation resolution does, so the resolution Run continues
+    // the Task. Read before the card leaves pending; exact or unchanged.
+    const governedWait = interaction && issue && issue.assigneeAgentId
+      ? await findGovernedToolDecisionWait(tx as unknown as Db, {
+          companyId: input.companyId, issueId: issue.id, assigneeAgentId: issue.assigneeAgentId,
+        })
+      : null;
     if (interaction && issue) {
       await tx
         .update(issueThreadInteractions)
@@ -206,6 +216,21 @@ export async function commitToolActionReview(
               : { version: 1, outcome: "rejected", reason: input.reason },
         })
         .where(eq(issueThreadInteractions.id, interaction.id));
+      if (governedWait?.interactionId === interaction.id) {
+        const { issueService } = await import("./issues.js");
+        const returned = await issueService(tx as unknown as Db).update(issue.id, {
+          status: "todo",
+          actorUserId: input.actor.userId ?? null,
+        }, tx, publications);
+        if (returned) {
+          await logActivity(tx as unknown as Db, {
+            companyId: input.companyId, actorType: "user", actorId: input.actor.userId ?? "board",
+            action: "issue.updated", entityType: "issue", entityId: issue.id,
+            details: { identifier: issue.identifier, status: returned.status, source: "tool_action_review",
+              interactionId: interaction.id, actionRequestId: current.id, _previous: { status: issue.status } },
+          }, publications);
+        }
+      }
       await tx
         .insert(toolActionDeliveries)
         .values({

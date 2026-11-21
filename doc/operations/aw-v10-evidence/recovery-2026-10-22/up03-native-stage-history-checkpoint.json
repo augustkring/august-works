@@ -1,0 +1,87 @@
+{
+  "scope": "Preserve actual staged attachment source captures at native admission and original run history on repeat preparation",
+  "sources": {
+    "server/src/services/native-runtime/native-session-executor.ts": "c2438dc1711158a0e23de531d0e88564588829c61b86d776a184424ac58df150",
+    "server/src/services/native-runtime/native-session-executor.test.ts": "413fdbc13fa79a9f98690d861aba8d23f474d45780cdc00c1671e52d22d0c0fc",
+    "server/src/services/native-runtime/native-runner-file-handoff.ts": "0f46a6a466491366ac146baae65bdc5d7ad91204e216bc5236b04c05440b90b8",
+    "server/src/services/native-runtime/prepare-native-run.ts": "54880986141105bb988a81f12661d05788a2aef433654f206fa5711a3c327775",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "eabf048dd1a12640dc1febc57fb33cd5bd90e8f58053680fc9887abfe22228ce"
+  },
+  "stageRegression": {
+    "initial": {
+      "failed": 2,
+      "filtered": 467,
+      "seconds": 50.87,
+      "exit": 1,
+      "log": "up03-native-stage-admission-baseline.log",
+      "limit": "Positive genuinely finds missing profile write; new negative fixture initially returned an invalid empty native terminal object, so its wrong-error failure is not credited as admission evidence."
+    },
+    "correctedBaseline": {
+      "failed": 2,
+      "filtered": 467,
+      "seconds": 54.23,
+      "exit": 1,
+      "log": "up03-native-stage-admission-corrected-baseline.log",
+      "finding": "Valid completed native result replaces invalid fixture. Original owner still lacks capture before provider marker and wrongly admits/completes when capture persistence should fail. Exact source and pins retained."
+    },
+    "initialImplementation": {
+      "failed": 2,
+      "passed": 2,
+      "filtered": 465,
+      "seconds": 39.03,
+      "exit": 1,
+      "log": "up03-native-stage-admission-focused.log",
+      "finding": "Root new internal executor referenced outer-only runId; existing guard tests pass but both new paths fail. Root binds the actual execution runId locally; failed source retained."
+    }
+  },
+  "implementation": "Outer original stager passes its exact returned private captures into the internal executor, without a public argument or copying prose/paths. Original onSessionAdmission captures committed PROCESS_START_REQUESTED seq and reuses current analytical check. For nonempty attachment sources, original coordinator renewal fence runs on physical transaction, then exact current native running run is locked and current profile reread. Append partial entries {eventSeq,attempt,responsibleUserId,sourceCaptures}, max64 and2MiB, retaining prior entries/all other keys and literal NULL snapshots. Renew helper preserves original coordinator-to-run ordering. Persistence failure rejects admission and original cleanup runs. Existing analytical recheck runs again after capture commit. Captured Human is a fact at capture time, not an admission capability or full dispatch receipt. Empty attachment families create no new entry. No protocol/producer/full-receipt activation.",
+  "repeatPreparation": {
+    "baseline": {
+      "failed": 3,
+      "filtered": 304,
+      "seconds": 99.89,
+      "exit": 1,
+      "log": "up03-native-prepare-history-baseline.log",
+      "finding": "Real current DB profile has newer canonical IDs and partial/unknown history than supplied earlier prepared row. All three original reserved-admission modes lose history and overwrite IDs."
+    },
+    "implementation": "Original prepare owner derives turn/item/environment IDs from locked current profile, merges that complete current profile before canonical fields, and returns actual retained/new IDs from transaction. Deletes redundant reserved-marker-only copying; current DB marker still wins over supplied stale/malformed profile. No input history reconstructed or protocol upgrade.",
+    "actualPostgresFinal": {
+      "passed": 3,
+      "filtered": 304,
+      "seconds": 69.24,
+      "exit": 0,
+      "log": "up03-native-prepare-history-fresh-final.log",
+      "assertions": "Required/historical/invalid native admission marker semantics retained. Newer unknown NULL input/bootstrap/checkpoint and partial unavailable attachment capture preserved exactly, latest canonical IDs returned, actual protocol remains0. This is preservation coverage, not a valid full-receipt fixture."
+    },
+    "discardedInvocation": {
+      "exit": 143,
+      "log": "up03-native-prepare-history-aborted-reused-database.log",
+      "reason": "Root attempted fixed fixture-account cleanup using postgres import from unsupported root dependency location. Module import failed; launched Vitest was terminated before behavior qualification and dedicated DB replaced with a fresh migrated PG. No behavioral credit."
+    }
+  },
+  "verification": {
+    "fullOriginalExecutorAndStagerSuites": {
+      "passed": 488,
+      "files": 2,
+      "seconds": 153.34,
+      "exit": 0,
+      "log": "up03-native-stage-admission-suite.log",
+      "boundary": "469 executor unit/mock-DB cases plus19 original stager filesystem/PG cases. New executor tests invoke original admission callback with mock DB/backend, assert exact append/history/no paths and persistence-failure stop/cleanup. They do not prove physical executor commit-to-transport atomicity."
+    },
+    "finalServerCompiler": {
+      "exit": 0,
+      "log": "up03-native-stage-history-server-types.log"
+    },
+    "finalPinsMatch": true,
+    "processesClosed": true,
+    "dedicatedPostgresCleaned": true
+  },
+  "review": "Root traced original event allocator, vendor onSessionAdmission before attach/open/start transport, coordinator lease/claim and profile owners. Original checkpoint/workspace/status writers already reread locked profile; repeat prepare whole-profile reset was corrected. Bounded gpt-6-luna unit-test/design/read-only review assistance; Root corrected fixtures/runId and verified actual logs/exits/pins. No concrete final defect reported by bounded review.",
+  "limits": [
+    "Partial capture-time attachment evidence only. No nativeInputSourceReceipt writer or production protocol1 constructor, no complete/Ready/source-free claim.",
+    "Actual PG stager coverage and actual PG preparation preservation are distinct from mocked executor before-provider-marker wiring. Physical nonempty-stage executor commit/transport fault injection, cross-process races and real host/provider remain open.",
+    "Current post-capture Human/permission checks remain original owner behavior. This partial Human fact never substitutes for current authority or complete actual dispatch identity fencing.",
+    "Full bootstrap/dynamic tools/staged/history receipt, source-preserving copy effects, canonical SQL and original private Memory/temporal regressions remain open.",
+    "Latest bounded compiler/tests are distinct from earlier ba7cd42ca full workspace typecheck. Full latest workspace tests/build and broad V10/PR/release gates remain open."
+  ]
+}

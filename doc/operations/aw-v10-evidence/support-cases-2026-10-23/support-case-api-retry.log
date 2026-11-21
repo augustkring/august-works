@@ -1,0 +1,80 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts (9 tests | 3 failed) 14267ms
+     × blocks new intake without operator policy while preserving receipts and separately gated approval history 348ms
+     × hides pending-deletion principals and expired content from ordinary reads 203ms
+     × erases expired local content but preserves held and uncertain delivery without false completion 202ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > blocks new intake without operator policy while preserving receipts and separately gated approval history
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/v10-support-cases.integration.test.ts:153:28
+    151|     const history = await request(noPolicy).get(`/api/companies/${comp…
+    152|       .query({ expectedUserId: users.owner });
+    153|     expect(history.status).toBe(200);
+       |                            ^
+    154|   });
+    155|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > hides pending-deletion principals and expired content from ordinary reads
+Error: Failed query: update "support_cases" set "expires_at" = $1 where "support_cases"."id" = $2
+params: 2026-10-22T17:26:46.294Z,9f249a2a-a86e-4979-9481-4777f5711d33
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/v10-support-cases.integration.test.ts:166:5
+    164|     expect(expired.status).toBe(201);
+    165|     const expiredId = expired.body.id;
+    166|     await db.update(supportCases).set({ expiresAt: new Date(Date.now()…
+       |     ^
+    167|     expect((await list(companyA, "owner")).body.entries.map((row: { id…
+    168|     expect((await detail(companyA, "owner", expiredId)).status).toBe(4…
+
+Caused by: PostgresError: Support retention policy binding is invalid
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_support_case_content_guard() line 104 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "support_cases" set "expires_at" = $1 where "support_cases"."id" = $2', parameters: [ '2026-10-22T17:26:46.294Z', '9f249a2a-a86e-4979-9481-4777f5711d33' ], args: [ '2026-10-22T17:26:46.294Z', '9f249a2a-a86e-4979-9481-4777f5711d33' ], types: [ 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > erases expired local content but preserves held and uncertain delivery without false completion
+Error: Failed query: update "support_cases" set "expires_at" = $1 where "support_cases"."id" = $2
+params: 2026-10-22T17:26:46.573Z,31b78fc4-e81e-46fc-8112-5f52b5efceca
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/v10-support-cases.integration.test.ts:192:52
+    190|     // provider request is sent and no delivery qualification follows.
+    191|     await db.update(supportCaseEvents).set({ deliveryState: "unknown" …
+    192|     for (const response of [clean, held, unknown]) await db.update(sup…
+       |                                                    ^
+    193|       .where(eq(supportCases.id, response.body.id));
+    194|     const result = await eraseExpiredSupportCases(db);
+
+Caused by: PostgresError: Support retention policy binding is invalid
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_support_case_content_guard() line 104 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "support_cases" set "expires_at" = $1 where "support_cases"."id" = $2', parameters: [ '2026-10-22T17:26:46.573Z', '31b78fc4-e81e-46fc-8112-5f52b5efceca' ], args: [ '2026-10-22T17:26:46.573Z', '31b78fc4-e81e-46fc-8112-5f52b5efceca' ], types: [ 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 6 passed (9)
+   Start at  17:25:38
+   Duration  67.95s (transform 35.59s, setup 246ms, import 52.94s, tests 14.27s, environment 0ms)
+

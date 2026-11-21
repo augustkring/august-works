@@ -1,0 +1,5 @@
+# R78 recovery delta
+
+Recovery only from pushed source `1c7a1cb3a61915e2c80cc47c6167ad3fedbe98f9`. All tracked source was clean at capture. This preserves the exact remaining private Native, scheduler, Host stop-witness, Smoke Lab and runtime-notice candidates as bytes, together with scoped receipts. Source matching the pushed baseline is referenced by commit and SHA; changed/new source is inside the archive. No active test logs, raw databases or credentials are included.
+
+R172 full server TypeScript passed; R174 reached successful model completion and canonical Stop but failed before erasure due a test-fixture start/stop provenance mismatch. R16 has predicate controls, not actual C7 acceptance. Scheduler134, runtime-notice browser and Smoke Lab browser qualification remain open. No full Native9, Project2, final metadata, aggregate or final CI acceptance is claimed. Absolute paths in original manifests are provenance; archive member paths and this manifest provide portable recovery inputs. Do not apply unqualified candidates as accepted source.

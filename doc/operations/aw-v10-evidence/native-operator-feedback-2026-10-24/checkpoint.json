@@ -1,0 +1,66 @@
+{
+  "parentCommit": "53bc70540bd80d7fdd24f825259ce0367e3bca44",
+  "requirements": [
+    "CE-03",
+    "CE-04",
+    "V10-166"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "completeNativeFeedbackImageRetentionRestore": {
+      "exit": 0,
+      "suites": 4,
+      "passed": 73
+    },
+    "focusedNativePackagePublisher": {
+      "exit": 0,
+      "passed": 3,
+      "unselected": 111
+    },
+    "stagedBroadNativeRun": {
+      "exit": 1,
+      "passed": 144,
+      "failed": 41,
+      "suites": 4
+    },
+    "previousPackageOwnerRepresentativeControl": {
+      "exit": 1,
+      "failed": 3,
+      "unselected": 110
+    },
+    "preFixRestoreFixture": {
+      "exit": 1,
+      "failed": 1
+    },
+    "serverCompiler": {
+      "exit": 0
+    }
+  },
+  "baselineOwners": [
+    {
+      "commit": "53bc70540bd80d7fdd24f825259ce0367e3bca44",
+      "path": "server/src/services/agent-packages/package-service.ts",
+      "sha256": "3272034590f6cc4a9ea82b119ee047176587e40c95c5bb531d754d574c9b55d5",
+      "check": "previousPackageOwnerRepresentativeControl",
+      "fixture": "Current structural session fixture before addition of the final independent positive-revocation case; the three selected cases are unchanged."
+    }
+  ],
+  "observations": [
+    "Feedback current verified native passkey proof is checked inside original transactions and before return. New triage, retention-change and erasure-request admission additionally require recent proof. Internal list/detail and private audits now share the native transaction.",
+    "Pure internal image/review/receipt reads use current proof without requiring a new recent event. A structurally old passkey session can review a case but cannot change a legal hold or create an erasure request. Native version, confirmation/hash, owner, object, hold and receipt protections remain.",
+    "The first broad run fails39 package cases in actual-accountable-run Context admission (37) and derived Memory source closure (2), plus one invalid new NEEDS_INFO request and one older account-erasure fixture without actual native session admission. The latter two fixtures are corrected without changing production validation or session requirements.",
+    "The representative control temporarily restores the exact previous package service, runs one Context-dependent installation and both derived Memory cases, reproduces all3 denials, and restores the final guarded service via EXIT trap. This qualifies the two failure groups, not every unselected package case. Full package/native source acceptance remains open.",
+    "Prior-schema restore fixture fails before authentication on the modern User model inserting an absent locale column. The corrected historical fixture passes original pending/delete/complete SQL constraints without disabling triggers, then actual migration backfills two immutable minimal marker identities. It qualifies migration compatibility, not historical MFA or application C3 admission.",
+    "Package preflight and original publication/revocation transactions require actual native proof; recency repeats before commit. Focused checks cover publication without SID, actual credential-backed password proof refusal, successful current-passkey revocation, deleted-session refusal and immutable release/component hashes. BeforeEach publication uses current proof.",
+    "All native domain proof rows are explicitly structural. The real maintained WebAuthn/cookie browser checkpoint remains separate. No authentication verifier, private-source guard or run/accountability guard is weakened."
+  ],
+  "compatibility": [
+    "No migration or dependency change. Shared retention callbacks now distinguish current private reads from recent-proof mutations using an internal policy argument. Existing approved exact-object erasure workers retain their original authority."
+  ],
+  "limits": [
+    "The complete package suite remains unaccepted with original Context/Memory failures. No synthetic accountable run, unchecked manifest, source-free readiness or fake input receipt is introduced.",
+    "Private read source-content deletion/visibility lifetime qualification remains part of the broader source-owner work; the new private-read transactions qualify native operator proof and preserve original data policy.",
+    "Remaining internal HTTP admission, runtime/catalog/fleet/cost owners, asynchronous host/provider dispatch and completion, drain process state, bootstrap/break-glass and enterprise recovery remain open.",
+    "Original payload privacy/typed-origin/portability regressions, complete V10 and latest full workspace checks remain open. No PR-ready, release or production qualification claim."
+  ]
+}

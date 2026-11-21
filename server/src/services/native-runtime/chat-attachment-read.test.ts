@@ -33,6 +33,9 @@ import { createLocalDiskStorageProvider } from "../../storage/local-disk-provide
 import { createStorageService } from "../../storage/service.js";
 import type { StorageService } from "../../storage/types.js";
 import { issueService } from "../issues.js";
+import { seedCurrentHumanMembership } from "../../__tests__/helpers/current-human-membership-fixture.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 
@@ -117,11 +120,13 @@ describe("native same-conversation historical attachment reading", () => {
       status: "in_progress",
       workMode: "standard",
       assigneeAgentId: agentId,
+      responsibleUserId: userId,
     });
     await db.insert(heartbeatRuns).values({
       id: runId,
       companyId,
       agentId,
+      responsibleUserId: userId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: issueId,
@@ -202,13 +207,9 @@ describe("native same-conversation historical attachment reading", () => {
       paperclipUserId: userId,
       status: "linked",
     });
-    await db.insert(companyMemberships).values({
-      companyId,
-      principalType: "user",
-      principalId: userId,
-      status: "active",
-      membershipRole: "member",
-    });
+    await seedCurrentHumanMembership(db, companyId, userId, "operator");
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
 
     const sourceComment = await issueService(db).addComment(
       issueId,
@@ -345,11 +346,20 @@ describe("native same-conversation historical attachment reading", () => {
     });
     expect(result).not.toHaveProperty("objectKey");
     expect(result.workspaceRelativePath).toMatch(/^\.paperclip-inbound\//);
+    const [owner] = await db.select().from(issueAttachments).where(eq(issueAttachments.id, sourceAttachmentId));
+    expect(reader.nativeReadResultCapture(result)).toMatchObject({
+      sourceSet: null,
+      observedSourceInputs: [{ kind: "attachment", issueId, attachmentId: sourceAttachmentId, commentId: sourceCommentId,
+        assetId: owner!.assetId, sha256: createHash("sha256").update(sourceBody).digest("hex"),
+        byteSize: sourceBody.length, disposition: "delivered" }],
+    });
+    expect(reader.nativeReadResultCapture({ ...result })).toBeNull();
     const stagedPath = path.join(workspaceRoot, result.workspaceRelativePath);
     expect(await readFile(stagedPath)).toEqual(sourceBody);
     expect(await db.select().from(issueAttachments)).toEqual(before);
     expect(await db.select().from(chatPublications)).toEqual([]);
     await reader.close();
+    expect(reader.nativeReadResultCapture(result)).toBeNull();
     expect((await stat(stagedPath)).size).toBe(0);
     expect(() => reader.read(selection())).toThrow("scope_closed");
   });
@@ -435,6 +445,36 @@ describe("native same-conversation historical attachment reading", () => {
         .update(companyMemberships)
         .set({ status: "active" })
         .where(eq(companyMemberships.principalId, userId));
+    }
+  });
+
+  it("withholds staged bytes when the bound Native session is withdrawn during storage", async () => {
+    let release!: () => void;
+    let acquired!: () => void;
+    const ready = new Promise<void>((resolve) => { acquired = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const getObject = vi.fn(async (...args: Parameters<StorageService["getObject"]>) => {
+      acquired();
+      await blocked;
+      return storage.getObject(...args);
+    });
+    const stage = stagingControl.beforeStage;
+    const stageSpy = vi.fn(async () => { await stage?.(); });
+    stagingControl.beforeStage = stageSpy;
+    const reader = scope({ storage: { ...storage, getObject } });
+    const pending = reader.read(selection());
+    try {
+      await ready;
+      await db.update(heartbeatRuns).set({ status: "failed" }).where(eq(heartbeatRuns.id, runId));
+      release();
+      await expect(pending).rejects.toThrow("read_not_authorized");
+      expect(getObject).toHaveBeenCalledTimes(1);
+      expect(stageSpy).not.toHaveBeenCalled();
+    } finally {
+      release();
+      await reader.close();
+      stagingControl.beforeStage = stage;
+      await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, runId));
     }
   });
 

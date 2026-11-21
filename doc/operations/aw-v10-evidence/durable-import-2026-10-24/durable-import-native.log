@@ -1,0 +1,124 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[19:53:34] [33mWARN[39m: [36mfailed to delete import transfer spool after a successful apply[39m [90m{"transferId":"32778702-6dcb-4c0c-9829-ab9e5a7073a0"}[39m
+    err: {
+      "type": "Error",
+      "message": "EACCES: spool dir is busy",
+      "stack":
+          Error: EACCES: spool dir is busy
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:771:33
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:53:34] [33mWARN[39m: [36mfailed to attach the imported company to its transfer run[39m [90m{"transferId":"c9472f04-bd7b-4c29-bc76-6d58f917d218"}[39m
+    err: {
+      "type": "Error",
+      "message": "registry write timed out",
+      "stack":
+          Error: registry write timed out
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:822:30
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:53:34] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"8be52e7d-4267-47e6-b3ad-95ef06d66cae"}[39m
+ ❯ |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts (27 tests | 4 failed) 14498ms
+     × applies through the async import job machinery when requested 430ms
+     × releases the claim when an async apply is refused by a running import 442ms
+     × marks an invoked import with a lost response unknown and refuses a second import 15ms
+     × keeps the apply claim fenced when persisting an unknown outcome also fails 18ms
+ ❯ |@paperclipai/server| src/__tests__/company-import-jobs.integration.test.ts (3 tests | 1 failed) 3732ms
+     × allows one start winner and preserves interrupted work as unknown without a new admission 19ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-jobs.integration.test.ts > native company import job ledger > allows one start winner and preserves interrupted work as unknown without a new admission
+AssertionError: expected [ …(2) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/__tests__/company-import-jobs.integration.test.ts:83:85
+     81|     await expect(freshService.admit(admission(authority, { idempotency…
+     82|       .rejects.toMatchObject({ status: 409, details: { code: "import_o…
+     83|     expect(await db.select({ id: customerOperations.id }).from(custome…
+       |                                                                                     ^
+     84|   }, 90_000);
+     85|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts > company import transfer routes > applies through the async import job machinery when requested
+AssertionError: expected undefined to be 'succeeded' // Object.is equality
+
+- Expected:
+"succeeded"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/company-import-transfer-routes.test.ts:530:25
+    528|       await new Promise((resolve) => setTimeout(resolve, 10));
+    529|     }
+    530|     expect(job?.status).toBe("succeeded");
+       |                         ^
+    531|     expect(job?.result?.companyId).toBe(companyId);
+    532|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts > company import transfer routes > releases the claim when an async apply is refused by a running import
+AssertionError: expected undefined to be 'succeeded' // Object.is equality
+
+- Expected:
+"succeeded"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/company-import-transfer-routes.test.ts:591:25
+    589|       await new Promise((resolve) => setTimeout(resolve, 10));
+    590|     }
+    591|     expect(job?.status).toBe("succeeded");
+       |                         ^
+    592|     expect((await companyTransferRunService.getRun(db, firstId))!.stat…
+    593|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts > company import transfer routes > marks an invoked import with a lost response unknown and refuses a second import
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ src/__tests__/company-import-transfer-routes.test.ts:1042:56
+    1040|     expect(attempted.status).toBe(409);
+    1041|     expect(attempted.body.code).toBe("import_outcome_unknown");
+    1042|     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalle…
+       |                                                        ^
+    1043|     expect((await companyTransferRunService.getRun(db, transferId))!.s…
+    1044|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts > company import transfer routes > keeps the apply claim fenced when persisting an unknown outcome also fails
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ src/__tests__/company-import-transfer-routes.test.ts:1066:58
+    1064|       expect(attempted.status).toBe(409);
+    1065|       expect(attempted.body.code).toBe("import_outcome_unknown");
+    1066|       expect(mockCompanyPortabilityService.importBundle).toHaveBeenCal…
+       |                                                          ^
+    1067|       expect((await companyTransferRunService.getRun(db, transferId))!…
+    1068|       expect(await companyTransferRunService.claimApply(db, transferId…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  5 failed | 25 passed (30)
+   Start at  19:53:15
+   Duration  24.54s (transform 9.77s, setup 130ms, import 5.94s, tests 18.23s, environment 0ms)
+

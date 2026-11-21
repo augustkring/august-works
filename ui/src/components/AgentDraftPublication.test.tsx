@@ -25,9 +25,10 @@ const review: AgentDraftPublicationReview = { companyId: draft.companyId, draftI
   activate: true, canPublish: true, blockers: [], requiredProcedures: [{ skillId: "10000000-0000-4000-8000-000000000009", versionId: "10000000-0000-4000-8000-000000000010", name: "Required security procedure" }],
   requiredPlaybooks: [{ playbookId: "10000000-0000-4000-8000-000000000011", revisionId: "10000000-0000-4000-8000-000000000012",
     name: "Approved welcome procedure", bodyHash: "f".repeat(64) }],
-  maximumPerModelCallMinor: 3, currency: "USD", provider: "anthropic", model: "fixture-draft-model", runtimeBindingId: null, reviewHash: "c".repeat(64), modelCalled: false, authorityGranted: false, executionStarted: false };
+  maximumPerModelCallMinor: 3, currency: "USD", provider: "anthropic", model: "fixture-draft-model", modelMigration: { required: false, action: "none", stage: "single_agent" }, runtimeBindingId: null, reviewHash: "c".repeat(64), modelCalled: false, authorityGranted: false, executionStarted: false };
 const result: AgentDraftPublicationReceipt = { companyId: draft.companyId, draftId: draft.id, requestId: "10000000-0000-4000-8000-000000000006", agentId: draft.agentId!,
-  revisionId: "10000000-0000-4000-8000-000000000006", publishedContent: draft.content!, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00.000Z", activatedAtPublication: true, authorityGranted: false, executionStarted: false };
+  revisionId: "10000000-0000-4000-8000-000000000006", publishedContent: draft.content!, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00.000Z", activatedAtPublication: true,
+  modelMigration: { required: false, action: "none", stage: "single_agent" }, authorityGranted: false, executionStarted: false };
 let root: Root, container: HTMLDivElement, client: QueryClient;
 afterEach(async () => { if (root) await act(async () => root.unmount()); container?.remove(); client?.clear(); sessionStorage.clear();
   context.ready = true; context.principal = "author"; context.receiptOnly = false; vi.restoreAllMocks(); await i18n.changeLanguage("en"); });

@@ -1,0 +1,51 @@
+{
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/services/native-runtime/native-execution-input.test.ts",
+    "src/services/native-runtime/native-attachment-remote-stage.test.ts",
+    "src/services/native-runtime/remote-deliverable-file.test.ts"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 163.93874015301117,
+  "sourceManifest": "native-input-and-readback-modules-full-r234-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 15.882440733999829,
+  "stopReason": null,
+  "nodeHeapMiB": 768,
+  "ownedDescendantRssLimitBytes": 4294967296,
+  "observedPeakOwnedDescendantRssBytes": 1445965824,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 330341,
+      "parentPid": 329063,
+      "executable": "node",
+      "rssBytes": 758681600,
+      "nodeOptions": "--max-old-space-size=768"
+    },
+    {
+      "pid": 330425,
+      "parentPid": 330341,
+      "executable": "node",
+      "rssBytes": 687284224,
+      "nodeOptions": "--max-old-space-size=768"
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 7,
+  "observedPostgresRelatedPids": [],
+  "uniqueTempRoot": "/var/tmp/mpg-k1tk7cir",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 72,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "controlled component modules, no PostgreSQL process observed; no external provider/SDK/host proof"
+}

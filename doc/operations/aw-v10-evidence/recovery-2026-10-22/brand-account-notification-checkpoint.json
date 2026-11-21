@@ -1,0 +1,29 @@
+{
+  "scope": "Canonical product identity for new encrypted account/invitation/notification email payloads",
+  "sources": {
+    "server/src/services/saas/auth-delivery.ts": "61b211cef69641bff010331a9dda57049787cca3b36c976328378fa75ca6d5fa",
+    "server/src/services/saas/invitations.ts": "cc1b5baf210f98380a5fe1952ed1641a5ed8fbe63c5558b1a5d901f82198b2e2",
+    "server/src/services/notifications/notifications.ts": "2a9d97814094ceda547bd1ddbd4d7cba1d73209ebd876a29cf9052eccf75bdd0"
+  },
+  "implementation": "Reuse PRODUCT_IDENTITY for auth/invitation subjects and account notification digest subject/message. Existing native auth URL validation, encrypted outbox, recipient binding, expiry, dedupe and historical queued payloads remain unchanged.",
+  "verification": {
+    "existingActualAccountInvitationAndNotificationSuites": {
+      "files": 3,
+      "passed": 30,
+      "seconds": 176.38,
+      "exit": 0,
+      "log": "brand-account-notification-tests.log"
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "up03-native-callers-and-mail-server-types.log"
+    },
+    "pinsMatch": true,
+    "processesClosed": true
+  },
+  "limits": [
+    "Product wording only. Full shared versioned EN/DA auth mail/landing flow in CE03 remains open.",
+    "Actual sender, delivery, provider/region and hosted configuration are not qualified.",
+    "Complete V10 and full latest workspace checks remain open."
+  ]
+}

@@ -1,0 +1,1 @@
+src/services/heartbeat.ts(24141,18): error TS2304: Cannot find name 'selected'.

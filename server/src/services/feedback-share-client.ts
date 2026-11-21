@@ -2,8 +2,6 @@ import { gzipSync } from "node:zlib";
 import type { FeedbackTraceBundle } from "@paperclipai/shared";
 import type { Config } from "../config.js";
 
-const DEFAULT_FEEDBACK_EXPORT_BACKEND_URL = "https://telemetry.paperclip.ing";
-
 function buildFeedbackShareObjectKey(bundle: FeedbackTraceBundle, exportedAt: Date) {
   const year = String(exportedAt.getUTCFullYear());
   const month = String(exportedAt.getUTCMonth() + 1).padStart(2, "0");
@@ -18,12 +16,23 @@ export interface FeedbackTraceShareClient {
 export function createFeedbackTraceShareClientFromConfig(
   config: Pick<Config, "feedbackExportBackendUrl" | "feedbackExportBackendToken">,
 ): FeedbackTraceShareClient {
-  const baseUrl = config.feedbackExportBackendUrl?.trim() || DEFAULT_FEEDBACK_EXPORT_BACKEND_URL;
+  const baseUrl = config.feedbackExportBackendUrl?.trim();
   const token = config.feedbackExportBackendToken?.trim();
-  const endpoint = new URL("/feedback-traces", baseUrl).toString();
+  let endpoint: string | null = null;
+  if (baseUrl) {
+    try {
+      const destination = new URL(baseUrl);
+      if (!["http:", "https:"].includes(destination.protocol) || destination.username ||
+        destination.password || destination.search || destination.hash) throw new Error();
+      endpoint = new URL("/feedback-traces", destination).toString();
+    } catch {
+      throw new Error("Invalid feedback export destination");
+    }
+  }
 
   return {
     async uploadTraceBundle(bundle) {
+      if (!endpoint) throw new Error("Feedback export is not configured");
       const exportedAt = new Date();
       const objectKey = buildFeedbackShareObjectKey(bundle, exportedAt);
       const requestBody = JSON.stringify({
@@ -33,6 +42,7 @@ export function createFeedbackTraceShareClientFromConfig(
       });
       const response = await fetch(endpoint, {
         method: "POST",
+        redirect: "error",
         headers: {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
@@ -44,8 +54,8 @@ export function createFeedbackTraceShareClientFromConfig(
       });
 
       if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        throw new Error(detail.trim() || `Feedback trace upload failed with HTTP ${response.status}`);
+        await response.body?.cancel().catch(() => {});
+        throw new Error(`Feedback trace upload failed with HTTP ${response.status}`);
       }
 
       const payload = await response.json().catch(() => null) as { objectKey?: unknown } | null;

@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import {
+  authAccounts,
+  authSessions,
+  authUsers,
   createDb,
   runtimeCapacityProfiles,
   runtimeHostProviderOperations,
@@ -17,12 +21,15 @@ import {
   type UpCloudServer,
 } from "../services/runtime/upcloud-provider.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
+import type { AuthorizationActor } from "../services/authorization.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
   "V6 bounded provider ownership and fencing",
   () => {
     let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,
       db: ReturnType<typeof createDb>;
+    let operatorActor: AuthorizationActor, passwordSessionId: string;
     const provider: RuntimeProvider = {
       create: vi.fn(),
       get: vi.fn(),
@@ -71,6 +78,20 @@ const support = await getEmbeddedPostgresTestSupport();
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v6-fleet-");
       db = createDb(database.connectionString);
+      const now = new Date();
+      await db.insert(authUsers).values([
+        { id: "owner", name: "Owner", email: "owner@fleet.example.test", emailVerified: true, createdAt: now, updatedAt: now },
+        { id: "operator", name: "Operator", email: "operator@fleet.example.test", emailVerified: true, createdAt: now, updatedAt: now },
+      ]);
+      await db.insert(authAccounts).values({ id: randomUUID(), issuer: "local:credential", accountId: "operator",
+        providerId: "credential", userId: "operator", password: "structural-fixture-not-a-password-hash", createdAt: now, updatedAt: now });
+      operatorActor = { type: "board", source: "session", userId: "operator",
+        sessionId: await seedNativePasskeySession(db, "operator") };
+      const [operator] = await db.select({ version: authUsers.authenticatorVersion }).from(authUsers).where(eq(authUsers.id, "operator"));
+      passwordSessionId = randomUUID();
+      await db.insert(authSessions).values({ id: passwordSessionId, userId: "operator", token: randomUUID(), createdAt: now,
+        updatedAt: now, expiresAt: new Date(now.getTime() + 3600000), authenticationMethod: "password",
+        authenticatedAt: now, authenticatorVersion: operator!.version });
       await db.insert(runtimeCapacityProfiles).values({
         key: "fixture-standard",
         cpuMillis: 1000,
@@ -99,9 +120,19 @@ const support = await getEmbeddedPostgresTestSupport();
         "https://app.example.test",
         provider,
       );
+      const noSession = { ...operatorActor, sessionId: undefined };
+      const passwordOnly = { ...operatorActor, sessionId: passwordSessionId };
+      const boardKey = { ...operatorActor, source: "board_key" as const };
+      const notOperator = { ...operatorActor, userId: "owner" };
+      const schedulerNameOnly = { ...operatorActor, userId: "runtime-scheduler" };
+      for (const rejected of [noSession, passwordOnly, boardKey, notOperator, schedulerNameOnly]) {
+        await expect(fleet.requestHost("fixture-standard", rejected)).rejects.toMatchObject({ status: 403 });
+      }
+      expect(await db.select().from(runtimeHosts)).toEqual([]);
+      expect(await db.select().from(runtimeHostProviderOperations)).toEqual([]);
       const outcomes = await Promise.allSettled([
-        fleet.requestHost("fixture-standard", "operator"),
-        fleet.requestHost("fixture-standard", "operator"),
+        fleet.requestHost("fixture-standard", operatorActor),
+        fleet.requestHost("fixture-standard", operatorActor),
       ]);
       const successes = outcomes.filter(
         (
@@ -137,7 +168,17 @@ const support = await getEmbeddedPostgresTestSupport();
         "https://app.example.test",
         provider,
       );
-      await fleet.requestFence(hostId, "operator");
+      const noSession = { ...operatorActor, sessionId: undefined };
+      const passwordOnly = { ...operatorActor, sessionId: passwordSessionId };
+      await expect(fleet.requestFence(hostId, noSession)).rejects.toMatchObject({ status: 403 });
+      await expect(fleet.requestFence(hostId, passwordOnly)).rejects.toMatchObject({ status: 403 });
+      await expect(fleet.drain(hostId, noSession)).rejects.toMatchObject({ status: 403 });
+      let [beforeDrain] = await db.select().from(runtimeHosts).where(eq(runtimeHosts.id, hostId));
+      expect(beforeDrain!.status).toBe("BOOTSTRAPPING");
+      await fleet.drain(hostId, operatorActor);
+      [beforeDrain] = await db.select().from(runtimeHosts).where(eq(runtimeHosts.id, hostId));
+      expect(beforeDrain!.status).toBe("DRAINING");
+      await fleet.requestFence(hostId, operatorActor);
       let [host] = await db
         .select()
         .from(runtimeHosts)
@@ -176,7 +217,12 @@ const support = await getEmbeddedPostgresTestSupport();
           provider,
         ),
         now = new Date(Date.now() + 120000);
-      await fleet.requestRetire(hostId, "operator", now);
+      const noSession = { ...operatorActor, sessionId: undefined };
+      const passwordOnly = { ...operatorActor, sessionId: passwordSessionId };
+      await expect(fleet.requestRetire(hostId, noSession, now)).rejects.toMatchObject({ status: 403 });
+      await expect(fleet.requestRetire(hostId, passwordOnly, now)).rejects.toMatchObject({ status: 403 });
+      expect(await db.select().from(runtimeHostProviderOperations).where(eq(runtimeHostProviderOperations.operationType, "delete"))).toEqual([]);
+      await fleet.requestRetire(hostId, operatorActor, now);
       const disks = [
         "66666666-6666-4666-8666-666666666666",
         "77777777-7777-4777-8777-777777777777",

@@ -1,0 +1,49 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[23:04:21] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"a3732b87-731d-4dfd-b2fb-c18982e5dbd2","issueId":"0fd89019-03b4-4978-83b4-526a3bd30b1a","attachmentName":"request.txt"}[39m
+    error: "injected Telegram attachment outage"
+[23:04:22] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"767454ae-36f1-4ddd-a7c0-2735e038fdee","issueId":"26847282-00fe-4f35-8130-549cfd73d28f","attachmentName":"request.txt"}[39m
+    error: "injected Telegram attachment outage"
+ ❯ |@paperclipai/server| src/__tests__/chat-channels.integration.test.ts (1049 tests | 1 failed | 1047 skipped) 36559ms
+     × surfaces an attachment-only Telegram ingestion failure without waking the agent (bound snapshot: true) 1344ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/chat-channels.integration.test.ts > chat channel control-plane integration > surfaces an attachment-only Telegram ingestion failure without waking the agent (bound snapshot: true)
+Error: Failed query: update "issue_comments" set "body" = $1, "updated_at" = $2 where ("issue_comments"."id" = $3 and "issue_comments"."company_id" = $4)
+params: Paperclip could not safely import the attached Telegram file. Please resend it as a supported file under 10 MB or include text describing the request.,2026-10-23T23:04:22.428Z,d521c7b5-18c7-4a2a-916b-1b14a7e00a9d,e7deebc7-ccea-40ad-a088-bbbcf14e8558
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/chat-channels.ts:11280:7
+    11278|       // exact provider redelivery, while no agent wakeup is enqueued …
+    11279|       // empty turn that contains no usable bytes.
+    11280|       await tx
+       |       ^
+    11281|         .update(issueComments)
+    11282|         .set({ body: visibleFailure, updatedAt: new Date() })
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ settleTelegramAttachmentOnlyFailure src/services/chat-channels.ts:11275:20
+ ❯ processMessage src/services/chat-channels.ts:16551:9
+ ❯ handleSdkMessage src/services/chat-channels.ts:17638:7
+ ❯ deliverMessage src/__tests__/chat-channels.integration.test.ts:3558:5
+ ❯ src/__tests__/chat-channels.integration.test.ts:63579:7
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issue_comments" set "body" = $1, "updated_at" = $2 where ("issue_comments"."id" = $3 and "issue_comments"."company_id" = $4)', parameters: [ 'Paperclip could not safely import the attached Telegram file. Please resend it as a supported file under 10 MB or include text describing the request.', '2026-10-23T23:04:22.428Z', 'd521c7b5-18c7-4a2a-916b-1b14a7e00a9d', 'e7deebc7-ccea-40ad-a088-bbbcf14e8558' ], args: [ 'Paperclip could not safely import the attached Telegram file. Please resend it as a supported file under 10 MB or include text describing the request.', '2026-10-23T23:04:22.428Z', 'd521c7b5-18c7-4a2a-916b-1b14a7e00a9d', 'e7deebc7-ccea-40ad-a088-bbbcf14e8558' ], types: [ 25, 1184, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 1047 skipped (1049)
+   Start at  23:02:04
+   Duration  139.05s (transform 49.50s, setup 161ms, import 101.54s, tests 36.56s, environment 0ms)
+

@@ -1,0 +1,3 @@
+Three independent pinned full-file runs qualify fixture repairs, not a final unchanged-head aggregate. Public response executes6 cases with a current session and exact retained Task-to-Project privacy edge; Sentry executes29 cases and skips5 existing optional-SDK cases because that SDK is absent; process owner executes4 cases and models the real launcher’s dedicated process session with detached:true. Production authorization and process-generation/session guards remain active.
+
+Each directory contains exact source pins, selected files, exits and sanitized logs. Decompress source-pins.source.patch.gz for the original reconstruction bytes. Original log hashes and redaction counts are retained in receipts.json.

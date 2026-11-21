@@ -19,7 +19,9 @@ import {
   DEFAULT_FEEDBACK_DATA_SHARING_PREFERENCE,
   DEFAULT_BACKUP_RETENTION,
   PAPERCLIP_CLOUD_MANAGED_BY,
+  applyCapabilityLifecycleAvailability,
   instanceGeneralSettingsSchema,
+  resourceGovernancePolicySchema,
   type InstanceGeneralSettings,
   instanceExperimentalSettingsSchema,
   type InstanceExperimentalSettings,
@@ -33,10 +35,12 @@ import {
 } from "@paperclipai/shared";
 import {
   INSTANCE_FEATURE_CATALOG,
+  capabilityEnablementIssues,
   applyOperatorGeneralDefaults,
   stripOperatorGeneralEchoes,
 } from "@paperclipai/shared";
 import { eq, sql } from "drizzle-orm";
+import { isSaasDeployment } from "../deployment-profile.js";
 import { getManagedInstanceConfig, type ManagedInstanceConfig } from "./managed-config.js";
 import { getOperatorSettingDefaults } from "./setting-defaults.js";
 
@@ -204,6 +208,8 @@ export async function resolveWorktreeRunExecutionActivationState(options: {
 
 function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
   const sticky = raw && typeof raw === "object" && "outputFeedbackPolicyVersion" in raw && raw.outputFeedbackPolicyVersion === "aw-v9-local-v1" ? {outputFeedbackPolicyVersion:"aw-v9-local-v1" as const} : {};
+  const resourceGovernance = raw && typeof raw === "object" && "resourceGovernance" in raw && raw.resourceGovernance !== undefined
+    ? resourceGovernancePolicySchema.parse(raw.resourceGovernance) : undefined;
   const parsed = instanceGeneralSettingsStorageSchema.safeParse(raw ?? {});
   if (parsed.success) {
     return {
@@ -215,6 +221,7 @@ function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
       ...sticky,
       // Absent => unrestricted; only carry through an explicit policy.
       ...(parsed.data.executionMode ? { executionMode: parsed.data.executionMode } : {}),
+      ...(parsed.data.resourceGovernance ? { resourceGovernance: parsed.data.resourceGovernance } : {}),
     };
   }
   return {
@@ -223,6 +230,7 @@ function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
     feedbackDataSharingPreference: DEFAULT_FEEDBACK_DATA_SHARING_PREFERENCE,
     backupRetention: DEFAULT_BACKUP_RETENTION,
     ...sticky,
+    ...(resourceGovernance ? { resourceGovernance } : {}),
   };
 }
 
@@ -477,7 +485,10 @@ export function stripCloudCatalogDefaultEchoes(
   return result as Partial<InstanceExperimentalSettings>;
 }
 
-export function instanceSettingsService(db: Db, options: InstanceSettingsServiceOptions = {}) {
+export function instanceSettingsService(
+  db: InstanceSettingsWriteDb & Pick<Db, "transaction">,
+  options: InstanceSettingsServiceOptions = {},
+) {
   // Fail closed: a malformed PAPERCLIP_MANAGED_CONFIG throws here (and at
   // boot in index.ts) rather than silently running without the overlay.
   const managedConfig = getManagedInstanceConfig(options.runtimeEnv ?? process.env);
@@ -499,8 +510,12 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
     assertV7FeatureDependencies(experimental);
     assertV8FeatureDependencies(experimental);
     assertV9FeatureDependencies(experimental);
+    // Lifecycle is an admission floor over stored/managed settings. Apply it
+    // only to the returned view so historical state remains available to the
+    // existing canonical owners and is never silently rewritten.
+    const availableExperimental = applyCapabilityLifecycleAvailability(experimental);
     // Self-hosted responses stay byte-identical: no managedKeys field at all.
-    return managedConfig ? { ...experimental, managedKeys } : experimental;
+    return managedConfig ? { ...availableExperimental, managedKeys } : availableExperimental;
   }
 
   function toInstanceSettings(row: typeof instanceSettings.$inferSelect): InstanceSettings {
@@ -513,42 +528,59 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       updatedAt: row.updatedAt,
     } as InstanceSettings;
   }
-  async function getOrCreateRow(runner: InstanceSettingsWriteDb = db) {
-    const existing = await runner
+  async function getOrCreateRow(
+    runner: InstanceSettingsWriteDb = db,
+    lock?: "share" | "update",
+  ) {
+    const existingQuery = runner
       .select()
       .from(instanceSettings)
-      .where(eq(instanceSettings.singletonKey, DEFAULT_SINGLETON_KEY))
+      .where(eq(instanceSettings.singletonKey, DEFAULT_SINGLETON_KEY));
+    const existing = await (lock ? existingQuery.for(lock) : existingQuery)
       .then((rows) => rows[0] ?? null);
-    if (existing) return existing;
-
-    const now = new Date();
-    const [created] = await runner
-      .insert(instanceSettings)
-      .values({
-        singletonKey: DEFAULT_SINGLETON_KEY,
-        general: {},
-        experimental: {},
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [instanceSettings.singletonKey],
-        set: {
+    let row = existing;
+    if (!row) {
+      const now = new Date();
+      const [created] = await runner
+        .insert(instanceSettings)
+        .values({
+          singletonKey: DEFAULT_SINGLETON_KEY,
+          general: {},
+          experimental: {},
+          createdAt: now,
           updatedAt: now,
-        },
+        })
+        .onConflictDoUpdate({
+          target: [instanceSettings.singletonKey],
+          set: {
+            updatedAt: now,
+          },
+        })
+        .returning();
+
+      row = created ?? await runner
+        .select()
+        .from(instanceSettings)
+        .where(eq(instanceSettings.singletonKey, DEFAULT_SINGLETON_KEY))
+        .then((rows) => rows[0] ?? null);
+    }
+    if (!row) throw new Error("Failed to initialize instance settings row");
+
+    if (!isSaasDeployment(options.runtimeEnv ?? process.env) ||
+      normalizeGeneralSettings(row.general).outputFeedbackPolicyVersion === "aw-v9-local-v1") {
+      return row;
+    }
+
+    const [admitted] = await runner
+      .update(instanceSettings)
+      .set({
+        general: sql`coalesce(${instanceSettings.general}, '{}'::jsonb) || '{"outputFeedbackPolicyVersion":"aw-v9-local-v1"}'::jsonb`,
+        updatedAt: new Date(),
       })
+      .where(eq(instanceSettings.id, row.id))
       .returning();
-
-    if (created) return created;
-
-    const raced = await runner
-      .select()
-      .from(instanceSettings)
-      .where(eq(instanceSettings.singletonKey, DEFAULT_SINGLETON_KEY))
-      .then((rows) => rows[0] ?? null);
-    if (raced) return raced;
-
-    throw new Error("Failed to initialize instance settings row");
+    if (!admitted) throw new Error("Failed to admit SaaS feedback privacy policy");
+    return admitted;
   }
 
   return {
@@ -585,38 +617,62 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       return toGeneralView(row.general);
     },
 
-    getExperimental: async (): Promise<InstanceExperimentalSettingsWithManaged> => {
-      const row = await getOrCreateRow();
+    getExperimental: async (
+      readOptions?: { db?: InstanceSettingsWriteDb; lock?: "share" | "update" },
+    ): Promise<InstanceExperimentalSettingsWithManaged> => {
+      const row = await getOrCreateRow(readOptions?.db, readOptions?.lock);
       return toExperimentalView(row.experimental);
     },
 
-    updateGeneral: async (patch: PatchInstanceGeneralSettings): Promise<InstanceSettings> => {
-      const current = await getOrCreateRow();
-      const storedGeneral = normalizeGeneralSettings(current.general);
-      // A full-GET echo carries the overlaid operator value for a field the
-      // user never chose; stripping it keeps the overlay strictly read-time,
-      // so changing or unsetting the variable later still takes effect.
-      const nextGeneral = stripOperatorGeneralEchoes(
-        storedGeneral,
-        normalizeGeneralSettings({ ...storedGeneral, ...patch }),
-        operatorDefaults,
-      );
-      const now = new Date();
-      const [updated] = await db
-        .update(instanceSettings)
-        .set({
-          general: { ...internalGeneralState(current.general), ...nextGeneral },
-          updatedAt: now,
-        })
-        .where(eq(instanceSettings.id, current.id))
-        .returning();
-      return toInstanceSettings(updated ?? current);
+    updateGeneral: async (
+      patch: PatchInstanceGeneralSettings,
+      writeOptions?: { db?: InstanceSettingsWriteDb },
+    ): Promise<InstanceSettings> => {
+      const write = async (tx: InstanceSettingsWriteDb) => {
+        const row = await getOrCreateRow(tx);
+        // A feedback admission can set the irreversible privacy latch while
+        // this ordinary settings write is in flight. Lock and reread before
+        // merging so a stale full-JSON update cannot erase that admission.
+        const [current] = await tx.select().from(instanceSettings)
+          .where(eq(instanceSettings.id, row.id)).for("update");
+        if (!current) throw new Error("Instance settings disappeared during update");
+        // A current operator can repair an invalid restored policy, while
+        // unrelated settings writes cannot silently erase that protection.
+        const storedGeneral = normalizeGeneralSettings(patch.resourceGovernance === undefined ? current.general
+          : { ...current.general, resourceGovernance: patch.resourceGovernance });
+        // A full-GET echo carries the overlaid operator value for a field the
+        // user never chose; stripping it keeps the overlay strictly read-time,
+        // so changing or unsetting the variable later still takes effect.
+        const nextGeneral = stripOperatorGeneralEchoes(
+          storedGeneral,
+          normalizeGeneralSettings({ ...storedGeneral, ...patch }),
+          operatorDefaults,
+        );
+        const now = new Date();
+        const [updated] = await tx
+          .update(instanceSettings)
+          .set({
+            general: { ...internalGeneralState(current.general), ...nextGeneral },
+            updatedAt: now,
+          })
+          .where(eq(instanceSettings.id, current.id))
+          .returning();
+        return toInstanceSettings(updated ?? current);
+      };
+      return writeOptions?.db ? write(writeOptions.db) : db.transaction(write);
     },
 
     updateExperimental: async (
       patch: PatchInstanceExperimentalSettings,
       writeOptions?: { db?: InstanceSettingsWriteDb },
     ): Promise<InstanceSettings> => {
+      const lifecycleIssues = capabilityEnablementIssues(patch as Record<string, unknown>);
+      if (lifecycleIssues.length > 0) {
+        throw badRequest("Internal or retired capabilities cannot be enabled for new use", {
+          code: "CAPABILITY_LIFECYCLE_NEW_USE_BLOCKED",
+          issues: lifecycleIssues,
+        });
+      }
       const write = async (tx: InstanceSettingsWriteDb) => {
         const row = await getOrCreateRow(tx);
         // Serialize the complete read/validate/write. Concurrent patches cannot

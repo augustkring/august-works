@@ -1,0 +1,20 @@
+{
+  "status": "scoped_software_tests_passed",
+  "sourceCommit": "cd1061d20ddcda2d9a2e103b2a05e8239a62d3fc",
+  "sourceVerification": {
+    "checked": 5917,
+    "mismatches": []
+  },
+  "sourceManifestSha256": "752a7c30a87ec8677b131288a33164d1092af13951b72ed9f0e9acdbcef464de",
+  "testFileSha256": "39454c6f6f45b4f826c0534d024aca44f24842234291cb35a3cdb57222bc7206",
+  "container": "blentera-v10-learning-diagnostics",
+  "image": "blentera-v10-learning-worker",
+  "uid": 20001,
+  "nodeVersion": "24.22.1",
+  "nodeHeapMiB": 2048,
+  "network": "none",
+  "outerNamespaceRestrictionsRelaxed": true,
+  "applicationSandboxControlsUnchanged": true,
+  "sourceCopyAttempts": "Two archive extraction attempts returned2 because of ownership/metadata differences; independent full code/config file hash verification afterward confirmed all5917 tracked files match the named source snapshot. The read-only mounted test is the original exact committed file.",
+  "limits": "Only two selected Learning artifact cases;40notselected. This does not qualify a production host/profile/provider or unchanged-source final workspace acceptance."
+}

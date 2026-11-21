@@ -1,0 +1,8 @@
+{
+  "meaning": "Immutable V3 metadata and current procedure admission qualification, not all API endpoint conformance or final unchanged-head acceptance",
+  "operationManifestHash": "52fe608c583066221d3cee9562cd2216e17abdb9d0860ba74d9b9adf33e50e20",
+  "toolCatalogHash": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+  "procedureBytes": "14 files identical to V2; V1/V2 registry entries and existing Run pins preserved",
+  "apiContracts": "159 source-only existing API records; no Tool IDs/aliases or MCP exposure added; 62 critical endpoint conformance cases remain unqualified",
+  "sourceReconstruction": "Recorded sourceHead plus gzip patch and source-files archive; preserve the raw summary-gate failure alongside corrected log/exit verified result."
+}

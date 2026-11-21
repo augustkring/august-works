@@ -1,0 +1,25 @@
+{
+  "scope": "closed Host60 compact closeout only; no raw logs, overlay snapshots or snapshot patch included",
+  "sourcePinsSha256": "5c3aa8eb95c8eb351bb2cb00aa9f16b9b568fcd0f92f9c9b3384ade1518134c4",
+  "runnerSha256": "1a2a0797ab606c7f2c8ad11c983b2633875bac062fa99d615892740a94f92b24",
+  "resultBeforeRestore": {
+    "source-oxc": 0,
+    "shared-build": 0,
+    "db-build": 0,
+    "server-tsc": 0,
+    "host-session-node": 0,
+    "native-first-claim-vitest": 0,
+    "targeted-worker-vitest": 1
+  },
+  "nativeFirstClaim": {
+    "testsPassed": 11,
+    "testsFailed": 0,
+    "logSha256": "99e061d300b6a9b90dcb5b8e99d978c936402461249a3b0311acac126dabd03e"
+  },
+  "targetedWorker": {
+    "exit": 1,
+    "logSha256": "3517f3bbc0afe1490a604a9944df735d895f4b365864544c11943419386617a6"
+  },
+  "restoreSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+  "interpretation": "Source Oxc/shared/db builds, server typecheck and Host Node pass; Native first-claim suite is 11/11; targeted Worker route remains failed. This is not overall Host or Native journey acceptance."
+}

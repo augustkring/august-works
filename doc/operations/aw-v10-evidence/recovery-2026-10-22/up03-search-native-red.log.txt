@@ -1,0 +1,97 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stdout | src/__tests__/company-search-service.test.ts > companySearchService
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42710',
+  message: 'extension "pg_trgm" already exists, skipping',
+  file: 'extension.c',
+  line: '1991',
+  routine: 'CreateExtension'
+}
+
+ ❯ |@paperclipai/server| src/__tests__/company-search-service.test.ts (30 tests | 2 failed | 28 skipped) 11321ms
+     × excludes private tasks and projects before counts, facets and pagination (native) 865ms
+     × does not let an unreadable literal task suppress a readable fuzzy task (native) 500ms
+ ❯ |@paperclipai/server| src/__tests__/company-search-extract-service.test.ts (9 tests | 1 failed | 8 skipped) 12807ms
+     × omits private extraction sources before the page window and hasMore (native) 472ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-search-extract-service.test.ts > companySearchExtractService > omits private extraction sources before the page window and hasMore (native)
+AssertionError: expected [ Array(1) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
+-   "50fe2f91-e5e8-4d9b-a3e7-ad6a0001015a",
++   "dd1b301f-4dc0-4eda-b3d0-4bdf2217a19a",
+  ]
+
+ ❯ src/__tests__/company-search-extract-service.test.ts:161:52
+    159|       issueReadCondition: await issueReadSqlCondition(db, { type: "non…
+    160|     } : undefined);
+    161|     expect(result.results.map(row => row.issueId)).toEqual([visible]);
+       |                                                    ^
+    162|     expect(result.hasMore).toBe(false);
+    163|     expect(result.truncated).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-search-service.test.ts > companySearchService > excludes private tasks and projects before counts, facets and pagination (native)
+AssertionError: expected { issue: 2, comment: +0, …(4) } to match object { issue: 1, project: 1 }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "issue": 1,
+-   "project": 1,
++   "issue": 2,
++   "project": 2,
+  }
+
+ ❯ src/__tests__/company-search-service.test.ts:169:33
+    167|       projectReadCondition: await projectReadSqlCondition(db, { type: …
+    168|     } : undefined);
+    169|     expect(result.countsByType).toMatchObject({ issue: 1, project: 1 }…
+       |                                 ^
+    170|     expect(result.filterOptionCounts.priority).toEqual({ low: 1 });
+    171|     expect(result.results.every(row => row.id === publicId || row.id =…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-search-service.test.ts > companySearchService > does not let an unreadable literal task suppress a readable fuzzy task (native)
+AssertionError: expected [ Array(1) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
+-   "69a345b4-a42d-432f-ae8f-336c263aa238",
++   "f24c595e-6d60-4564-aa09-94404622e75e",
+  ]
+
+ ❯ src/__tests__/company-search-service.test.ts:182:47
+    180|       issueReadCondition: await issueReadSqlCondition(db, { type: "non…
+    181|     } : undefined);
+    182|     expect(result.results.map(row => row.id)).toEqual([visible]);
+       |                                               ^
+    183|     expect(result.countsByType.issue).toBe(1);
+    184|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 36 skipped (39)
+   Start at  21:50:30
+   Duration  49.03s (transform 11.29s, setup 356ms, import 23.82s, tests 24.13s, environment 0ms)
+

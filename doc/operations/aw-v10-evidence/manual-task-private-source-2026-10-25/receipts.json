@@ -1,0 +1,95 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "40b354f61cb4fc693e007b797da408739802f6ae",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Initial PG owner-suite result before current-session actor correction; 14/15 passed and the private-constructor case exposed missing session identity in the final privacy check.",
+  "logs": [
+    {
+      "name": "manual-task-private-source-initial-failure",
+      "exitCode": 1,
+      "exitSidecar": "manual-task-private-source-initial-failure.exit",
+      "rawSha256": "87517446a0872e0384eda1af92998ecab766c2c7c0c051e971453b9b5cf8f5d2",
+      "sanitizedSha256": "87517446a0872e0384eda1af92998ecab766c2c7c0c051e971453b9b5cf8f5d2",
+      "archiveSha256": "feb3b10ac7a6d7e07dcec345139bffaeb588c7c054a67f61c282e6925ab7cd90",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 14 passed (15)",
+        "Duration  21.82s (transform 9.76s, setup 71ms, import 13.40s, tests 8.24s, environment 0ms)"
+      ],
+      "sourceCommit": "40b354f61cb4fc693e007b797da408739802f6ae"
+    },
+    {
+      "name": "manual-task-private-source-final",
+      "exitCode": 0,
+      "exitSidecar": "manual-task-private-source-final.exit",
+      "rawSha256": "05d2bded3536071fc3d474a2dfc4bc2c41a066104b59969ccca4695e85803990",
+      "sanitizedSha256": "05d2bded3536071fc3d474a2dfc4bc2c41a066104b59969ccca4695e85803990",
+      "archiveSha256": "27d5a35773498e8db9dac1789da847f26d120edf099fe1c21220a9d8f5cd3130",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  22.61s (transform 9.61s, setup 81ms, import 13.26s, tests 9.13s, environment 0ms)"
+      ],
+      "sourceCommit": "40b354f61cb4fc693e007b797da408739802f6ae"
+    },
+    {
+      "name": "manual-task-private-source-second",
+      "exitCode": 0,
+      "exitSidecar": "manual-task-private-source-second.exit",
+      "rawSha256": "bbb2d8583801660a99dd7acb9c647abaa709a8a054316e1be0e7c6cecb617e9c",
+      "sanitizedSha256": "bbb2d8583801660a99dd7acb9c647abaa709a8a054316e1be0e7c6cecb617e9c",
+      "archiveSha256": "7c8b11400212b28bc14cbb2aa383e6e3dd3cb1f6b6cec86cd93464c2280634b1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  15 passed (15)",
+        "Duration  24.57s (transform 11.12s, setup 84ms, import 15.12s, tests 9.25s, environment 0ms)"
+      ],
+      "sourceCommit": "40b354f61cb4fc693e007b797da408739802f6ae"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "40b354f61cb4fc693e007b797da408739802f6ae",
+      "meaning": "Second PG owner-suite attempt: session actor passed correctly, but privacy reader check occurred before protocol-1 snapshot binding; moved same-transaction capture before that check.",
+      "logs": [
+        "manual-task-private-source-final"
+      ]
+    },
+    {
+      "sourceCommit": "40b354f61cb4fc693e007b797da408739802f6ae",
+      "meaning": "Focused original-owner qualified PG suite on fresh installed dependencies after exact private Task snapshot binding moved ahead of current privacy admission. Source snapshot files identify the tested inputs.",
+      "logs": [
+        "manual-task-private-source-second"
+      ]
+    },
+    {
+      "sourceCommit": "40b354f61cb4fc693e007b797da408739802f6ae",
+      "meaning": "Final focused owner PG suite on qualified fresh-dependency snapshot after same-transaction exact Task snapshot binding now precedes private privacy read. Includes optional Agent assignment and preserves unqualified related/generated cases.",
+      "logs": [
+        "manual-task-private-source-final"
+      ]
+    }
+  ]
+}

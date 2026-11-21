@@ -1,0 +1,44 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[04:30:16] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+ ❯ |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts (17 tests | 1 failed | 16 skipped) 9934ms
+     × commits the maintained challenge consumption before a failed protected database transaction 587ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts > maintained native TOTP and recovery lifecycle > commits the maintained challenge consumption before a failed protected database transaction
+AssertionError: expected '[\n  [\n    \'# SERVER_ERROR: \',\n  …' not to contain 'CANARY'
+
+- Expected
++ Received
+
+- CANARY
++ [
++   [
++     '# SERVER_ERROR: ',
++     Error: Protected native transaction unavailable: SQL-TOKEN-CANARY
++         at PostgresJsDatabase.<anonymous> (/workspace/blentera-v10/server/src/__tests__/native-two-factor.integration.test.ts:406:53)
++         at processTicksAndRejections (node:internal/process/task_queues:104:5)
++   ]
++ ]
+
+ ❯ src/__tests__/native-two-factor.integration.test.ts:414:69
+    412|       expect(response.status).toBe(500);
+    413|       expect(observed).toBe(true);
+    414|       expect(inspect(consoleError.mock.calls, { depth: null })).not.to…
+       |                                                                     ^
+    415|       expect(JSON.stringify(response.body)).not.toContain("CANARY");
+    416|     } finally { spy.mockRestore(); consoleError.mockRestore(); }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  04:29:16
+   Duration  59.88s (transform 31.26s, setup 224ms, import 49.39s, tests 9.93s, environment 0ms)
+

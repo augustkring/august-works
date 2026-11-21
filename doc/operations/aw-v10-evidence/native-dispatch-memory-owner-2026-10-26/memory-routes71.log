@@ -1,0 +1,301 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification
+
+------
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-routes.test.ts > Memory routes
+Error: Failed to start embedded PostgreSQL test database: Failed query: -- Human-authored Memory may attach new canonical Task evidence while retaining
+-- its complete original provenance. Keep the old snapshot available only as
+-- an invalidated monotonicity witness until the same owner transaction seals
+-- a new snapshot over the current body and evidence. Agent/native outputs keep
+-- the original irreversible invalidation behavior.
+CREATE OR REPLACE FUNCTION public.aw_native_payload_source_binding() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE snapshot jsonb; row_data jsonb; owner_kind text := TG_ARGV[0];
+BEGIN
+  IF NEW.payload_source_protocol_version NOT IN (0,1) THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Unknown native payload source protocol';
+  END IF;
+  IF TG_OP='UPDATE' THEN
+    IF NEW.payload_source_protocol_version IS DISTINCT FROM OLD.payload_source_protocol_version THEN
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source protocol is insert-only';
+    END IF;
+    IF NEW.payload_source_snapshot_invalidated IS DISTINCT FROM OLD.payload_source_snapshot_invalidated THEN
+      IF owner_kind='memory_record' THEN
+        -- The evidence invalidation trigger may retain a stale snapshot as an
+        -- inaccessible monotonicity witness. It cannot change any other field.
+        IF to_jsonb(OLD)->>'created_by_actor_type'='user' AND OLD.payload_source_protocol_version=1
+          AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=false
+          AND NEW.payload_source_snapshot_invalidated=true
+          AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot
+          AND pg_trigger_depth()>1
+          AND (to_jsonb(NEW)-'payload_source_snapshot_invalidated')=(to_jsonb(OLD)-'payload_source_snapshot_invalidated') THEN
+          RETURN NEW;
+        END IF;
+        IF to_jsonb(OLD)->>'created_by_actor_type'='user' AND OLD.payload_source_protocol_version=1
+          AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=true
+          AND NEW.payload_source_snapshot_invalidated=false AND NEW.payload_source_snapshot IS NOT NULL THEN
+          snapshot := NEW.payload_source_snapshot;
+          -- Source fields are merged in the preceding invalidated state. The
+          -- final reseal itself may only replace the snapshot and clear its
+          -- marker; it cannot change the already-bound body or owner fields.
+          IF (to_jsonb(NEW)-ARRAY['payload_source_snapshot','payload_source_snapshot_invalidated','updated_at'])
+              IS DISTINCT FROM
+             (to_jsonb(OLD)-ARRAY['payload_source_snapshot','payload_source_snapshot_invalidated','updated_at']) THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal cannot change its body or owner';
+          END IF;
+          IF jsonb_typeof(OLD.payload_source_snapshot->'inputs') IS DISTINCT FROM 'array'
+            OR jsonb_typeof(snapshot->'inputs') IS DISTINCT FROM 'array' THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal requires Task source history';
+          END IF;
+          IF CASE WHEN jsonb_typeof(OLD.payload_source_snapshot->'inputs')='array'
+              THEN jsonb_array_length(OLD.payload_source_snapshot->'inputs')>0 ELSE false END IS NOT TRUE
+            OR CASE WHEN jsonb_typeof(snapshot->'inputs')='array'
+              THEN jsonb_array_length(snapshot->'inputs')>0 ELSE false END IS NOT TRUE THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal requires Task source history';
+          END IF;
+          IF EXISTS (SELECT 1 FROM jsonb_array_elements(OLD.payload_source_snapshot->'inputs') AS e(item)
+              WHERE e.item->>'kind' IS DISTINCT FROM 'task')
+            OR EXISTS (SELECT 1 FROM jsonb_array_elements(snapshot->'inputs') AS e(item)
+              WHERE e.item->>'kind' IS DISTINCT FROM 'task') THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal accepts only Task sources';
+          END IF;
+          row_data := to_jsonb(NEW);
+          IF jsonb_typeof(snapshot) IS DISTINCT FROM 'object'
+            OR snapshot->'version' IS DISTINCT FROM '1'::jsonb
+            OR snapshot->'owner'->>'kind' IS DISTINCT FROM owner_kind
+            OR snapshot->'owner'->>'companyId' IS DISTINCT FROM NEW.company_id::text
+            OR snapshot->'owner'->>'id' IS DISTINCT FROM NEW.id::text
+            OR snapshot->'owner'->>'contentHash' IS DISTINCT FROM public.aw_native_payload_body_hash(owner_kind,row_data)
+            OR snapshot->>'digest' IS DISTINCT FROM encode(sha256(convert_to((snapshot-'digest')::text,'UTF8')),'hex')
+            OR OLD.payload_source_snapshot->>'digest' IS DISTINCT FROM encode(sha256(convert_to((OLD.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+            OR ((snapshot->'inputs') @> (OLD.payload_source_snapshot->'inputs')) IS NOT TRUE
+            OR ((snapshot->'policy'->'issueIds') @> (OLD.payload_source_snapshot->'policy'->'issueIds')) IS NOT TRUE
+            OR ((snapshot->'policy'->'projectIds') @> (OLD.payload_source_snapshot->'policy'->'projectIds')) IS NOT TRUE
+            OR ((snapshot->'policy'->'runIds') @> (OLD.payload_source_snapshot->'policy'->'runIds')) IS NOT TRUE
+            OR ((snapshot->'policy'->'memoryIds') @> (OLD.payload_source_snapshot->'policy'->'memoryIds')) IS NOT TRUE
+            OR ((snapshot->'policy'->'foundationRevisionIds') @> (OLD.payload_source_snapshot->'policy'->'foundationRevisionIds')) IS NOT TRUE THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal does not retain its source history';
+          END IF;
+          RETURN NEW;
+        END IF;
+      END IF;
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source invalidation marker is server-owned';
+    END IF;
+    IF OLD.payload_source_snapshot_invalidated THEN
+      IF owner_kind='memory_record' AND to_jsonb(OLD)->>'created_by_actor_type'='user'
+        AND OLD.payload_source_protocol_version=1 AND OLD.payload_source_snapshot IS NOT NULL
+        AND NEW.payload_source_snapshot_invalidated=true
+        AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot
+        AND (to_jsonb(NEW)-ARRAY['source_provenance_qualified','source_run_ids','source_issue_ids','source_project_ids',
+          'source_memory_ids','source_foundation_revision_ids','updated_at'])
+          =(to_jsonb(OLD)-ARRAY['source_provenance_qualified','source_run_ids','source_issue_ids','source_project_ids',
+            'source_memory_ids','source_foundation_revision_ids','updated_at']) THEN
+        RETURN NEW;
+      END IF;
+      IF NEW.payload_source_snapshot IS NOT NULL THEN
+        RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Invalidated native payload source snapshot cannot be rebound';
+      END IF;
+      RETURN NEW;
+    END IF;
+    IF OLD.payload_source_snapshot IS NOT NULL AND NEW.payload_source_snapshot IS NULL THEN
+      NEW.payload_source_snapshot_invalidated := true;
+      RETURN NEW;
+    END IF;
+  END IF;
+  snapshot := NEW.payload_source_snapshot;
+  IF snapshot IS NULL THEN RETURN NEW; END IF;
+  row_data := to_jsonb(NEW);
+  IF NEW.payload_source_protocol_version <> 1 OR NEW.payload_source_snapshot_invalidated
+      OR jsonb_typeof(snapshot) IS DISTINCT FROM 'object'
+      OR snapshot->'version' IS DISTINCT FROM '1'::jsonb
+      OR snapshot->'owner'->>'kind' IS DISTINCT FROM owner_kind
+      OR snapshot->'owner'->>'companyId' IS DISTINCT FROM NEW.company_id::text
+      OR snapshot->'owner'->>'id' IS DISTINCT FROM NEW.id::text
+      OR snapshot->'owner'->>'contentHash' IS DISTINCT FROM public.aw_native_payload_body_hash(owner_kind,row_data)
+      OR snapshot->>'digest' IS DISTINCT FROM encode(sha256(convert_to((snapshot-'digest')::text,'UTF8')),'hex') THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source snapshot does not bind its owner and body';
+  END IF;
+  IF TG_OP='UPDATE' AND OLD.payload_source_snapshot IS NOT NULL THEN
+    IF ((snapshot->'inputs') @> (OLD.payload_source_snapshot->'inputs')) IS NOT TRUE
+      OR ((snapshot->'policy'->'issueIds') @> (OLD.payload_source_snapshot->'policy'->'issueIds')) IS NOT TRUE
+      OR ((snapshot->'policy'->'projectIds') @> (OLD.payload_source_snapshot->'policy'->'projectIds')) IS NOT TRUE
+      OR ((snapshot->'policy'->'runIds') @> (OLD.payload_source_snapshot->'policy'->'runIds')) IS NOT TRUE
+      OR ((snapshot->'policy'->'memoryIds') @> (OLD.payload_source_snapshot->'policy'->'memoryIds')) IS NOT TRUE
+      OR ((snapshot->'policy'->'foundationRevisionIds') @> (OLD.payload_source_snapshot->'policy'->'foundationRevisionIds')) IS NOT TRUE THEN
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source snapshot cannot discard retained inputs';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+params: 
+ ❯ startEmbeddedPostgresTestDatabase ../packages/db/src/test-embedded-postgres.ts:305:11
+    303|   } catch (error) {
+    304|     await stopEmbeddedPostgresBounded(instance, () => cleanupEmbeddedP…
+    305|     throw new Error(
+       |           ^
+    306|       `Failed to start embedded PostgreSQL test database: ${
+    307|         formatEmbeddedPostgresError(error, {
+ ❯ src/__tests__/memory-routes.test.ts:59:14
+
+Caused by: Error: Failed query: -- Human-authored Memory may attach new canonical Task evidence while retaining
+-- its complete original provenance. Keep the old snapshot available only as
+-- an invalidated monotonicity witness until the same owner transaction seals
+-- a new snapshot over the current body and evidence. Agent/native outputs keep
+-- the original irreversible invalidation behavior.
+CREATE OR REPLACE FUNCTION public.aw_native_payload_source_binding() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE snapshot jsonb; row_data jsonb; owner_kind text := TG_ARGV[0];
+BEGIN
+  IF NEW.payload_source_protocol_version NOT IN (0,1) THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Unknown native payload source protocol';
+  END IF;
+  IF TG_OP='UPDATE' THEN
+    IF NEW.payload_source_protocol_version IS DISTINCT FROM OLD.payload_source_protocol_version THEN
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source protocol is insert-only';
+    END IF;
+    IF NEW.payload_source_snapshot_invalidated IS DISTINCT FROM OLD.payload_source_snapshot_invalidated THEN
+      IF owner_kind='memory_record' THEN
+        -- The evidence invalidation trigger may retain a stale snapshot as an
+        -- inaccessible monotonicity witness. It cannot change any other field.
+        IF to_jsonb(OLD)->>'created_by_actor_type'='user' AND OLD.payload_source_protocol_version=1
+          AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=false
+          AND NEW.payload_source_snapshot_invalidated=true
+          AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot
+          AND pg_trigger_depth()>1
+          AND (to_jsonb(NEW)-'payload_source_snapshot_invalidated')=(to_jsonb(OLD)-'payload_source_snapshot_invalidated') THEN
+          RETURN NEW;
+        END IF;
+        IF to_jsonb(OLD)->>'created_by_actor_type'='user' AND OLD.payload_source_protocol_version=1
+          AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=true
+          AND NEW.payload_source_snapshot_invalidated=false AND NEW.payload_source_snapshot IS NOT NULL THEN
+          snapshot := NEW.payload_source_snapshot;
+          -- Source fields are merged in the preceding invalidated state. The
+          -- final reseal itself may only replace the snapshot and clear its
+          -- marker; it cannot change the already-bound body or owner fields.
+          IF (to_jsonb(NEW)-ARRAY['payload_source_snapshot','payload_source_snapshot_invalidated','updated_at'])
+              IS DISTINCT FROM
+             (to_jsonb(OLD)-ARRAY['payload_source_snapshot','payload_source_snapshot_invalidated','updated_at']) THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal cannot change its body or owner';
+          END IF;
+          IF jsonb_typeof(OLD.payload_source_snapshot->'inputs') IS DISTINCT FROM 'array'
+            OR jsonb_typeof(snapshot->'inputs') IS DISTINCT FROM 'array' THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal requires Task source history';
+          END IF;
+          IF CASE WHEN jsonb_typeof(OLD.payload_source_snapshot->'inputs')='array'
+              THEN jsonb_array_length(OLD.payload_source_snapshot->'inputs')>0 ELSE false END IS NOT TRUE
+            OR CASE WHEN jsonb_typeof(snapshot->'inputs')='array'
+              THEN jsonb_array_length(snapshot->'inputs')>0 ELSE false END IS NOT TRUE THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal requires Task source history';
+          END IF;
+          IF EXISTS (SELECT 1 FROM jsonb_array_elements(OLD.payload_source_snapshot->'inputs') AS e(item)
+              WHERE e.item->>'kind' IS DISTINCT FROM 'task')
+            OR EXISTS (SELECT 1 FROM jsonb_array_elements(snapshot->'inputs') AS e(item)
+              WHERE e.item->>'kind' IS DISTINCT FROM 'task') THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal accepts only Task sources';
+          END IF;
+          row_data := to_jsonb(NEW);
+          IF jsonb_typeof(snapshot) IS DISTINCT FROM 'object'
+            OR snapshot->'version' IS DISTINCT FROM '1'::jsonb
+            OR snapshot->'owner'->>'kind' IS DISTINCT FROM owner_kind
+            OR snapshot->'owner'->>'companyId' IS DISTINCT FROM NEW.company_id::text
+            OR snapshot->'owner'->>'id' IS DISTINCT FROM NEW.id::text
+            OR snapshot->'owner'->>'contentHash' IS DISTINCT FROM public.aw_native_payload_body_hash(owner_kind,row_data)
+            OR snapshot->>'digest' IS DISTINCT FROM encode(sha256(convert_to((snapshot-'digest')::text,'UTF8')),'hex')
+            OR OLD.payload_source_snapshot->>'digest' IS DISTINCT FROM encode(sha256(convert_to((OLD.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+            OR ((snapshot->'inputs') @> (OLD.payload_source_snapshot->'inputs')) IS NOT TRUE
+            OR ((snapshot->'policy'->'issueIds') @> (OLD.payload_source_snapshot->'policy'->'issueIds')) IS NOT TRUE
+            OR ((snapshot->'policy'->'projectIds') @> (OLD.payload_source_snapshot->'policy'->'projectIds')) IS NOT TRUE
+            OR ((snapshot->'policy'->'runIds') @> (OLD.payload_source_snapshot->'policy'->'runIds')) IS NOT TRUE
+            OR ((snapshot->'policy'->'memoryIds') @> (OLD.payload_source_snapshot->'policy'->'memoryIds')) IS NOT TRUE
+            OR ((snapshot->'policy'->'foundationRevisionIds') @> (OLD.payload_source_snapshot->'policy'->'foundationRevisionIds')) IS NOT TRUE THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Human Memory evidence seal does not retain its source history';
+          END IF;
+          RETURN NEW;
+        END IF;
+      END IF;
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source invalidation marker is server-owned';
+    END IF;
+    IF OLD.payload_source_snapshot_invalidated THEN
+      IF owner_kind='memory_record' AND to_jsonb(OLD)->>'created_by_actor_type'='user'
+        AND OLD.payload_source_protocol_version=1 AND OLD.payload_source_snapshot IS NOT NULL
+        AND NEW.payload_source_snapshot_invalidated=true
+        AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot
+        AND (to_jsonb(NEW)-ARRAY['source_provenance_qualified','source_run_ids','source_issue_ids','source_project_ids',
+          'source_memory_ids','source_foundation_revision_ids','updated_at'])
+          =(to_jsonb(OLD)-ARRAY['source_provenance_qualified','source_run_ids','source_issue_ids','source_project_ids',
+            'source_memory_ids','source_foundation_revision_ids','updated_at']) THEN
+        RETURN NEW;
+      END IF;
+      IF NEW.payload_source_snapshot IS NOT NULL THEN
+        RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Invalidated native payload source snapshot cannot be rebound';
+      END IF;
+      RETURN NEW;
+    END IF;
+    IF OLD.payload_source_snapshot IS NOT NULL AND NEW.payload_source_snapshot IS NULL THEN
+      NEW.payload_source_snapshot_invalidated := true;
+      RETURN NEW;
+    END IF;
+  END IF;
+  snapshot := NEW.payload_source_snapshot;
+  IF snapshot IS NULL THEN RETURN NEW; END IF;
+  row_data := to_jsonb(NEW);
+  IF NEW.payload_source_protocol_version <> 1 OR NEW.payload_source_snapshot_invalidated
+      OR jsonb_typeof(snapshot) IS DISTINCT FROM 'object'
+      OR snapshot->'version' IS DISTINCT FROM '1'::jsonb
+      OR snapshot->'owner'->>'kind' IS DISTINCT FROM owner_kind
+      OR snapshot->'owner'->>'companyId' IS DISTINCT FROM NEW.company_id::text
+      OR snapshot->'owner'->>'id' IS DISTINCT FROM NEW.id::text
+      OR snapshot->'owner'->>'contentHash' IS DISTINCT FROM public.aw_native_payload_body_hash(owner_kind,row_data)
+      OR snapshot->>'digest' IS DISTINCT FROM encode(sha256(convert_to((snapshot-'digest')::text,'UTF8')),'hex') THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source snapshot does not bind its owner and body';
+  END IF;
+  IF TG_OP='UPDATE' AND OLD.payload_source_snapshot IS NOT NULL THEN
+    IF ((snapshot->'inputs') @> (OLD.payload_source_snapshot->'inputs')) IS NOT TRUE
+      OR ((snapshot->'policy'->'issueIds') @> (OLD.payload_source_snapshot->'policy'->'issueIds')) IS NOT TRUE
+      OR ((snapshot->'policy'->'projectIds') @> (OLD.payload_source_snapshot->'policy'->'projectIds')) IS NOT TRUE
+      OR ((snapshot->'policy'->'runIds') @> (OLD.payload_source_snapshot->'policy'->'runIds')) IS NOT TRUE
+      OR ((snapshot->'policy'->'memoryIds') @> (OLD.payload_source_snapshot->'policy'->'memoryIds')) IS NOT TRUE
+      OR ((snapshot->'policy'->'foundationRevisionIds') @> (OLD.payload_source_snapshot->'policy'->'foundationRevisionIds')) IS NOT TRUE THEN
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native payload source snapshot cannot discard retained inputs';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+params: 
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/dialect.js:64:13
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PgDialect.migrate ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/dialect.js:60:5
+ ❯ migrate ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/postgres-js/migrator.js:4:3
+ ❯ applyPendingMigrations ../packages/db/src/client.ts:1028:7
+ ❯ startEmbeddedPostgresTestDatabase ../packages/db/src/test-embedded-postgres.ts:289:5
+ ❯ src/__tests__/memory-routes.test.ts:59:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { query: '-- Human-authored Memory may attach new canonical Task evidence while retaining\n-- its complete original provenance. Keep the old snapshot available only as\n-- an invalidated monotonicity witness until the same owner transaction seals\n-- a new snapshot over the current body and evidence. Agent/native outputs keep\n-- the original irreversible invalidation behavior.\nCREATE OR REPLACE FUNCTION public.aw_native_payload_source_binding() RETURNS trigger\nLANGUAGE plpgsql SET search_path = pg_catalog, public AS $$\nDECLARE snapshot jsonb; row_data jsonb; owner_kind text := TG_ARGV[0];\nBEGIN\n  IF NEW.payload_source_protocol_version NOT IN (0,1) THEN\n    RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Unknown native payload source protocol\';\n  END IF;\n  IF TG_OP=\'UPDATE\' THEN\n    IF NEW.payload_source_protocol_version IS DISTINCT FROM OLD.payload_source_protocol_version THEN\n      RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Native payload source protocol is insert-only\';\n    END IF;\n    IF NEW.payload_source_snapshot_invalidated IS DISTINCT FROM OLD.payload_source_snapshot_invalidated THEN\n      IF owner_kind=\'memory_record\' THEN\n        -- The evidence invalidation trigger may retain a stale snapshot as an\n        -- inaccessible monotonicity witness. It cannot change any other field.\n        IF to_jsonb(OLD)->>\'created_by_actor_type\'=\'user\' AND OLD.payload_source_protocol_version=1\n          AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=false\n          AND NEW.payload_source_snapshot_invalidated=true\n          AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot\n          AND pg_trigger_depth()>1\n          AND (to_jsonb(NEW)-\'payload_source_snapshot_invalidated\')=(to_jsonb(OLD)-\'payload_source_snapshot_invalidated\') THEN\n          RETURN NEW;\n        END IF;\n        IF to_jsonb(OLD)->>\'created_by_actor_type\'=\'user\' AND OLD.payload_source_protocol_version=1\n          AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=true\n          AND NEW.payload_source_snapshot_invalidated=false AND NEW.payload_source_snapshot IS NOT NULL THEN\n          snapshot := NEW.payload_source_snapshot;\n          -- Source fields are merged in the preceding invalidated state. The\n          -- final reseal itself may only replace the snapshot and clear its\n          -- marker; it cannot change the already-bound body or owner fields.\n          IF (to_jsonb(NEW)-ARRAY[\'payload_source_snapshot\',\'payload_source_snapshot_invalidated\',\'updated_at\'])\n              IS DISTINCT FROM\n             (to_jsonb(OLD)-ARRAY[\'payload_source_snapshot\',\'payload_source_snapshot_invalidated\',\'updated_at\']) THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal cannot change its body or owner\';\n          END IF;\n          IF jsonb_typeof(OLD.payload_source_snapshot->\'inputs\') IS DISTINCT FROM \'array\'\n            OR jsonb_typeof(snapshot->\'inputs\') IS DISTINCT FROM \'array\' THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal requires Task source history\';\n          END IF;\n          IF CASE WHEN jsonb_typeof(OLD.payload_source_snapshot->\'inputs\')=\'array\'\n              THEN jsonb_array_length(OLD.payload_source_snapshot->\'inputs\')>0 ELSE false END IS NOT TRUE\n            OR CASE WHEN jsonb_typeof(snapshot->\'inputs\')=\'array\'\n              THEN jsonb_array_length(snapshot->\'inputs\')>0 ELSE false END IS NOT TRUE THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal requires Task source history\';\n          END IF;\n          IF EXISTS (SELECT 1 FROM jsonb_array_elements(OLD.payload_source_snapshot->\'inputs\') AS e(item)\n              WHERE e.item->>\'kind\' IS DISTINCT FROM \'task\')\n            OR EXISTS (SELECT 1 FROM jsonb_array_elements(snapshot->\'inputs\') AS e(item)\n              WHERE e.item->>\'kind\' IS DISTINCT FROM \'task\') THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal accepts only Task sources\';\n          END IF;\n          row_data := to_jsonb(NEW);\n          IF jsonb_typeof(snapshot) IS DISTINCT FROM \'object\'\n            OR snapshot->\'version\' IS DISTINCT FROM \'1\'::jsonb\n            OR snapshot->\'owner\'->>\'kind\' IS DISTINCT FROM owner_kind\n            OR snapshot->\'owner\'->>\'companyId\' IS DISTINCT FROM NEW.company_id::text\n            OR snapshot->\'owner\'->>\'id\' IS DISTINCT FROM NEW.id::text\n            OR snapshot->\'owner\'->>\'contentHash\' IS DISTINCT FROM public.aw_native_payload_body_hash(owner_kind,row_data)\n            OR snapshot->>\'digest\' IS DISTINCT FROM encode(sha256(convert_to((snapshot-\'digest\')::text,\'UTF8\')),\'hex\')\n            OR OLD.payload_source_snapshot->>\'digest\' IS DISTINCT FROM encode(sha256(convert_to((OLD.payload_source_snapshot-\'digest\')::text,\'UTF8\')),\'hex\')\n            OR ((snapshot->\'inputs\') @> (OLD.payload_source_snapshot->\'inputs\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'issueIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'issueIds\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'projectIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'projectIds\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'runIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'runIds\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'memoryIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'memoryIds\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'foundationRevisionIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'foundationRevisionIds\')) IS NOT TRUE THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal does not retain its source history\';\n          END IF;\n          RETURN NEW;\n        END IF;\n      END IF;\n      RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Native payload source invalidation marker is server-owned\';\n    END IF;\n    IF OLD.payload_source_snapshot_invalidated THEN\n      IF owner_kind=\'memory_record\' AND to_jsonb(OLD)->>\'created_by_actor_type\'=\'user\'\n        AND OLD.payload_source_protocol_version=1 AND OLD.payload_source_snapshot IS NOT NULL\n        AND NEW.payload_source_snapshot_invalidated=true\n        AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot\n        AND (to_jsonb(NEW)-ARRAY[\'source_provenance_qualified\',\'source_run_ids\',\'source_issue_ids\',\'source_project_ids\',\n          \'source_memory_ids\',\'source_foundation_revision_ids\',\'updated_at\'])\n          =(to_jsonb(OLD)-ARRAY[\'source_provenance_qualified\',\'source_run_ids\',\'source_issue_ids\',\'source_project_ids\',\n            \'source_memory_ids\',\'source_foundation_revision_ids\',\'updated_at\']) THEN\n        RETURN NEW;\n      END IF;\n      IF NEW.payload_source_snapshot IS NOT NULL THEN\n        RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Invalidated native payload source snapshot cannot be rebound\';\n      END IF;\n      RETURN NEW;\n    END IF;\n    IF OLD.payload_source_snapshot IS NOT NULL AND NEW.payload_source_snapshot IS NULL THEN\n      NEW.payload_source_snapshot_invalidated := true;\n      RETURN NEW;\n    END IF;\n  END IF;\n  snapshot := NEW.payload_source_snapshot;\n  IF snapshot IS NULL THEN RETURN NEW; END IF;\n  row_data := to_jsonb(NEW);\n  IF NEW.payload_source_protocol_version <> 1 OR NEW.payload_source_snapshot_invalidated\n      OR jsonb_typeof(snapshot) IS DISTINCT FROM \'object\'\n      OR snapshot->\'version\' IS DISTINCT FROM \'1\'::jsonb\n      OR snapshot->\'owner\'->>\'kind\' IS DISTINCT FROM owner_kind\n      OR snapshot->\'owner\'->>\'companyId\' IS DISTINCT FROM NEW.company_id::text\n      OR snapshot->\'owner\'->>\'id\' IS DISTINCT FROM NEW.id::text\n      OR snapshot->\'owner\'->>\'contentHash\' IS DISTINCT FROM public.aw_native_payload_body_hash(owner_kind,row_data)\n      OR snapshot->>\'digest\' IS DISTINCT FROM encode(sha256(convert_to((snapshot-\'digest\')::text,\'UTF8\')),\'hex\') THEN\n    RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Native payload source snapshot does not bind its owner and body\';\n  END IF;\n  IF TG_OP=\'UPDATE\' AND OLD.payload_source_snapshot IS NOT NULL THEN\n    IF ((snapshot->\'inputs\') @> (OLD.payload_source_snapshot->\'inputs\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'issueIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'issueIds\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'projectIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'projectIds\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'runIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'runIds\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'memoryIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'memoryIds\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'foundationRevisionIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'foundationRevisionIds\')) IS NOT TRUE THEN\n      RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Native payload source snapshot cannot discard retained inputs\';\n    END IF;\n  END IF;\n  RETURN NEW;\nEND;\n$$;\n', params: [] }
+Caused by: PostgresError: syntax error at end of input
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '42601', position: '3238', file: 'scan.l', routine: 'scanner_yyerror', query: '-- Human-authored Memory may attach new canonical Task evidence while retaining\n-- its complete original provenance. Keep the old snapshot available only as\n-- an invalidated monotonicity witness until the same owner transaction seals\n-- a new snapshot over the current body and evidence. Agent/native outputs keep\n-- the original irreversible invalidation behavior.\nCREATE OR REPLACE FUNCTION public.aw_native_payload_source_binding() RETURNS trigger\nLANGUAGE plpgsql SET search_path = pg_catalog, public AS $$\nDECLARE snapshot jsonb; row_data jsonb; owner_kind text := TG_ARGV[0];\nBEGIN\n  IF NEW.payload_source_protocol_version NOT IN (0,1) THEN\n    RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Unknown native payload source protocol\';\n  END IF;\n  IF TG_OP=\'UPDATE\' THEN\n    IF NEW.payload_source_protocol_version IS DISTINCT FROM OLD.payload_source_protocol_version THEN\n      RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Native payload source protocol is insert-only\';\n    END IF;\n    IF NEW.payload_source_snapshot_invalidated IS DISTINCT FROM OLD.payload_source_snapshot_invalidated THEN\n      IF owner_kind=\'memory_record\' THEN\n        -- The evidence invalidation trigger may retain a stale snapshot as an\n        -- inaccessible monotonicity witness. It cannot change any other field.\n        IF to_jsonb(OLD)->>\'created_by_actor_type\'=\'user\' AND OLD.payload_source_protocol_version=1\n          AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=false\n          AND NEW.payload_source_snapshot_invalidated=true\n          AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot\n          AND pg_trigger_depth()>1\n          AND (to_jsonb(NEW)-\'payload_source_snapshot_invalidated\')=(to_jsonb(OLD)-\'payload_source_snapshot_invalidated\') THEN\n          RETURN NEW;\n        END IF;\n        IF to_jsonb(OLD)->>\'created_by_actor_type\'=\'user\' AND OLD.payload_source_protocol_version=1\n          AND OLD.payload_source_snapshot IS NOT NULL AND OLD.payload_source_snapshot_invalidated=true\n          AND NEW.payload_source_snapshot_invalidated=false AND NEW.payload_source_snapshot IS NOT NULL THEN\n          snapshot := NEW.payload_source_snapshot;\n          -- Source fields are merged in the preceding invalidated state. The\n          -- final reseal itself may only replace the snapshot and clear its\n          -- marker; it cannot change the already-bound body or owner fields.\n          IF (to_jsonb(NEW)-ARRAY[\'payload_source_snapshot\',\'payload_source_snapshot_invalidated\',\'updated_at\'])\n              IS DISTINCT FROM\n             (to_jsonb(OLD)-ARRAY[\'payload_source_snapshot\',\'payload_source_snapshot_invalidated\',\'updated_at\']) THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal cannot change its body or owner\';\n          END IF;\n          IF jsonb_typeof(OLD.payload_source_snapshot->\'inputs\') IS DISTINCT FROM \'array\'\n            OR jsonb_typeof(snapshot->\'inputs\') IS DISTINCT FROM \'array\' THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal requires Task source history\';\n          END IF;\n          IF CASE WHEN jsonb_typeof(OLD.payload_source_snapshot->\'inputs\')=\'array\'\n              THEN jsonb_array_length(OLD.payload_source_snapshot->\'inputs\')>0 ELSE false END IS NOT TRUE\n            OR CASE WHEN jsonb_typeof(snapshot->\'inputs\')=\'array\'\n              THEN jsonb_array_length(snapshot->\'inputs\')>0 ELSE false END IS NOT TRUE THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal requires Task source history\';\n          END IF;\n          IF EXISTS (SELECT 1 FROM jsonb_array_elements(OLD.payload_source_snapshot->\'inputs\') AS e(item)\n              WHERE e.item->>\'kind\' IS DISTINCT FROM \'task\')\n            OR EXISTS (SELECT 1 FROM jsonb_array_elements(snapshot->\'inputs\') AS e(item)\n              WHERE e.item->>\'kind\' IS DISTINCT FROM \'task\') THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal accepts only Task sources\';\n          END IF;\n          row_data := to_jsonb(NEW);\n          IF jsonb_typeof(snapshot) IS DISTINCT FROM \'object\'\n            OR snapshot->\'version\' IS DISTINCT FROM \'1\'::jsonb\n            OR snapshot->\'owner\'->>\'kind\' IS DISTINCT FROM owner_kind\n            OR snapshot->\'owner\'->>\'companyId\' IS DISTINCT FROM NEW.company_id::text\n            OR snapshot->\'owner\'->>\'id\' IS DISTINCT FROM NEW.id::text\n            OR snapshot->\'owner\'->>\'contentHash\' IS DISTINCT FROM public.aw_native_payload_body_hash(owner_kind,row_data)\n            OR snapshot->>\'digest\' IS DISTINCT FROM encode(sha256(convert_to((snapshot-\'digest\')::text,\'UTF8\')),\'hex\')\n            OR OLD.payload_source_snapshot->>\'digest\' IS DISTINCT FROM encode(sha256(convert_to((OLD.payload_source_snapshot-\'digest\')::text,\'UTF8\')),\'hex\')\n            OR ((snapshot->\'inputs\') @> (OLD.payload_source_snapshot->\'inputs\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'issueIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'issueIds\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'projectIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'projectIds\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'runIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'runIds\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'memoryIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'memoryIds\')) IS NOT TRUE\n            OR ((snapshot->\'policy\'->\'foundationRevisionIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'foundationRevisionIds\')) IS NOT TRUE THEN\n            RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Human Memory evidence seal does not retain its source history\';\n          END IF;\n          RETURN NEW;\n        END IF;\n      END IF;\n      RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Native payload source invalidation marker is server-owned\';\n    END IF;\n    IF OLD.payload_source_snapshot_invalidated THEN\n      IF owner_kind=\'memory_record\' AND to_jsonb(OLD)->>\'created_by_actor_type\'=\'user\'\n        AND OLD.payload_source_protocol_version=1 AND OLD.payload_source_snapshot IS NOT NULL\n        AND NEW.payload_source_snapshot_invalidated=true\n        AND NEW.payload_source_snapshot IS NOT DISTINCT FROM OLD.payload_source_snapshot\n        AND (to_jsonb(NEW)-ARRAY[\'source_provenance_qualified\',\'source_run_ids\',\'source_issue_ids\',\'source_project_ids\',\n          \'source_memory_ids\',\'source_foundation_revision_ids\',\'updated_at\'])\n          =(to_jsonb(OLD)-ARRAY[\'source_provenance_qualified\',\'source_run_ids\',\'source_issue_ids\',\'source_project_ids\',\n            \'source_memory_ids\',\'source_foundation_revision_ids\',\'updated_at\']) THEN\n        RETURN NEW;\n      END IF;\n      IF NEW.payload_source_snapshot IS NOT NULL THEN\n        RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Invalidated native payload source snapshot cannot be rebound\';\n      END IF;\n      RETURN NEW;\n    END IF;\n    IF OLD.payload_source_snapshot IS NOT NULL AND NEW.payload_source_snapshot IS NULL THEN\n      NEW.payload_source_snapshot_invalidated := true;\n      RETURN NEW;\n    END IF;\n  END IF;\n  snapshot := NEW.payload_source_snapshot;\n  IF snapshot IS NULL THEN RETURN NEW; END IF;\n  row_data := to_jsonb(NEW);\n  IF NEW.payload_source_protocol_version <> 1 OR NEW.payload_source_snapshot_invalidated\n      OR jsonb_typeof(snapshot) IS DISTINCT FROM \'object\'\n      OR snapshot->\'version\' IS DISTINCT FROM \'1\'::jsonb\n      OR snapshot->\'owner\'->>\'kind\' IS DISTINCT FROM owner_kind\n      OR snapshot->\'owner\'->>\'companyId\' IS DISTINCT FROM NEW.company_id::text\n      OR snapshot->\'owner\'->>\'id\' IS DISTINCT FROM NEW.id::text\n      OR snapshot->\'owner\'->>\'contentHash\' IS DISTINCT FROM public.aw_native_payload_body_hash(owner_kind,row_data)\n      OR snapshot->>\'digest\' IS DISTINCT FROM encode(sha256(convert_to((snapshot-\'digest\')::text,\'UTF8\')),\'hex\') THEN\n    RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Native payload source snapshot does not bind its owner and body\';\n  END IF;\n  IF TG_OP=\'UPDATE\' AND OLD.payload_source_snapshot IS NOT NULL THEN\n    IF ((snapshot->\'inputs\') @> (OLD.payload_source_snapshot->\'inputs\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'issueIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'issueIds\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'projectIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'projectIds\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'runIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'runIds\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'memoryIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'memoryIds\')) IS NOT TRUE\n      OR ((snapshot->\'policy\'->\'foundationRevisionIds\') @> (OLD.payload_source_snapshot->\'policy\'->\'foundationRevisionIds\')) IS NOT TRUE THEN\n      RAISE EXCEPTION USING ERRCODE=\'23514\', MESSAGE=\'Native payload source snapshot cannot discard retained inputs\';\n    END IF;\n  END IF;\n  RETURN NEW;\nEND;\n$$;\n', parameters: [], args: [], types: [] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 skipped (6)
+   Start at  03:16:17
+   Duration  16.72s (transform 9.25s, setup 71ms, import 13.08s, tests 3.45s, environment 0ms)
+

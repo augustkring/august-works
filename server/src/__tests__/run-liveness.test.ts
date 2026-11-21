@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRunLiveness } from "../services/run-liveness.ts";
+import { classifyRunLiveness, countRunLivenessActivityEvidence, isRunLivenessPlatformActivity } from "../services/run-liveness.ts";
 
 const baseInput = {
   runStatus: "succeeded",
@@ -257,5 +257,59 @@ describe("run liveness classifier", () => {
     expect(classification.livenessState).toBe("needs_followup");
     expect(classification.actionability).toBe("unknown");
     expect(classification.nextAction).toBeNull();
+  });
+});
+
+describe("run liveness platform activity (T3)", () => {
+  const agentId = "agent-1";
+  // The rows the platform writes for every managed Native Run.
+  const platformRows = [
+    { action: "context.assembled", actorType: "agent", actorId: agentId, entityType: "context_manifest", details: { issueId: "issue-1" } },
+    { action: "context.assembled", actorType: "agent", actorId: agentId, entityType: "context_manifest", details: null },
+    { action: "environment.lease_acquired", actorType: "system", actorId: "heartbeat", entityType: "environment_lease", details: null },
+    { action: "tool_gateway.discovery", actorType: "agent", actorId: agentId, entityType: "tool_gateway", details: null },
+    { action: "issue.updated", actorType: "system", actorId: "native-status-committer", entityType: "issue",
+      details: { source: "native_status_decision", fromStatus: "todo", toStatus: "in_progress" } },
+    { action: "issue.comment_added", actorType: "agent", actorId: agentId, entityType: "issue",
+      details: { commentId: "comment-1", source: "run_presentation_resolver" } },
+    { action: "environment.lease_released", actorType: "system", actorId: "heartbeat", entityType: "environment_lease", details: null },
+  ];
+  // The incomplete `done` report a managed OpenCode Run sends for plan-only output.
+  const incompleteDone = { summary: "I will inspect the repository next and implement the requested fix.",
+    nativeResult: { schema: "paperclip.run_result.v1", reportedWorkDisposition: "done",
+      summary: "I will inspect the repository next and implement the requested fix." } };
+  const evidence = (activityEventsCreated: number, toolOrActionEventsCreated = 0) => ({ issueCommentsCreated: 0,
+    documentRevisionsCreated: 0, planDocumentRevisionsCreated: 0, workProductsCreated: 0, workspaceOperationsCreated: 1,
+    activityEventsCreated, toolOrActionEventsCreated, latestEvidenceAt: null });
+  const classify = (rows: Parameters<typeof countRunLivenessActivityEvidence>[0]) => classifyRunLiveness({
+    ...baseInput, resultJson: incompleteDone, evidence: evidence(countRunLivenessActivityEvidence(rows)) });
+
+  it("classifies only platform rows plus an incomplete done report as plan_only", () => {
+    expect(countRunLivenessActivityEvidence(platformRows)).toBe(0);
+    expect(classify(platformRows).livenessState).toBe("plan_only");
+  });
+
+  it("keeps an agent-authored comment or update as concrete evidence", () => {
+    // The Run's own tool writes carry the tool transport details, not a platform source.
+    const toolComment = { action: "issue.comment_added", actorType: "agent", actorId: agentId, entityType: "issue",
+      details: { commentId: "comment-2", authorizationReason: "native_tool", transport: "paperclip_runner" } };
+    const toolUpdate = { action: "issue.updated", actorType: "agent", actorId: agentId, entityType: "issue",
+      details: { changedFields: ["title"], status: "in_progress", transport: "paperclip_runner" } };
+    for (const row of [toolComment, toolUpdate]) {
+      expect(isRunLivenessPlatformActivity(row)).toBe(false);
+      expect(classify([...platformRows, row]).livenessState).toBe("advanced");
+    }
+    // A platform source claimed by another actor, action or entity is not platform activity.
+    expect(isRunLivenessPlatformActivity({ ...platformRows[4]!, actorType: "agent", actorId: agentId })).toBe(false);
+    expect(isRunLivenessPlatformActivity({ ...platformRows[5]!, action: "issue.updated" })).toBe(false);
+    expect(isRunLivenessPlatformActivity({ ...platformRows[0]!, entityType: "issue" })).toBe(false);
+  });
+
+  it("keeps an agent tool effect as concrete evidence", () => {
+    expect(classifyRunLiveness({ ...baseInput, resultJson: incompleteDone,
+      evidence: evidence(countRunLivenessActivityEvidence(platformRows), 1) }).livenessState).toBe("advanced");
+    const documentWrite = { action: "issue.document_upserted", actorType: "agent", actorId: agentId, entityType: "issue",
+      details: { key: "result" } };
+    expect(classify([...platformRows, documentWrite]).livenessState).toBe("advanced");
   });
 });

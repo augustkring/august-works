@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { eq, sql } from "drizzle-orm";
+import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
@@ -32,10 +33,13 @@ import {
 } from "@paperclipai/db";
 
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
 import type { StorageService } from "../../storage/types.js";
 import { issueService } from "../issues.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { findHeartbeatRunCompletionComment, resolveHeartbeatRunResponse } from "../heartbeat-run-summary.js";
 import {
   renderNativeRunnerStagedAttachmentPrompt,
@@ -56,6 +60,7 @@ describe("native runner file handoff", () => {
   const agentId = "00000000-0000-4000-8000-000000009102";
   const issueId = "00000000-0000-4000-8000-000000009103";
   const runId = "00000000-0000-4000-8000-000000009104";
+  const responsibleUserId = "00000000-0000-4000-8000-000000009105";
 
   beforeAll(async () => {
     temporary = await startEmbeddedPostgresTestDatabase(
@@ -75,6 +80,7 @@ describe("native runner file handoff", () => {
       issuePrefix: "NFH",
       issueCounter: 1,
     });
+    await seedCurrentHumanSourceActor(db, [companyId], responsibleUserId);
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -98,6 +104,7 @@ describe("native runner file handoff", () => {
       id: runId,
       companyId,
       agentId,
+      responsibleUserId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: issueId,
@@ -109,6 +116,8 @@ describe("native runner file handoff", () => {
       .update(issues)
       .set({ executionRunId: runId })
       .where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+      responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
   });
 
   afterAll(async () => {
@@ -548,6 +557,11 @@ describe("native runner file handoff", () => {
         unavailableReason: null,
       },
     ]);
+    expect(stage.sourceCaptures).toEqual([{
+      input: { kind: "attachment", issueId, attachmentId: attachment.id, commentId: comment.id,
+        assetId: attachment.assetId, sha256: stored.sha256.toLowerCase(), byteSize: body.length, disposition: "delivered" },
+      payloadSourceSnapshot: null,
+    }]);
     const relativePath = stage.attachments[0]?.workspaceRelativePath;
     expect(relativePath).toBeTruthy();
     await expect(
@@ -727,7 +741,74 @@ describe("native runner file handoff", () => {
         unavailableReason: "remote_workspace_staging_unsupported",
       }),
     ]);
+    expect(remoteStage.sourceCaptures).toEqual([{
+      input: { kind: "attachment", issueId, attachmentId: attachment.id, commentId: comment.id,
+        assetId: attachment.assetId, sha256: stored.sha256.toLowerCase(), byteSize: body.length,
+        disposition: "remote_workspace_staging_unsupported" },
+      payloadSourceSnapshot: null,
+    }]);
     await remoteStage.cleanup();
+  });
+
+  it("captures the selected attachment snapshot before later asset changes and never invents delivered bytes", async () => {
+    const storage = createStorageService(createLocalDiskStorageProvider(storageRoot));
+    const body = Buffer.from("exact captured asset bytes\n");
+    const stored = await storage.putFile({ companyId, namespace: `issues/${issueId}`,
+      originalFilename: "captured.txt", contentType: "text/plain", body });
+    const [asset] = await db.insert(assets).values({ companyId, ...stored }).returning();
+    const [attachment] = await db.insert(issueAttachments).values({ companyId, issueId,
+      assetId: asset!.id, payloadSourceProtocolVersion: 1 }).returning();
+    // This source-free structural fixture tests exact capture, not producer
+    // completeness, current source permission or a qualified dispatch receipt.
+    const [hash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash('attachment',to_jsonb(a)) as hash
+      from issue_attachments a where a.id=${attachment!.id}::uuid`);
+    const content = { version: 1, owner: { kind: "attachment", companyId, id: attachment!.id, contentHash: hash!.hash },
+      policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] };
+    const [sealed] = await db.execute<{ snapshot: NativePayloadSourceSnapshot }>(sql`select ${JSON.stringify(content)}::jsonb || jsonb_build_object(
+      'digest',encode(sha256(convert_to((${JSON.stringify(content)}::jsonb)::text,'UTF8')),'hex')) as snapshot`);
+    await db.update(issueAttachments).set({ payloadSourceSnapshot: sealed!.snapshot }).where(eq(issueAttachments.id, attachment!.id));
+    const wake = { issueId, selectedSavedSources: [{ attachmentId: attachment!.id, sha256: stored.sha256 }] };
+    await db.update(heartbeatRuns).set({ contextSnapshot: wake }).where(eq(heartbeatRuns.id, runId));
+    const binding = { companyId, issueId, runId, agentId, workspaceRoot, executionTargetKind: "local" as const };
+    const stage = await stageNativeRunnerWakeAttachments({ db, binding, storage });
+    try {
+      expect(stage.sourceCaptures).toEqual([{
+        input: { kind: "attachment", issueId, attachmentId: attachment!.id, commentId: null,
+          assetId: asset!.id, sha256: stored.sha256.toLowerCase(), byteSize: body.length, disposition: "delivered" },
+        payloadSourceSnapshot: sealed!.snapshot,
+      }]);
+      expect(JSON.stringify(stage.sourceCaptures)).not.toContain(workspaceRoot);
+      expect(JSON.stringify(stage.sourceCaptures)).not.toContain(".paperclip-inbound");
+      expect(renderNativeRunnerStagedAttachmentPrompt(stage.attachments)).not.toContain("payloadSourceSnapshot");
+      await db.update(assets).set({ sha256: "a".repeat(64) }).where(eq(assets.id, asset!.id));
+      const [changed] = await db.select().from(issueAttachments).where(eq(issueAttachments.id, attachment!.id));
+      expect(changed!.payloadSourceSnapshot).toBeNull();
+      expect(stage.sourceCaptures[0]!.payloadSourceSnapshot).toEqual(sealed!.snapshot);
+      expect(stage.sourceCaptures[0]!.input.sha256).toBe(stored.sha256.toLowerCase());
+    } finally { await stage.cleanup(); }
+    const failed = await stageNativeRunnerWakeAttachments({ db, binding, storage });
+    try {
+      expect(failed.attachments[0]!.workspaceRelativePath).toBeNull();
+      expect(failed.sourceCaptures).toEqual([{
+        input: { kind: "attachment", issueId, attachmentId: attachment!.id, commentId: null,
+          assetId: null, sha256: null, byteSize: null, disposition: "attachment_binding_unavailable" },
+        payloadSourceSnapshot: null,
+      }]);
+    } finally { await failed.cleanup(); }
+    // A selected source withdrawn after capture is not staged on a later run.
+    await db.update(heartbeatRuns).set({ contextSnapshot: { issueId,
+      selectedSavedSources: [{ attachmentId: attachment!.id, sha256: stored.sha256 }] } }).where(eq(heartbeatRuns.id, runId));
+    for (const executionTargetKind of ["local", "remote"] as const) {
+      const unavailable = await stageNativeRunnerWakeAttachments({ db, binding: { ...binding, executionTargetKind }, storage });
+      try {
+        expect(unavailable.sourceCaptures).toEqual([{
+          input: { kind: "attachment", issueId, attachmentId: attachment!.id, commentId: null,
+            assetId: null, sha256: null, byteSize: null, disposition: "attachment_binding_unavailable" },
+          payloadSourceSnapshot: null,
+        }]);
+        expect(unavailable.attachments[0]!.unavailableReason).toBe("attachment_binding_unavailable");
+      } finally { await unavailable.cleanup(); }
+    }
   });
 
   it("excludes an older same-issue attachment when the current wake selects a newer file", async () => {
@@ -882,6 +963,7 @@ describe("native runner file handoff", () => {
     });
 
     expect(stage.attachments).toEqual([]);
+    expect(stage.sourceCaptures).toEqual([]);
     expect(objectReads).toEqual([]);
     expect(objectReads).not.toContain(historical.stored.objectKey);
     expect(renderNativeRunnerStagedAttachmentPrompt(stage.attachments)).toBe(
@@ -1183,8 +1265,10 @@ describe("native runner file handoff", () => {
       title: "Previous report", status: "ready_for_review", url: "https://example.com/previous.pdf", createdByRunId: runId }).returning();
     const nextRunId = randomUUID();
     await db.insert(heartbeatRuns).values({ id: nextRunId, companyId, agentId, status: "running", runtimeMode: "native",
-      nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
+      responsibleUserId, nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.update(issues).set({ executionRunId: nextRunId }).where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId: nextRunId,
+      responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
     const ref = kind === "attachment" ? `deliverable:${prior.entityRefs[0]}` : `work_product:${product.id}`;
     try {
       await expect(nativeCompletionFeedback(db, nextRunId, doneReport([ref])))

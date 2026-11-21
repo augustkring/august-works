@@ -1,0 +1,2 @@
+552 passed; 1 failed.
+The lower-owner fixture used a direct private Task row without a current-Human source snapshot. The production privacy check correctly rejected it. The fixture uses a real current-Human Task owner in the later r489/r490 checks; no production ACL or Native receipt was changed.

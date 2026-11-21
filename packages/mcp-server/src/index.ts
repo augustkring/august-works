@@ -1,6 +1,6 @@
 import { EXPERIENCE_CARD_TOOL } from "@paperclipai/shared";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { PaperclipApiClient } from "./client.js";
 import { readConfigFromEnv, type PaperclipMcpConfig } from "./config.js";
 import { createToolDefinitions } from "./tools.js";
@@ -23,7 +23,10 @@ export function createPaperclipMcpServer(config: PaperclipMcpConfig = readConfig
         annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       }, tool.execute);
     } else {
-      server.tool(tool.name, tool.description, tool.schema.shape, tool.execute);
+      server.registerTool(tool.name, {
+        description: tool.description,
+        inputSchema: tool.schema,
+      }, tool.execute);
     }
   }
 
@@ -35,7 +38,5 @@ export function createPaperclipMcpServer(config: PaperclipMcpConfig = readConfig
 }
 
 export async function runServer(config: PaperclipMcpConfig = readConfigFromEnv()) {
-  const { server } = createPaperclipMcpServer(config);
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  serveStdio(() => createPaperclipMcpServer(config).server, { legacy: "serve" });
 }

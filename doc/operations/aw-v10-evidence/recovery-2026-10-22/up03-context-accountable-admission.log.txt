@@ -1,0 +1,46 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:33:33] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"62234dd3-3519-4905-8e0e-b40d7e4fa292","actorAgentId":"dfc3e399-3d7a-4eba-a8a7-e45fd6a1325b","responsibleUserId":"0ec49515-98c4-4882-a199-9b585caae273"}[39m
+[20:33:33] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"85bb5c14-8124-4bd8-a799-b594f1014fc2","actorAgentId":"e4db4501-d62d-4ad0-b191-73132f800e97","responsibleUserId":"deb015a2-40cc-4a55-9145-30dd1ed85d87"}[39m
+ ❯ |@paperclipai/server| src/services/context/context-manifest.test.ts (4 tests | 4 failed) 10619ms
+     × persists only hashes and provenance, not raw query or evidence content 499ms
+     × hashes policy snapshots deterministically across object-key order 19ms
+     × rejects cross-company evidence before any manifest row is created 69ms
+     × rejects a run that belongs to a different agent 114ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-manifest.test.ts > Context Manifest service > persists only hashes and provenance, not raw query or evidence content
+ FAIL  |@paperclipai/server| src/services/context/context-manifest.test.ts > Context Manifest service > hashes policy snapshots deterministically across object-key order
+ FAIL  |@paperclipai/server| src/services/context/context-manifest.test.ts > Context Manifest service > rejects cross-company evidence before any manifest row is created
+ FAIL  |@paperclipai/server| src/services/context/context-manifest.test.ts > Context Manifest service > rejects a run that belongs to a different agent
+Error: Failed query: delete from "companies"
+params: 
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/context/context-manifest.test.ts:41:5
+     39|     await db.delete(heartbeatRuns);
+     40|     await db.delete(agents);
+     41|     await db.delete(companies);
+       |     ^
+     42|     await db.delete(authUsers);
+     43|   });
+
+Caused by: PostgresError: update or delete on table "companies" violates foreign key constraint "company_memberships_company_id_companies_id_fk" on table "company_memberships"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23503', detail: 'Key (id)=(fa841e2d-feb6-4d7c-b73c-a890bffa816e) is still referenced from table "company_memberships".', schema_name: 'public', table_name: 'company_memberships', constraint_name: 'company_memberships_company_id_companies_id_fk', file: 'ri_triggers.c', routine: 'ri_ReportViolation', query: 'delete from "companies"', parameters: [], args: [], types: [] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  4 failed | 9 passed | 3 skipped (16)
+   Start at  20:33:03
+   Duration  47.96s (transform 11.18s, setup 350ms, import 22.29s, tests 24.48s, environment 0ms)
+

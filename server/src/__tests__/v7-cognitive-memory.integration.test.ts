@@ -1,31 +1,52 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { agents, agentIdentities, companies, companyMemberships, createDb, cognitiveProviderOperations, memoryBindings, memoryRecords, principalPermissionGrants } from "@paperclipai/db";
+import { agents, agentIdentities, companies, companyMemberships, createDb, cognitiveProviderOperations, memoryRecords, principalPermissionGrants } from "@paperclipai/db";
 import { cognitiveMemoryService } from "../services/memory/cognitive-memory.js";
 import { assertCognitiveRecallUniverse, localCognitiveProvider } from "../services/memory/cognitive-provider.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { issueService } from "../services/issues.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import type { MemoryMutationActor } from "../services/memory/memory-service.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)("V7 governed cognitive provider", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
   let companyId: string, agentId: string, memoryId: string;
+  let memoryActor: MemoryMutationActor;
   const owner = { type: "board" as const, source: "local_implicit" as const };
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v7-cognitive-"); db = createDb(database.connectionString);
     await instanceSettingsService(db).updateExperimental({ enableCollectiveMemoryV1: true, enableContextEngineV1: true, cognitive_memory_v7: true }); });
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
+    await instanceSettingsService(db).updateExperimental({ enableCollectiveMemoryV1: true, enableContextEngineV1: true, cognitive_memory_v7: true });
     companyId = randomUUID(); agentId = randomUUID(); memoryId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Cognitive fixture", issuePrefix: `C${companyId.slice(0, 7)}` });
     const [identity] = await db.insert(agentIdentities).values({ name: "Memory agent", homeCompanyId: companyId }).returning();
     await db.insert(agents).values({ id: agentId, companyId, agentIdentityId: identity!.id, name: "Memory agent" });
     await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agentId, status: "active" });
     await db.insert(principalPermissionGrants).values({ companyId, principalType: "agent", principalId: agentId, permissionKey: "company_scope:read" });
-    const [binding] = await db.insert(memoryBindings).values({ companyId, key: "test", name: "Governed memory", providerKey: "local" }).returning();
-    await db.insert(memoryRecords).values({ id: memoryId, companyId, bindingId: binding!.id, providerKey: "local", memoryType: "lesson", scopeType: "company",
-      content: "Customer onboarding needs verified evidence", observedAt: new Date(), reviewState: "accepted", verificationState: "human_verified", createdByActorType: "system", createdByActorId: "fixture" });
+    const human = await seedCurrentHumanSourceActor(db, [companyId]);
+    memoryActor = { principal: { type: "user", userId: "local-board" }, authorizationActor: human };
+    const memories = memoryService(db);
+    const binding = await memories.createCompanyBinding(companyId, { key: "test", name: "Governed memory", providerKey: "local" }, memoryActor);
+    const content = "Customer onboarding needs verified evidence";
+    const task = await issueService(db).create(companyId, { title: "Human cognitive Memory evidence", description: content,
+      createdByUserId: "local-board", responsibleUserId: "local-board" }, db, undefined, { manualInputActor: human });
+    const observedAt = new Date().toISOString();
+    const candidate = await memories.createCandidate(companyId, { bindingId: binding.id, memoryType: "lesson",
+      scope: { type: "company", id: null }, subject: null, ownerAgentId: null, title: "Reviewed onboarding evidence", content,
+      summary: null, sensitivity: "internal", importance: 50, confidenceScore: 1, validFrom: null, validUntil: null,
+      observedAt, retentionPolicy: "standard", expiresAt: null, createdByOperationId: null, metadata: {}, evidence: [{
+        sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${task.id}`,
+        sourceVersion: task.updatedAt.toISOString(), sourceUpdatedAt: task.updatedAt.toISOString(), observedAt,
+        excerptHash: nativeSha256(`Status: ${task.status}\nPriority: ${task.priority}\nDescription: ${content}`),
+        citation: { label: `${task.identifier}: ${task.title}` }, trustLevel: "low", relation: "supports" }] }, memoryActor);
+    memoryId = candidate.record.id;
+    await memories.reviewCandidate(companyId, memoryId, { decision: "accept" }, memoryActor);
   });
   const recall = { query: "customer onboarding", purpose: "general_work", sensitivityCeiling: "internal" as const, topK: 10 };
   async function binding() { return cognitiveMemoryService(db).createBinding(owner, companyId, { bindingKey: "local", providerKey: "local_baseline", scope: { type: "company", id: null }, purpose: "general_work" }); }
@@ -42,7 +63,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const service = cognitiveMemoryService(db), configured = await binding();
     expect((await service.reconcile(owner, companyId, configured.id)).status).toBe("succeeded");
     await instanceSettingsService(db).updateExperimental({ cognitive_memory_v7: false });
-    await memoryService(db).revoke(companyId, memoryId, { reason: "Incorrect outcome" }, { principal: { type: "system", service: "fixture" } });
+    await memoryService(db).revoke(companyId, memoryId, { reason: "Incorrect outcome" }, memoryActor);
     const receipts = await db.select().from(cognitiveProviderOperations).where(eq(cognitiveProviderOperations.companyId, companyId));
     expect(receipts.some((receipt) => receipt.operationType === "delete" && receipt.status === "succeeded")).toBe(true);
     expect(JSON.stringify(receipts)).not.toContain("Customer onboarding");
@@ -71,13 +92,13 @@ const support = await getEmbeddedPostgresTestSupport();
     const privateBinding = await service.createBinding(owner, companyId, { bindingKey: "private", providerKey: "local_baseline", scope: { type: "agent", id: agentId }, purpose: "general_work", approvedPrivateProjection: true });
     expect((await service.status(owner, companyId)).bindings.some((row) => row.id === privateBinding.id)).toBe(false);
     await db.update(memoryRecords).set({ scopeType: "agent", scopeId: agentId, ownerAgentId: agentId, verificationState: "unverified" }).where(eq(memoryRecords.id, memoryId));
-    expect(await service.recall(actor, companyId, privateBinding.id, recall)).toEqual([]);
+    await expect(service.recall(actor, companyId, privateBinding.id, recall)).rejects.toMatchObject({ status: 403 });
     await expect(service.recall(owner, companyId, privateBinding.id, recall)).rejects.toMatchObject({ status: 404 });
   });
   it("keeps V4 Memory functional with the cognitive flag off", async () => {
     const configured = await binding(); await instanceSettingsService(db).updateExperimental({ cognitive_memory_v7: false });
     expect(await cognitiveMemoryService(db).recall(owner, companyId, configured.id, recall)).toEqual([]);
-    expect(await memoryService(db).listEligible(companyId, { scopeType: "company", scopeId: null }, { principal: { type: "system", service: "fixture" } })).toHaveLength(1);
+    expect(await memoryService(db).listEligible(companyId, { scopeType: "company", scopeId: null }, memoryActor)).toHaveLength(1);
     await instanceSettingsService(db).updateExperimental({ cognitive_memory_v7: true });
   });
 });

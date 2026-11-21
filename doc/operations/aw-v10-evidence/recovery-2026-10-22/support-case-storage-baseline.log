@@ -1,0 +1,53 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/support-case-storage.integration.test.ts (7 tests | 7 skipped) 65381ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/support-case-storage.integration.test.ts > native support case storage and erasure boundaries
+Error: Failed to start embedded PostgreSQL test database: Failed query: 
+ALTER TABLE "support_case_events" ADD CONSTRAINT "support_case_events_company_id_case_id_support_cases_company_id_id_fk" FOREIGN KEY ("company_id","case_id") REFERENCES "public"."support_cases"("company_id","id") ON DELETE cascade ON UPDATE no action;
+params: 
+ ❯ startEmbeddedPostgresTestDatabase ../packages/db/src/test-embedded-postgres.ts:305:11
+    303|   } catch (error) {
+    304|     await stopEmbeddedPostgresBounded(instance, () => cleanupEmbeddedP…
+    305|     throw new Error(
+       |           ^
+    306|       `Failed to start embedded PostgreSQL test database: ${
+    307|         formatEmbeddedPostgresError(error, {
+ ❯ src/__tests__/support-case-storage.integration.test.ts:19:16
+
+Caused by: Error: Failed query: 
+ALTER TABLE "support_case_events" ADD CONSTRAINT "support_case_events_company_id_case_id_support_cases_company_id_id_fk" FOREIGN KEY ("company_id","case_id") REFERENCES "public"."support_cases"("company_id","id") ON DELETE cascade ON UPDATE no action;
+params: 
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/dialect.js:64:13
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PgDialect.migrate ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/dialect.js:60:5
+ ❯ migrate ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/postgres-js/migrator.js:4:3
+ ❯ applyPendingMigrations ../packages/db/src/client.ts:1027:7
+ ❯ startEmbeddedPostgresTestDatabase ../packages/db/src/test-embedded-postgres.ts:289:5
+ ❯ src/__tests__/support-case-storage.integration.test.ts:19:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { query: '\nALTER TABLE "support_case_events" ADD CONSTRAINT "support_case_events_company_id_case_id_support_cases_company_id_id_fk" FOREIGN KEY ("company_id","case_id") REFERENCES "public"."support_cases"("company_id","id") ON DELETE cascade ON UPDATE no action;', params: [] }
+Caused by: PostgresError: there is no unique constraint matching given keys for referenced table "support_cases"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '42830', file: 'tablecmds.c', routine: 'transformFkeyCheckAttrs', query: '\nALTER TABLE "support_case_events" ADD CONSTRAINT "support_case_events_company_id_case_id_support_cases_company_id_id_fk" FOREIGN KEY ("company_id","case_id") REFERENCES "public"."support_cases"("company_id","id") ON DELETE cascade ON UPDATE no action;', parameters: [], args: [], types: [] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 skipped (7)
+   Start at  15:59:17
+   Duration  119.36s (transform 29.96s, setup 728ms, import 52.01s, tests 65.38s, environment 0ms)
+

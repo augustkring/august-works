@@ -1,0 +1,44 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.379065917019034,
+      "filesAdvised": 513558,
+      "memoryAfter": 6142976000,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "scripts/check-token-gates.mjs"
+      ],
+      "exit": 0,
+      "seconds": 0.9035158229817171,
+      "peakGroupRssBytes": 40415232,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "/workspace/blentera-v10/ui/vitest.config.ts",
+        "--root",
+        "ui",
+        "--maxWorkers=1",
+        "src/pages/SaasDeletion.test.tsx",
+        "src/pages/SaasAccount.test.tsx",
+        "src/i18n/locale-validation.test.ts",
+        "src/api/saas-account-current.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 10.924975448986515,
+      "peakGroupRssBytes": 763084800,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

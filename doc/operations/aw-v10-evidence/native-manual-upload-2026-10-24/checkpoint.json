@@ -1,0 +1,71 @@
+{
+  "parentCommit": "2143ea995",
+  "requirements": [
+    "KRN-01",
+    "UP-03",
+    "CE-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "initialNativeUploadOwner": {
+      "exit": 0,
+      "passed": 9,
+      "suites": 1,
+      "log": "native-manual-upload-initial.log"
+    },
+    "initialExpandedSuites": {
+      "exit": 1,
+      "passed": 76,
+      "failed": 4,
+      "suites": 4,
+      "log": "native-manual-upload-owned.log"
+    },
+    "parentProductionControl": {
+      "exit": 1,
+      "failed": 4,
+      "unselected": 29,
+      "log": "native-manual-upload-parent-routes.log"
+    },
+    "routeFixtureDiagnostics": {
+      "exit": 1,
+      "passed": 31,
+      "failed": 2,
+      "log": "native-manual-upload-route-diagnostics.log"
+    },
+    "routeFixtureStackDiagnostics": {
+      "exit": 1,
+      "failed": 2,
+      "unselected": 31,
+      "log": "native-manual-upload-route-stack.log"
+    },
+    "finalNativeAndExistingAttachmentSuites": {
+      "exit": 0,
+      "passed": 80,
+      "suites": 4,
+      "log": "native-manual-upload-final.log"
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "native-manual-upload-types.log"
+    },
+    "builtCookieAndAuthenticatorBrowser": {
+      "exit": 0,
+      "passed": 1,
+      "log": "native-manual-upload-browser.log"
+    }
+  },
+  "observations": [
+    "The original multipart HTTP route passes actual file.buffer and the actual Board/session actor to the original attachment owner. Stored metadata alone, user attribution, Board keys and Agent/run constructors cannot qualify literal Human input.",
+    "The owner verifies the actual nonempty byte length and SHA-256 against storage metadata before registration. Native User/session and current non-viewer membership or recent native passkey operator role are pinned before privacy-tree and Task locks. Current canonical issue:mutate and Task privacy apply under the Task lock. Original session expiry and operator recency are checked after waits and after awaited registration effects.",
+    "The new attachment INSERT selects protocol1. After the asset/attachment and original registration effects, the same transaction binds its actual native body hash and canonical digest with the parent Task policy anchor. The actual Human source audit uses native parent issue linkage, attachment/asset IDs and hashes only. Publication follows commit; its failure cannot undo a committed acknowledgement.",
+    "Nine native owner controls cover actual multipart/disk bytes, stored hash/digest, private DTO omission, asset-change invalidation, attribution-only unknown history, hash/length mismatch, expired/wrong-session/viewer denial, source-audit rollback and source-session expiry during an observed actual privacy lock wait.",
+    "All four legacy route failures reproduce against parent production files. Fixture repair moves cold route compilation into bounded setup, preserves analytical-source denial403 and parent-read denial404, and explicitly mocks the canonical Task admission helper in the isolated HTTP/storage/artifact-metadata suite. Separate native suites retain actual PostgreSQL authorization. Final80 cases pass; failed diagnostic stages are preserved.",
+    "The built maintained cookie/password/TOTP/recovery/software-UV browser now additionally verifies original HTTP upload capture, actual DB body hash/digest, hidden private fields and actual Human audit. Server compilation passes. A bounded read-only gpt-6-luna review found no concrete upload blocker."
+  ],
+  "limits": [
+    "The native owner suite uses structural HTTP actor carriers backed by actual PostgreSQL principals, sessions, memberships, transactions and disk storage. The browser supplies actual localhost cookie and software virtual-authenticator evidence, not physical hardware/provider qualification.",
+    "Provider storage writes still precede DB registration. Existing cleanup deletes known rejected4xx objects and preserves ambiguous failures. This is not a new durable-upload-intent, orphan collector or physical-erasure qualification.",
+    "The capture qualifies only original independent literal Human upload bytes. It is neither source permission nor a complete Native run input receipt. Historical/Agent/model sources remain unknown; no run protocol activation or private-work admission is added.",
+    "The six typed/private-Memory/temporal regressions, remaining source producers, read lifetimes and broader V10 acceptance remain open. No full V10/PR readiness, release, merge or deployment claim."
+  ]
+}

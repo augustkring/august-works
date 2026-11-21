@@ -1,0 +1,34 @@
+{
+  "status": "Historical original four-case RED; corrections/current bounded evidence in up03-agent-scope-http-jwt-checkpoint.json",
+  "actualRed": {
+    "sessionId": 83985,
+    "testsFailed": 4,
+    "durationSeconds": 28.25,
+    "exitCode": 1,
+    "fourSourcePinsUnchanged": true,
+    "cleanup": "Actual PostgreSQL and socket/server cleanup completed"
+  },
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=1GiB GOMAXPROCS=2 node node_modules/vitest/vitest.mjs run server/src/__tests__/live-events-agent-key-authority.integration.test.ts --maxWorkers=1",
+  "actualProof": [
+    "Actual native Agent+Human+memberships+active persisted SHA256key starts company socket and receives positive event.",
+    "Original canonical paused-read positive passes, preserving existing HTTP read policy.",
+    "Human membership suspension or physical account deletion makes canonical company_scope:read deny while original key remains active; old socket still received event.",
+    "Actual skill_test/task_bridge keys canonically deny company_scope:read but original WebSocket upgraded successfully."
+  ],
+  "policyLimitations": [
+    "No Agent company_membership policy invented. Canonical standard same-company read currently admits native Agent row without membership; SaaS distinction remains explicitly unresolved.",
+    "No claim of current source-policy lifetime atomicity or complete V10/graph closure.",
+    "No production fix or GREEN verdict yet."
+  ],
+  "pins": {
+    "server/src/realtime/live-events-ws.ts": "d8784137fa23bf5264d979924d74d1823717760201af9011c060b2c86dc0156e",
+    "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+    "server/src/services/analytical-live-events.ts": "fc2b6cb54b1d7251e5a142956bcb18f5b902e37c71c542d0c04b2af8973392d9",
+    "server/src/__tests__/live-events-agent-key-authority.integration.test.ts": "4c62e977c7a75b8d36f44e2655cf888865945493609bf41ef3538d8a6f833ab6"
+  },
+  "artifacts": {
+    "up03-live-agent-company-red.log.txt": "7e1e230f6b4e90b1c775b3c3a56d61a34be93d453855218a35aa9e11293662e4",
+    "up03-live-agent-company-red-test.ts.txt": "4c62e977c7a75b8d36f44e2655cf888865945493609bf41ef3538d8a6f833ab6",
+    "up03-live-agent-company-red-ws.ts.txt": "d8784137fa23bf5264d979924d74d1823717760201af9011c060b2c86dc0156e"
+  }
+}

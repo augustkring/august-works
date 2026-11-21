@@ -1,0 +1,7 @@
+{
+  "server/src/__tests__/v6-commercial-runtime.integration.test.ts": "f9aa3da0407c674753dae8348058914237475799c12ed8d3c2584a3fb5df037f",
+  "server/src/__tests__/v6-costs.integration.test.ts": "a700750f10ad2e54c1f44234a00af6245b8d2ae10146f7750e018a199c963383",
+  "server/src/routes/saas.ts": "20e11f899ae3d1d45208caaaf2a32cc627f5394f14ce747156a41d8b5ee7df55",
+  "server/src/services/billing/costs.ts": "2c9107bacd5c812f4351cf8b6ff08661dbb3b506a3d05ce248da0fc43bc2cb54",
+  "server/src/services/runtime/catalog.ts": "2b3ec038709aba649dfc8a2e2dc3f4638e99dd9965485c808fa0e22ad7439268"
+}

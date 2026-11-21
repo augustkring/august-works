@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { createDb, companyMemberships, companySkills, companySkillVersions, portfolioCapabilityPublications, projects, issues } from "@paperclipai/db";
+import { createDb, companyMemberships, companySkills, companySkillVersions, portfolioCapabilityPublications } from "@paperclipai/db";
 import { createPlaybookSchema, publishPortfolioCapabilitySchema, installPortfolioCapabilitySchema } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -8,6 +8,8 @@ import { organizationService } from "../services/organization.js";
 import { playbookService } from "../services/playbooks.js";
 import { portfolioCapabilityService } from "../services/portfolio-capabilities.js";
 import { portfolioService } from "../services/portfolio.js";
+import { issueService } from "../services/issues.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 describe.skipIf(!support.supported)("V5 explicit portfolio releases and company views", () => {
@@ -45,13 +47,16 @@ describe.skipIf(!support.supported)("V5 explicit portfolio releases and company 
   });
   it("reads each company's canonical sources and removes a company after current membership is revoked", async () => {
     const f = await seedV5Presences(db), service = portfolioService(db);
-    const [project] = await db.insert(projects).values({ companyId: f.home, name: "Canonical launch" }).returning();
-    const [task] = await db.insert(issues).values({ companyId: f.home, projectId: project!.id, title: "Assigned to the operator", assigneeUserId: f.userId }).returning();
-    const before = await service.summary(f.actor, { companyIds: [f.home, f.guest] });
+    const actor = await seedCurrentHumanSourceActor(db, [f.home, f.guest], f.userId);
+    const project = await createCanonicalHumanProject(db, f.home, actor, "Canonical launch");
+    const task = await issueService(db).create(f.home, { projectId: project.id, title: "Assigned to the operator", status: "todo",
+      assigneeUserId: f.userId, createdByUserId: f.userId, responsibleUserId: f.userId }, db, undefined,
+      { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+    const before = await service.summary(actor, { companyIds: [f.home, f.guest] });
     expect(before.companies.find((c) => c.companyId === f.home)?.myTasks.map((t) => t.id)).toContain(task!.id);
-    expect(before.companies.find((c) => c.companyId === f.home)?.projects.map((p) => p.id)).toContain(project!.id);
+    expect(before.companies.find((c) => c.companyId === f.home)?.projects.map((p) => p.id)).toContain(project.id);
     await db.update(companyMemberships).set({ status: "revoked" }).where(and(eq(companyMemberships.companyId, f.guest), eq(companyMemberships.principalId, f.userId)));
-    const after = await service.summary(f.actor, { companyIds: [f.home, f.guest] });
+    const after = await service.summary(actor, { companyIds: [f.home, f.guest] });
     expect(after.unavailableCompanyIds).toEqual([f.guest]); expect(after.companies.map((c) => c.companyId)).toEqual([f.home]);
   });
 });

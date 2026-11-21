@@ -1,0 +1,15 @@
+{
+  "scope": "Reuse existing code-owned PRODUCT_IDENTITY in four entry/runtime/billing pages and English/Danish auth titles",
+  "sources": {
+    "ui/src/pages/Auth.tsx": "ce5d6e6dd86b153ebc82328116e8bd6bca9bde870a54d394cb8028f12e135884",
+    "ui/src/pages/Activation.tsx": "fb60b8a93e90de8bf61c09d644823dd3a9b367946cc6f77569c8281c50f2db5f",
+    "ui/src/pages/SaasWelcome.tsx": "1001c8f32ffec29367b5ef4177c41711ba1e8f42ba6c9af6ff6605290e025a54",
+    "ui/src/pages/SaasBilling.tsx": "c3032499911b693f8a985f328f42b75e51488ade1f651b468d6be0e161bd6e1e",
+    "ui/src/i18n/experience/en.json": "0897c78232800af212970168a865809d9dee5f789b4ad57fe8740ab8b0e73c4c",
+    "ui/src/i18n/experience/da.json": "2b1ae7d88a41955551f1400cce03d21cc6ce82de6680d324bec9959e494e5130"
+  },
+  "uiTypecheckExit": 0,
+  "uiTokenGatesExit": 0,
+  "localeVerification": "All keys and unrelated values preserved; exactly three auth titles per locale interpolate productName and render the identical previous Blentera copy.",
+  "limits": "Partial brand migration only; feedback data-sharing behavior unchanged. No complete visual, accessibility, locale or V10 qualification."
+}

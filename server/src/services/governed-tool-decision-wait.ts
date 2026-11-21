@@ -1,0 +1,288 @@
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import {
+  activityLog,
+  heartbeatRuns,
+  issueComments,
+  issueThreadInteractions,
+  issues,
+  statusDecisions,
+  type Db,
+} from "@paperclipai/db";
+import { logActivity } from "./activity-log.js";
+
+/**
+ * APR-E2E-1 (decision: option B). A Human's comment on a Task that waits only
+ * for a governed tool decision of its own assignee does not start a Run: the
+ * gated action cannot run before the decision, so a Run could only yield again
+ * while spending model budget and a plan retry. The comment is recorded as a
+ * deferred note and handed to the resolution Run (approve, decline, Always
+ * allow, or a failed approved action) exactly once.
+ *
+ * The match is exact and fails closed. Every other `in_review` Task keeps the
+ * ordinary comment wake: review handoffs, signoff and plan review, any second
+ * pending interaction, a card created by another actor, a card whose Run did
+ * not record the governed wait as the Task's latest decision.
+ */
+export const GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION = "issue.comment_wake_deferred";
+export const GOVERNED_TOOL_DECISION_NOTE_REASON = "governed_tool_decision_pending";
+
+export type GovernedToolDecisionWait = {
+  interactionId: string;
+  sourceRunId: string;
+  statusDecisionId: string;
+};
+
+function object(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export async function findGovernedToolDecisionWait(
+  db: Db,
+  input: { companyId: string; issueId: string; assigneeAgentId: string },
+): Promise<GovernedToolDecisionWait | null> {
+  const [issue] = await db
+    .select({
+      status: issues.status,
+      assigneeAgentId: issues.assigneeAgentId,
+      assigneeUserId: issues.assigneeUserId,
+      lastStatusDecisionId: issues.lastStatusDecisionId,
+    })
+    .from(issues)
+    .where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)))
+    .limit(1);
+  if (
+    !issue ||
+    issue.status !== "in_review" ||
+    issue.assigneeAgentId !== input.assigneeAgentId ||
+    issue.assigneeUserId ||
+    !issue.lastStatusDecisionId
+  )
+    return null;
+  // Any other open interaction (a second card, a plan or completion review,
+  // a question) keeps today's behaviour.
+  const pending = await db
+    .select({
+      id: issueThreadInteractions.id,
+      kind: issueThreadInteractions.kind,
+      payload: issueThreadInteractions.payload,
+      createdByAgentId: issueThreadInteractions.createdByAgentId,
+      createdByUserId: issueThreadInteractions.createdByUserId,
+      sourceRunId: issueThreadInteractions.sourceRunId,
+    })
+    .from(issueThreadInteractions)
+    .where(
+      and(
+        eq(issueThreadInteractions.companyId, input.companyId),
+        eq(issueThreadInteractions.issueId, input.issueId),
+        eq(issueThreadInteractions.status, "pending"),
+      ),
+    )
+    .limit(2);
+  if (pending.length !== 1) return null;
+  const card = pending[0]!;
+  const toolAction = object(object(card.payload)?.toolAction);
+  if (
+    card.kind !== "request_confirmation" ||
+    !toolAction ||
+    typeof toolAction.actionRequestId !== "string" ||
+    card.createdByAgentId !== input.assigneeAgentId ||
+    card.createdByUserId ||
+    !card.sourceRunId
+  )
+    return null;
+  const [decision] = await db
+    .select({ id: statusDecisions.id })
+    .from(statusDecisions)
+    .where(
+      and(
+        eq(statusDecisions.companyId, input.companyId),
+        eq(statusDecisions.issueId, input.issueId),
+        eq(statusDecisions.id, issue.lastStatusDecisionId),
+        eq(statusDecisions.runId, card.sourceRunId),
+        eq(statusDecisions.applicationState, "applied"),
+        eq(statusDecisions.reasonCode, "governed_response_waiting"),
+        eq(statusDecisions.toStatus, "in_review"),
+      ),
+    )
+    .limit(1);
+  if (!decision) return null;
+  const [sourceRun] = await db
+    .select({ id: heartbeatRuns.id })
+    .from(heartbeatRuns)
+    .where(
+      and(
+        eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.id, card.sourceRunId),
+        eq(heartbeatRuns.agentId, input.assigneeAgentId),
+      ),
+    )
+    .limit(1);
+  if (!sourceRun) return null;
+  return { interactionId: card.id, sourceRunId: card.sourceRunId, statusDecisionId: decision.id };
+}
+
+export async function recordDeferredGovernedNote(
+  db: Db,
+  input: {
+    companyId: string;
+    issueId: string;
+    assigneeAgentId: string;
+    commentId: string;
+    wait: GovernedToolDecisionWait;
+    actor: { actorType: "user"; actorId: string };
+  },
+): Promise<boolean> {
+  // APR-E2E-18. The pending card itself is never changed: the requesting
+  // Run recorded it as a source. The durable activity row below is the note's
+  // only owner; it binds this note, this card at its current (pending)
+  // version and this Task, with the note's Human author as its actor. If the
+  // card is no longer pending, nothing is recorded and the caller keeps the
+  // ordinary wake.
+  return db.transaction(async (raw) => {
+    const tx = raw as unknown as Db;
+    const [linked] = await tx
+      .select({ id: issueThreadInteractions.id,
+        version: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text` })
+      .from(issueThreadInteractions)
+      .where(and(
+        eq(issueThreadInteractions.companyId, input.companyId),
+        eq(issueThreadInteractions.issueId, input.issueId),
+        eq(issueThreadInteractions.id, input.wait.interactionId),
+        eq(issueThreadInteractions.status, "pending"),
+      ))
+      .for("update");
+    if (!linked) return false;
+    await logActivity(tx, {
+      companyId: input.companyId,
+      actorType: input.actor.actorType,
+      actorId: input.actor.actorId,
+      action: GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION,
+      entityType: "issue",
+      entityId: input.issueId,
+      details: {
+        commentId: input.commentId,
+        interactionId: input.wait.interactionId,
+        interactionVersion: linked.version,
+        sourceRunId: input.wait.sourceRunId,
+        statusDecisionId: input.wait.statusDecisionId,
+        assigneeAgentId: input.assigneeAgentId,
+        reason: GOVERNED_TOOL_DECISION_NOTE_REASON,
+      },
+    });
+    return true;
+  });
+}
+
+/** Human notes deferred for this card, still present on this Task, oldest
+ * first. The resolution wake is idempotent per card status, so they are
+ * delivered once. */
+export async function deferredGovernedNoteCommentIds(
+  db: Db,
+  input: { companyId: string; issueId: string; interactionId: string; assigneeAgentId: string },
+): Promise<string[]> {
+  const deferred = await db
+    .select({ details: activityLog.details, actorType: activityLog.actorType, actorId: activityLog.actorId })
+    .from(activityLog)
+    .where(
+      and(
+        eq(activityLog.companyId, input.companyId),
+        eq(activityLog.entityType, "issue"),
+        eq(activityLog.entityId, input.issueId),
+        eq(activityLog.action, GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION),
+        eq(activityLog.actorType, "user"),
+        sql`${activityLog.details}->>'interactionId' = ${input.interactionId}`,
+        sql`${activityLog.details}->>'assigneeAgentId' = ${input.assigneeAgentId}`,
+      ),
+    );
+  const byComment = new Map<string, string>();
+  for (const row of deferred) {
+    const commentId = object(row.details)?.commentId;
+    if (typeof commentId === "string" && !byComment.has(commentId)) byComment.set(commentId, row.actorId);
+  }
+  if (byComment.size === 0) return [];
+  const comments = await db
+    .select({ id: issueComments.id, authorUserId: issueComments.authorUserId })
+    .from(issueComments)
+    .where(
+      and(
+        eq(issueComments.companyId, input.companyId),
+        eq(issueComments.issueId, input.issueId),
+        inArray(issueComments.id, [...byComment.keys()]),
+        isNull(issueComments.deletedAt),
+        isNull(issueComments.createdByRunId),
+      ),
+    )
+    .orderBy(asc(issueComments.createdAt), asc(issueComments.id));
+  return comments
+    .filter((comment) => comment.authorUserId && comment.authorUserId === byComment.get(comment.id))
+    .map((comment) => comment.id);
+}
+
+/** APR-E2E-18. The owner of one deferred Human note on a resolved governed
+ * card: its durable deferral activity row, re-read in the caller's
+ * transaction. Never a card origin and never an authority flag. */
+export type NativeDeferredGovernedNoteOwner = {
+  companyId: string; issueId: string; interactionId: string; interactionVersion: string;
+  commentId: string; activityId: string; authorUserId: string;
+};
+
+/**
+ * Return the owner of each given note that has exactly one deferral activity
+ * row binding exactly this note, this card (id and the card version at
+ * deferral) and this Task, recorded by the note's own Human author while the
+ * card was pending (the version lies between the card's creation and its
+ * resolution, and the row precedes the resolution). The note must be a
+ * present Human comment of this Task. Notes without such a row are omitted,
+ * so their origin stays unowned and refused.
+ */
+export async function captureDeferredGovernedNoteOwners(
+  db: Db,
+  input: { companyId: string; issueId: string; interactionId: string; commentIds: readonly string[] },
+): Promise<NativeDeferredGovernedNoteOwner[]> {
+  if (input.commentIds.length === 0 || input.commentIds.length > 64) return [];
+  const [card] = await db
+    .select({ createdAt: sql<string>`extract(epoch from ${issueThreadInteractions.createdAt})::text`,
+      resolvedAt: sql<string | null>`extract(epoch from ${issueThreadInteractions.resolvedAt})::text`,
+      resolvedAtTime: issueThreadInteractions.resolvedAt })
+    .from(issueThreadInteractions)
+    .where(and(eq(issueThreadInteractions.companyId, input.companyId), eq(issueThreadInteractions.issueId, input.issueId),
+      eq(issueThreadInteractions.id, input.interactionId)))
+    .for("share");
+  if (!card) return [];
+  const owners: NativeDeferredGovernedNoteOwner[] = [];
+  for (const commentId of [...new Set(input.commentIds)]) {
+    const [comment] = await db
+      .select({ authorUserId: issueComments.authorUserId })
+      .from(issueComments)
+      .where(and(eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+        eq(issueComments.id, commentId), isNull(issueComments.deletedAt), isNull(issueComments.createdByRunId)))
+      .for("share");
+    if (!comment?.authorUserId) continue;
+    const rows = await db
+      .select({ id: activityLog.id, actorId: activityLog.actorId, details: activityLog.details, createdAt: activityLog.createdAt })
+      .from(activityLog)
+      .where(and(
+        eq(activityLog.companyId, input.companyId),
+        eq(activityLog.entityType, "issue"),
+        eq(activityLog.entityId, input.issueId),
+        eq(activityLog.action, GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION),
+        eq(activityLog.actorType, "user"),
+        sql`${activityLog.details}->>'commentId' = ${commentId}`,
+      ))
+      .for("share");
+    if (rows.length !== 1) continue;
+    const row = rows[0]!;
+    const details = object(row.details);
+    const version = details?.interactionVersion;
+    if (!details || details.interactionId !== input.interactionId || row.actorId !== comment.authorUserId ||
+      typeof version !== "string" || !/^\d+(?:\.\d+)?$/.test(version) ||
+      Number(version) < Number(card.createdAt) ||
+      (card.resolvedAt !== null && (Number(version) > Number(card.resolvedAt) ||
+        !card.resolvedAtTime || row.createdAt.getTime() > card.resolvedAtTime.getTime()))) continue;
+    owners.push({ companyId: input.companyId, issueId: input.issueId, interactionId: input.interactionId,
+      interactionVersion: version, commentId, activityId: row.id, authorUserId: comment.authorUserId });
+  }
+  return owners;
+}

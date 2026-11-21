@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+No test files found, exiting with code 1
+
+filter: server/src/services/native-runtime/native-runner-file-handoff.test.ts
+include: src/**/*.test.ts, scripts/**/*.test.mjs
+exclude:  **/node_modules/**, **/.git/**
+

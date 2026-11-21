@@ -1,6 +1,6 @@
 import * as nativeExecutor from "./native-runtime/native-session-executor.js";
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
-import { recordNativeLocalProcessStop, hasNativeLocalProcessStop, PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
+import { recordNativeLocalProcessStop, recordNativeLocalProcessStopAfterExit, hasNativeLocalProcessStop, PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
 import { remoteTerminationReceipt } from "./remote-execution-termination.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
@@ -14,9 +14,13 @@ import {
   issues, nativeRunFinalizations, nativeRunResults, completionContracts, environmentLeases, environments, issueRelations, issueTreeHolds, issueTreeHoldMembers,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "../__tests__/helpers/embedded-postgres.js";
-import { admitExplicitNativeContinuation } from "./explicit-native-continuation.js";
+import { issueService } from "./issues.js";
+import { seedCurrentHumanSourceActor } from "../__tests__/helpers/current-human-source-fixture.js";
+import { admitExplicitNativeContinuation, isExactUnknownNativeTextCharge } from "./explicit-native-continuation.js";
 import { buildExecutionContinuation } from "./execution-continuation.js";
 import { heartbeatService, persistHeartbeatRunProcessMetadata, type HeartbeatEnvironmentRuntime } from "./heartbeat.js";
+import { createRemoteRuntimeAssetLocator } from "./native-runtime/runtime-asset-retention.js";
+import { readProcessStartedAt } from "./hot-restart.js";
 import { getExecutionBlocker } from "./execution-blocker.js";
 import { createDurableChatWakeupRequest } from "./durable-chat-wakeup.js";
 const support = await getEmbeddedPostgresTestSupport();
@@ -25,13 +29,21 @@ const support = await getEmbeddedPostgresTestSupport();
   let db: ReturnType<typeof createDb>;
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("explicit-native-message-"); db = createDb(database.connectionString); }, 30000);
   afterAll(async () => { await database?.cleanup(); });
-  async function seed() {
+  async function seed(canonicalHumanTask = false) {
     const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID();
     const sourceRunId = randomUUID(), successorRunId = randomUUID();
     const commentId: string = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Explicit turn", defaultResponsibleUserId: "board", issuePrefix: `E${companyId.slice(0, 6)}` });
     await db.insert(agents).values({ id: agentId, companyId, name: "Native", role: "engineer", adapterType: "paperclip_runner", status: "idle", runtimeConfig: { heartbeat: { maxConcurrentRuns: 1 } } });
-    await db.insert(issues).values({ id: issueId, companyId, title: "Deploy", status: "blocked", assigneeAgentId: agentId });
+    if (canonicalHumanTask) {
+      const human = await seedCurrentHumanSourceActor(db, [companyId], "board");
+      await issueService(db).create(companyId, { id: issueId, title: "Deploy", status: "todo", priority: "medium",
+        assigneeAgentId: agentId, responsibleUserId: "board", createdByUserId: "board" }, db, undefined,
+      { manualInputActor: human });
+      await db.update(issues).set({ status: "blocked" }).where(eq(issues.id, issueId));
+    } else {
+      await db.insert(issues).values({ id: issueId, companyId, title: "Deploy", status: "blocked", assigneeAgentId: agentId });
+    }
     await db.insert(heartbeatRuns).values({ id: sourceRunId, companyId, agentId,
       nativeIssueId: issueId, runtimeMode: "native", status: "failed", processPid: 999999999,
       contextSnapshot: { issueId }, finishedAt: new Date("2026-09-11T10:00:00Z") });
@@ -48,7 +60,7 @@ const support = await getEmbeddedPostgresTestSupport();
   }
   type Fixture = Awaited<ReturnType<typeof seed>>;
   it.each(["handoff", "foreign_task", "running_source", "different_owner", "mention", "interaction", "chat"])("adopts former-owner comments only during an authorized handoff (%s)", async kind => {
-    const f = await seed(), nextAgentId = randomUUID(), queueId = randomUUID();
+    const f = await seed(true), nextAgentId = randomUUID(), queueId = randomUUID();
     await db.delete(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, f.issueId));
     await db.delete(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, f.sourceRunId));
     await db.insert(agents).values({ id: nextAgentId, companyId: f.companyId, name: "Replacement", role: "engineer", adapterType: "paperclip_runner", runtimeConfig: { heartbeat: { maxConcurrentRuns: 1 } } });
@@ -565,6 +577,82 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(await admit(f, true)).toBeNull();
   });
 
+  it("records the ordinary local Native child exit with an exact PID clear", async () => {
+    const f = await seed();
+    const child = (await import("node:child_process")).spawn(process.execPath,
+      ["-e", "setTimeout(() => {}, 50)"], { detached: true, stdio: "ignore" });
+    if (!child.pid) throw new Error("Test child did not expose a PID");
+    const childClosed = new Promise<void>(resolve => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, f.sourceRunId, {
+      pid: child.pid, processGroupId: child.pid, startedAt: new Date().toISOString(),
+    });
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, f.sourceRunId));
+    await db.insert(environmentLeases).values({ companyId: f.companyId, heartbeatRunId: f.sourceRunId,
+      provider: "local", status: "released", releasedAt: new Date(), cleanupStatus: "succeeded", leasePolicy: "ephemeral" });
+    await childClosed;
+
+    expect(await recordNativeLocalProcessStopAfterExit(db, f.companyId, f.sourceRunId)).toBe(true);
+    const [stopped] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.sourceRunId));
+    expect(stopped).toMatchObject({ processPid: null, processGroupId: null, processStartedAt: null });
+    expect(await hasNativeLocalProcessStop(db, f.companyId, f.sourceRunId)).toBe(true);
+  });
+
+  it("persists the validated remote process marker when its PID collides with a local process", async () => {
+    const f = await seed();
+    const environmentId = randomUUID(), environmentLeaseId = randomUUID(), runnerInstanceId = randomUUID();
+    const nativeSessionId = randomUUID(), remoteCwd = "/workspace/remote-runner";
+    const remoteMarkerStartedAt = "2001-02-03T04:05:06.007Z";
+    const localObservedStartedAt = await readProcessStartedAt(process.pid);
+    expect(localObservedStartedAt).toBeTruthy();
+    expect(localObservedStartedAt).not.toBe(remoteMarkerStartedAt);
+    await expect(persistHeartbeatRunProcessMetadata(db, f.sourceRunId, { pid: process.pid, processGroupId: null,
+      startedAt: remoteMarkerStartedAt, identitySource: "remote_marker", remoteRunnerInstanceId: randomUUID() })).rejects.toThrow();
+    await db.insert(environments).values({ id: environmentId, name: `Remote identity ${environmentId}`, driver: "sandbox" });
+    await db.insert(environmentLeases).values({ id: environmentLeaseId, companyId: f.companyId,
+      environmentId, heartbeatRunId: f.sourceRunId, provider: "sandbox-fixture", providerLeaseId: "provider-lease-1",
+      status: "active", leasePolicy: "ephemeral", expiresAt: new Date(Date.now() + 60_000), metadata: { remoteCwd } });
+    const locator = createRemoteRuntimeAssetLocator({ companyId: f.companyId, runId: f.sourceRunId, environmentId,
+      environmentLeaseId, provider: "sandbox-fixture", providerLeaseId: "provider-lease-1", runnerInstanceId,
+      normalizedSessionId: nativeSessionId, remoteCwd });
+    await db.update(heartbeatRuns).set({ status: "running", driverKind: "opencode_server", nativeSessionId,
+      runnerInstanceId, runnerProfileJson: { nativeRemoteRuntimeAssetLocator: locator } })
+      .where(eq(heartbeatRuns.id, f.sourceRunId));
+
+    await persistHeartbeatRunProcessMetadata(db, f.sourceRunId, { pid: process.pid, processGroupId: null,
+      startedAt: remoteMarkerStartedAt, identitySource: "remote_marker", remoteRunnerInstanceId: runnerInstanceId });
+
+    const [stored] = await db.select({ processStartedAt: heartbeatRuns.processStartedAt,
+      processPid: heartbeatRuns.processPid }).from(heartbeatRuns).where(eq(heartbeatRuns.id, f.sourceRunId));
+    expect(stored).toMatchObject({ processPid: process.pid, processStartedAt: new Date(remoteMarkerStartedAt) });
+  });
+
+  it("does not infer an ordinary Native Stop from an unknown or still-live process", async () => {
+    const unknown = await seed();
+    await db.insert(environmentLeases).values({ companyId: unknown.companyId, heartbeatRunId: unknown.sourceRunId,
+      provider: "local", status: "released", releasedAt: new Date(), cleanupStatus: "succeeded", leasePolicy: "ephemeral" });
+    expect(await recordNativeLocalProcessStopAfterExit(db, unknown.companyId, unknown.sourceRunId)).toBe(false);
+    expect(await hasNativeLocalProcessStop(db, unknown.companyId, unknown.sourceRunId)).toBe(false);
+
+    const active = await seed();
+    const child = (await import("node:child_process")).spawn(process.execPath,
+      ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
+    if (!child.pid) throw new Error("Test child did not expose a PID");
+    const childClosed = new Promise<void>(resolve => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, active.sourceRunId, {
+      pid: child.pid, processGroupId: child.pid, startedAt: new Date().toISOString(),
+    });
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, active.sourceRunId));
+    await db.insert(environmentLeases).values({ companyId: active.companyId, heartbeatRunId: active.sourceRunId,
+      provider: "local", status: "released", releasedAt: new Date(), cleanupStatus: "succeeded", leasePolicy: "ephemeral" });
+    try {
+      expect(await recordNativeLocalProcessStopAfterExit(db, active.companyId, active.sourceRunId)).toBe(false);
+      expect(await hasNativeLocalProcessStop(db, active.companyId, active.sourceRunId)).toBe(false);
+    } finally {
+      child.kill("SIGTERM");
+      await childClosed;
+    }
+  });
+
   it.each(["live", "remote", "provider_event"])("does not accept invalid local stop proof: %s", async kind => {
     const f = await seed();
     if (kind === "remote") {
@@ -937,6 +1025,31 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(envelope.completedWork).toBe("Deployment completed.");
   });
 
+  it("resolves a comment wake within its one-connection pool transaction", async () => {
+    const f = await seed(true);
+    const singleConnectionDb = createDb(database.connectionString, { maxConnections: 1 });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const wakePromise = heartbeatService(singleConnectionDb).wakeup(f.agentId, {
+      source: "automation", triggerDetail: "system", reason: "issue_commented",
+      requestedByActorType: "user", requestedByActorId: "board",
+      payload: { issueId: f.issueId, commentId: f.commentId },
+      contextSnapshot: { issueId: f.issueId, wakeCommentId: f.commentId },
+    });
+    void wakePromise.catch(() => {});
+    try {
+      const wake = await Promise.race([
+        wakePromise,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("single_connection_wakeup_timed_out")), 10_000);
+        }),
+      ]);
+      expect(wake).toMatchObject({ status: "queued", contextSnapshot: { wakeCommentId: f.commentId } });
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      await singleConnectionDb.$client.end({ timeout: 1 }).catch(() => {});
+    }
+  });
+
   it.each(["pause", "dependency", "state"])("keeps the existing %s gate on the actual user wake", async gate => {
     const f = await seed();
     await db.insert(heartbeatRuns).values({ companyId: f.companyId, agentId: f.agentId, status: "running" });
@@ -1116,5 +1229,60 @@ const support = await getEmbeddedPostgresTestSupport();
       status: "resolved", outcome: "blocked", nextAction: "Could not start", evidence: { runId: rejectedRunId, automaticRecovery: { replay: "blocked" } } });
     expect(await admit(f)).toMatchObject({ previousRunId: f.sourceRunId });
     expect(await getExecutionBlocker(db, f.companyId, f.issueId)).toBeNull();
+  });
+});
+
+
+type NativeTextChargeProof = Parameters<typeof isExactUnknownNativeTextCharge>[0];
+const nativeChargeRunId = "10000000-0000-4000-8000-000000000001";
+const nativeChargeCompanyId = "10000000-0000-4000-8000-000000000002";
+const nativeChargeIssueId = "10000000-0000-4000-8000-000000000003";
+const nativeChargeAgentId = "10000000-0000-4000-8000-000000000004";
+const nativeChargeReservationId = "10000000-0000-4000-8000-000000000005";
+const nativeChargePlanId = "10000000-0000-4000-8000-000000000006";
+const nativeChargeAttemptId = "10000000-0000-4000-8000-000000000007";
+const nativeChargeRequestHash = "a".repeat(64);
+const nativeChargeInputHash = "c".repeat(64);
+const nativeChargeBodyHash = "b".repeat(64);
+
+function nativeTextChargeProof(): NativeTextChargeProof {
+  return {
+    run: { id: nativeChargeRunId, companyId: nativeChargeCompanyId, agentId: nativeChargeAgentId,
+      nativeIssueId: nativeChargeIssueId, runtimeMode: "native", driverKind: "aw_text_messages" },
+    issueId: nativeChargeIssueId, actionCause: "uncertain_provider_action",
+    actionEvidence: { runId: nativeChargeRunId, modelReservationId: nativeChargeReservationId,
+      automaticRecovery: { replay: "blocked", actionOutcome: "unknown" } },
+    reservation: { id: nativeChargeReservationId, companyId: nativeChargeCompanyId, purpose: "worker_model", status: "unknown",
+      workerAttemptId: nativeChargeAttemptId, planId: nativeChargePlanId, requestHash: nativeChargeRequestHash,
+      inputHash: nativeChargeInputHash,
+      providerWireReceipt: { version: 1, reservationId: nativeChargeReservationId, requestHash: nativeChargeRequestHash,
+        method: "POST", endpoint: "https://api.anthropic.com/v1/messages", bodySha256: nativeChargeBodyHash, callId: null } },
+    binding: { runId: nativeChargeRunId, agentId: nativeChargeAgentId, planIssueId: nativeChargeIssueId,
+      workerIssueId: nativeChargeIssueId, workerAgentId: nativeChargeAgentId },
+    wireIntents: [{ reservationId: nativeChargeReservationId, requestHash: nativeChargeInputHash,
+      wireBodyHash: nativeChargeBodyHash, method: "POST", endpoint: "https://api.anthropic.com/v1/messages",
+      modelPurpose: "worker_model" }],
+  };
+}
+
+describe("unknown NativeText charge continuation proof", () => {
+  it("accepts only the exact dispatched unknown source and Text driver", () => {
+    expect(isExactUnknownNativeTextCharge(nativeTextChargeProof())).toBe(true);
+  });
+  it.each([
+    ["reservation", (value: NativeTextChargeProof) => { value.actionEvidence.modelReservationId = "10000000-0000-4000-8000-000000000099"; }],
+    ["source run", (value: NativeTextChargeProof) => { value.actionEvidence.runId = "10000000-0000-4000-8000-000000000099"; }],
+    ["worker run binding", (value: NativeTextChargeProof) => { value.binding.runId = "10000000-0000-4000-8000-000000000099"; }],
+    ["status", (value: NativeTextChargeProof) => { value.reservation.status = "completed"; }],
+    ["driver", (value: NativeTextChargeProof) => { value.run.driverKind = "paperclip_runner"; }],
+    ["company", (value: NativeTextChargeProof) => { value.reservation.companyId = "10000000-0000-4000-8000-000000000099"; }],
+    ["wire intent", (value: NativeTextChargeProof) => { value.wireIntents = []; }],
+    ["wire intent input hash", (value: NativeTextChargeProof) => {
+      value.wireIntents = [{ ...(value.wireIntents as Record<string, unknown>[])[0], requestHash: nativeChargeRequestHash }];
+    }],
+  ] as const)("rejects mismatched %s evidence", (_label, mutate) => {
+    const value = nativeTextChargeProof();
+    mutate(value);
+    expect(isExactUnknownNativeTextCharge(value)).toBe(false);
   });
 });

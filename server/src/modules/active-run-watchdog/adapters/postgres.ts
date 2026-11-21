@@ -307,6 +307,18 @@ export function createPostgresWatchdogAdapter(db: Db): WatchdogRunReader & Watch
     };
 
     const transactionResult = await db.transaction(async (tx) => {
+      // Lock order (run-identity.ts): Task before run. Take the source Task row
+      // this fold clears below, with that update's lock mode and predicate,
+      // before the run row; what is read, decided and written is unchanged.
+      await tx
+        .select({ id: issues.id })
+        .from(issues)
+        .where(and(
+          eq(issues.id, input.sourceIssue.id),
+          eq(issues.companyId, companyId),
+          eq(issues.executionRunId, input.run.id),
+        ))
+        .for("no key update");
       const [updatedRun] = await tx
         .update(heartbeatRuns)
         .set({

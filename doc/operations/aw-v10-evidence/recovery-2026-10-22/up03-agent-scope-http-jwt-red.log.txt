@@ -1,0 +1,146 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/agent-auth-jwt.test.ts (22 tests | 4 failed) 70ms
+     × rejects a valid signature with malformed key scope {} 20ms
+     × rejects a valid signature with malformed key scope {"kind":"unknown"} 2ms
+     × rejects a valid signature with malformed key scope {"kind":"skill_test","issueId":"invalid"} 3ms
+     × rejects a valid signature with malformed key scope {"kind":"task_bridge","parentIssueIds":[]} 2ms
+[00:56:36] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"2c9789f7-fc17-49d5-8cd9-58242381d28e","actorAgentId":"2f01c2da-5044-4595-8f1a-5d2a716a9f52","responsibleUserId":"a81ca021-267b-4979-9249-48db0daa66c1"}[39m
+[00:56:36] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"2c9789f7-fc17-49d5-8cd9-58242381d28e","actorAgentId":"2f01c2da-5044-4595-8f1a-5d2a716a9f52","responsibleUserId":"a81ca021-267b-4979-9249-48db0daa66c1"}[39m
+[00:56:36] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"9afbd687-e0d8-4a80-8d3d-f6e2cf446c7a","actorAgentId":"f423910e-c312-4094-a50f-888836d70ded","responsibleUserId":"ebf890e7-4619-499a-ab29-047b750066a9"}[39m
+[00:56:36] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"9afbd687-e0d8-4a80-8d3d-f6e2cf446c7a","actorAgentId":"f423910e-c312-4094-a50f-888836d70ded","responsibleUserId":"ebf890e7-4619-499a-ab29-047b750066a9"}[39m
+ ❯ |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts (8 tests | 4 failed) 11943ms
+     × rejects malformed persisted key scope at the original HTTP authentication boundary 258ms
+     × rejects a key after actual HTTP last-used update wait and revoke 96ms
+     × rejects a key after actual HTTP last-used update wait and delete 103ms
+     × rejects an actually persisted malformed scoped key instead of broadening it to standard 47ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-auth-jwt.test.ts > agent local JWT > rejects a valid signature with malformed key scope {}
+ FAIL  |@paperclipai/server| src/__tests__/agent-auth-jwt.test.ts > agent local JWT > rejects a valid signature with malformed key scope {"kind":"unknown"}
+ FAIL  |@paperclipai/server| src/__tests__/agent-auth-jwt.test.ts > agent local JWT > rejects a valid signature with malformed key scope {"kind":"skill_test","issueId":"invalid"}
+ FAIL  |@paperclipai/server| src/__tests__/agent-auth-jwt.test.ts > agent local JWT > rejects a valid signature with malformed key scope {"kind":"task_bridge","parentIssueIds":[]}
+AssertionError: expected { sub: 'agent-legacy', …(9) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "adapter_type": "claude_local",
+  "aud": "paperclip-api",
+  "company_id": "company-1",
+  "exp": 1792720550,
+  "iat": 1792716950,
+  "iss": "paperclip",
+  "jti": undefined,
+  "key_scope": {
+    "kind": "standard",
+  },
+  "run_id": "run-legacy",
+  "sub": "agent-legacy",
+}
+
+ ❯ src/__tests__/agent-auth-jwt.test.ts:272:40
+    270|     { kind: "task_bridge", parentIssueIds: [] }])("rejects a valid sig…
+    271|     const token = craftLegacyMasterSecretToken("test-secret", "company…
+    272|     expect(verifyLocalAgentJwt(token)).toBeNull();
+       |                                        ^
+    273|   });
+    274|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > rejects malformed persisted key scope at the original HTTP authentication boundary
+AssertionError: expected 200 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 200
+
+ ❯ src/__tests__/live-events-agent-key-authority.integration.test.ts:105:42
+    103|       expect((await http.read()).status).toBe(200);
+    104|       await db.execute(sql`update ${agentApiKeys} set scope_config=${J…
+    105|       expect((await http.read()).status).toBe(401);
+       |                                          ^
+    106|     } finally { await http.close(); }
+    107|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > rejects a key after actual HTTP last-used update wait and revoke
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > rejects a key after actual HTTP last-used update wait and delete
+AssertionError: expected 200 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 200
+
+ ❯ src/__tests__/live-events-agent-key-authority.integration.test.ts:137:38
+    135|       expect(waiter?.query).toMatch(/update "agent_api_keys"/i);
+    136|       release(); await holder;
+    137|       expect((await pending).status).toBe(401);
+       |                                      ^
+    138|     } finally { release(); await holder; await http.close(); }
+    139|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > rejects an actually persisted malformed scoped key instead of broadening it to standard
+AssertionError: expected { kind: 'standard' } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "kind": "standard",
+}
+
+ ❯ src/__tests__/live-events-agent-key-authority.integration.test.ts:147:65
+    145|     expect(stored?.revokedAt).toBeNull();
+    146|     expect(agentApiKeyScopeSchema.safeParse(stored?.scopeConfig).succe…
+    147|     expect.soft(normalizeAgentApiKeyScope(stored?.scopeConfig)).toBeNu…
+       |                                                                 ^
+    148|     const live = await server(fixture);
+    149|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > rejects an actually persisted malformed scoped key instead of broadening it to standard
+AssertionError: expected { kind: 'open' } to deeply equal { kind: 'denied', status: 403 }
+
+- Expected
++ Received
+
+  {
+-   "kind": "denied",
+-   "status": 403,
++   "kind": "open",
+  }
+
+ ❯ src/__tests__/live-events-agent-key-authority.integration.test.ts:154:23
+    152|         once(live.socket, "unexpected-response").then(([, response]) =…
+    153|       ]);
+    154|       expect(outcome).toEqual({ kind: "denied", status: 403 });
+       |                       ^
+    155|     } finally { await live.close(); }
+    156|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  8 failed | 22 passed (30)
+   Start at  00:55:41
+   Duration  55.69s (transform 28.45s, setup 324ms, import 42.53s, tests 12.01s, environment 1ms)
+

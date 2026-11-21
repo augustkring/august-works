@@ -1,0 +1,7 @@
+{
+  "sourceParent": "4a51d94864438c0e8ab141bdc21679f27740fecb",
+  "workingSourceDiffSha256Preserved": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "scope": "recovery only; no activation, final software qualification or merge claim",
+  "dependsOn": "r55 working source snapshot, r56, r57, r58 and prior committed source",
+  "archiveSha256": "df9ce731ebba9e3d786008364b5ae8de62e119cbaac9c4ea2c7351ba260b1037"
+}

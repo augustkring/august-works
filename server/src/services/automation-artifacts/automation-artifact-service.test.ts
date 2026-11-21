@@ -3,6 +3,7 @@ import { getArtifactSandboxTestSupport } from "../../__tests__/helpers/artifact-
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  authUsers,
   automationArtifacts,
   automationArtifactVersions,
   companies,
@@ -147,6 +148,8 @@ describePg("Automation Artifact service", () => {
         issuePrefix: `A${randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       })
       .returning();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Artifact owner", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companyMemberships).values({
       companyId: company!.id,
       principalType: "user",

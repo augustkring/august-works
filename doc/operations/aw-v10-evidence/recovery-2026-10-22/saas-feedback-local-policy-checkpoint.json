@@ -1,0 +1,58 @@
+{
+  "scope": "Explicit SaaS deployment local-feedback policy and shared vote/note/consent UI owner",
+  "sources": {
+    "server/src/services/instance-settings.ts": "cd0c78152685afbb2a0a1448850204613844bd14924b65718c8d6cff34b8c6a4",
+    "server/src/__tests__/v9-customer-feedback.integration.test.ts": "c02c950c73df52bea4f3ef2efd92039b27e7f69ece9360a3b16236b6b1116237",
+    "ui/src/components/OutputFeedbackButtons.tsx": "53148702fe5138b7321ca3153eea76c91908905af135462edf8b9d1fdbf35891",
+    "ui/src/components/AgentBubbleActionRow.tsx": "9bbab8b828c25ea648e8131321023598d8be952d0057cd2863d10d697e5d3768",
+    "ui/src/components/IssueChatThread.tsx": "4f5c81785244dac133f073d1f09b74f56d13109854808856930560877ce3708e",
+    "ui/src/components/OutputFeedbackButtons.test.tsx": "0cbe49ba2efea7e8c4ce886415b546132ca44d3b421627920f90d50eb1286a3f",
+    "ui/src/components/IssueChatThread.test.tsx": "ec6ca6aa9968c64b75278bc7586988e4136842e9011a8d8cba10a5eff16e9362",
+    "ui/src/components/IssueChatThreadSystemNotice.test.tsx": "0ea0d57b691a7fd0d3e8059c015c0e9c25e1f91f22985906b817affb8fc78ed6",
+    "ui/src/pages/InstanceGeneralSettings.tsx": "8e9144a5fcd4ec568a9452fe7a524a5d21ced0a48f4c84c3aa94a487725e1fef",
+    "ui/src/pages/InstanceGeneralSettings.test.tsx": "e2883460c3f2d8be3d4d29a508e5e066b1c1b016acbdd181d396ad16bcd441d5"
+  },
+  "actualPostgres": {
+    "exit": 0,
+    "passed": 1,
+    "filtered": 17,
+    "durationSeconds": 129.83,
+    "log": "saas-feedback-admission-current.log",
+    "assertions": "False/unlatched local compatibility setup; explicit SaaS existing/fresh settings admission; old allowed preference retained but no export authority; profile rollback stays latched; no trace/export/upload."
+  },
+  "ui": {
+    "exit": 0,
+    "files": 4,
+    "passed": 120,
+    "durationSeconds": 93.64,
+    "log": "feedback-ui-policy-reviewed.log",
+    "pinFile": "feedback-ui-policy-reviewed-pins.txt"
+  },
+  "serverCompiler": {
+    "exit": 0,
+    "log": "up03-wake-feedback-server-types.log",
+    "pinFile": "up03-wake-feedback-server-types-pins.txt"
+  },
+  "uiTypecheck": {
+    "exit": 0,
+    "log": "feedback-ui-policy-reviewed-types.log"
+  },
+  "uiTokenGates": {
+    "exit": 0,
+    "files": 1424,
+    "log": "feedback-ui-policy-tokens.log",
+    "qualification": "Final production styling unchanged; only two existing test mocks gained the shared hook export after this gate."
+  },
+  "retainedFailures": [
+    "Settings DOM genuine1FAIL/8PASS before policy-based hiding.",
+    "Initial component DOM attempt2FAIL/10PASS; React act/rerender/query notification fixture corrections retained without changing assertions or production guards.",
+    "Broader first100-case run99PASS/1FAIL: old thread mock omitted new shared hook export, entered error fallback and broke existing unchanged-Markdown assertion. Both original mocks updated; all120 then pass."
+  ],
+  "allFinalPinsMatch": true,
+  "limits": [
+    "Atomic JSON merge reuses existing irreversible aw-v9-local-v1 latch, including existing/create/conflict row paths; no product-brand inference, new flag, destination or outbound upload.",
+    "Existing first-party customer feedback rollout remains independent; local/legacy never-admitted operator compatibility still requires its original explicit destination/consent controls.",
+    "Three vote surfaces share the existing policy queries; loading/error fail local, pending consent clears and saves locally, notes cannot reuse old sharing true; duplicate compact component removed. Settings hide legacy controls under latched policy.",
+    "No complete outbound inventory, receiver/legal/DPA/retention, actual hosted deployment or browser/a11y qualification. Original source-graph/private Memory/temporal failures and full V10/release gates remain open."
+  ]
+}

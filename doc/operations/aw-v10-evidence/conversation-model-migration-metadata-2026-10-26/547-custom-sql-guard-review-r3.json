@@ -1,0 +1,11 @@
+{
+  "kind": "custom-sql-guard-review",
+  "source": "packages/db/src/migrations/0547_native_conversation_model_reservations.sql",
+  "sha256": "82821c471e402817d1244366d50ba3cdef452fcd91566763da951963d47a7e9f",
+  "schemaSnapshotUnchanged": true,
+  "corrections": [
+    "BEFORE INSERT includes NEW ceiling and rejects the 65th call; UPDATE dispatch counts the existing reserved row once and permits the 64th.",
+    "Conversation reservation dispatch accepts the exact live issue states in_review or in_progress; null and every other status remain denied, with the existing execution-run, generation, Human, manifest, and source-receipt checks unchanged."
+  ],
+  "validation": "Static source review; fresh actual PostgreSQL acceptance pending. Earlier publication and review receipts retain their historical SQL digests."
+}

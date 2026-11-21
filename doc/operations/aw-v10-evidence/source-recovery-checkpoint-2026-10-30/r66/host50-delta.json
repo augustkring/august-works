@@ -1,0 +1,73 @@
+{
+  "baseCheckpoint": "R65",
+  "baseHost47SourcePinsSha256": "484150475d92d3e611b87bd46b5f1f89c5b97cfc57c226c4e09d7bb96b57bedd",
+  "candidateHost50SourcePinsSha256": "443ed46ca65f9dd6fb621dea18c9cb869fe62d0058b9a2ea731609ce88ee889c",
+  "pathCounts": {
+    "base": 102,
+    "candidate": 104,
+    "added": 2,
+    "deleted": 0,
+    "changed": 8
+  },
+  "added": [
+    {
+      "path": "server/src/__tests__/sandbox-endpoint-network-selectors.test.ts",
+      "candidateSha256": "1f3b10ba8a071b67d438f450df62db1be85db17c70b11134b8ed14ab7fcf9dc3"
+    },
+    {
+      "path": "server/src/services/execution-sandbox/openshell-policy.ts",
+      "candidateSha256": "0e1edc3c816f6dad184a41b413f8fc1c12a25a738f98952ff12ac73f050da97e"
+    }
+  ],
+  "deleted": [],
+  "changed": [
+    {
+      "path": "deploy/v6/host-agent/broker-profiles.mjs",
+      "baseSha256": "0ebdc81341631950672ae3f88512c0f34df538f279094af7e5bb413a7a9f4f69",
+      "candidateSha256": "4aca01725d68f7a2b0c66a5804defaaaaa8a1865e4780e0b02d362cfae858888",
+      "bytes": 5602
+    },
+    {
+      "path": "deploy/v6/host-agent/broker-profiles.test.mjs",
+      "baseSha256": "d53fc93a073caaf84a8c9c1e0af1dfe26d4edd6ab603700dd34236bcfe336ae1",
+      "candidateSha256": "674b9a59df19c82ddef530ea891434f666643895a7b83067576806325a1714c4",
+      "bytes": 8554
+    },
+    {
+      "path": "deploy/v6/host-agent/openshell.test.mjs",
+      "baseSha256": "6543648569c4aea8bb3cec90a56b4137fbdfb3007670615b131029ffa7b6e7f7",
+      "candidateSha256": "ff7b80d5470a60aeff591985b27eabf74f423c0e6c0342adc7f2060d2c5b76d0",
+      "bytes": 183398
+    },
+    {
+      "path": "packages/shared/src/execution-sandbox.ts",
+      "baseSha256": "8aa41c536821cd43e41fb9d8df5c99ea7e9d536c4223b364800397dbf220bd87",
+      "candidateSha256": "0b56917850ab0a3989ae2d2b8929b05252fdd65e1b58f36a32e7cb6c4fec1c69",
+      "bytes": 14698
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "baseSha256": "022fa9e48b6fa27f1ba7cc17ee8637f77a2315bfb02d591085a6433c3f7f6bbd",
+      "candidateSha256": "8156f7d9ce87015e21cbf21716cd3297fa764102494470c2324b4d418aa6c339",
+      "bytes": 144736
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "baseSha256": "9bf01d02ea240925036677aa7196aefa095b593023c9279711d80f6fb070687f",
+      "candidateSha256": "ab60327090de9330886606778e2baeb530ef3bd0bcff23c1d5b03feaf3e1bd56",
+      "bytes": 221083
+    },
+    {
+      "path": "server/src/services/execution-sandbox/openshell-backend.ts",
+      "baseSha256": "57b17c311c77d40142bb146410cde87783e2f5ece208b3b03d5cf0633e170156",
+      "candidateSha256": "9f2880b9302b36e8fd2c81988f61b9e055b2c15831031834c40c6d118d1bee59",
+      "bytes": 23891
+    },
+    {
+      "path": "server/src/services/execution-sandbox/policy-compiler.ts",
+      "baseSha256": "25605f5ac26dd2d2e20579776f894967beaf582cbccbedda8be97dae47785534",
+      "candidateSha256": "cdb3d1e46c35556a081ef96f19eaa7dc214f3db6629e4704712bf67e4402e202",
+      "bytes": 20352
+    }
+  ]
+}

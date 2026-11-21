@@ -1,0 +1,21 @@
+{
+  "parentCommit": "2e308ac740572b92204112453733f495d6bfeb80",
+  "scope": "Current changed implementation, tests, CI and receipt guard; each invocation separately records its own exact input revision and limitations",
+  "files": {
+    ".github/workflows/aw-v4-verification.yml": "ae6c37eef750b9e78d0bf8fa15ff58129066f129162bfff836c819b2efb271b8",
+    ".github/workflows/pr-trusted.yml": "63eae61aae06563d784b8127bb23a739c06dee32f85a1c05396a1ccd820b42c6",
+    "scripts/check-v10-security-regression-execution.mjs": "5a6a4cbf921f1da2ff1a253690707cbf8819b2c56510d5070f6bfddd7c1bfe9a",
+    "scripts/check-v10-security-regression-execution.test.mjs": "3169b7e929a09de7f4bde5a94e0a5b881b3eb788a8326c267d905790e57ec74c",
+    "scripts/fixtures/native-model-socket-observer-check.mjs": "1f7081f83a2dfe63b4c76e80e9e83e8852d6b3ec94856542554cf4f8f2541a6a",
+    "scripts/fixtures/native-model-socket-observer.mjs": "a2f1183beaa1594c452bb17956e29f53030dc3de36ef59f830e82b3e186c08f4",
+    "scripts/fixtures/native-model-socket-observer.test.mjs": "7978bfac57646d8675af2e321f5d231ba5825ce79babd546299a6ec7f7b4b8d1",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "85a7a537fd2aad7460bb79595ae23b2f2a0a613acff70788f0cb88b88bd9c292",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "c3d236e605ceb7feed5a2b8230be8b8556fc3c3a199f7a5bf211b94af6c0f76a",
+    "server/src/__tests__/helpers/managed-native-model-transport.ts": "ce45abdf539100fe9fb6ac0cc491f5f092d37f49a8637a68e7c14443b4960372",
+    "server/src/__tests__/v7-model-reservations.integration.test.ts": "d12b50c071cda3424e62666f9962b6b50b02f688a9736e8d0c0f7fa4773d249a",
+    "server/src/services/context/context-engine-integration.test.ts": "241b51eb2a611a8897b89e9fbc9f0bffb12c867923ad232a66bdc5182d467026",
+    "server/src/services/memory/memory-agent-tools.ts": "b63a086ff018a4abb45b6ed6eb61ae1f3161afecc02f6f70ade39c64f597c738",
+    "server/src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts": "313abd770a1a219e4c57017ee5ff160688bda27262a307f63c0937181825db13",
+    "server/src/services/tool-gateway.ts": "3799afe93dac2c82d387e97dc4e86afbca62ff2e64a472eef5b4f551ee06a6f2"
+  }
+}

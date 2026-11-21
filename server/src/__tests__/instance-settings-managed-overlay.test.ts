@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Db } from "@paperclipai/db";
+import { INSTANCE_FEATURE_CATALOG } from "@paperclipai/shared";
 import {
   applyManagedExperimentalOverlay,
   instanceSettingsService,
@@ -83,6 +84,27 @@ describe("applyManagedExperimentalOverlay", () => {
 });
 
 describe("instanceSettingsService managed overlay", () => {
+  it("withdraws a stored true retired flag from admission without rewriting history", async () => {
+    const row = settingsRow({ enableAgentChat: true });
+    const { db, persistedSets } = stubDb(row);
+    const lifecycle = INSTANCE_FEATURE_CATALOG.enableAgentChat.lifecycle;
+    const previousMaturity = lifecycle.maturity;
+    lifecycle.maturity = "retired";
+    try {
+      const service = instanceSettingsService(db, { runtimeEnv: {} });
+      expect((await service.getExperimental()).enableAgentChat).toBe(false);
+      expect(row.experimental).toMatchObject({ enableAgentChat: true });
+      expect(persistedSets).toHaveLength(0);
+      await expect(service.updateExperimental({ enableAgentChat: true })).rejects.toThrow(
+        "Internal or retired capabilities cannot be enabled for new use",
+      );
+      expect(row.experimental).toMatchObject({ enableAgentChat: true });
+      expect(persistedSets).toHaveLength(0);
+    } finally {
+      lifecycle.maturity = previousMaturity;
+    }
+  });
+
   it.each([{}, { enableMcpAggregators: false }])("keeps aggregators on with legacy stored and managed values: %j", async (stored) => {
     const { db } = stubDb(settingsRow({ ...stored, enableChatConnectors: true }));
     const service = instanceSettingsService(db, { runtimeEnv: managedEnv(JSON.stringify({

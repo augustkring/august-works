@@ -1,0 +1,57 @@
+{
+  "parentCommit": "0eb583408e80d416f2799ee99639b886fe7184c5",
+  "status": "Native TOTP/recovery backend checkpoint; full authentication/V10 admission remains open",
+  "sourcePins": {
+    "packages/db/src/schema/auth.ts": "f993387ed8928b5852b88ace2ec4a8c6a5d54301d6046cfecc39abc70611f5fb",
+    "packages/db/src/migrations/0521_opposite_garia.sql": "8888a7c26b4c1542c4087909f21b6447ff67f29ebecb546f6e52dafe779a04c6",
+    "packages/db/src/migrations/0522_native_challenge_generation.sql": "de7398b306b8ff637343c89db6a0ac590e52da4b54bfd8b4948f8ce9e6672d69",
+    "packages/db/src/migrations/meta/0521_snapshot.json": "0e01091bbde37b85ea8c6f326522400e328a6cd6b00d082c66ff2e19c4dc0236",
+    "packages/db/src/migrations/meta/0522_snapshot.json": "9dcc084935292bf52b3464a28fdd0f55bafe249d034f9a470dabb500d0592f5b",
+    "packages/db/src/migrations/meta/_journal.json": "93170d37824b0d68d3ff40dd3b34eb6b7aa8a194b6521dcbefddb744845a0a3e",
+    "server/src/auth/native-two-factor.ts": "524b64c4bb2fb1a2f2ace505fe1f563d9be38d1c58d396d9679033ed31d0a4d0",
+    "server/src/auth/better-auth.ts": "67b9dbdfe333d03e0db827aae1d4991368a022a986a648ac35d79002cd7977fb",
+    "server/src/routes/saas.ts": "f244641d63617e0b873788ec05210cda8e2b3a415d3b1a5f85c9fcf741d18717",
+    "server/src/services/saas/account-deletion.ts": "3e5fa3ee851f5e1743f632d591228cd6d22852f7bbf616f55899c4f8a79a23eb",
+    "server/src/__tests__/native-two-factor.integration.test.ts": "7c96c4f345f5201e2c1b44aaf5d4c45565c3a505bb291e7e5e67874da64d60c6",
+    "server/src/__tests__/v6-account-deletion.integration.test.ts": "c96e77213cbac63aa1eb1e1930cd5f9ac55e8545e93fd9cb9ca746cddb66ee49"
+  },
+  "checks": {
+    "initialNativeLifecycle": {
+      "exit": 0,
+      "passed": 2
+    },
+    "intermediateNativeSuites": {
+      "exit": 0,
+      "passed": 42,
+      "suites": 4
+    },
+    "finalNativeSuites": {
+      "exit": 0,
+      "passed": 44,
+      "suites": 4
+    },
+    "finalServerCompiler": {
+      "exit": 0
+    },
+    "nativeMigrationChecks": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "The original maintained TOTP and recovery verifiers, encryption, native account lockout and recovery-code CAS remain authoritative. The actual provider generates and verifies the test TOTP codes; no successful crypto verifier is mocked.",
+    "A wrapped native password sign-in hook fences the original verified user generation in a physical transaction before issuing a generation-bound native challenge. A real password-verifier/credential-rotation interleave yields no surviving session or challenge.",
+    "Verification attempts commit a shared per-user database budget independently of completion. Two native instances in one test process exercise its shared limit and fixed window. Native failed sign-in attempts also retain provider account lockout state.",
+    "Configuration pins recent actual proof in the provider transaction. Enrollment remains unverified until actual TOTP success. Enabled-secret replacement is refused; recovery-code rotation retains the real prior method/time under its exact own generation change. Disable revokes all sessions and requires a new sign-in.",
+    "A valid historic trusted-device cookie cannot skip the second factor. Session-skipping recovery mode is refused, so the native one-use challenge completes. Unconfigured email/SMS OTP and native server-only code generation are absent over HTTP.",
+    "Actual MFA is required again before password changes and irreversible account exit. Password changes rotate through the maintained adapter while preserving the actual earlier MFA event/time. Account exit requires a real current session belonging to the same user; a bare session label or absent actor is insufficient.",
+    "Existing offboarding SQL fixtures now supply actual stored native session IDs, and the factor-erasure fixture supplies explicitly structural passkey proof. Those fixtures do not qualify WebAuthn; the separate native MFA suite exercises real TOTP/recovery and account exit.",
+    "Native schema generation plus a new custom migration bind server-owned challenge generations, refuse ownership/version rewriting and invalidate unknown historic owned challenges rather than manufacturing proof. The five-snapshot pruning policy and committed SQL identities remain intact."
+  ],
+  "limits": [
+    "Native TOTP same-code replay within its accepted time window still needs explicit consumption qualification and fencing before release. A consumed native challenge and recovery code are already covered separately.",
+    "Enrollment/recovery/reauthentication account settings UI, passkey UV ceremonies, operator phishing resistance/bootstrap and complete enterprise recovery remain open.",
+    "Not every sensitive/powerful action owner has yet adopted the common proof guard. No complete authentication or V10 acceptance claim.",
+    "Two native instances share PostgreSQL in one test process; this does not qualify separate deployed replicas, restart/failover or backup restoration.",
+    "The server compiler excludes tests. No latest full workspace test/build, provider/host or PR-ready qualification."
+  ]
+}

@@ -7,7 +7,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   createDb,
   issues,
@@ -35,6 +35,8 @@ import { purpose, oversight, reviews } from "./helpers/governance-fixture.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 import {
   assertExecutionGovernance,
   governanceToolRestriction,
@@ -169,6 +171,50 @@ const support = await getEmbeddedPostgresTestSupport();
           })
           .returning()
       )[0]!;
+    it("keeps a generic deployment current through first Native Platform Skill admission", async () => {
+      await approve();
+      const platformSkillBefore = await db
+        .select()
+        .from(companySkills)
+        .where(
+          and(
+            eq(companySkills.companyId, f.home),
+            eq(companySkills.key, "blentera-platform"),
+          ),
+        );
+      expect(platformSkillBefore).toHaveLength(0);
+      const deployment = await bind();
+      expect(deployment.status).toBe("active");
+      const execution = await run();
+      await preparePlatformSkillAdmission(
+        db,
+        {
+          companyId: f.home,
+          agentId: f.presence.id,
+          runId: execution.id,
+          responsibleUserId: f.userId,
+          requireExisting: false,
+        },
+        blenteraPlatformContractHashes(),
+      );
+      await assertExecutionGovernance(
+        db,
+        f.home,
+        f.presence.id,
+        execution.id,
+        task.id,
+      );
+      const platformSkillAfter = await db
+        .select()
+        .from(companySkills)
+        .where(
+          and(
+            eq(companySkills.companyId, f.home),
+            eq(companySkills.key, "blentera-platform"),
+          ),
+        );
+      expect(platformSkillAfter).toHaveLength(1);
+    });
     it("pins real native queue provenance and does not let an old session adopt a newly approved purpose", async () => {
       const [legacy] = await db
         .insert(heartbeatRuns)

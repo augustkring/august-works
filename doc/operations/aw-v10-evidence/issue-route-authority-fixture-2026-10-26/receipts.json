@@ -1,0 +1,102 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "21610ebd630ed560496c5953b70552be5e58a740",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Route source-authority fixture seam; local qualification base a2a73dda9a27bdb906ff22a502d7dbdb89236aea; execution policy and access checks retained",
+  "logs": [
+    {
+      "name": "depfix-issue-routes-final-20261026-snapshot",
+      "exitCode": 0,
+      "exitSidecar": "depfix-issue-routes-final-20261026-snapshot.exit",
+      "rawSha256": "69ea949282817c48ceee2e80b72e0f42dd41cdd34a9a10aaf52baccc3916cac3",
+      "sanitizedSha256": "69ea949282817c48ceee2e80b72e0f42dd41cdd34a9a10aaf52baccc3916cac3",
+      "archiveSha256": "76477b0977d90ef9918e3cba5ed4cffef05b5b3540aa1f293788909628192c30",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "depfix-issue-routes-final-20261026-syntax",
+      "exitCode": 0,
+      "exitSidecar": "depfix-issue-routes-final-20261026-syntax.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "depfix-issue-routes-final-20261026-test",
+      "exitCode": 0,
+      "exitSidecar": "depfix-issue-routes-final-20261026-test.exit",
+      "rawSha256": "ff253100cf7699c78559843a1a87773085a3cc427e98d412852d4fecd8195be4",
+      "sanitizedSha256": "ff253100cf7699c78559843a1a87773085a3cc427e98d412852d4fecd8195be4",
+      "archiveSha256": "a871696ca5535385957a1b8ba2f7ec1a668b503096bc079e2c9946322e04b445",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  23 passed (23)",
+        "Duration  27.94s (transform 11.33s, setup 159ms, import 2.60s, tests 24.90s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "depfix-policy-diagnostic-20261026-test",
+      "exitCode": 1,
+      "exitSidecar": "depfix-policy-diagnostic-20261026-test.exit",
+      "rawSha256": "ad2222b698fe20c10ae07000e151b46caef530ce013d72dab9a6d22bcee5ebeb",
+      "sanitizedSha256": "ad2222b698fe20c10ae07000e151b46caef530ce013d72dab9a6d22bcee5ebeb",
+      "archiveSha256": "23845ea8710c35b7f994071c1efdc4c820bec017f11bea8cd2df12ab217e8d1c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 18 skipped (19)",
+        "Duration  14.24s (transform 10.34s, setup 75ms, import 2.24s, tests 11.79s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "depfix-issue-routes-20261026-test",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "37616c4da54231583c2d46f459cbe2b00c686b77e4a1611c1616983ea4f133ee",
+      "sanitizedSha256": "37616c4da54231583c2d46f459cbe2b00c686b77e4a1611c1616983ea4f133ee",
+      "archiveSha256": "02a3bf05f7beadb1fe7af9a4321e345165187b12da4418de61c96b2fa4d0eb51",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 18 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 1 passed (2)",
+        "Tests  18 failed | 5 passed (23)",
+        "Duration  25.12s (transform 9.90s, setup 134ms, import 1.92s, tests 22.81s, environment 0ms)"
+      ]
+    }
+  ]
+}

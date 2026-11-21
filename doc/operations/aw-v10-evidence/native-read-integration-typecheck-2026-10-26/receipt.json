@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "scope": "Fresh scoped server TypeScript compilation and syntax preflight; exact 153-file copied source snapshot, frozen qualified dependency tree and existing resource caps. This is not a full workspace test/build or managed Native/temporal qualification.",
+  "files": {
+    "memory-current-server-source-pins-r5-20261026.json": "bd9a456e829c6100f069bed33e6ef5307651ab4725900d4e1a157b9cf1119113",
+    "memory-current-server-syntax-r5-20261026.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "memory-current-server-syntax-r5-20261026.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "memory-current-server-typecheck-r5-20261026.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "memory-current-server-typecheck-r5-20261026.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  }
+}

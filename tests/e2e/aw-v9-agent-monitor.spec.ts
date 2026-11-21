@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 import { expect, test, type APIResponse } from "@playwright/test";
 import { createRequire } from "node:module";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -13,6 +15,8 @@ test("customer agent monitor follows native state and keeps business verificatio
   request,
 }) => {
   test.setTimeout(120000);
+  const session = await json(await request.get("/api/auth/get-session"));
+  const currentUserId = session.user.id as string;
   const original = await json(
     await request.get("/api/instance/settings/experimental"),
   );
@@ -38,7 +42,7 @@ test("customer agent monitor follows native state and keeps business verificatio
     );
     const view = await json(
       await request.get(
-        `/api/companies/${company.id}/agents/${agent.id}/experience?expectedUserId=local-board`,
+        `/api/companies/${company.id}/agents/${agent.id}/experience?expectedUserId=${encodeURIComponent(currentUserId)}`,
       ),
     );
     expect(view.agentId).toBe(agent.id);
@@ -68,7 +72,7 @@ test("customer agent monitor follows native state and keeps business verificatio
       }),
     ).toBeVisible();
     const pausedView = await json(await request.get(
-      `/api/companies/${company.id}/agents/${agent.id}/experience?expectedUserId=local-board`,
+      `/api/companies/${company.id}/agents/${agent.id}/experience?expectedUserId=${encodeURIComponent(currentUserId)}`,
     ));
     expect(pausedView.pausedWork).toEqual({ status: "none", pendingRuns: 0 });
     await expect(page.getByText("No pending native runs were recorded at this check.", { exact: false })).toBeVisible();

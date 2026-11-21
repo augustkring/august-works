@@ -1,0 +1,55 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/trust-document-routes.integration.test.ts (1 test | 1 failed) 4671ms
+     × registers and projects a current source, records/replays explicit acceptance, then rechecks live privacy and auth after waits 232ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/trust-document-routes.integration.test.ts > V10 trust document route lifecycle on PostgreSQL > registers and projects a current source, records/replays explicit acceptance, then rechecks live privacy and auth after waits
+AssertionError: {"error":"Internal server error"}
+Error: Failed query: select "trust_document_registry"."id", "trust_document_registry"."document_id", "trust_document_registry"."document_revision_id", "document_revisions"."title", "document_revisions"."revision_number", "trust_document_registry"."version", "document_revisions"."created_by_user_id", "document_revisions"."created_by_agent_id", "document_revisions"."created_by_run_id", "document_revisions"."payload_source_snapshot", "document_revisions"."conversation_foundation_proposal_ids", "trust_document_registry"."owner", "documents"."created_by_user_id", "documents"."created_by_agent_id", "documents"."updated_by_user_id", "documents"."updated_by_agent_id", "documents"."source_trust", "trust_document_registry"."effective_at", "trust_document_registry"."evidence_refs", "trust_document_registry"."customer_visibility", "trust_document_registry"."nda_required", "trust_document_registry"."last_reviewed_at", "trust_document_registry"."next_review_or_trigger", "trust_document_registry"."expires_at", "trust_document_registry"."superseded_by", "trust_document_registry"."acceptance_required" from "trust_document_registry" inner join "document_revisions" on ("document_revisions"."company_id" = "trust_document_registry"."company_id" and "document_revisions"."document_id" = "trust_document_registry"."document_id" and "document_revisions"."id" = "trust_document_registry"."document_revision_id") inner join "documents" on ("documents"."company_id" = "trust_document_registry"."company_id" and "documents"."id" = "trust_document_registry"."document_id") where ("trust_document_registry"."company_id" = $1 and "documents"."latest_revision_id" = "trust_document_registry"."document_revision_id" and "trust_document_registry"."customer_visibility" = $2 and "trust_document_registry"."nda_required" = $3 and "trust_document_registry"."superseded_by" is null and "trust_document_registry"."last_reviewed_at" is not null and "trust_document_registry"."last_reviewed_at" <= $4 and "trust_document_registry"."effective_at" is not null and "trust_document_registry"."effective_at" <= $5 and ("trust_document_registry"."expires_at" is null or "trust_document_registry"."expires_at" > $6)) for update
+params: 9678ace6-876e-4d7e-b52a-f5178f073ffd,public,false,2026-10-28T08:34:04.604Z,2026-10-28T08:34:04.604Z,Wed Oct 28 2026 08:34:04 GMT+0000 (Coordinated Universal Time)
+Error: Failed query: select "trust_document_registry"."id", "trust_document_registry"."document_id", "trust_document_registry"."document_revision_id", "document_revisions"."title", "document_revisions"."revision_number", "trust_document_registry"."version", "document_revisions"."created_by_user_id", "document_revisions"."created_by_agent_id", "document_revisions"."created_by_run_id", "document_revisions"."payload_source_snapshot", "document_revisions"."conversation_foundation_proposal_ids", "trust_document_registry"."owner", "documents"."created_by_user_id", "documents"."created_by_agent_id", "documents"."updated_by_user_id", "documents"."updated_by_agent_id", "documents"."source_trust", "trust_document_registry"."effective_at", "trust_document_registry"."evidence_refs", "trust_document_registry"."customer_visibility", "trust_document_registry"."nda_required", "trust_document_registry"."last_reviewed_at", "trust_document_registry"."next_review_or_trigger", "trust_document_registry"."expires_at", "trust_document_registry"."superseded_by", "trust_document_registry"."acceptance_required" from "trust_document_registry" inner join "document_revisions" on ("document_revisions"."company_id" = "trust_document_registry"."company_id" and "document_revisions"."document_id" = "trust_document_registry"."document_id" and "document_revisions"."id" = "trust_document_registry"."document_revision_id") inner join "documents" on ("documents"."company_id" = "trust_document_registry"."company_id" and "documents"."id" = "trust_document_registry"."document_id") where ("trust_document_registry"."company_id" = $1 and "documents"."latest_revision_id" = "trust_document_registry"."document_revision_id" and "trust_document_registry"."customer_visibility" = $2 and "trust_document_registry"."nda_required" = $3 and "trust_document_registry"."superseded_by" is null and "trust_document_registry"."last_reviewed_at" is not null and "trust_document_registry"."last_reviewed_at" <= $4 and "trust_document_registry"."effective_at" is not null and "trust_document_registry"."effective_at" <= $5 and ("trust_document_registry"."expires_at" is null or "trust_document_registry"."expires_at" > $6)) for update
+params: 9678ace6-876e-4d7e-b52a-f5178f073ffd,public,false,2026-10-28T08:34:04.604Z,2026-10-28T08:34:04.604Z,Wed Oct 28 2026 08:34:04 GMT+0000 (Coordinated Universal Time)
+    at PostgresJsPreparedQuery.queryWithCache (file:///workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/postgres-js/session.js:37:20
+    at /workspace/v10-dep-qualification/server/src/routes/trust-documents.ts:163:20
+    at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+    at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+    at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+    at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+    at /workspace/v10-dep-qualification/server/src/routes/trust-documents.ts:159:53
+Cause: TypeError [ERR_INVALID_ARG_TYPE]: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ src/routes/trust-documents.ts:163:20
+    161|       // Lock the current source rows while checking owner links so a …
+    162|       // private association cannot race the projection.
+    163|       const rows = await tx.select({
+       |                    ^
+    164|       id: trustDocumentRegistry.id,
+    165|       documentId: trustDocumentRegistry.documentId,
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/routes/trust-documents.ts:159:53
+ ❯ src/__tests__/trust-document-routes.integration.test.ts:143:77
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  08:33:43
+   Duration  21.58s (transform 11.46s, setup 94ms, import 16.68s, tests 4.67s, environment 0ms)
+

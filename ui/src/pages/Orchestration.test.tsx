@@ -34,17 +34,17 @@ async function setField(label: string, value: string) {
 it("keeps a simple internal draft single-worker and preserves the selected canonical Task version", async () => {
   await render();
   await setField("Task", fixture.task); await setField("Objective", "Prepare the retained launch analysis draft"); await setField("Business invariant", "All market claims cite retained evidence");
-  await setField("Independent assessment call limit", "2");
+  await setField("Independent assessment call limit", "2"); await setField("Maximum model cost (minor units)", "200");
   vi.mocked(orchestrationApi.create).mockRejectedValue(new Error("Server fixture stops before dispatch"));
   await act(async () => Array.from(container!.querySelectorAll("button")).find(button => button.textContent === "Save plan")!.click());
-  expect(orchestrationApi.create).toHaveBeenCalledWith(fixture.company, expect.objectContaining({ issueId: fixture.task, expectedIssueUpdatedAt: "2026-10-05T00:00:00.000Z", workload: "semantic", riskClass: "C0", budgets: expect.objectContaining({ maxWorkerCount: 1, maxParallelWorkers: 1 }), workers: [{ key: "worker", issueId: fixture.task }] }));
+  expect(orchestrationApi.create).toHaveBeenCalledWith(fixture.company, expect.objectContaining({ issueId: fixture.task, expectedIssueUpdatedAt: "2026-10-05T00:00:00.000Z", workload: "semantic", riskClass: "C0", budgets: expect.objectContaining({ maxWorkerCount: 1, maxParallelWorkers: 1, maxModelCostMinor: 200 }), workers: [{ key: "worker", issueId: fixture.task }] }));
   expect(orchestrationApi.create).toHaveBeenCalledWith(fixture.company, expect.objectContaining({ supervisionPolicy: expect.objectContaining({ maxVerifierCalls: 2 }) }));
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
   expect(container!.textContent).toContain("Server fixture stops before dispatch");
 });
 it("raises material assurance and binds an external action to its approved exact arguments", async () => {
   await render(); await setField("Task", fixture.task); await setField("Intended action", "external_communication");
-  await setField("Objective", "Send the separately approved launch announcement"); await setField("Business invariant", "Use only the explicitly approved recipient and message"); await setField("Approved action name", "send_email"); await setField("Approved arguments fingerprint", "a".repeat(64));
+  await setField("Objective", "Send the separately approved launch announcement"); await setField("Business invariant", "Use only the explicitly approved recipient and message"); await setField("Approved action name", "send_email"); await setField("Approved arguments fingerprint", "a".repeat(64)); await setField("Maximum model cost (minor units)", "500");
   vi.mocked(orchestrationApi.create).mockRejectedValue(new Error("Server fixture stops before dispatch"));
   await act(async () => Array.from(container!.querySelectorAll("button")).find(button => button.textContent === "Save plan")!.click());
   expect(orchestrationApi.create).toHaveBeenCalledWith(fixture.company, expect.objectContaining({ actionClass: "external_communication", riskClass: "C2", completionContract: expect.objectContaining({ requiredPostconditions: [{ kind: "tool_receipt", toolName: "send_email", argumentsHash: "a".repeat(64), requireApproval: true }] }) }));

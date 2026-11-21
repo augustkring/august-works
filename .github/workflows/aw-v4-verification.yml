@@ -67,10 +67,71 @@ jobs:
       - name: Build
         run: pnpm build
 
+  managed-native-test-prerequisites:
+    name: Build managed Native test prerequisites
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
+
+      - name: Build managed Native provider pack
+        run: |
+          set -euo pipefail
+          provider_pack="$RUNNER_TEMP/paperclip-native-provider-pack"
+          artifact_dir="$RUNNER_TEMP/aw-v4-managed-native-prerequisites"
+          mkdir -p "$artifact_dir"
+          pnpm --filter @paperclipai/paperclip-runner run build:binary
+          pnpm --filter @paperclipai/paperclip-runner run build:provider-pack "$provider_pack"
+          git diff --exit-code -- pnpm-lock.yaml
+          test -x "$provider_pack/dist/bin/paperclip-runnerd"
+          git rev-parse HEAD > "$artifact_dir/source-commit.txt"
+          tar -czf "$artifact_dir/provider-pack.tar.gz" -C "$provider_pack" .
+          (cd "$artifact_dir" && sha256sum provider-pack.tar.gz source-commit.txt > provider-pack.sha256)
+
+      - name: Fetch pinned managed Native OpenShell prover
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/aw-v4-managed-native-prerequisites/openshell-prover-x86_64-unknown-linux-musl.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 --retry 2 --max-time 120 \
+            https://github.com/NVIDIA/OpenShell/releases/download/v0.1.2/openshell-prover-x86_64-unknown-linux-musl.tar.gz \
+            --output "$archive"
+          echo "e1c9db66ae459850cab43765d7ad569effe2ac0a338c902a1b895d0cc361fbb0  $archive" | sha256sum --check
+          test "$(tar -tzf "$archive")" = openshell-prover
+          binary_sha=$(tar -xOzf "$archive" openshell-prover | sha256sum | cut -d ' ' -f 1)
+          test "$binary_sha" = 3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1
+
+      - name: Retain managed Native test prerequisites
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aw-v4-managed-native-prerequisites-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aw-v4-managed-native-prerequisites/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   tests:
     name: Repository tests (${{ matrix.partition }})
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    needs: [managed-native-test-prerequisites]
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -114,6 +175,12 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: Install qualified managed Native test helpers
+        if: startsWith(matrix.partition, 'server-')
+        shell: bash
+        env:
+          ERASER_TEST_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: bash scripts/ci-install-managed-native-test-observers.sh
       - name: Install dependencies
         shell: bash
         run: |
@@ -123,20 +190,303 @@ jobs:
       - name: Prepare workspace build dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
 
+      - name: Download managed Native test prerequisites
+        if: startsWith(matrix.partition, 'server-')
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: aw-v4-managed-native-prerequisites-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aw-v4-managed-native-prerequisites
+
+      - name: Prepare managed Native fixture inputs
+        if: startsWith(matrix.partition, 'server-')
+        shell: bash
+        run: bash scripts/ci-prepare-managed-native-fixture-inputs.sh
+
       - name: Install generated-code sandbox
         if: startsWith(matrix.partition, 'server-')
         run: bash scripts/ci-install-native-sandbox.sh
 
+      - name: Select installed Chrome for managed browser fixtures
+        if: startsWith(matrix.partition, 'server-')
+        shell: bash
+        run: |
+          selection="$RUNNER_TEMP/aw-v4-managed-native-selected-suites.json"
+          node scripts/run-vitest-stable.mjs ${{ matrix.args }} --dry-run > "$selection"
+          browser_selected=$(node --input-type=module - "$selection" <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const selected = JSON.parse(readFileSync(process.argv[2], "utf8")).selectedGeneralServerSuites;
+          assert.ok(Array.isArray(selected) && selected.every(value => typeof value === "string"));
+          process.stdout.write(String(selected.some(value => value.startsWith("server/src/services/native-runtime/native-opencode-managed-browser") && value.endsWith(".integration.test.ts"))));
+          NODE
+          )
+          if [[ "$browser_selected" == true ]]; then
+            google-chrome --version
+            chrome="$(dirname "$(readlink -f "$(command -v google-chrome)")")/chrome"
+            test -x "$chrome"
+            "$chrome" --version
+            echo "PAPERCLIP_PLAYWRIGHT_EXECUTABLE=$chrome" >> "$GITHUB_ENV"
+          fi
+
       - name: Run stable test suite
         run: pnpm test:run ${{ matrix.args }}
 
+  security-regression-plan:
+    name: Plan changed-source security regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      selectors_json: ${{ steps.plan.outputs.selectors_json }}
+      selected_files_json: ${{ steps.plan.outputs.selected_files_json }}
+      has_selectors: ${{ steps.plan.outputs.has_selectors }}
+      shard_count: ${{ steps.plan.outputs.shard_count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
+
+      - name: Prepare workspace build dependencies
+        run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+
+      - name: Validate V10 security regression selectors
+        run: |
+          node scripts/check-v10-security-fast-path.mjs
+          node --test scripts/check-v10-security-fast-path.test.mjs
+
+      - name: Resolve selectors and config-aware shard count
+        id: plan
+        shell: bash
+        env:
+          CHANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CHANGE_BASE}" ] || [[ "${CHANGE_BASE}" =~ ^0+$ ]]; then
+            selectors="$(node scripts/check-v10-security-fast-path.mjs --all)"
+          else
+            selectors="$(node scripts/check-v10-security-fast-path.mjs --base "${CHANGE_BASE}")"
+          fi
+          if [ -z "$selectors" ]; then
+            printf 'matrix={"include":[{"shard":1,"count":1}]}\nselectors_json=[]\nselected_files_json=[]\nhas_selectors=false\nshard_count=0\n' >> "$GITHUB_OUTPUT"
+            echo "No protected V10 source path changed."
+            exit 0
+          fi
+          selector_file="$RUNNER_TEMP/v10-security-selectors.txt"
+          file_list="$RUNNER_TEMP/v10-security-files.txt"
+          printf '%s\n' "$selectors" > "$selector_file"
+          mapfile -t selected_tests < "$selector_file"
+          pnpm run preflight:workspace-links
+          pnpm exec vitest list --filesOnly --json="$file_list" "${selected_tests[@]}"
+          node --input-type=module - "$selector_file" "$file_list" "$GITHUB_OUTPUT" <<'NODE'
+          import { appendFileSync, readFileSync } from "node:fs";
+          import { relative } from "node:path";
+          const [selectorFile, fileList, outputFile] = process.argv.slice(2);
+          const selectors = readFileSync(selectorFile, "utf8").split(/\r?\n/).filter(Boolean);
+          const listed = JSON.parse(readFileSync(fileList, "utf8"));
+          if (!Array.isArray(listed) || listed.some(entry => !entry || typeof entry.file !== "string" || !entry.file)) {
+            throw new Error("Invalid config-aware Vitest file list");
+          }
+          const files = [...new Set(listed.map(entry => relative(process.cwd(), entry.file)))];
+          if (selectors.length === 0 || files.length === 0) throw new Error("Changed security selectors resolved to zero Vitest files");
+          const shardCount = Math.min(4, files.length);
+          const matrix = { include: Array.from({ length: shardCount }, (_, index) => ({ shard: index + 1, count: shardCount })) };
+          appendFileSync(outputFile, `matrix=${JSON.stringify(matrix)}\nselectors_json=${JSON.stringify(selectors)}\nselected_files_json=${JSON.stringify(files)}\nhas_selectors=true\nshard_count=${shardCount}\n`);
+          console.log(`Resolved ${selectors.length} original selectors to ${files.length} Vitest files across ${shardCount} serial shards.`);
+          NODE
+
+  security-regressions:
+    name: Changed-source security regressions (${{ matrix.shard }}/${{ matrix.count }})
+    needs: [security-regression-plan, managed-native-test-prerequisites]
+    if: needs.security-regression-plan.outputs.has_selectors == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.security-regression-plan.outputs.matrix) }}
+    env:
+      SECURITY_SELECTORS_JSON: ${{ needs.security-regression-plan.outputs.selectors_json }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install qualified managed Native test helpers
+        if: contains(needs.security-regression-plan.outputs.selected_files_json, 'server/')
+        shell: bash
+        env:
+          ERASER_TEST_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: bash scripts/ci-install-managed-native-test-observers.sh
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
+
+      - name: Prepare workspace build dependencies
+        run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+
+      - name: Download managed Native test prerequisites
+        if: contains(needs.security-regression-plan.outputs.selected_files_json, 'server/')
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: aw-v4-managed-native-prerequisites-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/aw-v4-managed-native-prerequisites
+
+      - name: Prepare managed Native fixture inputs
+        if: contains(needs.security-regression-plan.outputs.selected_files_json, 'server/')
+        shell: bash
+        run: bash scripts/ci-prepare-managed-native-fixture-inputs.sh
+
+      - name: Install generated-code sandbox
+        if: contains(needs.security-regression-plan.outputs.selected_files_json, 'server/')
+        run: bash scripts/ci-install-native-sandbox.sh
+
+      - name: Select installed Chrome for managed browser fixtures
+        if: contains(needs.security-regression-plan.outputs.selected_files_json, 'server/')
+        shell: bash
+        env:
+          SELECTED_FILES_JSON: ${{ needs.security-regression-plan.outputs.selected_files_json }}
+        run: |
+          browser_selected=$(node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          const selected = JSON.parse(process.env.SELECTED_FILES_JSON);
+          assert.ok(Array.isArray(selected) && selected.every(value => typeof value === "string"));
+          process.stdout.write(String(selected.some(value => value.startsWith("server/src/services/native-runtime/native-opencode-managed-browser") && value.endsWith(".integration.test.ts"))));
+          NODE
+          )
+          if [[ "$browser_selected" == true ]]; then
+            google-chrome --version
+            chrome="$(dirname "$(readlink -f "$(command -v google-chrome)")")/chrome"
+            test -x "$chrome"
+            "$chrome" --version
+            echo "PAPERCLIP_PLAYWRIGHT_EXECUTABLE=$chrome" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run one serial Vitest shard with default and JSON reporters
+        id: run-shard
+        shell: bash
+        run: |
+          set -euo pipefail
+          selector_file="$RUNNER_TEMP/v10-security-selectors.txt"
+          node --input-type=module - "$selector_file" <<'NODE'
+          import { writeFileSync } from "node:fs";
+          writeFileSync(process.argv[2], `${JSON.parse(process.env.SECURITY_SELECTORS_JSON).join("\n")}\n`);
+          NODE
+          mapfile -t selected_tests < "$selector_file"
+          pnpm run preflight:workspace-links
+          execution_report="$(mktemp --suffix=.json "$RUNNER_TEMP/v10-security-vitest-${{ matrix.shard }}-XXXXXX")"
+          text_log="${execution_report%.json}.log"
+          echo "report=$execution_report" >> "$GITHUB_OUTPUT"
+          echo "text_log=$text_log" >> "$GITHUB_OUTPUT"
+          set +e
+          pnpm exec vitest run "${selected_tests[@]}" --maxWorkers=1 --no-file-parallelism \
+            --shard=${{ matrix.shard }}/${{ matrix.count }} --reporter=default --reporter=json --outputFile "$execution_report" 2>&1 | tee "$text_log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          exit "$test_status"
+
+      - name: Guard this shard's JSON execution receipt
+        if: always()
+        env:
+          EXECUTION_REPORT: ${{ steps.run-shard.outputs.report }}
+        run: node scripts/check-v10-security-regression-execution.mjs --shard "$EXECUTION_REPORT"
+
+      - name: Upload shard diagnostics and JSON receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aw-v4-security-regression-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: |
+            ${{ steps.run-shard.outputs.report }}
+            ${{ steps.run-shard.outputs.text_log }}
+          if-no-files-found: warn
+          retention-days: 3
+
+  security-regression-aggregate:
+    name: Verify complete changed-source security coverage
+    needs: [security-regression-plan, security-regressions]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Download every shard report
+        if: needs.security-regression-plan.outputs.has_selectors == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: aw-v4-security-regression-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/v10-security-shards
+          merge-multiple: true
+
+      - name: Verify original selectors across all shard reports
+        if: always()
+        env:
+          PLAN_RESULT: ${{ needs.security-regression-plan.result }}
+          SHARDS_RESULT: ${{ needs.security-regressions.result }}
+          HAS_SELECTORS: ${{ needs.security-regression-plan.outputs.has_selectors }}
+          SELECTORS_JSON: ${{ needs.security-regression-plan.outputs.selectors_json }}
+          SHARD_COUNT: ${{ needs.security-regression-plan.outputs.shard_count }}
+        run: |
+          set -euo pipefail
+          if [[ "$PLAN_RESULT" != success ]]; then echo "Security regression planning failed." >&2; exit 1; fi
+          if [[ "$HAS_SELECTORS" != true ]]; then echo "No changed-source selectors; full hard gates remain required."; exit 0; fi
+          selector_file="$RUNNER_TEMP/v10-security-selectors.txt"
+          node --input-type=module - "$selector_file" <<'NODE'
+          import { writeFileSync } from "node:fs";
+          writeFileSync(process.argv[2], `${JSON.parse(process.env.SELECTORS_JSON).join("\n")}\n`);
+          NODE
+          mapfile -t selected_tests < "$selector_file"
+          node scripts/check-v10-security-regression-execution.mjs --aggregate \
+            "$RUNNER_TEMP/v10-security-shards" "$SHARD_COUNT" "${selected_tests[@]}"
+          if [[ "$SHARDS_RESULT" != success ]]; then echo "One or more changed-source security shards failed." >&2; exit 1; fi
+
   security-evals:
     name: Security hard gates
+    needs: security-regression-aggregate
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -231,6 +581,15 @@ jobs:
           - journey: V7 authenticated discovery and governance
             config: tests/e2e/aw-v7-authenticated.config.ts
             spec: tests/e2e/aw-v7-authenticated.spec.ts
+          - journey: V10 authenticated native auth
+            config: tests/e2e/aw-v10-native-auth.config.ts
+            spec: tests/e2e/aw-v10-native-auth.spec.ts
+          - journey: V10 authenticated support Help
+            config: tests/e2e/aw-v10-support.config.ts
+            spec: tests/e2e/aw-v10-support.spec.ts
+          - journey: V10 authenticated agent chat
+            config: tests/e2e/aw-v10-agent-chat.config.ts
+            spec: 'tests/e2e/agent-chat-(sessions|projects)\.spec\.ts'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -256,8 +615,16 @@ jobs:
       - name: Prepare workspace build dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
 
+      - name: Use canonical Ubuntu archive for Playwright system dependencies
+        run: bash scripts/ci-canonicalize-ubuntu-apt-mirrors.sh
+
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build Native chat Runner
+        if: matrix.config == 'tests/e2e/aw-v10-agent-chat.config.ts'
+        working-directory: packages/paperclip-runner/runner
+        run: cargo build --locked --release --bin paperclip-runnerd
 
       - name: Verify product browser journey
         run: pnpm exec playwright test --config '${{ matrix.config }}' '${{ matrix.spec }}'
@@ -272,6 +639,7 @@ jobs:
             tests/e2e/playwright-report
             test-results/v5-authenticated
             test-results/v7-authenticated
+            test-results/v10-agent-chat-authenticated
           if-no-files-found: ignore
 
   pilot-readiness:

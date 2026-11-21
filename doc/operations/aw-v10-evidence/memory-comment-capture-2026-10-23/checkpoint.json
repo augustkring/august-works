@@ -1,0 +1,34 @@
+{
+  "baseCommit": "82c8ccd199e1a060eedec47095d9515755aa65c8",
+  "sources": {
+    "server/src/services/issues.ts": "d0255ccaf2b9c786f350ebcd00b6943fdbf059f577578d5ae03aff692e1dcd12",
+    "server/src/services/memory/memory-maintenance.ts": "e46a065357e6e6e6ccc12f52c6dcf2e192130d9a2bf3af024ebf8dfe768f9bf7",
+    "server/src/__tests__/native-payload-source-binding.integration.test.ts": "8ebaffcb86223a6b2c4e3f88d1d32bda7c58e89523f16c8d65ab224ec5c188d9",
+    "server/src/__tests__/memory-maintenance-publication.integration.test.ts": "ed7fe91f20a3bb0c6453abf713aac7908a48ac4e57ac11e2244e1ebd4b749e30"
+  },
+  "checks": {
+    "baseline": {
+      "exit": 1,
+      "tests": "2 failed | 25 skipped (27)",
+      "duration": "56.80s (transform 21.09s, setup 244ms, import 39.77s, tests 15.91s, environment 0ms)"
+    },
+    "final": {
+      "exit": 0,
+      "tests": "27 passed (27)",
+      "duration": "63.34s (transform 24.25s, setup 207ms, import 41.32s, tests 21.34s, environment 0ms)"
+    },
+    "server-types": {
+      "exit": 0,
+      "testFilesExcluded": true
+    }
+  },
+  "interpretation": [
+    "Actual baseline2FAIL/25skipped reproduces native Comment metadata update SQLSTATE23514 and original dedupe worker failure; final27PASS includes original lease-expiry rollback and committed publication checks.",
+    "Metadata upgrade compares actual JSONB in the original company-scoped UPDATE. Dedupe clears canonical capture when adding an actual new selected Memory root; superseded duplicate retains its exact original snapshot.",
+    "Server compiler0; exact tested source pins unchanged at completion; sessions closed. Test evidence is the actual native runs, not compiler qualification."
+  ],
+  "limits": [
+    "New INSERT-only protocol1 structural fixtures, not authenticated input-completeness, producer qualification or source-free admission. No constructor activation, historical upgrade, snapshot rebinding or guard relaxation.",
+    "Original privacy/temporal and31 portability failures, complete run-input capture, other Memory/Document/attachment writers and full workspace/V10/PR gates remain open."
+  ]
+}

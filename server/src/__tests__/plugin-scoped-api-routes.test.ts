@@ -204,7 +204,7 @@ describe.sequential("plugin scoped API routes", () => {
     expect(res.headers.location).toBeUndefined();
   });
 
-  it("enforces agent checkout ownership before dispatching issue-scoped POST routes", async () => {
+  it("refuses opaque agent routes even with current checkout ownership", async () => {
     const apiRoutes = manifest([
       {
         routeKey: "issue.advance",
@@ -242,18 +242,13 @@ describe.sequential("plugin scoped API routes", () => {
       .post(`/api/plugins/${pluginId}/api/issues/${issueId}/advance`)
       .send({ step: "next" });
 
-    expect(res.status).toBe(200);
-    expect(mockIssueService.assertCheckoutOwner).toHaveBeenCalledWith(issueId, agentId, runId);
-    expect(workerManager.call).toHaveBeenCalledWith(pluginId, "handleApiRequest", expect.objectContaining({
-      routeKey: "issue.advance",
-      params: { issueId },
-      body: { step: "next" },
-      actor: expect.objectContaining({ actorType: "agent", agentId, runId }),
-      companyId,
-    }));
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("configuration_incomplete");
+    expect(workerManager.call).not.toHaveBeenCalled();
+    expect(mockIssueService.assertCheckoutOwner).not.toHaveBeenCalled();
   });
 
-  it("allows non-assignee agents on in-progress required checkout routes without claiming checkout ownership", async () => {
+  it("refuses opaque non-assignee agent routes without claiming checkout ownership", async () => {
     const apiRoutes = manifest([
       {
         routeKey: "issue.advance",
@@ -291,15 +286,10 @@ describe.sequential("plugin scoped API routes", () => {
       .post(`/api/plugins/${pluginId}/api/issues/${issueId}/advance`)
       .send({ step: "next" });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("configuration_incomplete");
+    expect(workerManager.call).not.toHaveBeenCalled();
     expect(mockIssueService.assertCheckoutOwner).not.toHaveBeenCalled();
-    expect(workerManager.call).toHaveBeenCalledWith(pluginId, "handleApiRequest", expect.objectContaining({
-      routeKey: "issue.advance",
-      params: { issueId },
-      body: { step: "next" },
-      actor: expect.objectContaining({ actorType: "agent", agentId: peerAgentId, runId }),
-      companyId,
-    }));
   });
 
   it("rejects checkout-protected agent routes without a run id before worker dispatch", async () => {
@@ -339,8 +329,10 @@ describe.sequential("plugin scoped API routes", () => {
       .post(`/api/plugins/${pluginId}/api/issues/${issueId}/advance`)
       .send({});
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("configuration_incomplete");
     expect(workerManager.call).not.toHaveBeenCalled();
+    expect(mockIssueService.assertCheckoutOwner).not.toHaveBeenCalled();
   });
 
   it("rejects checkout-protected agent routes when the active checkout belongs to another run", async () => {
@@ -385,7 +377,9 @@ describe.sequential("plugin scoped API routes", () => {
       .send({});
 
     expect(res.status).toBe(409);
+    expect(res.body.code).toBe("configuration_incomplete");
     expect(workerManager.call).not.toHaveBeenCalled();
+    expect(mockIssueService.assertCheckoutOwner).not.toHaveBeenCalled();
   });
 
   it("returns a clear error for disabled plugins without worker dispatch", async () => {

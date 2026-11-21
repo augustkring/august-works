@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import os from "node:os";
 import path from "node:path";
@@ -125,6 +125,111 @@ describe("createPluginDevWatcher", () => {
     const [watchedPaths] = chokidarMock.watch.mock.calls[0] ?? [];
     expect(watchedPaths).toContain(path.join(pluginDir, "dist", "worker.js"));
 
+    devWatcher.close();
+  });
+
+  it("excludes bundled catalog paths while continuing to watch editable local plugins", async () => {
+    const catalogRoot = makeTempPluginDir();
+    const bundledDir = path.join(catalogRoot, "sandbox-providers", "example");
+    writePluginPackage(bundledDir);
+    const localDir = makeTempPluginDir();
+    writePluginPackage(localDir);
+    installMockFsWatcher();
+    const lifecycle = createLifecycle();
+    const devWatcher = createPluginDevWatcher(
+      lifecycle as never,
+      async (pluginId) => pluginId === "bundled" ? bundledDir : localDir,
+      undefined,
+      { unwatchedRoots: [catalogRoot] },
+    );
+
+    lifecycle.emit("plugin.loaded", { pluginId: "bundled", pluginKey: "bundled" });
+    devWatcher.watch("bundled-direct", bundledDir);
+    lifecycle.emit("plugin.loaded", { pluginId: "local", pluginKey: "local" });
+
+    await vi.waitFor(() => expect(chokidarMock.watch).toHaveBeenCalledTimes(1));
+    const watched = chokidarMock.watch.mock.calls.flatMap(([targets]) => targets as string[]);
+    expect(watched).toContain(path.join(localDir, "dist", "worker.js"));
+    expect(watched.every((target) => !target.startsWith(catalogRoot))).toBe(true);
+    devWatcher.close();
+  });
+
+  it("excludes bundled paths through real and symbolic root forms", () => {
+    const realRoot = makeTempPluginDir();
+    const linkParent = makeTempPluginDir();
+    const linkedRoot = path.join(linkParent, "catalog");
+    symlinkSync(realRoot, linkedRoot, "dir");
+    const bundledDir = path.join(realRoot, "sandbox-providers", "example");
+    writePluginPackage(bundledDir);
+    installMockFsWatcher();
+    const devWatcher = createPluginDevWatcher(createLifecycle() as never, undefined, undefined, { unwatchedRoots: [linkedRoot] });
+
+    devWatcher.watch("bundled-real", bundledDir);
+    devWatcher.watch("bundled-link", path.join(linkedRoot, "sandbox-providers", "example"));
+
+    expect(chokidarMock.watch).not.toHaveBeenCalled();
+    devWatcher.close();
+  });
+
+  it("closes a local watcher and cancels its pending restart when lifecycle lookup moves into the bundle root", async () => {
+    vi.useFakeTimers();
+    const localDir = makeTempPluginDir();
+    writePluginPackage(localDir);
+    const catalogRoot = makeTempPluginDir();
+    const bundledDir = path.join(catalogRoot, "sandbox-providers", "example");
+    writePluginPackage(bundledDir);
+    const { fakeWatcher, handlers } = installMockFsWatcher();
+    const lifecycle = createLifecycle();
+    let resolvedPath = localDir;
+    const devWatcher = createPluginDevWatcher(
+      lifecycle as never,
+      async () => resolvedPath,
+      undefined,
+      { unwatchedRoots: [catalogRoot] },
+    );
+
+    lifecycle.emit("plugin.loaded", { pluginId: "moving", pluginKey: "moving" });
+    await vi.waitFor(() => expect(chokidarMock.watch).toHaveBeenCalledTimes(1));
+    handlers.all?.("change", path.join(localDir, "dist", "worker.js"));
+    resolvedPath = bundledDir;
+    lifecycle.emit("plugin.enabled", { pluginId: "moving", pluginKey: "moving" });
+    await vi.waitFor(() => expect(fakeWatcher.close).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(lifecycle.restartWorker).not.toHaveBeenCalled();
+    expect(chokidarMock.watch).toHaveBeenCalledTimes(1);
+    devWatcher.close();
+  });
+
+  it("ignores stale asynchronous package lookups after unload and out-of-order lifecycle events", async () => {
+    const firstDir = makeTempPluginDir();
+    writePluginPackage(firstDir);
+    const secondDir = makeTempPluginDir();
+    writePluginPackage(secondDir);
+    installMockFsWatcher();
+    const lifecycle = createLifecycle();
+    const lookups: Array<(value: string | null) => void> = [];
+    const devWatcher = createPluginDevWatcher(lifecycle as never, () => new Promise((resolve) => {
+      lookups.push(resolve);
+    }));
+
+    lifecycle.emit("plugin.loaded", { pluginId: "race", pluginKey: "race" });
+    await vi.waitFor(() => expect(lookups).toHaveLength(1));
+    lifecycle.emit("plugin.enabled", { pluginId: "race", pluginKey: "race" });
+    await vi.waitFor(() => expect(lookups).toHaveLength(2));
+    lookups[1]!(secondDir);
+    await vi.waitFor(() => expect(chokidarMock.watch).toHaveBeenCalledTimes(1));
+    lookups[0]!(firstDir);
+    await Promise.resolve();
+    expect(chokidarMock.watch).toHaveBeenCalledTimes(1);
+    expect(chokidarMock.watch.mock.calls[0]?.[0]).toContain(path.join(secondDir, "dist", "worker.js"));
+
+    lifecycle.emit("plugin.loaded", { pluginId: "unloaded-race", pluginKey: "unloaded-race" });
+    await vi.waitFor(() => expect(lookups).toHaveLength(3));
+    lifecycle.emit("plugin.unloaded", { pluginId: "unloaded-race", pluginKey: "unloaded-race" });
+    lookups[2]!(firstDir);
+    await Promise.resolve();
+    expect(chokidarMock.watch).toHaveBeenCalledTimes(1);
     devWatcher.close();
   });
 

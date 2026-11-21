@@ -1,0 +1,4 @@
+dd76a93d6b52f37a4291783b6d7c4a40a9d7fc803301bcc3885cbc0314b2d4f6  server/src/services/heartbeat.ts
+15763522a561265dd4828cf33613031fab9f945c834c860ed6771e290ce43ad2  server/src/services/agent-conversations.ts
+97fb92a321261341ea6a1089ba80135b7fd56996b3a051fc1abff12a687100dc  server/src/__tests__/issue-comment-redaction.test.ts
+9dac1c070f3571b902c9cb67e3e95c12148ee2a9d68d31168ae6548f321fd09a  server/src/__tests__/heartbeat-process-recovery.test.ts

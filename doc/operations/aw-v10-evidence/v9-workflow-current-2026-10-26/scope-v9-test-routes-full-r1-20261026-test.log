@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > executes the actual immutable draft as test without publishing, cloning or admitting live work 686ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > serializes identical original requests and recovers one receipt after draft replacement and publication 636ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > retains queued test recovery on the original revision after draft replacement 187ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects stale before native admission 73ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects revision before native admission 75ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects workflow before native admission 59ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects false_ack before native admission 55ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects production_input before native admission 56ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects wrong_expected_result before native admission 57ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > does not allow retry or optimizer correction/trace to convert a test to live evidence 452ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rechecks the initiating human's current role during queued recovery 349ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > revokes original test receipt and queued execution after actual workflows:read grant loss 206ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > revokes original test receipt and queued execution after actual workflows:edit grant loss 182ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > revokes original test receipt and queued execution after actual workflows:run grant loss 191ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > refuses a native draft requiring long_deadline before any test run 66ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > refuses a native draft requiring input_contract before any test run 80ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > refuses a native draft requiring variables before any test run 86ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > keeps another human's original receipt private and rejects reused UUID with changed command 364ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > rejects altered retained receipt bindings instead of displaying a different run 222ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > keeps legacy manual admission from choosing an unpublished test source 40ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > enforces rollout at the native enqueue owner as well as the customer route 49ms
+ ✓ src/__tests__/v9-workflow-test-routes.test.ts > V9 actual unpublished native workflow tests > blocks fresh admission on Pause and rollout rollback while preserving the native run 246ms
+
+ Test Files  1 passed (1)
+      Tests  22 passed (22)
+   Start at  22:55:24
+   Duration  23.64s (transform 10.34s, setup 79ms, import 14.81s, tests 8.62s, environment 0ms)
+

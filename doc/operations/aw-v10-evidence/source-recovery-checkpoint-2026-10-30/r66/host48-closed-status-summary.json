@@ -1,0 +1,25 @@
+{
+  "scope": "Closed Host48 scoped qualification receipt; not end-to-end model/Worker route success",
+  "sourcePinsSha256": "51928231f699e6f473a0d532e2679ad6d11e33ef73dae3b06167f15e52bb989a",
+  "exitCodes": {
+    "db-build": "0",
+    "host-session-node": "0",
+    "managed-source-target-vitest": "1",
+    "managed-worker-lifecycle-vitest": "1",
+    "qualification-clock-vitest": "0",
+    "server-tsc": "0",
+    "shared-build": "0",
+    "source-oxc": "0"
+  },
+  "restoreLogSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+  "hostSessionNodeTests": 101,
+  "hostSessionNodeExit": "0",
+  "qualificationClockTestsPassed": 16,
+  "qualificationClockExit": "0",
+  "protectedQualificationReportRows": 19,
+  "protectedQualificationRowsPassed": 19,
+  "managedSourceLogSha256": "02372f6711a25ae918e537558f77e05d53137778644ee0a6dd0fc3ab8c6b2c88",
+  "managedWorkerLogSha256": "d4dca902173cb11e828345c1e0303943cd9252745ec54a6e27330cf86a74f9e0",
+  "modelAndWorkerOutcome": "Both actual managed model and Worker lifecycle route tests failed during production projection before model invocation. Host48 logs identify OpenShell refusing the compiled admission policy; no model call is claimed.",
+  "limits": "TypeScript, Host Node, qualification clock, and protected 19-row report passed. Managed Project GET and Worker routes did not pass."
+}

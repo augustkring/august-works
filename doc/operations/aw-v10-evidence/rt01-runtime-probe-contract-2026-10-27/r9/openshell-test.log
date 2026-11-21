@@ -1,0 +1,31 @@
+✔ CLI fixtures cannot earn complete physical capabilities or forced-stop probes (20.24904ms)
+✔ policy-bound process probe executes the pinned OpenShell command and hashes only its assertion (9.548691ms)
+✔ observed metadata cannot substitute for image or complete control enforcement (7.006638ms)
+✔ prepare returns only an observed exact stopped sandbox image and rejects drift (25.107094ms)
+✔ Stop checks immutable scope, targets one sandbox and persists a restart receipt (5.426543ms)
+✔ foreign labels and host epochs cannot run Stop (7.449116ms)
+✔ binary change and public CLI state close the command without leaking subprocess errors (4.943658ms)
+✔ provider revocation uses exact private names and unreachable fencing rechecks ownership (5.32575ms)
+✔ reused names and identical labels cannot replace a pinned instance after restart (12.080969ms)
+✔ absent gateway identity cannot be learned from labels (3.131678ms)
+✔ legacy unpinned observations stay fenced during journal migration (3.873387ms)
+✔ apply and start use pinned OpenShell policy APIs plus exact Docker identity observations (21.992783ms)
+✔ expired source policy deadlines fail before any host or CLI observation (3.344369ms)
+✔ a persisted unknown command intent is never replayed after host restart (4.811324ms)
+✔ static policy changes require sandbox recreation before any policy mutation (8.389766ms)
+✔ foreign Docker labels block policy mutation before any effect (5.402536ms)
+✔ an image repository digest mismatch blocks policy mutation before any effect (5.033689ms)
+✔ a changed OpenShell policy revision blocks workload start (19.210433ms)
+✔ physical inspection never promotes host observations to qualification (6.55738ms)
+✔ sandbox exec streams through pinned CLI argv without shell and journals no output or replay (24.78699ms)
+✔ sandbox broker capability enters through an expiring native provider, never CLI argv or workload env (29.838958ms)
+✔ managed model capability uses its exact Messages route profile and stays out of workload env and argv (23.249866ms)
+✔ sandbox exec preflight cancellation and deadline expiry never spawn the CLI (1122.913101ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1453.708579

@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, agents, companies, companyMemberships, createDb, heartbeatRuns, issues, principalPermissionGrants } from "@paperclipai/db";
+import { activityLog, agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, issueAccessGrants, issues, principalPermissionGrants } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -12,6 +12,7 @@ import { errorHandler } from "../middleware/index.js";
 import {
   __clearIssueListResponseCacheForTests,
   __getIssueListResponseCacheSizeForTests,
+  __setIssueListResponseCacheMaxEntriesForTests,
   ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES,
   issueRoutes,
 } from "../routes/issues.js";
@@ -34,7 +35,9 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-issue-list-routes-");
-    db = createDb(tempDb.connectionString);
+    // Match the production driver default explicitly so the request-storm
+    // regression exercises the actual bounded-pool starvation boundary.
+    db = createDb(tempDb.connectionString, { maxConnections: 10 });
   }, 20_000);
 
   afterEach(async () => {
@@ -46,6 +49,7 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -96,6 +100,86 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
       grantedByUserId: null,
     });
   }
+
+  it("rechecks private access on a warm compact cache before returning 304", async () => {
+    const companyId = randomUUID();
+    const owner = randomUUID(), reader = randomUUID(), issueId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Private cache", issuePrefix: uniqueIssuePrefix() });
+    await db.insert(authUsers).values([
+      { id: owner, name: "Owner", email: `${owner}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: reader, name: "Reader", email: `${reader}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+    ]);
+    await seedCloudTenantMember(companyId, owner);
+    await seedCloudTenantMember(companyId, reader);
+    await db.insert(issues).values({ id: issueId, companyId, title: "Private cache marker", visibility: "private",
+      privacyRootIssueId: issueId, responsibleUserId: owner, createdByUserId: owner });
+    const [grant] = await db.insert(issueAccessGrants).values({ companyId, issueId, subjectType: "user", subjectId: reader,
+      source: "explicit", grantedByUserId: owner }).returning();
+    const app = createApp(companyId);
+    const first = await request(app).get(`/api/companies/${companyId}/issues?view=compact`).set("x-test-user-id", reader);
+    expect(first.status).toBe(200);
+    expect(first.body.map((row: { id: string }) => row.id)).toEqual([issueId]);
+    expect(first.headers.etag).toBeTruthy();
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, grant.id));
+    const after = await request(app).get(`/api/companies/${companyId}/issues?view=compact`)
+      .set("x-test-user-id", reader).set("If-None-Match", first.headers.etag);
+    expect(after.status).toBe(200);
+    expect(after.headers["x-paperclip-request-cache"]).toBe("hit");
+    expect(after.body).toEqual([]);
+    expect(after.headers.etag).not.toBe(first.headers.etag);
+    expect((await request(app).get(`/api/issues/${issueId}`).set("x-test-user-id", reader)).status).toBe(404);
+    expect((await request(app).get(`/api/issues/${issueId}`).set("x-test-user-id", owner)).status).toBe(200);
+  });
+
+  it("keeps private HTTP admission closed while derivative qualification is unfinished", async () => {
+    const companyId = randomUUID(), owner = randomUUID(), issueId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Admission boundary", issuePrefix: uniqueIssuePrefix() });
+    await db.insert(authUsers).values({ id: owner, name: "Owner", email: `${owner}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await seedCloudTenantMember(companyId, owner);
+    await db.insert(issues).values({ id: issueId, companyId, title: "Qualification fixture", visibility: "private",
+      privacyRootIssueId: issueId, responsibleUserId: owner, createdByUserId: owner });
+    const app = createApp(companyId);
+    const create = await request(app).post(`/api/companies/${companyId}/issues`).set("x-test-user-id", owner)
+      .send({ title: "Private must wait", visibility: "private" });
+    expect(create.status).toBe(422);
+    const share = await request(app).post(`/api/issues/${issueId}/access-grants`).set("x-test-user-id", owner)
+      .send({ subjectType: "user", subjectId: owner });
+    expect(share.status).toBe(422);
+    expect(await db.select().from(issueAccessGrants).where(eq(issueAccessGrants.issueId, issueId))).toEqual([]);
+    expect((await db.select().from(issues).where(eq(issues.companyId, companyId))).map(row => row.id)).toEqual([issueId]);
+  });
+
+  it("recomputes cached descendant and blocker counts after a child privacy grant is revoked", async () => {
+    const companyId = randomUUID(), owner = randomUUID(), reader = randomUUID(), parentId = randomUUID(), childId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Private cached metrics", issuePrefix: uniqueIssuePrefix() });
+    await db.insert(authUsers).values([owner, reader].map(id => ({ id, name: "Metrics member", email: `${id}@example.test`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date() })));
+    await seedCloudTenantMember(companyId, owner);
+    await seedCloudTenantMember(companyId, reader);
+    await db.insert(issues).values({ id: parentId, companyId, title: "Public blocked parent", status: "blocked" });
+    await db.insert(issues).values({ id: childId, companyId, parentId, title: "Private child metric marker", identifier: "PRIVATE-METRIC-2",
+      visibility: "private", privacyRootIssueId: childId, privacyParentIssueId: parentId, status: "in_progress",
+      responsibleUserId: owner, createdByUserId: owner, assigneeUserId: owner });
+    const [grant] = await db.insert(issueAccessGrants).values({ companyId, issueId: childId, subjectType: "user",
+      subjectId: reader, source: "explicit", grantedByUserId: owner }).returning();
+    const agentId = randomUUID(), runId = randomUUID();
+    await db.insert(agents).values({ id: agentId, companyId, name: "Metrics run agent", role: "engineer", adapterType: "process" });
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", responsibleUserId: owner,
+      scopeKind: "issue", issueId: childId, nativeIssueId: childId, contextSnapshot: { issueId: childId } });
+    await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, childId));
+    const app = createApp(companyId);
+    const path = `/api/companies/${companyId}/issues?view=compact&status=blocked&includeLiveDescendantSummary=true`;
+    const first = await request(app).get(path).set("x-test-user-id", reader);
+    expect(first.status).toBe(200);
+    expect(first.body[0]).toMatchObject({ id: parentId, liveDescendantCount: 1, blockerAttention: { unresolvedBlockerCount: 1 } });
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, grant.id));
+    const after = await request(app).get(path).set("x-test-user-id", reader).set("If-None-Match", first.headers.etag);
+    expect(after.status).toBe(200);
+    expect(after.headers["x-paperclip-request-cache"]).toBe("hit");
+    expect(after.body[0]).toMatchObject({ id: parentId, liveDescendantCount: 0, blockerAttention: { unresolvedBlockerCount: 0 } });
+    expect(JSON.stringify(after.body)).not.toContain(childId);
+    expect(JSON.stringify(after.body)).not.toContain("PRIVATE-METRIC-2");
+  });
 
   it("returns only unassigned issues for assigneeAgentId=null", async () => {
     const companyId = randomUUID();
@@ -512,6 +596,9 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
         },
       },
     });
+    // Ten simultaneous requests occupy every connection while they hold
+    // current-reader transactions. The leader must compute solely through
+    // its transaction; a query through the outer pool deadlocks here.
     const responses = await Promise.all(Array.from({ length: 10 }, () =>
       request(app)
         .get(`/api/companies/${companyId}/issues`)
@@ -634,14 +721,21 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
     });
 
     const app = createApp(companyId);
-    for (let index = 0; index < ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES + 5; index += 1) {
-      const res = await request(app)
-        .get(`/api/companies/${companyId}/issues`)
-        .query({ view: "compact", limit: "20", q: `cache-key-${index}` });
-      expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES).toBe(256);
+    const cacheLimit = 8;
+    __setIssueListResponseCacheMaxEntriesForTests(cacheLimit);
+    const responses = [];
+    for (let start = 0; start < cacheLimit + 5; start += 8) {
+      responses.push(...await Promise.all(Array.from(
+        { length: Math.min(8, cacheLimit + 5 - start) },
+        (_, offset) => request(app)
+          .get(`/api/companies/${companyId}/issues`)
+          .query({ view: "compact", limit: "20", q: `cache-key-${start + offset}` }),
+      )));
     }
+    expect(responses.every((res) => res.status === 200), JSON.stringify(responses.map((res) => res.body))).toBe(true);
 
-    expect(__getIssueListResponseCacheSizeForTests()).toBe(ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES);
+    expect(__getIssueListResponseCacheSizeForTests()).toBe(cacheLimit);
   });
 
   it.each([
@@ -946,7 +1040,7 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
     });
   });
 
-  it("does not recurse forever when live descendant summaries encounter a parent cycle", async () => {
+  it("fails closed on a cyclic parent graph in live descendant summary requests", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();
     const parentIssueId = randomUUID();
@@ -1006,10 +1100,8 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
       .query({ status: "blocked", includeLiveDescendantSummary: "true", limit: "20" });
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body).toHaveLength(1);
-    expect(res.body[0]).toMatchObject({
-      id: parentIssueId,
-      liveDescendantCount: 1,
-    });
+    // Current Task privacy validation rejects malformed ancestry before any
+    // descendant summary can expose a projection from this cyclic graph.
+    expect(res.body).toEqual([]);
   });
 });

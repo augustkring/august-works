@@ -1,0 +1,15 @@
+{
+  "pid": 1030094,
+  "processState": "Z",
+  "dataDir": "/tmp/paperclip-e2e-home-0YIgCY/instances/playwright-e2e/db",
+  "tcpListener": "absent",
+  "removed": [
+    "/tmp/.s.PGSQL.54329",
+    "/tmp/.s.PGSQL.54329.lock"
+  ],
+  "preserved": [
+    "/tmp/paperclip-e2e-home-0YIgCY/instances/playwright-e2e/db",
+    "source files",
+    "prior logs"
+  ]
+}

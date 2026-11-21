@@ -1,17 +1,23 @@
 import { createHash, randomUUID } from "node:crypto";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
+  authUsers,
+  authSessions,
   companies,
   companyMemberships,
   createDb,
+  heartbeatRuns,
   issues,
   memoryBindings,
   memoryBindingTargets,
   memoryEvidence,
   memoryRecords,
   projects,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -19,6 +25,10 @@ import {
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { memoryService } from "./memory-service.js";
 import { memoryAgentToolsService } from "./memory-agent-tools.js";
+import { initializeRunIdentity } from "../run-identity.js";
+import { issueService } from "../issues.js";
+import { projectRoutes } from "../../routes/projects.js";
+import { errorHandler } from "../../middleware/error-handler.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe : describe.skip;
@@ -54,9 +64,13 @@ describePg("Memory agent tools", () => {
     await db.delete(memoryRecords);
     await db.delete(memoryBindingTargets);
     await db.delete(memoryBindings);
+    await db.delete(heartbeatRuns);
     await db.delete(issues);
     await db.delete(projects);
     await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
+    await db.delete(authSessions);
+    await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(companies);
   });
@@ -75,6 +89,13 @@ describePg("Memory agent tools", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: userId,
     });
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Memory Tool Human",
+      email: `${userId}@example.test`,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
     await db.insert(companyMemberships).values({
       companyId,
       principalType: "user",
@@ -87,6 +108,7 @@ describePg("Memory agent tools", () => {
       name: "Memory Tool Agent",
       role: "analyst",
       adapterType: "paperclip_runner",
+      status: "active",
       adapterConfig: {},
       runtimeConfig: {},
       permissions: {},
@@ -98,32 +120,53 @@ describePg("Memory agent tools", () => {
       status: "active",
       membershipRole: "member",
     });
-    const [project] = await db.insert(projects).values({
-      companyId,
-      name: "Current project",
-    }).returning();
-    const [otherProject] = await db.insert(projects).values({
-      companyId,
-      name: "Other project",
-    }).returning();
-    const [issue] = await db.insert(issues).values({
-      companyId,
-      projectId: project!.id,
-      title: "Acme renewal",
-      status: "in_progress",
-      priority: "high",
-      assigneeAgentId: agent!.id,
-      responsibleUserId: userId,
-    }).returning();
+    const now = new Date(), sessionId = randomUUID(), expiresAt = new Date(now.getTime() + 60 * 60_000);
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt, authenticationMethod: "password", authenticatedAt: now, authenticatorVersion: 0 });
+    const human = { type: "board" as const, source: "session" as const, userId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" as const }] };
+    const project = await createManualProject(companyId, human, "Current project");
+    const otherProject = await createManualProject(companyId, human, "Other project");
+    const issue = await issueService(db).create(companyId, {
+      title: "Acme renewal", description: "Canonical active Task for Memory agent tool tests.", status: "in_progress",
+      priority: "high", assigneeAgentId: agent!.id, responsibleUserId: userId, createdByUserId: userId,
+    }, db, undefined, { manualInputActor: human });
+    await db.insert(principalPermissionGrants).values({ companyId, principalType: "agent",
+      principalId: agent!.id, permissionKey: "company_scope:read" }).onConflictDoNothing();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id,
+      responsibleUserId: userId, nativeIssueId: issue!.id, contextSnapshot: { issueId: issue!.id },
+      runtimeMode: "native", status: "running" }).returning();
+    await initializeRunIdentity(db, { companyId, runId: run!.id, issueId: issue!.id,
+      responsibleUserId: userId, cause: "dispatch" });
     return {
       companyId,
       userId,
       agent: agent!,
-      project: project!,
-      otherProject: otherProject!,
+      project,
+      otherProject,
       issue: issue!,
-      runId: randomUUID(),
+      runId: run!.id,
+      human,
     };
+  }
+
+  function projectApp(actor: { type: "board"; source: "session"; userId: string; sessionId: string;
+    companyIds: string[]; memberships: Array<{ companyId: string; membershipRole: string; status: "active" }> }) {
+    const app = express();
+    app.use(express.json());
+    app.use(((req, _res, next) => {
+      (req as typeof req & { actor: typeof actor }).actor = actor;
+      next();
+    }) as RequestHandler);
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    return app;
+  }
+
+  async function createManualProject(companyId: string, actor: Parameters<typeof projectApp>[0], name: string) {
+    const response = await request(projectApp(actor)).post(`/api/companies/${companyId}/projects`)
+      .send({ name, description: `${name} owner source.`, color: null, icon: "folder" }).expect(201);
+    return { id: response.body.id, companyId };
   }
 
   async function binding(
@@ -195,6 +238,24 @@ describePg("Memory agent tools", () => {
     };
   }
 
+  function agentMutation(seeded: Awaited<ReturnType<typeof seed>>, runId = seeded.runId) {
+    return { principal: { type: "agent" as const, agentId: seeded.agent.id, responsibleUserId: seeded.userId }, runId };
+  }
+
+  async function anotherRun(seeded: Awaited<ReturnType<typeof seed>>) {
+    const issue = await issueService(db).create(seeded.companyId, {
+      title: "Second current Memory tool Task", description: "An independent current Task for replay isolation.",
+      status: "in_progress", assigneeAgentId: seeded.agent.id, responsibleUserId: seeded.userId,
+      createdByUserId: seeded.userId,
+    }, db, undefined, { manualInputActor: seeded.human });
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, nativeIssueId: issue.id, contextSnapshot: { issueId: issue.id },
+      runtimeMode: "native", status: "running" }).returning();
+    await initializeRunIdentity(db, { companyId: seeded.companyId, runId: run!.id, issueId: issue.id,
+      responsibleUserId: seeded.userId, cause: "dispatch" });
+    return { ...seeded, issue, runId: run!.id };
+  }
+
   it("recalls only company, current-project and owner-private memory", async () => {
     const seeded = await seed();
     const shared = await binding(
@@ -232,7 +293,7 @@ describePg("Memory agent tools", () => {
       const pending = await svc.createCandidate(
         seeded.companyId,
         candidate(shared.id, scope, text),
-        { principal: { type: "agent", agentId: seeded.agent.id } },
+        { principal: { type: "agent", agentId: seeded.agent.id, responsibleUserId: seeded.userId }, runId: seeded.runId },
       );
       await svc.reviewCandidate(
         seeded.companyId,
@@ -263,7 +324,7 @@ describePg("Memory agent tools", () => {
         metadata: {},
         evidence: evidence("Renewal private memory"),
       },
-      { principal: { type: "agent", agentId: seeded.agent.id } },
+      agentMutation(seeded),
     );
 
     const result = await memoryAgentToolsService(db).recall(
@@ -306,7 +367,7 @@ describePg("Memory agent tools", () => {
     const detail = await memoryService(db).get(
       seeded.companyId,
       result.record.id,
-      { principal: { type: "agent", agentId: seeded.agent.id } },
+      agentMutation(seeded),
     );
     expect(detail?.evidence[0]).toMatchObject({
       sourceClass: "task",
@@ -407,7 +468,7 @@ describePg("Memory agent tools", () => {
     const sharedDetail = await memoryService(db).get(
       seeded.companyId,
       shared.record.id,
-      { principal: { type: "agent", agentId: seeded.agent.id } },
+      agentMutation(seeded),
     );
     expect(sharedDetail?.evidence).toEqual(
       expect.arrayContaining([
@@ -532,7 +593,7 @@ describePg("Memory agent tools", () => {
 
     await expect(
       tools.correct(
-        { ...context(seeded), runId: randomUUID() },
+        context(await anotherRun(seeded)),
         correction,
       ),
     ).rejects.toMatchObject({
@@ -577,7 +638,7 @@ describePg("Memory agent tools", () => {
 
     await expect(
       tools.share(
-        { ...context(seeded), runId: randomUUID() },
+        context(await anotherRun(seeded)),
         shareInput,
       ),
     ).rejects.toMatchObject({

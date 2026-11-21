@@ -1,0 +1,141 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/WorkflowBuilder.test.tsx (6 tests | 1 failed) 422ms
+     × runs the published revision through the explicit live-run action 51ms
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > refreshes the canonical agent chat after source loss without showing cached private history
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > creates an unused conversation only for the first message and updates its canonical cache
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > creates an unused conversation only for the first attachment and updates its canonical cache
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > retries the chosen initial chat mode after creation succeeded but mode persistence failed
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > opens artifact cards in the shared gallery at the selected image without duplicating attachments
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > loads from the pending state into issue detail without changing hook order
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > preserves explicit upload receipt IDs through the page mutation (reassign=false)
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > preserves explicit upload receipt IDs through the page mutation (reassign=true)
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > keeps hierarchy breadcrumbs and label chips out of the Streamlined task header
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > preserves hierarchy breadcrumbs and label chips when Streamlined UI is off
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > lifts the redesigned desktop thread into the side-panel header band
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > retains the production breadcrumb side-panel toggle when Streamlined UI is off
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > opens a closed desktop pane and routes an ordinary document to its own tab on direct load
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > leaves ordinary document links to the classic center-column surface
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > clears document routing when the URL no longer names a document
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > routes plan to the Plan pane tab and leaves continuation-summary on its existing surface
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > replays document routing when the current same-page hash is clicked again
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > maximizes the desktop pane once per viewer=full deep link
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/IssueDetail.test.tsx > IssueDetail > re-maximizes when navigating to another issue with an identical viewer=full hash
+An error occurred in the <TaskDetailSurface> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+

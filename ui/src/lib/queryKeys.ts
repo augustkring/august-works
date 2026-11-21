@@ -284,6 +284,7 @@ export const queryKeys = {
   },
   issues: {
     list: (companyId: string) => ["issues", companyId] as const,
+    recoveryActions: (issueId: string) => ["issues", "recovery-actions", issueId] as const,
     mentionPool: (companyId: string) =>
       ["issues", companyId, "mention-pool"] as const,
     search: (
@@ -628,6 +629,7 @@ export const queryKeys = {
       ["access", "company-members", companyId] as const,
     companyUserDirectory: (companyId: string) =>
       ["access", "company-user-directory", companyId] as const,
+    workflowCoverages: (companyId: string, principalId?: string) => ["access", "workflow-coverages", companyId, principalId ?? "__current_principal"] as const,
     adminUsers: (query: string) => ["access", "admin-users", query] as const,
     userCompanyAccess: (userId: string) =>
       ["access", "user-company-access", userId] as const,
@@ -647,6 +649,8 @@ export const queryKeys = {
       ["sidebar-preferences", "company-order", userId] as const,
     projectOrder: (companyId: string, userId: string) =>
       ["sidebar-preferences", "project-order", companyId, userId] as const,
+    preferredCoworker: (companyId: string, userId: string) =>
+      ["sidebar-preferences", "preferred-coworker", companyId, userId] as const,
   },
   resourceMemberships: {
     mine: (companyId: string) =>

@@ -1,0 +1,120 @@
+{
+  "head": "c4cb571a4c05e5961eba9585b2c12dc5e9c0c18a",
+  "files": {
+    ".nvmrc": {
+      "sha256": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+      "bytes": 8
+    },
+    "deploy/v6/host-agent/openshell.mjs": {
+      "sha256": "159dc7b433a476c5f44a858a4cc06461bea18e0bd12b2005cec8a74c4dd43a70",
+      "bytes": 373524
+    },
+    "deploy/v6/host-agent/openshell.test.mjs": {
+      "sha256": "a05c94b82d10da87013b0a400c07a71748debfe8584324ac9b06051528584cff",
+      "bytes": 253909
+    },
+    "package.json": {
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "bytes": 14972
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "bytes": 634978
+    },
+    "server/package.json": {
+      "sha256": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "bytes": 6179
+    },
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": {
+      "sha256": "db44429c7879bf28eb7fd9037e29137f5db2ee113d6b37b35a77857c15878f01",
+      "bytes": 198441
+    },
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": {
+      "sha256": "4c2455ad4d2e935b9b01a78637743ccdaeef2b4aa7f9d7d38e9d297d45de6680",
+      "bytes": 28900
+    },
+    "server/src/__tests__/openshell-native-conformance-proof-maximum.test.ts": {
+      "sha256": "77edab11d2fff3d8228b9019d28814580f6aa7b75841e1418e6b1fafe018a1a7",
+      "bytes": 2802
+    },
+    "server/src/__tests__/v7-governance.integration.test.ts": {
+      "sha256": "479e180a58b4a1b5bc913d4db3d3629e6d55599de2854213847a59826d074a8e",
+      "bytes": 23027
+    },
+    "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts": {
+      "sha256": "08320a5f4605b1fa0ddbf7596f7640cfff275cc72447202a2d21a9325ebc44be",
+      "bytes": 187536
+    },
+    "server/src/services/ai-governance/governance-service.ts": {
+      "sha256": "39270cb855e4728217ad151274bff188ab628a50a881b6c9b60a18a3f27fe2b6",
+      "bytes": 29124
+    },
+    "server/src/services/execution-continuation.ts": {
+      "sha256": "5dedef85ce23cd24d2a7d618e7a82c27a7063d1c7e6cb5ddb35647db17f3e249",
+      "bytes": 62758
+    },
+    "server/src/services/execution-sandbox/native-host-bridge.ts": {
+      "sha256": "61d329a654621837fd847e889c54568bec15cc0f8b57e6e5247b84975529a807",
+      "bytes": 109440
+    },
+    "server/src/services/execution-sandbox/openshell-backend.ts": {
+      "sha256": "22e5ff4be83b9df19be14d4346c043ea68bc3cc5664aa1fa981bf10790bb227d",
+      "bytes": 31351
+    },
+    "server/src/services/execution-sandbox/openshell-policy.ts": {
+      "sha256": "3d8007fb633771d93da1f42f9982dcff818db60a2b06204c335baf1f1d84d779",
+      "bytes": 14767
+    },
+    "server/src/services/execution-sandbox/sandbox-service.ts": {
+      "sha256": "4074424f317522542743f48d838a059c82ee4def496c32e5384670fbd5493eb2",
+      "bytes": 117140
+    },
+    "server/src/services/heartbeat.ts": {
+      "sha256": "a8cf24bbc7c50bb82ae13afb2c22f48ed86a646addfe307615d910e79b865ffd",
+      "bytes": 1265655
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "7a1f7653ca000b0d6b7b801260934d7eb7130dd377e32d170df911fcb4cf76fa",
+      "bytes": 523048
+    },
+    "server/src/services/native-runtime/native-execution-input.test.ts": {
+      "sha256": "c96c3d8306588f643324818877d4f9ce02b859a73299815a0967eba1946fb0b6",
+      "bytes": 122667
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "sha256": "e6af196873881401278db70e36419d9ceea3750dd961bc00aabd3331f47334d3",
+      "bytes": 123175
+    },
+    "server/src/services/native-runtime/native-interaction-bridge.ts": {
+      "sha256": "1d88b7d89868884d7b2c2de0e1ed322c99018f9930b0deb1f1b31f20524cbe1d",
+      "bytes": 88947
+    },
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": {
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+      "bytes": 14778
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "bytes": 9673
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": {
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "bytes": 8437
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "bytes": 12734
+    },
+    "server/src/services/saas/platform.ts": {
+      "sha256": "f5294702ef6b8748144b946224e0d70212c20749a2dd863092467c18b263e1ff",
+      "bytes": 21330
+    },
+    "server/vitest.config.ts": {
+      "sha256": "1c32f3f46cb9206de3cdbb1745d43abf17bd2b5c385183675835ba928c2d31b3",
+      "bytes": 1883
+    }
+  },
+  "allRecordedSourcePinsUnchanged": true,
+  "allQualificationInputPinsUnchanged": true,
+  "changedRecordedPaths": []
+}

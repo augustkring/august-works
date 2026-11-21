@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from "@playwright/test";
+import { deleteCompany } from "./company-cleanup";
 
 /**
  * E2E: contextual sidebar companion model.
@@ -21,7 +22,7 @@ async function createCompany(board: APIRequestContext): Promise<{ id: string; pr
   const healthRes = await board.get(`${BASE_URL}/api/health`);
   expect(healthRes.ok()).toBe(true);
   const health = await healthRes.json();
-  expect(health.deploymentMode).toBe("local_trusted");
+  expect(health.deploymentMode).toBe("authenticated");
 
   const companyRes = await board.post(`${BASE_URL}/api/companies`, {
     data: { name: `${COMPANY_NAME_PREFIX}-${Date.now()}` },
@@ -42,14 +43,18 @@ test.describe("Contextual sidebar companion", () => {
   let prefix: string;
 
   test.beforeAll(async () => {
-    board = await pwRequest.newContext({ baseURL: BASE_URL });
+    board = await pwRequest.newContext({
+      baseURL: BASE_URL,
+      storageState: process.env.PAPERCLIP_E2E_AUTH_STORAGE_STATE,
+      extraHTTPHeaders: { Origin: BASE_URL },
+    });
     const company = await createCompany(board);
     companyId = company.id;
     prefix = company.prefix;
   });
 
   test.afterAll(async () => {
-    await board.delete(`${BASE_URL}/api/companies/${companyId}`).catch(() => {});
+    await deleteCompany(board, companyId, BASE_URL).catch(() => {});
     await board.dispose();
   });
 

@@ -196,7 +196,8 @@ describePg("Original own-account bound notification channels", () => {
       title: "PRIVATE task title", relativePath: `/${source.company.issuePrefix}/issues`, dedupeKey: randomUUID(), createdAt: now }).returning();
     const gateway = notificationChannelDelivery(db, { primaryAppOrigin: "https://app.example.test", allowedAppOrigins: ["https://app.example.test"], legacyOrigins: [] });
     const plan = await db.transaction(tx => gateway.stage(tx as unknown as typeof db, notice!.id, now));
-    expect(plan?.text).not.toContain("PRIVATE"); expect(plan?.notBefore.toISOString()).toBe("2026-10-15T09:00:00.000Z");
+    expect(plan?.text).not.toContain("PRIVATE"); expect(plan?.text).toContain("account update in Blentera.");
+    expect(plan?.notBefore.toISOString()).toBe("2026-10-15T09:00:00.000Z");
     const [action] = await db.insert(chatActions).values({ companyId: source.company.id, endpointId: source.endpoint.id, principalId: source.principal.id,
       notificationId: notice!.id, kind: "provider_effect", providerActionId: plan!.providerActionId,
       payload: { version: 1, effect: "thread_message", authorizationMode: "notification", threadId: plan!.threadId, text: plan!.text, settleDelivery: false,

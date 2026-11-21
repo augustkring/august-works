@@ -1,0 +1,5 @@
+04d4145dd77c6e9d788d8f6e5b067dafe67dfa095632a944218f558d54b8b38c  packages/shared/src/validators/native-payload-source-snapshot.ts
+461b40f71fd178efaea4d43af6ed3895e99806246b813a5a1e3e758c14e51c8c  packages/shared/src/validators/native-payload-source-snapshot.test.ts
+0b890f4750714000a4025da20200fc639030bb07f519b3b13cc0976d9ef21f8c  server/src/services/agent-conversations.ts
+c9654b6bb7304bf8f720951fbfefbcac41c8c2bbf437d122e260ff27a36a18a5  server/src/services/heartbeat.ts
+825a81ccee6e7c5c3e28d8c4a026d4d5f6495e747196a82efa5d3851b7e65407  server/src/__tests__/agent-conversations.test.ts

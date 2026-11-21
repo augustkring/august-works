@@ -1,0 +1,273 @@
+{
+  "revision": "V10-149-R14.36-private-patch-v2",
+  "mainBaseCommit": "0961ea8cecc795df85c6058a319e14c883bb2763",
+  "candidateSourcePinsSha256": "28867e0704f98cad68105d43057eded5773813face579626447054d120cad7bd",
+  "sourcePinManifestSha256": "ab4892bf7c6d6272023a4e95172ea33a1b6bc561550905ed45adc55792fe909c",
+  "sourceOnlyPatch": "source-only-r14.36-v2.patch",
+  "sourceOnlyPatchSha256": "1aa1a253513033f5ff8a82415ef81accdae2f23bf1986042de317bbde6958de7",
+  "sourceFiles": [
+    {
+      "path": "deploy/v6/host-agent/openshell.mjs",
+      "parentSha256": "9d15143c752d68b5e7f7ba0150b02e5ed708313eb8ec27a8e3097086f54fadbb",
+      "candidateSha256": "9463103cc2cf37fd680a99ca1e3285bc11e4c1da721ae4667a3baea7cc3f3b84",
+      "mode": 384
+    },
+    {
+      "path": "deploy/v6/host-agent/openshell.test.mjs",
+      "parentSha256": "97d2baac63c6efa60315695e23d13dceb2ab896cb4fc106515c1471f7d4f717e",
+      "candidateSha256": "a2a92ae13c4323de7e4c6c7e1cca31209bc8dfd60cd6321e7b57e784896d0ba4",
+      "mode": 384
+    },
+    {
+      "path": "packages/db/src/schema/execution_sandbox.ts",
+      "parentSha256": "38bf32845c74f0496f8590a817f513229831e0e61ae0e618f5dfb91cb2a05b56",
+      "candidateSha256": "5c6df7469351be5acbba9c9840af654aca3ecdc30ed387e5318d3da780365669",
+      "mode": 384
+    },
+    {
+      "path": "packages/shared/src/execution-sandbox.ts",
+      "parentSha256": "c7fed552a3bc18cf2f82c17976b15663319ff36b68210d687cb8e68b03409508",
+      "candidateSha256": "d50c1a51f12025c602427102fa1b0b49f8fddda0277766a4b0edc1789d5a446c",
+      "mode": 384
+    },
+    {
+      "path": "packages/shared/src/sandbox-host-contracts.ts",
+      "parentSha256": "8c5ea005e06c9c3912f8836b81b382f8d939533d565c5e54d9ca429742da2349",
+      "candidateSha256": "29d7a9543ae2843f3c73adc0d9901ea161834a288b5a101e58fda6d34a79a2dd",
+      "mode": 384
+    },
+    {
+      "path": "server/src/__tests__/agent-auth-jwt.test.ts",
+      "parentSha256": "52d3b1da64efc0e681e9b64257266acc8cb24dbcf8ee95718275973acf052b2b",
+      "candidateSha256": "e998a4de156e87fa532af16fcaa66416a0bf9c4dbddafb950a458c58c952621c",
+      "mode": 384
+    },
+    {
+      "path": "server/src/__tests__/fixtures/openshell-qualification-policy-golden.json",
+      "parentSha256": null,
+      "candidateSha256": "54774d03334447f87072893c4c2fe6c702ef16a339042a1051bb96a0703f7303",
+      "mode": 384
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "parentSha256": "31b5a47367229662b931c238a83acd04049513219362540ffc60aac0ebc456d7",
+      "candidateSha256": "e881addf55c39f165573df0349a869c03a11fbce3a02f853fffa6dc7729dda88",
+      "mode": 384
+    },
+    {
+      "path": "server/src/__tests__/openshell-qualification-policy.test.ts",
+      "parentSha256": null,
+      "candidateSha256": "6adc9620109b2e3288215d81886085b1a189504d77ee7f9873938ae48aa7e588",
+      "mode": 384
+    },
+    {
+      "path": "server/src/__tests__/v7-openshell-backend.test.ts",
+      "parentSha256": "3ecd5330dda5b2beeee3e5a1551730514411c57ced1e86f1f10ea79c03e68e71",
+      "candidateSha256": "f7946b47472ef05803f7456f84f586f5484f9aa77befe7989ab3601b6b108019",
+      "mode": 384
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "parentSha256": "6a65ac675a53287ddc332d7805815cb17ffffaa412fbb9b3d71844e47f95cdce",
+      "candidateSha256": "8ff852e313a893bbc7c0a869b3e40d75f9434ddf78ec02c1c64ffa2df17342ef",
+      "mode": 384
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox-policy.test.ts",
+      "parentSha256": "2c1df9660f6233ccd0650e4a8d01dbb3ff34b6a710d2d18ee295dda5df7bc6e9",
+      "candidateSha256": "9b38d9a1516b9af3fc17a36e0a328fa1c0b8127bcf8f28a68e183bd970a5ea03",
+      "mode": 384
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+      "parentSha256": "fd7c4c0bc3344b90a53e8265f4465ecf501a35efe4c69278b0502cec557853ec",
+      "candidateSha256": "cc57241b0809b9f973b53c3619e5262fe508ef008a068df61366c1d38dc20a0f",
+      "mode": 384
+    },
+    {
+      "path": "server/src/agent-auth-jwt.ts",
+      "parentSha256": "753c992e1007a1962f34ae7378610a118732f051f1c7f3657fff9f5f5357056d",
+      "candidateSha256": "1d375340646d32666a41e2b50fc390311f78183696525b878d0710a76dfe66b8",
+      "mode": 384
+    },
+    {
+      "path": "server/src/app.ts",
+      "parentSha256": "850149356579b398bcb0bafa128d1bfc9e1fef0c08a5e38a820740f8d4e04a8b",
+      "candidateSha256": "bed91376c4323741603ec11577765e6137b165f5e12c5de378c51902e1070ce0",
+      "mode": 384
+    },
+    {
+      "path": "server/src/routes/tool-gateway.ts",
+      "parentSha256": "29a57d7c63744b4dc09f39ad9c905de8e62f91beadce42bb912cbae091061b9a",
+      "candidateSha256": "89791df155f3e01546f307f6ec7917a819175893e18470bd1bb5513796bf664a",
+      "mode": 384
+    },
+    {
+      "path": "server/src/services/execution-sandbox/backend.ts",
+      "parentSha256": "c202e5481950e7e6fab0bc11499d56807feab79c842601be65bb6116949d29e1",
+      "candidateSha256": "f7a31a16c1b893165f8381ae88ee7ce8d9e180d2c82e8ac17976f65f02a49045",
+      "mode": 384
+    },
+    {
+      "path": "server/src/services/execution-sandbox/native-host-bridge.ts",
+      "parentSha256": "4f554bb3676cae5fe1a265930a559d7121ee5ef341f534e6f6a4636c214616a8",
+      "candidateSha256": "93abf535a32065a6329aae6386f7d2d1fd764386138b6388d22754babcc305ee",
+      "mode": 384
+    },
+    {
+      "path": "server/src/services/execution-sandbox/openshell-backend.ts",
+      "parentSha256": "a19e173ac2f55015a35c587ffabffe99fdff6091a159528b85c292f103fdb924",
+      "candidateSha256": "2738c9fe4c1e0f101124932117b285987145e054d15bdf978cb6b945d2bbf46f",
+      "mode": 384
+    },
+    {
+      "path": "server/src/services/execution-sandbox/openshell-policy.ts",
+      "parentSha256": "f569638ba6ac9c3d3b40f08885f7cb1ce9d24319a3e80baffe23a3f07df64dae",
+      "candidateSha256": "f9c71227a31cbab5ec3eea2644a54f5e84e4d2584c857b019d96998ff03b3f72",
+      "mode": 384
+    },
+    {
+      "path": "server/src/services/execution-sandbox/qualification.ts",
+      "parentSha256": "d72f6782c808570e9b80681f62e7c16f99088723b0725faa85b54200edb851bf",
+      "candidateSha256": "f5b249ef5809d61b36dffbf93be0cced9f88759aa4b8d6028a1a7702a45851c5",
+      "mode": 384
+    },
+    {
+      "path": "server/src/services/execution-sandbox/sandbox-service.ts",
+      "parentSha256": "e22b67262d705d3274e2bce039a0c7b762ff5d676e55b462734ab8a4277dd276",
+      "candidateSha256": "6073ee1f2e0363e3dacf7274b82a029572634ff9c5caebd4f394df88d790f94e",
+      "mode": 384
+    },
+    {
+      "path": "server/src/services/tool-gateway.ts",
+      "parentSha256": "c1d339d683e14ceaa441f18ab9b72af9cfd7e1ac8fb3e9c4579fcd3ad69b6428",
+      "candidateSha256": "372ec1900f5de1da5c7bb68b6884f3c47ffccdbc51eaf1f58401163b5afacc50",
+      "mode": 384
+    },
+    {
+      "path": "packages/db/src/migrations/0567_sandbox_qualification_probe_gate.sql",
+      "parentSha256": null,
+      "candidateSha256": "280b3e2eb46c73bcdfc316925489a1172894b3e7a54a1e68236c051693f976a2",
+      "mode": 384
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "parentSha256": "4e5b0d53fcca968ddf9486c43049b30a29d9475c98c84b6fc67c0baa429b3a8c",
+      "candidateSha256": "815deacbf80b4fb85beba3228767a129837608cede900bccec131a6db81b86c3",
+      "mode": 384
+    },
+    {
+      "path": "server/src/services/runtime/control.ts",
+      "parentSha256": "9b4569da209a6ab1128b964253d509c61cb4e7e9957129a31460ad6de9df86be",
+      "candidateSha256": "39db8fb0dba543a4c5ac9425f1ce591d536dd9f4734fde28c53033b0a850c060",
+      "mode": 384
+    },
+    {
+      "path": "packages/db/src/migrations/0568_sandbox_recompile_stopped_policy.sql",
+      "parentSha256": null,
+      "candidateSha256": "2cdad19151dcb57116e8875dc97c61710aed92f130d84d7c2943c934f20da2ef",
+      "mode": 384
+    }
+  ],
+  "qualification": {
+    "shared-build": 0,
+    "db-build": 0,
+    "host-node-test": 0,
+    "policy-vitest": 0,
+    "bridge-pg-vitest": 0,
+    "shared-tsc": 0,
+    "server-tsc": 0
+  },
+  "bridgeAndPgTestSummary": "2 files, 37 tests passed",
+  "restore": "tracked sources and compiled outputs restored byte-for-byte; all source, dist, and tsbuildinfo hashes verified",
+  "ownerOverlayVerification": {
+    "sourcePinsSha256": "28867e0704f98cad68105d43057eded5773813face579626447054d120cad7bd",
+    "stagedPathCount": 27,
+    "allCandidatePinsMatch": true,
+    "ownerOverlay": {
+      "immutableOwnerFiles": [
+        {
+          "path": "packages/shared/src/execution-sandbox.ts",
+          "ownerSha256": "3e6d9f04417aa91a55002a9f6c193ea037eab4ffcab5388a0bdea3a9b015284d",
+          "candidateSha256": "d50c1a51f12025c602427102fa1b0b49f8fddda0277766a4b0edc1789d5a446c",
+          "matches": false
+        },
+        {
+          "path": "server/src/services/execution-sandbox/openshell-backend.ts",
+          "ownerSha256": "5f288b7224fa110440046fa2ccd209ce1e84b810f68bfda76aa3768544ff4b5d",
+          "candidateSha256": "48ef18622f6ab921d8ac651f3a4759bf636d24aaaf5d3330de2abaf2a904ea7b",
+          "matches": true
+        },
+        {
+          "path": "server/src/services/execution-sandbox/openshell-policy.ts",
+          "ownerSha256": "f9c71227a31cbab5ec3eea2644a54f5e84e4d2584c857b019d96998ff03b3f72",
+          "candidateSha256": "f9c71227a31cbab5ec3eea2644a54f5e84e4d2584c857b019d96998ff03b3f72",
+          "matches": true
+        },
+        {
+          "path": "server/src/__tests__/openshell-qualification-policy.test.ts",
+          "ownerSha256": "2c057306d6f1f0504b21050189484651caa5f1baa420416d354f1f4a9999f1e6",
+          "candidateSha256": "6adc9620109b2e3288215d81886085b1a189504d77ee7f9873938ae48aa7e588",
+          "matches": false
+        },
+        {
+          "path": "server/src/__tests__/fixtures/openshell-qualification-policy-golden.json",
+          "ownerSha256": "54774d03334447f87072893c4c2fe6c702ef16a339042a1051bb96a0703f7303",
+          "candidateSha256": "54774d03334447f87072893c4c2fe6c702ef16a339042a1051bb96a0703f7303",
+          "matches": true
+        },
+        {
+          "path": "packages/shared/src/sandbox-host-contracts.ts",
+          "ownerSha256": "a7bd0ed3098e43620f42d34639aab2474a0e0c5d05ef67d803ebdb45eb266fca",
+          "candidateSha256": "29d7a9543ae2843f3c73adc0d9901ea161834a288b5a101e58fda6d34a79a2dd",
+          "matches": false
+        }
+      ],
+      "allImmutableOwnerFilesMatch": false,
+      "reviewedTestOverlay": {
+        "path": "server/src/__tests__/openshell-qualification-policy.test.ts",
+        "parentSha256": "2c057306d6f1f0504b21050189484651caa5f1baa420416d354f1f4a9999f1e6",
+        "candidateSha256": "6adc9620109b2e3288215d81886085b1a189504d77ee7f9873938ae48aa7e588",
+        "reason": "Align assertions with the exact shared golden policy and explicitly pin the separate credential gateway endpoint."
+      },
+      "allUnchangedOwnerFilesMatch": true,
+      "reviewedOwnerOverlays": [
+        {
+          "path": "packages/shared/src/execution-sandbox.ts",
+          "parentSha256": "3e6d9f04417aa91a55002a9f6c193ea037eab4ffcab5388a0bdea3a9b015284d",
+          "candidateSha256": "d50c1a51f12025c602427102fa1b0b49f8fddda0277766a4b0edc1789d5a446c",
+          "reason": "Keep report qualificationHash distinct from qualificationTarget.targetHash; the qualification owner verifies the canonical target body digest and the database binds the report digest."
+        },
+        {
+          "path": "packages/shared/src/sandbox-host-contracts.ts",
+          "parentSha256": "a7bd0ed3098e43620f42d34639aab2474a0e0c5d05ef67d803ebdb45eb266fca",
+          "candidateSha256": "29d7a9543ae2843f3c73adc0d9901ea161834a288b5a101e58fda6d34a79a2dd",
+          "reason": "Add a typed prepare receipt for safe stopped-workspace reuse and explicit requiresRecreate; the host returns it only after exact provisioning-intent verification."
+        },
+        {
+          "path": "server/src/services/runtime/control.ts",
+          "parentSha256": "9b4569da209a6ab1128b964253d509c61cb4e7e9957129a31460ad6de9df86be",
+          "candidateSha256": "39db8fb0dba543a4c5ac9425f1ce591d536dd9f4734fde28c53033b0a850c060",
+          "reason": "Bind the accepted Start host receipt to the claim\u2019s immutable admission epoch, matching epoch-scoped Start idempotency while retaining signature, current scope, generation, manifest, and policy checks."
+        }
+      ],
+      "requiredOwnerSourceAddition": {
+        "path": "server/src/services/runtime/control.ts",
+        "parentSha256": "9b4569da209a6ab1128b964253d509c61cb4e7e9957129a31460ad6de9df86be",
+        "candidateSha256": "39db8fb0dba543a4c5ac9425f1ce591d536dd9f4734fde28c53033b0a850c060",
+        "reason": "Runtime control owns the signed workload receipt validator; the changed Start key format requires exact claim epoch validation here."
+      }
+    }
+  },
+  "qualifiedMainHead": "0961ea8cecc795df85c6058a319e14c883bb2763",
+  "qualificationWorkspaceBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "sourcePinManifestMainBaseCommitIsOriginalCandidateBase": "ebd062daffa41999983d4575b9c40cd74cd0ae3b",
+  "historicalPatchArtifact": "source-only-r14.36.patch",
+  "historicalPatchSha256": "b6d99f92ccc6c96116eae05570f7378197d91b69c322f0de7d67d2c40eb72ed9",
+  "patchValidation": {
+    "gitApplyStat": "pass",
+    "gitApplyCheck": "pass against temporary clean overlay of every pinned current parent path",
+    "gitApply": "pass",
+    "reconstructedCandidateFilesMatchPins": true
+  }
+}

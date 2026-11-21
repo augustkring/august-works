@@ -1,0 +1,93 @@
+{
+  "baseCommit": "786aeb515c9f980539432a6bae7ccbf2f82f85f5",
+  "sources": {
+    "server/src/__tests__/heartbeat-retry-scheduling.test.ts": "9e63eeb8eee4ee611e1001f9bf20156fa3ad102832b438a27a09d3cd21c435b3",
+    "server/src/__tests__/issue-monitor-scheduler.test.ts": "4114a5e5aadb2c710eb9653d6fd9ddd092dff071e9f17b6480e38ffd53932461",
+    "server/src/__tests__/native-payload-public-response.integration.test.ts": "7fa39133adf243a255d56965f5ebc62617531bdef7ba3ff6bd450ceccb184e9f",
+    "server/src/__tests__/native-payload-source-binding.integration.test.ts": "594e9a2c27f05c8f899cdb857d2477712b353bacbac2908241f053e8b57fb34b",
+    "server/src/__tests__/native-status-arbiter-corpus.test.ts": "99a2d0b4a36a6e692bbf1f98ee80795853a6ae704408ab008db4b9e602dc83c5",
+    "server/src/__tests__/playbooks-project-control-v5.test.ts": "6743da282d6107b9691cf70d775ec1b8f88101e727ccff934cce8e062b45a911",
+    "server/src/__tests__/v9-native-task-source-erasure.integration.test.ts": "4c77bc15c101c2e46b8f58f2ae1cbc8f31ab73e7a4f77539be0ddc89df6108c1",
+    "server/src/routes/project-control.ts": "77f9a322b935145a425f750b8842e5d0ed6b9dfdd4ea09662de961c4c8c3939e",
+    "server/src/services/heartbeat.ts": "d48c001cac321c6caa8a0c1872d2d7773d817efdfb3531a0944198a68857b7ef",
+    "server/src/services/memory/memory-privacy.ts": "f342b89a3ac9db4898aba86fa07414d6f02809797d0685b04676632366ef7c7a",
+    "server/src/services/native-runtime/status-decision-committer.ts": "0c2fbe708c1e9839d96b24c32bf6b498e9730066f8b30a530d024729d5ae1102",
+    "server/src/services/project-control.ts": "7f2680c6f133e8d0e96fd2c74432f315af4335ec390aece0dc8fec7cee7328d0"
+  },
+  "checks": {
+    "forecast-baseline": {
+      "exit": 1,
+      "tests": "Tests  1 failed | 13 skipped (14)",
+      "duration": "Duration  38.42s (transform 20.27s, setup 186ms, import 29.42s, tests 8.38s, environment 0ms)"
+    },
+    "forecast-initial-broad": {
+      "exit": 1,
+      "tests": "Tests  4 failed | 10 passed (14)",
+      "duration": "Duration  57.98s (transform 29.98s, setup 196ms, import 44.35s, tests 13.06s, environment 0ms)"
+    },
+    "forecast-final": {
+      "exit": 0,
+      "tests": "Tests  14 passed (14)",
+      "duration": "Duration  41.71s (transform 19.31s, setup 177ms, import 30.03s, tests 11.11s, environment 0ms)"
+    },
+    "monitor-final": {
+      "exit": 0,
+      "tests": "Tests  9 passed (9)",
+      "duration": "Duration  77.24s (transform 23.70s, setup 124ms, import 35.64s, tests 41.21s, environment 0ms)"
+    },
+    "erasure-initial-fixture": {
+      "exit": 1,
+      "tests": "Tests  3 failed | 12 skipped (15)",
+      "duration": "Duration  37.66s (transform 20.63s, setup 103ms, import 29.41s, tests 7.95s, environment 0ms)"
+    },
+    "erasure-baseline": {
+      "exit": 1,
+      "tests": "Tests  3 failed | 12 skipped (15)",
+      "duration": "Duration  54.76s (transform 33.67s, setup 171ms, import 45.30s, tests 8.87s, environment 0ms)"
+    },
+    "erasure-binding-and-old-origin-fixture": {
+      "exit": 1,
+      "tests": "Tests  4 failed | 22 passed (26)",
+      "duration": "Duration  65.08s (transform 21.75s, setup 204ms, import 37.24s, tests 27.14s, environment 1ms)"
+    },
+    "erasure-initial-origin-and-public-fixture": {
+      "exit": 1,
+      "tests": "Tests  2 failed | 15 passed (17)",
+      "duration": "Duration  87.98s (transform 28.43s, setup 252ms, import 51.84s, tests 35.32s, environment 0ms)"
+    },
+    "erasure-and-public-final": {
+      "exit": 0,
+      "tests": "Tests  17 passed (17)",
+      "duration": "Duration  65.39s (transform 24.10s, setup 183ms, import 40.73s, tests 24.09s, environment 0ms)"
+    },
+    "status-and-retry-initial": {
+      "exit": 1,
+      "tests": "Tests  2 failed | 80 passed (82)",
+      "duration": "Duration  123.09s (transform 26.84s, setup 365ms, import 47.23s, tests 74.69s, environment 1ms)"
+    },
+    "status-final": {
+      "exit": 0,
+      "tests": "Tests  31 passed (31)",
+      "duration": "Duration  56.98s (transform 22.75s, setup 232ms, import 31.07s, tests 25.17s, environment 0ms)"
+    },
+    "server-types": {
+      "exit": 0,
+      "tests": null,
+      "duration": null
+    }
+  },
+  "interpretation": [
+    "Forecast actual changed-reason baseline rejects stale body binding. Final14 pass includes unchanged reason/date-only preservation, changed reason invalidation and original plan/baseline assertions. Four initial broad failures were newly inserted Projects missing the original Board-create source stamp; no historical rows upgraded.",
+    "Monitor9 pass at its archived owner source, before adding the distinct workspace-retry change. Combined retry/status run has51 retry passes and2 status failures from an absent stored Human in the original authorized-writer fixture. Final status31 pass uses real stored Human/membership and binds the chosen new Task before its actual production consumer.",
+    "First erasure fixture omitted originating Agent identity: two bindings rejected before purge and one comment was already scrubbed. Corrected actual3-case baseline reaches original purge and fails SQLSTATE23514 for Task, Comment and revision. Five native erasure updates now clear captures; binding15 pass in the initial broader run.",
+    "Original erasure suite initially has4 immutable-origin setup failures; new adversarial rows retain the four reader-denial cases. Malformed new provenance is explicitly rejected by the original DB guard and confirmed absent. Initial new forecast HTTP fixture omitted its forecast flag; final enables only the two required roadmap/forecast flags.",
+    "Final erasure/public17 pass includes original11 erasure cases and6 serialization cases; forecast response reuses native public-row projection while unchanged body capture remains stored.",
+    "Server compiler0 with native test exclusion; test results come from actual Vitest/PostgreSQL runs. No test typecheck claim."
+  ],
+  "limits": [
+    "Structural body/snapshot fixtures do not qualify authenticated producers, complete input receipts, source-free payload admission, current credential lifetime or provider execution.",
+    "No binding-trigger relaxation, historical protocol upgrade, rebind after invalidation, read-path admission or constructor activation.",
+    "Other Project/Comment/Memory/Document writers, exact immutable input/source closure, original3 privacy/temporal failures and31 substantive portability failures remain open.",
+    "Full latest workspace checks, gateway/provider/operator processing and complete V10/PR readiness remain open. No merge/deployment."
+  ]
+}

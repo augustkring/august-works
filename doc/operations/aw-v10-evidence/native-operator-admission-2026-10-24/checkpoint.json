@@ -1,0 +1,48 @@
+{
+  "parentCommit": "71eb18c7573281434134ed25a4e83dfb3b0a4c60",
+  "requirements": [
+    "CE-03",
+    "CE-04",
+    "V10-166"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "nativeOperatorDomainAndSettings": {
+      "exit": 0,
+      "suites": 8,
+      "passed": 148
+    },
+    "nativeSupportDomains": {
+      "exit": 0,
+      "suites": 3,
+      "passed": 40
+    },
+    "preFixSandboxMissingSessionNegativeControl": {
+      "exit": 1,
+      "failed": 1,
+      "skipped": 14
+    },
+    "serverCompiler": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "Configured identity is combined with actual verified-email native passkey proof; original tenant, resource, support approval, owner and version checks remain in their canonical owners.",
+    "Enterprise qualification, sandbox mutations, SaaS settings writes and native support request admission check actual proof within the original physical database transaction. Current native sessions and user generation are pinned; pending erasure, wrong/missing/revoked/expired proof and non-passkey proof are denied.",
+    "A real PostgreSQL cell-row blocker makes sandbox creation wait after preflight. An independent native session deletion commits before the blocker releases. No binding commits. The existing native board-lifetime fence also participates; this race is not attributed solely to the new helper.",
+    "Native settings route tests use a trusted actor carrier with structural native proof rows, actual Express routes and PostgreSQL services. They qualify domain behavior, not cookie/WebAuthn verification. Current passkey proof permits settings/drain changes; stale proof permits current private reads but refuses mutations; deleted/weak/missing proof prevents effects.",
+    "Support routes preserve the full actor, support authorization uses actual database-clock approval expiry, and proof/scope checks repeat before commit including idempotent returns. An actually expired approval cannot be revived with its historical call timestamp.",
+    "The pre-fix sandbox test observes the session-label-only creation resolving rather than being refused. The fixture later gains native passkey preparation for positive cases; the negative request still deliberately removes its session ID.",
+    "The final domain run predates only an explicit async wrapper on the lifecycle read query. That wrapper preserves its already awaited query result; the final compiler checks its final source. Support changes do not alter any behavior exercised by the unrelated domain suites."
+  ],
+  "compatibility": [
+    "No schema migration or dependency change. Internal operator support methods now take AuthorizationActor rather than a bare user ID. Non-SaaS settings behavior is retained and its original route/service suites pass."
+  ],
+  "limits": [
+    "These are native domain/structural proof tests. Maintained real cookie/WebAuthn browser evidence is retained separately in native-passkeys-2026-10-24.",
+    "SaaS drain process state still applies after durable audit commit; this process-local effect cannot share the database proof lock. Durable drain state remains open.",
+    "Later runtime/host/provider dispatch and completion require their original operation, current-authority and unknown-outcome owners. Request creation is not dispatch qualification. Sandbox host-command requester provenance remains open.",
+    "Remaining runtime catalog/fleet/control, billing costs, agent package, feedback/retention and internal operator read owners, bootstrap and break-glass remain open.",
+    "Enterprise recovery/SSO, other powerful actions, original payload privacy/typed-origin/portability failures, full V10 acceptance and latest full workspace gates remain open. No PR-ready, beta, production, deployed replica or independent review claim."
+  ]
+}

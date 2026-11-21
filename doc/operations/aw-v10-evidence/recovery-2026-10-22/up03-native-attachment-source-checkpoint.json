@@ -1,0 +1,41 @@
+{
+  "scope": "Exact original wake-attachment staging source handoff only",
+  "baselineCommit": "9954b086e",
+  "sourcePins": {
+    "server/src/services/native-runtime/native-runner-file-handoff.ts": "0f46a6a466491366ac146baae65bdc5d7ad91204e216bc5236b04c05440b90b8",
+    "server/src/services/native-runtime/native-runner-file-handoff.test.ts": "4d3d9e4b8a1a4743513cf8dc2eafb8b2f9499e5afb91ee1ed61d24b557934282"
+  },
+  "baseline": {
+    "actualExit": 1,
+    "genuineFailed": 1,
+    "filtered": 18,
+    "durationSeconds": 44.82,
+    "log": "up03-attachment-source-native-red.log",
+    "exactTest": "up03-attachment-source-red-test.txt",
+    "pinsUnchanged": true
+  },
+  "discardedInvocation": {
+    "actualExit": 1,
+    "log": "up03-attachment-source-red.log",
+    "reason": "Explicit server config with repository cwd found zero files; no test verdict"
+  },
+  "current": {
+    "actualExit": 0,
+    "passed": 4,
+    "filtered": 15,
+    "durationSeconds": 51.12,
+    "log": "up03-attachment-source-green.log",
+    "pinsUnchanged": true
+  },
+  "serverCompiler": {
+    "actualExit": 0,
+    "log": "up03-attachment-source-server-types.log"
+  },
+  "limits": [
+    "SourceCaptures retains actual selected attachment/asset/comment tuple, verified delivered byte hash/size and then-selected nullable payload snapshot; failed/unsupported/missing binding is explicit.",
+    "Snapshot fixture is source-free structural DB binding, not actual producer completeness or permission.",
+    "No workspace paths added to captures; existing rendered prompt projection unchanged except missing remote binding now correctly unavailable.",
+    "Actual dispatch persistence/immutability/receipt, post-staging current source authority, dynamic historical attachment/tool stamping and full native input completeness remain open.",
+    "The original private-Memory copy and temporal regressions remain open."
+  ]
+}

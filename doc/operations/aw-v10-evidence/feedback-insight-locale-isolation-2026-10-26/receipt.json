@@ -1,0 +1,13 @@
+{
+  "command": "PAPERCLIP_PLAYWRIGHT_EXECUTABLE=/usr/bin/chromium node_modules/.bin/playwright test --config tests/e2e/playwright.config.ts aw-v9-feedback-images.spec.ts aw-v9-insight-experiments.spec.ts --workers=1",
+  "exitCode": 0,
+  "executed": 2,
+  "passed": 2,
+  "scope": "Built UI with original local-trusted disposable server. Feedback image transport is scoped software mock; experiment uses original PostgreSQL recording/analysis owners. No deployed provider qualification.",
+  "change": "Reuse account locale fixture to start both English-selector tests in English and restore the actual original account preference, including after the experiment changes it to Danish.",
+  "testSourceHashes": {
+    "tests/e2e/aw-v9-feedback-images.spec.ts": "5943ecdfd1f0f2c95aeb3263bfe1c5bd95bf2c7b3b12e0dd852da220c2b1d50f",
+    "tests/e2e/aw-v9-insight-experiments.spec.ts": "23973f54a3f9f9d0daf173748cb6db6d9802ece665e3ac398da88d0c99324df7",
+    "tests/e2e/account-locale-isolation.ts": "c9f3a423a4df19f36ff3c4db8077743a33294f20c2b05c829b51c3a8428ce64a"
+  }
+}

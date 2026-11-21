@@ -1,0 +1,41 @@
+{
+  "checks": [
+    {
+      "name": "syntax",
+      "command": [
+        "node",
+        "/workspace/v10-preparation/combined-source-20261109/parse-browser-handoff-r491.mjs"
+      ],
+      "exit": 0,
+      "seconds": 0.4440501829958521,
+      "peakGroupRssBytes": 16756736,
+      "stopped": null
+    },
+    {
+      "name": "routing",
+      "command": [
+        "node",
+        "--test",
+        "scripts/__tests__/run-vitest-stable-shard.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 27.805302132008364,
+      "peakGroupRssBytes": 128348160,
+      "stopped": null
+    },
+    {
+      "name": "whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.22732635898864828,
+      "peakGroupRssBytes": 0,
+      "stopped": null
+    }
+  ],
+  "sourceStable": true,
+  "scope": "Syntax and canonical suite routing only; no SDK/PG/runtime qualification"
+}

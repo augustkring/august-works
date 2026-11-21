@@ -1,0 +1,56 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "402cc47669c7a1093ed424223a4727aa9fe08a30",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Four compatible security floors: compressed JSON parser2.4.0, Zod4.6.6 (v3 peer preserved), DOMPurify3.4.17 and follow-redirects1.16.1. Residual baseline feature-specific advisories retained with bounded source triage; no zero-vulnerability claim. Frozen install observed0.",
+  "logs": [
+    {
+      "name": "dependency-audit-before",
+      "exitCode": 1,
+      "exitSidecar": "dependency-audit-before.exit",
+      "rawSha256": "8571ccc7127a0e76068943cbc0f16ee01ee44ab503cce67f776ec19a2ae02ed1",
+      "sanitizedSha256": "d4b610101f465740422f40b23931d0380f18156b42c0384b938568cb8dae6fa2",
+      "archiveSha256": "45cd317bf985004295e5425dbb521c63fab987c9fa13ee25256b47268fec6a90",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 12,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "dependency-audit-after",
+      "exitCode": 1,
+      "exitSidecar": "dependency-audit-after.exit",
+      "rawSha256": "c2e695e217883e6d44ad03d6898f249955670e3fe8792f17b3e1242a32dbe357",
+      "sanitizedSha256": "abf1be385add34592a56689b018fcb5b069833155a422ab4cbb0e8dd730f9fac",
+      "archiveSha256": "e24a3051a7a19f3da1ebc3a02a410e3dd8f60e3ca5b67e45b3f0776dcabedad9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 2,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "security-overrides-frozen-install-20261025",
+      "exitCode": 0,
+      "exitSidecar": "security-overrides-frozen-install-20261025.log.exit",
+      "rawSha256": "49bba678657907a449ffa3215020ba1f76ec08e510d94e380558c9102df9ba09",
+      "sanitizedSha256": "49bba678657907a449ffa3215020ba1f76ec08e510d94e380558c9102df9ba09",
+      "archiveSha256": "c970c07d42539a19e38289d7f0f5e44c87e3ecaf9f4974d3efd1d6dc693eab1f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

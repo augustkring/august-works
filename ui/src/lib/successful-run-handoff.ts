@@ -1,12 +1,13 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import type { ActivityEvent, Issue, SuccessfulRunHandoffState } from "@paperclipai/shared";
 
 export const SUCCESSFUL_RUN_HANDOFF_REQUIRED_ACTION = "issue.successful_run_handoff_required";
 export const SUCCESSFUL_RUN_HANDOFF_RESOLVED_ACTION = "issue.successful_run_handoff_resolved";
 export const SUCCESSFUL_RUN_HANDOFF_ESCALATED_ACTION = "issue.successful_run_handoff_escalated";
 export const SUCCESSFUL_RUN_HANDOFF_REQUIRED_NOTICE_BODY =
-  "Paperclip needs a disposition before this issue can continue.";
+  `${PRODUCT_IDENTITY.productName} needs a disposition before this issue can continue.`;
 export const SUCCESSFUL_RUN_HANDOFF_EXHAUSTED_NOTICE_BODY =
-  "Paperclip could not resolve this issue's missing disposition automatically. The source assignment is unchanged and a board decision is required.";
+  `${PRODUCT_IDENTITY.productName} could not resolve this issue's missing disposition automatically. The source assignment is unchanged and a board decision is required.`;
 
 export function isSuccessfulRunHandoffActivity(action: string) {
   return action === SUCCESSFUL_RUN_HANDOFF_REQUIRED_ACTION

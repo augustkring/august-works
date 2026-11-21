@@ -1,0 +1,2297 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "paperclipai/paperclip",
+    "pinnedSha": "5623304586c04092d2a44c25b3850301a909989d",
+    "pinnedAt": "2026-10-18",
+    "latestLookupAllowed": false
+  },
+  "fork": {
+    "repository": "augustkring/august-works",
+    "baseSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "currentSha": "e8dcdf53e6d72ddf1859daf80aee7f23386cefa5",
+    "commonAncestorSha": "be43c23e2df9fc88392390569f5e3b1356cfe275"
+  },
+  "policy": {
+    "automaticMerge": false,
+    "featureAdoptionFromMovingRef": false,
+    "securityFastPath": "P0; review pinned source even when feature is rejected",
+    "classifications": [
+      "SECURITY / VULNERABILITY",
+      "BUG / CORRECTNESS",
+      "DEPENDENCY / BUILD",
+      "PROTOCOL / COMPATIBILITY",
+      "UX / ACCESSIBILITY",
+      "FEATURE",
+      "ARCHITECTURE",
+      "BRAND / COMMUNITY"
+    ],
+    "admissionRequires": [
+      "owner",
+      "sourceRead.reviewedRefs",
+      "decision",
+      "invariantImpact",
+      "affectedTests",
+      "regressionEvidence",
+      "provenanceRef",
+      "exact forkCommit when admitted"
+    ],
+    "releaseProvenance": "Reuse existing release source SHA and artifact provenance; this ledger does not publish or authorize releases."
+  },
+  "inventory": {
+    "latestGenerated": "2026-10-28",
+    "report": "doc/operations/aw-v10-evidence/upstream-intake-2026-10-28/inventory.json",
+    "reportSha256": "ed368e16bbfb6a24ed8f24923f955a252b46dbefaf4a7728499891da1e5edfd2",
+    "upstreamTreeSha": "ad33c1e247992f068b49236787cf26eb64117aae"
+  },
+  "changes": [
+    {
+      "pr": "#10633",
+      "sourceSha": "3a726e676fe47f4725d03037e823d7f057760708",
+      "packageIds": [
+        "UP-03"
+      ],
+      "classification": "SECURITY / VULNERABILITY",
+      "priority": "P0",
+      "state": "security_fast_path",
+      "decision": "**Decision: required for beta private work.** Source chain #14717 b67db12d90c1bd191f99975e35cc5c84137858e4, #10633 3a726e676fe47f4725d03037e823d7f057760708, #14718 b31558064093564fb937cf046596d1d497f5be27. Adapt the storage, service enforcement and UI together.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/3a726e676fe47f4725d03037e823d7f057760708",
+        "https://github.com/paperclipai/paperclip/pull/10633"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#13183",
+      "sourceSha": "514d8738cfa66f5ce5bb07d196a4c7412c0a42b8",
+      "packageIds": [
+        "UP-01"
+      ],
+      "classification": "SECURITY / VULNERABILITY",
+      "priority": "P0",
+      "state": "security_fast_path",
+      "decision": "**Decision: required before beta.** Source behaviors: #14773 98d8a6ccac82d1605ac10dcea17f351c385814e5, #14413 6f40e23536ad9f80c6379543acc22871380fdc25, #13183 514d8738cfa66f5ce5bb07d196a4c7412c0a42b8.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/514d8738cfa66f5ce5bb07d196a4c7412c0a42b8",
+        "https://github.com/paperclipai/paperclip/pull/13183"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#14413",
+      "sourceSha": "6f40e23536ad9f80c6379543acc22871380fdc25",
+      "packageIds": [
+        "UP-01"
+      ],
+      "classification": "SECURITY / VULNERABILITY",
+      "priority": "P0",
+      "state": "security_fast_path",
+      "decision": "**Decision: required before beta.** Source behaviors: #14773 98d8a6ccac82d1605ac10dcea17f351c385814e5, #14413 6f40e23536ad9f80c6379543acc22871380fdc25, #13183 514d8738cfa66f5ce5bb07d196a4c7412c0a42b8.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/6f40e23536ad9f80c6379543acc22871380fdc25",
+        "https://github.com/paperclipai/paperclip/pull/14413"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#14713",
+      "sourceSha": "d432dc7fa355c526a64a43c03120806c11d47b71",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| GitHub Skill sources | #14713 d432dc7fa355c526a64a43c03120806c11d47b71 + #16288 df4ee06e2f613649f8331cc18a1b587e6146f8a8; pin reviewed bytes/version, validate selected branch/source, apply source ACL and update policy. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/d432dc7fa355c526a64a43c03120806c11d47b71",
+        "https://github.com/paperclipai/paperclip/pull/14713"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#14717",
+      "sourceSha": "b67db12d90c1bd191f99975e35cc5c84137858e4",
+      "packageIds": [
+        "UP-03"
+      ],
+      "classification": "SECURITY / VULNERABILITY",
+      "priority": "P0",
+      "state": "security_fast_path",
+      "decision": "**Decision: required for beta private work.** Source chain #14717 b67db12d90c1bd191f99975e35cc5c84137858e4, #10633 3a726e676fe47f4725d03037e823d7f057760708, #14718 b31558064093564fb937cf046596d1d497f5be27. Adapt the storage, service enforcement and UI together.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/b67db12d90c1bd191f99975e35cc5c84137858e4",
+        "https://github.com/paperclipai/paperclip/pull/14717"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#14718",
+      "sourceSha": "b31558064093564fb937cf046596d1d497f5be27",
+      "packageIds": [
+        "UP-03"
+      ],
+      "classification": "SECURITY / VULNERABILITY",
+      "priority": "P0",
+      "state": "security_fast_path",
+      "decision": "**Decision: required for beta private work.** Source chain #14717 b67db12d90c1bd191f99975e35cc5c84137858e4, #10633 3a726e676fe47f4725d03037e823d7f057760708, #14718 b31558064093564fb937cf046596d1d497f5be27. Adapt the storage, service enforcement and UI together.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/b31558064093564fb937cf046596d1d497f5be27",
+        "https://github.com/paperclipai/paperclip/pull/14718"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#14740",
+      "sourceSha": "25c422ba7e30f9e4bfb34ddeff88ce4bd6b2773e",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| Minimum Google scopes | #14740 25c422ba7e30f9e4bfb34ddeff88ce4bd6b2773e; request only the selected supported capability, incremental consent for additional actions. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/25c422ba7e30f9e4bfb34ddeff88ce4bd6b2773e",
+        "https://github.com/paperclipai/paperclip/pull/14740"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#14773",
+      "sourceSha": "98d8a6ccac82d1605ac10dcea17f351c385814e5",
+      "packageIds": [
+        "UP-01"
+      ],
+      "classification": "SECURITY / VULNERABILITY",
+      "priority": "P0",
+      "state": "security_fast_path",
+      "decision": "**Decision: required before beta.** Source behaviors: #14773 98d8a6ccac82d1605ac10dcea17f351c385814e5, #14413 6f40e23536ad9f80c6379543acc22871380fdc25, #13183 514d8738cfa66f5ce5bb07d196a4c7412c0a42b8.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/98d8a6ccac82d1605ac10dcea17f351c385814e5",
+        "https://github.com/paperclipai/paperclip/pull/14773"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#14811",
+      "sourceSha": "467125fafb47a8520856504fecc48d6e32055db1",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| One-screen connection setup | #14811 467125fafb47a8520856504fecc48d6e32055db1; show account, purpose, requested scope and a useful connection test. Advanced configuration stays collapsed. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/467125fafb47a8520856504fecc48d6e32055db1",
+        "https://github.com/paperclipai/paperclip/pull/14811"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#14846",
+      "sourceSha": "e34abee670069cca84afb2efb86041bce7dccbec",
+      "packageIds": [
+        "UP-09"
+      ],
+      "classification": "PROTOCOL / COMPATIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "**Decision: scoped external MCP is selected; local stdio is implemented only for an explicitly supported runtime profile and remains off elsewhere.** External user OAuth: #14846 e34abee670069cca84afb2efb86041bce7dccbec. Session-local stdio: #16526 6f8ad3d77bc9032d7a6d518eb0a9580fc607c23d.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/e34abee670069cca84afb2efb86041bce7dccbec",
+        "https://github.com/paperclipai/paperclip/pull/14846"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#14859",
+      "sourceSha": "6d654f63d1c9e38f78a9e779c8d5324b73b088fe",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| Readable test results | #14859 6d654f63d1c9e38f78a9e779c8d5324b73b088fe; display what succeeded, what failed and the next action rather than raw MCP JSON. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/6d654f63d1c9e38f78a9e779c8d5324b73b088fe",
+        "https://github.com/paperclipai/paperclip/pull/14859"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15216",
+      "sourceSha": "4857799a88914cd9597655da56af312808d0474d",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| Connection instructions | #15216 4857799a88914cd9597655da56af312808d0474d; include only when the current turn is authorized; preserve provenance and trust level. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/4857799a88914cd9597655da56af312808d0474d",
+        "https://github.com/paperclipai/paperclip/pull/15216"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15254",
+      "sourceSha": "b43073d11fae2f62771144580a9c63a6734a4018",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| Multiple accounts grouped correctly | #15254 b43073d11fae2f62771144580a9c63a6734a4018; preserve account identity, purpose and permission scope; never silently switch accounts. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/b43073d11fae2f62771144580a9c63a6734a4018",
+        "https://github.com/paperclipai/paperclip/pull/15254"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15413",
+      "sourceSha": "d66acb7ac157c3db2e1d389de4513a7809977725",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| Managed Slack setup | #15413 d66acb7ac157c3db2e1d389de4513a7809977725 + #15679 f0e12c851971a21f7aadf0835b016bfaf2067314; Blentera-owned app, current grants and independent own-app advanced path. Do not require customers to create a developer app in normal onboarding. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/d66acb7ac157c3db2e1d389de4513a7809977725",
+        "https://github.com/paperclipai/paperclip/pull/15413"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15445",
+      "sourceSha": "083073703086dd699f3f2bfd852e56c7150c2d09",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| HTML/CSV/file outputs | #15447 1640c5b6abe7373b75606433c5f4a34450123170, #15445 083073703086dd699f3f2bfd852e56c7150c2d09, #15964 762d680daf3563d42a0c4c280761c233b21713c7; sandbox previews, enforce source permissions, bound parsing/upload and provide accessible download fallback. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/083073703086dd699f3f2bfd852e56c7150c2d09",
+        "https://github.com/paperclipai/paperclip/pull/15445"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15447",
+      "sourceSha": "1640c5b6abe7373b75606433c5f4a34450123170",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| HTML/CSV/file outputs | #15447 1640c5b6abe7373b75606433c5f4a34450123170, #15445 083073703086dd699f3f2bfd852e56c7150c2d09, #15964 762d680daf3563d42a0c4c280761c233b21713c7; sandbox previews, enforce source permissions, bound parsing/upload and provide accessible download fallback. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/1640c5b6abe7373b75606433c5f4a34450123170",
+        "https://github.com/paperclipai/paperclip/pull/15447"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15470",
+      "sourceSha": "ae6f95ed7a777069717b90230d651e7ed1060d35",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| Preferred personal generalist | #15470 ae6f95ed7a777069717b90230d651e7ed1060d35; a user's preferred Co-worker is a routing preference, not CEO authority or permission escalation. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/ae6f95ed7a777069717b90230d651e7ed1060d35",
+        "https://github.com/paperclipai/paperclip/pull/15470"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15473",
+      "sourceSha": "a7a244ab33cea9e8c68d2c1fa54c4879361bfc07",
+      "packageIds": [
+        "UP-11"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "**Decision: retain the optional BYO decision-model seam; do not make it a core dependency.** Source #15473 a7a244ab33cea9e8c68d2c1fa54c4879361bfc07. Integrate through existing connections, secret store, authorization and cost ledger. Preserve the upstream trusted consumer-handle/current-run checks and durable unknown-charge treatment, adapting to Blentera's owner rather than creating another budget ledger. Background decisions are off by default. This service is not V8's formal business decision owner.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/a7a244ab33cea9e8c68d2c1fa54c4879361bfc07",
+        "https://github.com/paperclipai/paperclip/pull/15473"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15625",
+      "sourceSha": "835a022936ddc7a152b9feab0c0420d02249a6d1",
+      "packageIds": [
+        "UP-13"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "**Decision: required for supported scheduled workflows and task monitors.** Port #16514 78b833c4958465b5e345b0e337018011b00dab72 together with absolute-deadline correction #16589 d1463fb79ecd72f53fd36c31b50076da9d73aebd. Dependency behaviors are transaction-aware producer signals #15625 835a022936ddc7a152b9feab0c0420d02249a6d1, coordinator/scheduler delivery behavior #15802 19e9facc5bd459ab790d53373612cfde1a2c9ec3, current startup/shutdown admission and existing atomic routine/monitor claims. Import only the required dependency behavior, not every unrelated chat worker.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/835a022936ddc7a152b9feab0c0420d02249a6d1",
+        "https://github.com/paperclipai/paperclip/pull/15625"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15631",
+      "sourceSha": "2dd9811e8be1dab59cccd86cdb25e8953b02fe07",
+      "packageIds": [
+        "UP-04"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "| Existing lifecycle ownership | #15631 2dd9811e8be1dab59cccd86cdb25e8953b02fe07 |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/2dd9811e8be1dab59cccd86cdb25e8953b02fe07",
+        "https://github.com/paperclipai/paperclip/pull/15631"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15634",
+      "sourceSha": "98e3cec78e8461774022a5ba0a777b09d4d16b96",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| Clear cost categories | #15634 98e3cec78e8461774022a5ba0a777b09d4d16b96; display subscriptions separately from measured API usage; do not label externally billed or unknown usage free. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/98e3cec78e8461774022a5ba0a777b09d4d16b96",
+        "https://github.com/paperclipai/paperclip/pull/15634"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15679",
+      "sourceSha": "f0e12c851971a21f7aadf0835b016bfaf2067314",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| Managed Slack setup | #15413 d66acb7ac157c3db2e1d389de4513a7809977725 + #15679 f0e12c851971a21f7aadf0835b016bfaf2067314; Blentera-owned app, current grants and independent own-app advanced path. Do not require customers to create a developer app in normal onboarding. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/f0e12c851971a21f7aadf0835b016bfaf2067314",
+        "https://github.com/paperclipai/paperclip/pull/15679"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15748",
+      "sourceSha": "a7dd5284b580e774c52711b91a41b7b36f9e0952",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| [#15748](https://github.com/paperclipai/paperclip/pull/15748) | a7dd5284b580e774c52711b91a41b7b36f9e0952 | Deterministic immediate acknowledgement is the beta default. Optional semantic acknowledgement is off unless the same admitted provider/purpose/budget path has demonstrated customer value; no false success or unapproved egress. UP-08/11, existing channel receipts. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/a7dd5284b580e774c52711b91a41b7b36f9e0952",
+        "https://github.com/paperclipai/paperclip/pull/15748"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15749",
+      "sourceSha": "f329b24ee12496e710ad17377ec7716e0eee22ef",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| Task work without a project | #15749 f329b24ee12496e710ad17377ec7716e0eee22ef; support a first useful task without forcing project setup; retain durable artifact/workspace ownership. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/f329b24ee12496e710ad17377ec7716e0eee22ef",
+        "https://github.com/paperclipai/paperclip/pull/15749"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15802",
+      "sourceSha": "19e9facc5bd459ab790d53373612cfde1a2c9ec3",
+      "packageIds": [
+        "UP-13"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "**Decision: required for supported scheduled workflows and task monitors.** Port #16514 78b833c4958465b5e345b0e337018011b00dab72 together with absolute-deadline correction #16589 d1463fb79ecd72f53fd36c31b50076da9d73aebd. Dependency behaviors are transaction-aware producer signals #15625 835a022936ddc7a152b9feab0c0420d02249a6d1, coordinator/scheduler delivery behavior #15802 19e9facc5bd459ab790d53373612cfde1a2c9ec3, current startup/shutdown admission and existing atomic routine/monitor claims. Import only the required dependency behavior, not every unrelated chat worker.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/19e9facc5bd459ab790d53373612cfde1a2c9ec3",
+        "https://github.com/paperclipai/paperclip/pull/15802"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#15964",
+      "sourceSha": "762d680daf3563d42a0c4c280761c233b21713c7",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| HTML/CSV/file outputs | #15447 1640c5b6abe7373b75606433c5f4a34450123170, #15445 083073703086dd699f3f2bfd852e56c7150c2d09, #15964 762d680daf3563d42a0c4c280761c233b21713c7; sandbox previews, enforce source permissions, bound parsing/upload and provide accessible download fallback. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/762d680daf3563d42a0c4c280761c233b21713c7",
+        "https://github.com/paperclipai/paperclip/pull/15964"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16046",
+      "sourceSha": "9e721264e912cb815c379f0d6bbfafcdfe6c5cc9",
+      "packageIds": [],
+      "classification": "DEPENDENCY / BUILD",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| [#16046](https://github.com/paperclipai/paperclip/pull/16046) | 9e721264e912cb815c379f0d6bbfafcdfe6c5cc9 | Reuse feature catalog/Storybook traceability pattern under existing Blentera screen contracts. A story is documentation/test input, not release evidence. Do not import upstream whole navigation. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/9e721264e912cb815c379f0d6bbfafcdfe6c5cc9",
+        "https://github.com/paperclipai/paperclip/pull/16046"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16052",
+      "sourceSha": "9bd820e6872eab293bb09e9fc27cdf5cbbd17eb5",
+      "packageIds": [],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| [#16052](https://github.com/paperclipai/paperclip/pull/16052) | 9bd820e6872eab293bb09e9fc27cdf5cbbd17eb5 | Carry compatible complete feature-map index with #16046; map actual Blentera states and paired labels, not unimplemented upstream promises. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/9bd820e6872eab293bb09e9fc27cdf5cbbd17eb5",
+        "https://github.com/paperclipai/paperclip/pull/16052"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16203",
+      "sourceSha": "db65a0863ea54292ceca3d60cf019ac64ec29357",
+      "packageIds": [
+        "UP-04"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "| Durable resource lifecycle delivery | #16203 db65a0863ea54292ceca3d60cf019ac64ec29357 |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/db65a0863ea54292ceca3d60cf019ac64ec29357",
+        "https://github.com/paperclipai/paperclip/pull/16203"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16288",
+      "sourceSha": "df4ee06e2f613649f8331cc18a1b587e6146f8a8",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| GitHub Skill sources | #14713 d432dc7fa355c526a64a43c03120806c11d47b71 + #16288 df4ee06e2f613649f8331cc18a1b587e6146f8a8; pin reviewed bytes/version, validate selected branch/source, apply source ACL and update policy. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/df4ee06e2f613649f8331cc18a1b587e6146f8a8",
+        "https://github.com/paperclipai/paperclip/pull/16288"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16424",
+      "sourceSha": "ea4aa185b0f3bc30be1c5fc160cdfd0eb433fe41",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Select #16424 ea4aa185b0f3bc30be1c5fc160cdfd0eb433fe41 plus #16683 1f27427ffdefaf5fb2760d1d53c0d78cb9683d4c batching of retained-reader identity, saved policy and project authorization within a single guarded operation. Preserve each run's responsible-user identity, task binding and policy. Batch at most 500 IDs. Never reuse authorization across operations after grant/membership changes. The upstream synthetic 680→47 query and ~7→0.5 second measurements are not Blentera hosted latency promises.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/ea4aa185b0f3bc30be1c5fc160cdfd0eb433fe41",
+        "https://github.com/paperclipai/paperclip/pull/16424"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16444",
+      "sourceSha": "2cc79923691848fea68c2ed0b611a9ce2c00bfaa",
+      "packageIds": [
+        "UP-12"
+      ],
+      "classification": "ARCHITECTURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-12 — Udskyd kundeløfte | Fælles ekstern Runner-livscyklus og Muse-kontrakter. Arkitekturreference, ikke dokumentation for en færdig Blentera-integration.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/2cc79923691848fea68c2ed0b611a9ce2c00bfaa",
+        "https://github.com/paperclipai/paperclip/pull/16444"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16447",
+      "sourceSha": "93ab7bad11e80d79620fb7bd407e7eb079265761",
+      "packageIds": [
+        "UP-12"
+      ],
+      "classification": "ARCHITECTURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-12 — Sammen med et senere Muse-valg | Immutable Museklienter og OAuth-grantkontrakter. Schema er ikke i sig selv et kvalificeret login-/produktforløb.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/93ab7bad11e80d79620fb7bd407e7eb079265761",
+        "https://github.com/paperclipai/paperclip/pull/16447"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16448",
+      "sourceSha": "e6dcc6b0959bdfc3bc93239c3d95e14c9fc8d457",
+      "packageIds": [
+        "UP-12"
+      ],
+      "classification": "ARCHITECTURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Defer Muse enablement; preserve reviewed extension design, UP-12.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/e6dcc6b0959bdfc3bc93239c3d95e14c9fc8d457",
+        "https://github.com/paperclipai/paperclip/pull/16448"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16450",
+      "sourceSha": "896f3c7f3bca5502ccb38c759ef356d799c0a60d",
+      "packageIds": [
+        "UP-12"
+      ],
+      "classification": "ARCHITECTURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Defer Muse-specific customer UI with backend; no dead enabled controls.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/896f3c7f3bca5502ccb38c759ef356d799c0a60d",
+        "https://github.com/paperclipai/paperclip/pull/16450"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16482",
+      "sourceSha": "2befcd9a0a087ef82506e1649140dd307b90e96a",
+      "packageIds": [
+        "UP-02"
+      ],
+      "classification": "SECURITY / VULNERABILITY",
+      "priority": "P0",
+      "state": "security_fast_path",
+      "decision": "Take applicable CLI security and descriptor corrections independently of Muse, UP-02.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/2befcd9a0a087ef82506e1649140dd307b90e96a",
+        "https://github.com/paperclipai/paperclip/pull/16482"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16487",
+      "sourceSha": "ce0eff7d1fe670f2ef3343178c144b1e4fa9b2ce",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-06/10 — Betinget workspace-pakke | Gitobjektcache og hurtigere staging. Tenant-/credentialgrænser, aktuel repoautorisation, kvoter og sletning er del af integrationen.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/ce0eff7d1fe670f2ef3343178c144b1e4fa9b2ce",
+        "https://github.com/paperclipai/paperclip/pull/16487"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16491",
+      "sourceSha": "becdc3b08edad2be36c9184d4668d1320b5a5e85",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| [#16491](https://github.com/paperclipai/paperclip/pull/16491) | becdc3b08edad2be36c9184d4668d1320b5a5e85 | Select Slack acknowledgement latency repair on supported Slack path. Acknowledge receipt promptly, preserve signature/current identity and durable work; receipt is not completion. UP-08/10. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/becdc3b08edad2be36c9184d4668d1320b5a5e85",
+        "https://github.com/paperclipai/paperclip/pull/16491"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16499",
+      "sourceSha": "9f4a956b90687dc55f51aa8b22279af2d946f4af",
+      "packageIds": [
+        "UP-04"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-04 — Prioriteret integrationspakke | Vedvarende runtimehooks. Kræver eksisterende lifecycle-forudsætninger, herunder relevante dele af #15631/#16203; forkets ejere og deployment skal kvalificeres.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/9f4a956b90687dc55f51aa8b22279af2d946f4af",
+        "https://github.com/paperclipai/paperclip/pull/16499"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16501",
+      "sourceSha": "5fbece9dcc9d1f0fa7bfd3c9e425c6aa7a30af36",
+      "packageIds": [
+        "UP-04"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-04 — Sammen med #16499 | Skillsynkronisering gennem hooks. Bevar aktuelle rettigheder, pins og immutable manifests for aktive runs.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/5fbece9dcc9d1f0fa7bfd3c9e425c6aa7a30af36",
+        "https://github.com/paperclipai/paperclip/pull/16501"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16514",
+      "sourceSha": "78b833c4958465b5e345b0e337018011b00dab72",
+      "packageIds": [
+        "UP-13"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "**Decision: required for supported scheduled workflows and task monitors.** Port #16514 78b833c4958465b5e345b0e337018011b00dab72 together with absolute-deadline correction #16589 d1463fb79ecd72f53fd36c31b50076da9d73aebd. Dependency behaviors are transaction-aware producer signals #15625 835a022936ddc7a152b9feab0c0420d02249a6d1, coordinator/scheduler delivery behavior #15802 19e9facc5bd459ab790d53373612cfde1a2c9ec3, current startup/shutdown admission and existing atomic routine/monitor claims. Import only the required dependency behavior, not every unrelated chat worker.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/78b833c4958465b5e345b0e337018011b00dab72",
+        "https://github.com/paperclipai/paperclip/pull/16514"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16526",
+      "sourceSha": "6f8ad3d77bc9032d7a6d518eb0a9580fc607c23d",
+      "packageIds": [
+        "UP-09"
+      ],
+      "classification": "PROTOCOL / COMPATIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-09 — Valgfri kvalificeret transport | Verificeret sessionslokal stdio-MCP. Samme Tool Gateway-autoritet, forbrug og effektkontrol skal gælde; ingen automatisk generel hosttillid.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/6f8ad3d77bc9032d7a6d518eb0a9580fc607c23d",
+        "https://github.com/paperclipai/paperclip/pull/16526"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16527",
+      "sourceSha": "185483e0909246b4609980a0e6e7ad3b8dbad1ba",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "| [#16527](https://github.com/paperclipai/paperclip/pull/16527) | 185483e0909246b4609980a0e6e7ad3b8dbad1ba | Select PostgreSQL-side authorization-revision reduction only with same allow/deny and revocation results. No cross-operation stale authority cache. UP-10. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/185483e0909246b4609980a0e6e7ad3b8dbad1ba",
+        "https://github.com/paperclipai/paperclip/pull/16527"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16536",
+      "sourceSha": "82a12f1a8bf454c005508741550c7438878ab2b4",
+      "packageIds": [
+        "UP-04"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "| [#16536](https://github.com/paperclipai/paperclip/pull/16536) | 82a12f1a8bf454c005508741550c7438878ab2b4 | Select batched project-source authorization for qualified Skill paths with tenant/source visibility and pin checks unchanged. UP-04/10. |",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.20"
+      ],
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/82a12f1a8bf454c005508741550c7438878ab2b4",
+        "https://github.com/paperclipai/paperclip/pull/16536"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md"
+    },
+    {
+      "pr": "#16543",
+      "sourceSha": "cfa9dce295970a85b3d8ee14cab0eccf50bc72e2",
+      "packageIds": [],
+      "classification": "DEPENDENCY / BUILD",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Optional maintenance only after fork-specific reference search proves fixtures unused; not a feature or beta blocker.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/cfa9dce295970a85b3d8ee14cab0eccf50bc72e2",
+        "https://github.com/paperclipai/paperclip/pull/16543"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16545",
+      "sourceSha": "8f1cb11a034b82e93fa414f8e77beeb702cc14e8",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-06/UX — Tag adfærden; tilpas teksten | Forklar ejerens nødvendige handling ved begrænset workspacekilde. Bevar ACL; omskriv teknisk upstreamtekst til sammenhængende EN/DA.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/8f1cb11a034b82e93fa414f8e77beeb702cc14e8",
+        "https://github.com/paperclipai/paperclip/pull/16545"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16548",
+      "sourceSha": "f1d4bc161711d071e417961d30afaadfd3bad8f1",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-08/10 — Tag med i Slack-pakken | Webhooks læser kun den nødvendige signing secret. Bevar versions-/rotationskontrol og validering.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/f1d4bc161711d071e417961d30afaadfd3bad8f1",
+        "https://github.com/paperclipai/paperclip/pull/16548"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16552",
+      "sourceSha": "8556539364bc4452b57e7f2cdaa771232bae8f01",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-10 — Betinget performance | Batch forberedelse af GitHub-launcherfiler; bevar hashkontrol, låse og atomisk publicering. Kun for de anvendte remoteprofiler.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/8556539364bc4452b57e7f2cdaa771232bae8f01",
+        "https://github.com/paperclipai/paperclip/pull/16552"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16556",
+      "sourceSha": "43ffe8ce95d11aca98319da50461b96c63fd8919",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-10 — Tag efter lighedscheck | Evaluer kun relevante toolprofilbetingelser. Dokumentér, at ændret rækkefølge giver samme tilladte og afviste kald.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/43ffe8ce95d11aca98319da50461b96c63fd8919",
+        "https://github.com/paperclipai/paperclip/pull/16556"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16561",
+      "sourceSha": "d75b3fc33f781f9b0e85458ffdbbb762f5960d00",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-10 — Kun valgt Daytona-profil | Observer procesafslutning før logstreamlukning. Må ikke gøre Daytona til en ny pilotafhængighed.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/d75b3fc33f781f9b0e85458ffdbbb762f5960d00",
+        "https://github.com/paperclipai/paperclip/pull/16561"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16569",
+      "sourceSha": "b294abb9eb96c33048b4f53a2a037e04886b7407",
+      "packageIds": [
+        "UP-05"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-05/10 — Tag med relevante tests | Én SQL-operation til normale run-events. Bevar binding, rækkefølge og idempotens under samtidighed.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/b294abb9eb96c33048b4f53a2a037e04886b7407",
+        "https://github.com/paperclipai/paperclip/pull/16569"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16575",
+      "sourceSha": "647116dd4bf712bda3fb75f259ee684b23bf8bb8",
+      "packageIds": [
+        "UP-05"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-05/09 — Tag afgrænset diagnosticering | Tillad relevante read-only diagnoser for sandboxagenten. Bevar filtrering af private opgaver og grænsen til kontrol-/administrationshandlinger.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/647116dd4bf712bda3fb75f259ee684b23bf8bb8",
+        "https://github.com/paperclipai/paperclip/pull/16575"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16576",
+      "sourceSha": "06689c1b3410000bcd65ff40cb469e600209c4db",
+      "packageIds": [
+        "UP-04"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-04/10 — Betinget performance | Saml Skill-inventory før cachelock. Aktuel synlighed og atomiske pins skal bevares; cache må ikke gøre tilbagekaldt adgang gyldig.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/06689c1b3410000bcd65ff40cb469e600209c4db",
+        "https://github.com/paperclipai/paperclip/pull/16576"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16577",
+      "sourceSha": "4de6335c3bba6de631a469fddac6bc511f890aa7",
+      "packageIds": [
+        "UP-01"
+      ],
+      "classification": "SECURITY / VULNERABILITY",
+      "priority": "P0",
+      "state": "security_fast_path",
+      "decision": "UP-01/10 — Tag efter lighedscheck | Mindre gemt run-JSON ved autentifikation. Bevar virksomhed, aktuel runidentitet, cancellation og alle gældende afvisninger.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/4de6335c3bba6de631a469fddac6bc511f890aa7",
+        "https://github.com/paperclipai/paperclip/pull/16577"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16583",
+      "sourceSha": "f5534717b020e9c627324d0c11464a70731c696d",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-06 — Høj prioritet ved native workspace | Bevar arbejde, der ikke er eksporteret, ved lease-cleanup. Tag livscyklusafhængigheder med; identisk datatab i nuværende fork er ikke reproduceret her.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/f5534717b020e9c627324d0c11464a70731c696d",
+        "https://github.com/paperclipai/paperclip/pull/16583"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16585",
+      "sourceSha": "c91f7a6e5f53fc6fe5fc4388eb1a717e15a5e6fe",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-10 — Betinget performance | Overlap verificerede sandboxassets. Brug capability checks og afvent/ryd alle igangsatte opgaver ved fejl.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/c91f7a6e5f53fc6fe5fc4388eb1a717e15a5e6fe",
+        "https://github.com/paperclipai/paperclip/pull/16585"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16586",
+      "sourceSha": "73659c6b27c1d97226f2da9ca39f256eefddac66",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-06 — Betinget cleanup | Ryd reproducerbare, managed Git-checkouts efter korrekt bevis. Bevar arbejde, der ikke kan genskabes; prioriter databevarelse først.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/73659c6b27c1d97226f2da9ca39f256eefddac66",
+        "https://github.com/paperclipai/paperclip/pull/16586"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16589",
+      "sourceSha": "d1463fb79ecd72f53fd36c31b50076da9d73aebd",
+      "packageIds": [
+        "UP-13"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-13 — Tag sammen med schedulerpakken | Bevar den gemte absolutte deliverydeadline. Afhænger af den relevante #16514/coordinator-pakke, som ikke blot findes uændret i forket.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/d1463fb79ecd72f53fd36c31b50076da9d73aebd",
+        "https://github.com/paperclipai/paperclip/pull/16589"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16593",
+      "sourceSha": "3db33c131ef59d8d7ad8ce3dc9aae4af0ce5dc25",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-08/10 — Tag med i Slack-pakken | Afgrænset samtidig endpointforberedelse og smallere læsning af aktuelle bottokens. Bevar fejlsemantik og revocation.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/3db33c131ef59d8d7ad8ce3dc9aae4af0ce5dc25",
+        "https://github.com/paperclipai/paperclip/pull/16593"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16601",
+      "sourceSha": "c0ac2772b0db920cdcc3e8108986d3911cbebbee",
+      "packageIds": [],
+      "classification": "DEPENDENCY / BUILD",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "dependency tests — Med relevante ændringer | Stabiliserer migrations-/recoveryfixtures. Testvedligeholdelse, ikke ny kundefeature.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/c0ac2772b0db920cdcc3e8108986d3911cbebbee",
+        "https://github.com/paperclipai/paperclip/pull/16601"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16602",
+      "sourceSha": "190080642ee4ea33336b6cd97b608b6c0534bddb",
+      "packageIds": [
+        "UP-04"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-04/10 — Prioriteret katalogpakke | Publicér i begrænsede batches, bevar samtidigt Off-valg og konsistent låserækkefølge. Prøv delvis fejl og OAuth-/profilkonkurrence.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/190080642ee4ea33336b6cd97b608b6c0534bddb",
+        "https://github.com/paperclipai/paperclip/pull/16602"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16603",
+      "sourceSha": "5f5602bba7000c950421f030664182a0c36e4017",
+      "packageIds": [
+        "UP-04"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-04 — Sammen med runtimehooks | Synkronisér stående connection assignments. Dækker ikke automatisk alle grants, credential-/policy-/katalogændringer eller fysisk per-use enforcement.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/5f5602bba7000c950421f030664182a0c36e4017",
+        "https://github.com/paperclipai/paperclip/pull/16603"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16608",
+      "sourceSha": "9a3290fe10fb1dbe950b91028b58b038b812169a",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-10 — Betinget performance | Overlap standard remote-artifactforberedelse under capability checks. Afvent alle aktive delopgaver korrekt ved fejl.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/9a3290fe10fb1dbe950b91028b58b038b812169a",
+        "https://github.com/paperclipai/paperclip/pull/16608"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16610",
+      "sourceSha": "564d4e1bce10b4e18f6daff09ebd4690e686872d",
+      "packageIds": [
+        "UP-04"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-04 tests — Med Skill-ændringer | Skelner testdeadline fra procesopstart. Et mere stabilt testforløb er ikke et nyt produktløfte.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/564d4e1bce10b4e18f6daff09ebd4690e686872d",
+        "https://github.com/paperclipai/paperclip/pull/16610"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16614",
+      "sourceSha": "dc499ae02b80a5d3ea9d30d77d1622d24da385ce",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-06 — Med cleanup-pakken | Afvis delte Git-cleanupstier tidligt. Bevar de senere checks, som faktisk beskytter sletningen.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/dc499ae02b80a5d3ea9d30d77d1622d24da385ce",
+        "https://github.com/paperclipai/paperclip/pull/16614"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16620",
+      "sourceSha": "0528cc7ee0a00579cfa207d333085253accb6c4b",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-10 — Betinget performance | Parallel GitHub-/assigned-toolopdagelse ved native setup. Start ikke provider før begge er klar; ryd korrekt ved delvis fejl.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/0528cc7ee0a00579cfa207d333085253accb6c4b",
+        "https://github.com/paperclipai/paperclip/pull/16620"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16621",
+      "sourceSha": "5555817c2b18a1a5ebc3a3b01883c1b12b86df5a",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-06 — Snæver cleanup-funktion | Efterprøv offentlige commits anonymt, når managed auth ikke kan bruges. Private repos forbliver beskyttede; ingen generel authfallback.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/5555817c2b18a1a5ebc3a3b01883c1b12b86df5a",
+        "https://github.com/paperclipai/paperclip/pull/16621"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16622",
+      "sourceSha": "32ee2e9a6a35da4cbde0c7f57df92f4d7eda5444",
+      "packageIds": [
+        "UP-05"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-05 — Prioriteret korrekthed | Lad gyldig legacycontroller færdiggøre arbejdet før en deadline fejler runnet. Manglende tilsvarende check er verificeret i den undersøgte fork-kode.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/32ee2e9a6a35da4cbde0c7f57df92f4d7eda5444",
+        "https://github.com/paperclipai/paperclip/pull/16622"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16623",
+      "sourceSha": "2723168083ad9a460f35199357d5d4c5d53f02d6",
+      "packageIds": [
+        "UP-05"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-05 tests — Med runner-pakken | Gør durable-resume-watchdogtest deterministisk. Testændring, ikke ny runtimekapacitet.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/2723168083ad9a460f35199357d5d4c5d53f02d6",
+        "https://github.com/paperclipai/paperclip/pull/16623"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16630",
+      "sourceSha": "669d329f257805ff3c171341ee6942d681cc6a0e",
+      "packageIds": [
+        "UP-08"
+      ],
+      "classification": "UX / ACCESSIBILITY",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "UP-08/10 — Med Slack-pakken | Undgå katalogrevisionsscans, som discovery ikke bruger. Må ikke fjerne autorisationskontrol på den efterfølgende faktiske handling.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/669d329f257805ff3c171341ee6942d681cc6a0e",
+        "https://github.com/paperclipai/paperclip/pull/16630"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16633",
+      "sourceSha": "4415665d67b16ffefbe4519c4bdd521f37bb87b9",
+      "packageIds": [
+        "UP-05"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "UP-05/06/10 — Kvalificér før aktivering | Idle waits og historisk cleanup med stærkere bevis. Prøv wake, waits, eksport, credentialskift og faktisk ressourcetilstand på den valgte leverandør.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/4415665d67b16ffefbe4519c4bdd521f37bb87b9",
+        "https://github.com/paperclipai/paperclip/pull/16633"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.19"
+      ]
+    },
+    {
+      "pr": "#16671",
+      "sourceSha": "938a441944c828205dd8ff115f9d3585ee63eb7f",
+      "packageIds": [
+        "UP-07"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "Take with #16688 for qualified Claude ACPX, UP-07.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/938a441944c828205dd8ff115f9d3585ee63eb7f",
+        "https://github.com/paperclipai/paperclip/pull/16671"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16672",
+      "sourceSha": "27ab902d3db2770ada79c9f42a9c06e1d346f34b",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Take production bundle with artifact boot tests, UP-10.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/27ab902d3db2770ada79c9f42a9c06e1d346f34b",
+        "https://github.com/paperclipai/paperclip/pull/16672"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16673",
+      "sourceSha": "391dd15ff26f43c27f3a3414b876dd4345791560",
+      "packageIds": [
+        "UP-05"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "Take queue/cleanup correctness, UP-05; sleep portion only with idle package.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/391dd15ff26f43c27f3a3414b876dd4345791560",
+        "https://github.com/paperclipai/paperclip/pull/16673"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16677",
+      "sourceSha": "bebeb389f1fecf51a81f4b040facbb1a4fba638b",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Take immutable-bundle watcher exclusion, UP-10.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/bebeb389f1fecf51a81f4b040facbb1a4fba638b",
+        "https://github.com/paperclipai/paperclip/pull/16677"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16679",
+      "sourceSha": "d30648dee89720358271c276b9fc28cf83f18be7",
+      "packageIds": [
+        "UP-05"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "Take after #16673, preserve accepted paused messages, UP-05.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/d30648dee89720358271c276b9fc28cf83f18be7",
+        "https://github.com/paperclipai/paperclip/pull/16679"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16681",
+      "sourceSha": "e30550ef39de89a890730088f47fdb892f8b03d9",
+      "packageIds": [],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Do not create a customer build task for comment-only deletion; retain useful Blentera rationale under its own coding policy.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/e30550ef39de89a890730088f47fdb892f8b03d9",
+        "https://github.com/paperclipai/paperclip/pull/16681"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16683",
+      "sourceSha": "1f27427ffdefaf5fb2760d1d53c0d78cb9683d4c",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Take with retained-reader authorization dependencies and revocation tests, UP-10.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/1f27427ffdefaf5fb2760d1d53c0d78cb9683d4c",
+        "https://github.com/paperclipai/paperclip/pull/16683"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16685",
+      "sourceSha": "63fbb714e62d025eeb69773f9f2262578d2f5653",
+      "packageIds": [
+        "UP-10"
+      ],
+      "classification": "FEATURE",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Required if idle admission/sleep package is adopted; do not weaken mutation tracking.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/63fbb714e62d025eeb69773f9f2262578d2f5653",
+        "https://github.com/paperclipai/paperclip/pull/16685"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16688",
+      "sourceSha": "63306f666020408f8175886faf54c3ad9ea6b1a2",
+      "packageIds": [
+        "UP-07"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "Take receipt-only diagnostic semantics alongside #16671.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/63306f666020408f8175886faf54c3ad9ea6b1a2",
+        "https://github.com/paperclipai/paperclip/pull/16688"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16690",
+      "sourceSha": "7c7d2d8d2cfca96aa956b85d086f067bc9fd8880",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "Take with #16696 and native lifecycle dependencies; adapt customer recovery UX, UP-06.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/7c7d2d8d2cfca96aa956b85d086f067bc9fd8880",
+        "https://github.com/paperclipai/paperclip/pull/16690"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16691",
+      "sourceSha": "790b729086420ad4ad3f4e8a475ac1f08d6711f9",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "Take exact nested source/settings restoration with complete Git lifecycle package, UP-06.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/790b729086420ad4ad3f4e8a475ac1f08d6711f9",
+        "https://github.com/paperclipai/paperclip/pull/16691"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16695",
+      "sourceSha": "1678aae8628e246d5121555ea7b39ed637421a2a",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "Take exact generated-ignore exception only inside verified Git reclamation package.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/1678aae8628e246d5121555ea7b39ed637421a2a",
+        "https://github.com/paperclipai/paperclip/pull/16695"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16696",
+      "sourceSha": "69ac928d2b06875c1ec81942348221717cf2bcb1",
+      "packageIds": [
+        "UP-06"
+      ],
+      "classification": "BUG / CORRECTNESS",
+      "priority": "P1",
+      "state": "decision_recorded",
+      "decision": "Required companion to reconstruction; retain bounded retry chain and original limits.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/69ac928d2b06875c1ec81942348221717cf2bcb1",
+        "https://github.com/paperclipai/paperclip/pull/16696"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.3",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16697",
+      "sourceSha": "39c345ec5c5846b6d485a6ff93bc8c14842761c8",
+      "packageIds": [],
+      "classification": "DEPENDENCY / BUILD",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Carry matching fixture correction only if those runner tests/profile targets are selected.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/39c345ec5c5846b6d485a6ff93bc8c14842761c8",
+        "https://github.com/paperclipai/paperclip/pull/16697"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    },
+    {
+      "pr": "#16701",
+      "sourceSha": "5623304586c04092d2a44c25b3850301a909989d",
+      "packageIds": [],
+      "classification": "DEPENDENCY / BUILD",
+      "priority": "P2",
+      "state": "decision_recorded",
+      "decision": "Carry matching provider fixture isolation; not new runtime functionality.",
+      "specRef": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17",
+      "readRefs": [
+        "https://github.com/paperclipai/paperclip/commit/5623304586c04092d2a44c25b3850301a909989d",
+        "https://github.com/paperclipai/paperclip/pull/16701"
+      ],
+      "sourceRead": {
+        "reviewedRefs": [],
+        "status": "not-recorded-by-this-ledger"
+      },
+      "forkCommit": null,
+      "regressionEvidence": [],
+      "provenanceRef": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "specRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#7.17"
+      ]
+    }
+  ]
+}

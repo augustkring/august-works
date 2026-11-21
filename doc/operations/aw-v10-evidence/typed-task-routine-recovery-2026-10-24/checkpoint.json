@@ -1,0 +1,83 @@
+{
+  "sourceHead": "b695fc49044cff5a1591f03dceda13cacb4d8d08",
+  "recordedAt": "2026-10-24T19:26:06.723136+00:00",
+  "requirements": [
+    "UP-03",
+    "CE-04",
+    "V10-146"
+  ],
+  "checks": {
+    "recovery-install": {
+      "exit": 0,
+      "log": "recovery-install.log"
+    },
+    "recovery-install-final": {
+      "exit": 0,
+      "log": "recovery-install-final.log"
+    },
+    "recovery-shared-build": {
+      "exit": 0,
+      "log": "recovery-shared-build.log"
+    },
+    "recovery-db-generate": {
+      "exit": 1,
+      "log": "recovery-db-generate.log"
+    },
+    "recovery-db-generate-final": {
+      "exit": 0,
+      "log": "recovery-db-generate-final.log"
+    },
+    "recovery-db-build": {
+      "exit": 0,
+      "log": "recovery-db-build.log"
+    },
+    "recovery-sdk-build": {
+      "exit": 0,
+      "log": "recovery-sdk-build.log"
+    },
+    "recovery-typed-native": {
+      "exit": 1,
+      "log": "recovery-typed-native.log"
+    },
+    "recovery-native-owned": {
+      "exit": 1,
+      "log": "recovery-native-owned.log"
+    },
+    "recovery-native-final": {
+      "exit": 0,
+      "log": "recovery-native-final.log"
+    },
+    "recovery-pending": {
+      "exit": 0,
+      "log": "recovery-pending.log"
+    },
+    "recovery-private-typed": {
+      "exit": 1,
+      "log": "recovery-private-typed.log"
+    },
+    "recovery-server-types": {
+      "exit": 1,
+      "log": "recovery-server-types.log"
+    },
+    "recovery-runner-typescript": {
+      "exit": 0,
+      "log": "recovery-runner-typescript.log"
+    },
+    "recovery-server-types-final": {
+      "exit": 0,
+      "log": "recovery-server-types-final.log"
+    },
+    "recovery-server-types-expanded": {
+      "exit": 0,
+      "log": "recovery-server-types-expanded.log"
+    }
+  },
+  "observations": [
+    "Replacement runtime lacked the prior worktree and its uncommitted patch/logs. Recovered exact pushed head 2f221c4f5 then reconstructed changes and reran all current receipts. Previous chat 74/74 is historical, not current evidence.",
+    "0526 is normally generated and preserves all historical retained sources. Typed execution IDs resolve only in their native namespaces, validate original retained same-company revision and fail closed on wrong parent/missing source. Private typed source readers remain incomplete.",
+    "The original Task constructor receives the same physical transaction/savepoint as RoutineRun creation. Linked received intent commits before native heartbeat assignment. Stable queue idempotency key, actual receipt tuple validation, advisory lock across enqueue, conditional finalization and bounded scheduler sweep preserve committed work on ambiguous wake error. issue_created means the Task exists; it is not provider/model success.",
+    "Final native run has 88 passes across typed origins (7), Routine source identity/recovery (7), Routine service (74). Three further scheduler/mismatched-receipt/concurrent recovery checks pass. Private typed source tests have two genuine positive-control failures and two passes; failures are retained and not skipped.",
+    "Initial server compiler failed because restored runner declarations were not built. Native runner TypeScript build and final compiler pass. Initial test import failed on absent SDK build. No new dependencies or fake declarations were added.",
+    "Structural queue callbacks/stored request fixtures are not real provider execution, physical process restart, complete input source receipts, or host qualification. All V10, private source graph, temporal Memory and release gates remain open."
+  ]
+}

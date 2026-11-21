@@ -1,0 +1,7 @@
+src/services/agent-packages/package-service.ts(495,11): error TS2322: Type 'AuthorizationActor' is not assignable to type '{ type: "agent" | "board" | "none"; userId?: string | undefined; userName?: string | null | undefined; userEmail?: string | null | undefined; agentId?: string | undefined; companyId?: string | undefined; ... 12 more ...; source?: "agent_jwt" | ... 7 more ... | undefined; }'.
+  Types of property 'userId' are incompatible.
+    Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+      Type 'null' is not assignable to type 'string | undefined'.
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --singleThreaded --incremental --tsBuildInfoFile /workspace/v10-preparation/v10-server-check.tsbuildinfo

@@ -16,6 +16,7 @@ import {
   type ActivationCommand,
   type ActivationView,
 } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { authApi } from "../api/auth";
 import { ApiError } from "../api/client";
 import { saasApi } from "../api/saas";
@@ -27,7 +28,7 @@ import { Link } from "../lib/router";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
-import { ExperienceLanguageSelect } from "../components/ExperienceLanguageSelect";
+import { AccountExperienceLanguageSelect } from "../components/AccountExperienceLanguageSelect";
 import { CustomerFeedbackDialog } from "../components/CustomerFeedbackDialog";
 import { ActivationMeasuresLink } from "../components/ActivationMeasuresLink";
 import { ActivationFirstValue } from "../components/ActivationFirstValue";
@@ -37,11 +38,12 @@ import { SaasWelcomePage } from "./SaasWelcome";
 import { hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
 
 export function SaasWelcomeEntry() {
+  const { t } = useTranslation("experience");
   const flags = useSaasCapabilities(),
     [params] = useSearchParams();
-  if (flags.isPending) return <p role="status">Loading…</p>;
+  if (flags.isPending) return <p role="status">{t("activation.loading")}</p>;
   if (flags.isError)
-    return <p role="alert">Getting started could not be loaded.</p>;
+    return <p role="alert">{t("activation.loadFailed")}</p>;
   return flags.data?.activationV9 && params.get("legacy") !== "1" ? (
     <ActivationPage />
   ) : (
@@ -144,7 +146,12 @@ function ActivationScope({
     enabled: ready && !!companyId,
     staleTime: 0,
     gcTime: 0,
-    retry: false,
+    retry: (failureCount, error) => {
+      if (failureCount >= 3 || !(error instanceof ApiError) || error.status !== 409) return false;
+      const details = (error.body as { details?: { code?: unknown; retryable?: unknown } } | null)?.details;
+      return details?.code === "activation_state_busy" && details.retryable === true;
+    },
+    retryDelay: attemptIndex => Math.min(200 * 2 ** attemptIndex, 800),
   });
   const current =
     ready && run.isSuccess && !run.isFetching ? run.data : undefined;
@@ -320,8 +327,8 @@ function ActivationScope({
       {companyId && current && <ObservationScope key={`${companyId}:${principal}:${epoch}`} company={companyId} principal={principal}
         surface="activation" navigation={String(screen)} step={ACTIVATION_STEPS[screen - 3] ?? null} />}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <span className="font-semibold">August Works</span>
-        <ExperienceLanguageSelect />
+        <span className="font-semibold">{PRODUCT_IDENTITY.productName}</span>
+        <AccountExperienceLanguageSelect userId={principal} key={principal} />
         <CustomerFeedbackDialog />
         <a
           href={FEEDBACK_CONTACTS.support}

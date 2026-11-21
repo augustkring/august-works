@@ -1,0 +1,21 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > qualifies a canonical virtual candidate through original probes without replacing the live configuration or binding 3767ms
+ ✓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > bootstraps through the actual operator service without fixture conformance and holds cancellation liability 2555ms
+ ✓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > preserves runtime revocation while settling a dispatched probe 695ms
+ ✓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > blocks the next dispatch before exceeding the combined two-company ceiling 1260ms
+ ↓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > withholds output and qualification after membership changes during dispatch
+ ↓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > withholds output and qualification after credential changes during dispatch
+ ↓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > withholds output and qualification after configuration changes during dispatch
+ ↓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > withholds output and qualification after flag changes during dispatch
+ ✓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > rejects provider usage outside the qualified envelope and preserves the entire debit 784ms
+ ✓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > does not qualify a provider that returns the wrong synthetic response 744ms
+ ↓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > requires private installed profiles, a real human and a separate isolation peer before model effects
+ ↓ src/__tests__/v7-native-draft-conformance.integration.test.ts > Native stateless draft conformance bootstrap > blocks direct ledger debits on visible Tasks and harness conversion to ordinary work
+
+ Test Files  1 passed (1)
+      Tests  6 passed | 6 skipped (12)
+   Start at  04:52:39
+   Duration  27.95s (transform 9.52s, setup 72ms, import 13.92s, tests 13.84s, environment 0ms)
+

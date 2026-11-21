@@ -26,6 +26,7 @@ import {
   type PaperclipRunnerPermissionMode,
   type PaperclipRunnerProvider,
 } from "@paperclipai/adapter-utils";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 
 const inputClass =
   "w-full rounded-md border border-border px-2.5 py-1.5 bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/40";
@@ -154,7 +155,7 @@ export function CodexLocalConfigFields({
     ? "Fast mode will be passed through for this manual model. If Codex rejects it, turn the toggle off."
     : fastModeSupported
       ? "Fast mode consumes credits/tokens much faster than standard Codex runs."
-      : `Fast mode currently only works on ${supportedModelsLabel} or manual model IDs. Paperclip will ignore this toggle until the model is switched.`;
+      : `Fast mode currently only works on ${supportedModelsLabel} or manual model IDs. ${PRODUCT_IDENTITY.productName} will ignore this toggle until the model is switched.`;
 
   return configFieldsForSection(section, (
     <>
@@ -301,7 +302,7 @@ export function CodexLocalConfigFields({
           </Field>
           <Field
             label="Estimated session ceiling (USD)"
-            hint="Paperclip estimate; AWS does not provide a per-session currency hard stop."
+            hint={`${PRODUCT_IDENTITY.productName} estimate; AWS does not provide a per-session currency hard stop.`}
           >
             <DraftNumberInput
               value={Number(runnerSchemaValue("maxEstimatedSessionCostUsd", 1))}
@@ -374,7 +375,7 @@ export function CodexLocalConfigFields({
       {runnerManaged && runnerPermissionCapability.configurable && (runnerPermissionCapability.options.length > 1 || runnerPermissionModeUnsupported) && (
         <Field
           label="Permission mode"
-          hint={`${runnerPermissionCapability.description} The selected mode does not widen Paperclip's workspace, network, credential, or planning boundaries.`}
+          hint={`${runnerPermissionCapability.description} The selected mode does not widen ${PRODUCT_IDENTITY.productName}'s workspace, network, credential, or planning boundaries.`}
         >
           <Select
             value={
@@ -425,7 +426,7 @@ export function CodexLocalConfigFields({
           </Select>
           {runnerPermissionModeUnsupported && runnerProvider === "codex" && (
             <p className="mt-1 text-xs text-destructive" role="alert">
-              This saved Codex mode cannot start or recover a Paperclip Runner
+              This saved Codex mode cannot start or recover a {PRODUCT_IDENTITY.productName} Runner
               run. Select Automatic (isolated) to remediate it.
             </p>
           )}
@@ -574,7 +575,7 @@ export function CodexLocalConfigFields({
           {!managedSandboxOnly && (
             <Field
               label="ACP state directory"
-              hint="Optional ACP session state directory. Defaults to Paperclip-managed organization/agent scoped storage."
+              hint={`Optional ACP session state directory. Defaults to ${PRODUCT_IDENTITY.productName}-managed organization/agent scoped storage.`}
             >
               <div className="flex items-center gap-2">
                 <DraftInput

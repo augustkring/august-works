@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadGitHubGrantMetadata } from "../services/tool-access.js";
 
-function json(value: unknown, next = false): Response {
+function json(value: unknown, nextUrl?: string): Response {
   return new Response(JSON.stringify(value), {
     headers: {
       "content-type": "application/json",
-      ...(next ? { link: '<https://api.github.com/next>; rel="next"' } : {}),
+      ...(nextUrl ? { link: `<${nextUrl}>; rel="next"` } : {}),
     },
   });
 }
@@ -20,13 +20,13 @@ describe("GitHub grant metadata", () => {
         return json({ installations: secondPage
           ? [{ id: 102, repository_selection: "all", account: { login: "octocat" } }]
           : [{ id: 101, repository_selection: "selected", html_url: "https://github.com/settings/installations/101", account: { login: "paperclipai" } }],
-        }, !secondPage);
+        }, !secondPage ? "https://api.github.com/user/installations?per_page=100&page=2" : undefined);
       }
       if (url.pathname === "/user/installations/101/repositories") {
         return json({ total_count: 2, repositories: secondPage
           ? [{ id: 2, full_name: "paperclipai/b", private: true, description: "must-not-persist", clone_url: "must-not-persist" }]
           : [{ id: 1, full_name: "paperclipai/a", private: false }],
-        }, !secondPage);
+        }, !secondPage ? "https://api.github.com/user/installations/101/repositories?per_page=100&page=2" : undefined);
       }
       if (url.pathname === "/user/installations/102/repositories") {
         return json({ total_count: 1, repositories: [{ id: 3, full_name: "octocat/c" }] });
@@ -86,10 +86,11 @@ describe("GitHub grant metadata", () => {
     const request = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(json({ id: 42, login: "octocat" }))
       .mockResolvedValueOnce(json({ installations: [{ id: 101, repository_selection: "selected" }] }))
-      .mockResolvedValueOnce(json({ repositories: [{ id: 1, full_name: "octocat/a" }] }, true))
+      .mockResolvedValueOnce(json({ repositories: [{ id: 1, full_name: "octocat/a" }] }, "https://api.github.com/user/installations/101/repositories?per_page=100&page=2"))
       .mockResolvedValueOnce(new Response("Unavailable", { status: 503 }));
     await expect(loadGitHubGrantMetadata("ghu_secret", request)).rejects.toMatchObject({
       details: expect.objectContaining({ code: "github_access_check_failed" }),
     });
+    expect(request).toHaveBeenCalledTimes(4);
   });
 });

@@ -55,7 +55,7 @@ type TransitionInput = {
   monitorExplicitlyUpdated?: boolean;
 };
 
-type TransitionResult = {
+export type TransitionResult = {
   patch: Record<string, unknown>;
   decision?: Pick<IssueExecutionDecision, "stageId" | "stageType" | "outcome" | "body">;
   workflowControlledAssignment?: boolean;
@@ -1224,3 +1224,68 @@ export function applyIssueExecutionPolicyTransition(input: TransitionInput): Tra
 export function applyIssueMonitorPolicyTransition(input: TransitionInput): TransitionResult {
   return { patch: applyMonitorTransition(input, {}) };
 }
+
+/**
+ * MS1f. The transition is the final approval of a declared execution-policy
+ * stage: the decision is `approved` and the stage left the execution state
+ * `completed` (no further stage became pending), so the caller would set the
+ * Task `done`. Only such a transition can be held for plan verification.
+ */
+export function isFinalExecutionStageApproval(transition: TransitionResult): boolean {
+  if (transition.decision?.outcome !== "approved") return false;
+  return parseIssueExecutionState(transition.patch.executionState)?.status === COMPLETED_STATUS;
+}
+
+/**
+ * MS1f. The final stage approval on a Task that an unfinished orchestration
+ * plan covers completes the stage (its execution state and decision are kept
+ * as approved) but not the Task: the Task stays `in_review` and returns to the
+ * stage's return assignee (the plan Worker) for the plan's Human server
+ * verification. The assignment is workflow-controlled, as when a stage returns
+ * the Task for changes. Callers decide plan coverage and must not wake the
+ * restored assignee. Mutates and returns the transition.
+ */
+export function holdFinalExecutionStageApprovalForPlanVerification(transition: TransitionResult): TransitionResult {
+  if (!isFinalExecutionStageApproval(transition)) {
+    throw new Error("Only a final execution-policy stage approval can be held for plan verification");
+  }
+  const state = parseIssueExecutionState(transition.patch.executionState);
+  transition.patch.status = "in_review";
+  if (state?.returnAssignee) Object.assign(transition.patch, patchForPrincipal(state.returnAssignee));
+  transition.workflowControlledAssignment = true;
+  return transition;
+}
+
+// Negation/rejection markers that invalidate an otherwise approval-looking heading.
+// Match common phrasings ("NOT APPROVED", "Do not approve", "Not approving", "Changes requested",
+// "Rejected", "Denied", "Blocked") so a reviewer comment intending to reject cannot auto-complete
+// the issue. We rely on the heading being a single line, so testing the heading text alone is safe.
+const APPROVAL_NEGATION_REGEX =
+  /\b(?:NOT|REJECT(?:ED|ING|S)?|DENY|DENIED|DENYING|BLOCK(?:ED|ING|S)?|CHANGES?\s+REQUESTED)\b/i;
+
+export function isApprovalReviewComment(body: string) {
+  const normalized = body.replace(/\r\n?/g, "\n");
+  const headingMatch = normalized.match(/(?:^|\n)##\s*Review:\s*([^\n]*)/i);
+  if (headingMatch) {
+    const headingText = headingMatch[1];
+    if (
+      /\bAPPROVED\b/i.test(headingText) &&
+      !APPROVAL_NEGATION_REGEX.test(headingText)
+    ) {
+      return true;
+    }
+  }
+  // Require the `kind: review` and `decision: approved` lines to appear on truly consecutive
+  // lines (no blank-line separation) so prose like "the previous sprint decision: approved"
+  // can't combine with an unrelated `kind: review` line elsewhere in the body to trigger
+  // auto-approval. Use `[ \t]*` between the lines so `\s*` does not silently swallow a newline.
+  return (
+    /^[ \t]*kind[ \t]*:[ \t]*review[ \t]*\n[ \t]*decision[ \t]*:[ \t]*approved[ \t]*$/im.test(
+      normalized,
+    ) ||
+    /^[ \t]*decision[ \t]*:[ \t]*approved[ \t]*\n[ \t]*kind[ \t]*:[ \t]*review[ \t]*$/im.test(
+      normalized,
+    )
+  );
+}
+

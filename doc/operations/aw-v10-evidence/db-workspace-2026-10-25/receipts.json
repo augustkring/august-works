@@ -1,0 +1,26 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "3d3fb473623cebf2b819d3fb9baabe6e75a9835f",
+  "meaning": "Whole current database workspace183PASS/49files. Database sources unchanged throughout; independent backend edits overlapped. Not fullserver/workspace/V10 acceptance.",
+  "logs": [
+    {
+      "name": "v10-current-db-suite",
+      "exitCode": 0,
+      "rawSha256": "1a800d632545265253489b012f5dbc5cceb152557e91dd41bcc9e22418948409",
+      "sanitizedSha256": "1a800d632545265253489b012f5dbc5cceb152557e91dd41bcc9e22418948409",
+      "archiveSha256": "1dece0265ce3a012efa3df71b761f8e2b6737f3283c800f6d087ac81feaeb69f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  49 passed (49)",
+        "Tests  183 passed (183)",
+        "Duration  365.42s (transform 3.26s, setup 0ms, import 68.35s, tests 291.55s, environment 4ms)"
+      ]
+    }
+  ]
+}

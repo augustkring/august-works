@@ -5,17 +5,21 @@ import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { agents, companySkills, companySkillVersions, createDb, heartbeatRuns, issues, documents, documentRevisions, memoryJobs, principalPermissionGrants } from "@paperclipai/db";
+import { agents, companySkills, companySkillVersions, contextManifestMemoryRoots, createDb, heartbeatRuns, issues, documents, documentRevisions, memoryJobs, principalPermissionGrants } from "@paperclipai/db";
 import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY } from "@paperclipai/shared";
 import { resolveAuthoringProcedures } from "../services/agents/authoring-procedures.js";
 import { assertAuthoredAgentManifestCurrent, compileAuthoredAgentDefinition } from "../services/agents/authored-definition.js";
 import { agentService } from "../services/agents.js";
+import { companySkillService } from "../services/company-skills.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
+import { initializeRunIdentity } from "../services/run-identity.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../services/provider-capabilities.js";
 import { hashContextPolicySnapshot } from "../services/context/context-manifest.js";
-import { buildNativeRuntimeContext, buildRetainedNativeRuntimeContext, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
+import { buildNativeRuntimeContext, buildRetainedNativeRuntimeContext, readNativeRuntimeAssetText, type NativeRuntimeAuthoredSourceCapture } from "../services/native-runtime/runtime-context.js";
 import { nativeRuntimeAssetsRoot } from "../services/native-runtime/runtime-asset-retention.js";
 import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook, bindAuthoringPlaybook, grantAuthoringPlaybookReadFixture } from "./helpers/authoring-procedures.js";
 import { playbookService } from "../services/playbooks.js";
@@ -73,8 +77,15 @@ const support = await getEmbeddedPostgresTestSupport();
       { authoredPublication: definition, recordRevision: { id: definition.revisionId, source: "agent_authoring_publish", createdByUserId: f.userId } });
     const agent = (await agentService(db).update(f.presence.id, { status: "idle", pauseReason: null }))!;
     const [task] = await db.insert(issues).values({ companyId: f.home, title: "Draft the internal welcome",
-      description: "Only current approved Task input", assigneeAgentId: agent.id }).returning();
-    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: agent.id, responsibleUserId: f.userId, status: "running" }).returning();
+      description: "Only current approved Task input", assigneeAgentId: agent.id,
+      responsibleUserId: f.userId, createdByUserId: f.userId }).returning();
+    const [createdRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: agent.id,
+      responsibleUserId: f.userId, status: "running", runtimeMode: "native", scopeKind: "issue",
+      issueId: task!.id, nativeIssueId: task!.id, contextSnapshot: { issueId: task!.id } }).returning();
+    await db.update(issues).set({ executionRunId: createdRun!.id }).where(eq(issues.id, task!.id));
+    await initializeRunIdentity(db, { companyId: f.home, runId: createdRun!.id, issueId: task!.id,
+      responsibleUserId: f.userId, cause: "dispatch" });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, createdRun!.id));
     return { f, pins, playbook, knowledge, preference, procedures, definition, agent, config, run: run!, task: task!, execution: { ...input(f), runId: run!.id, issueId: task!.id, query: task!.title } };
   }
   async function replaceVersion(f: Awaited<ReturnType<typeof installed>>) {
@@ -94,13 +105,25 @@ const support = await getEmbeddedPostgresTestSupport();
   });
   it("uses all default required procedures in a pinned Task-only runtime without executable capabilities", async () => {
     const f = await installed(), prepared = await agentRuntimeFabricService(db).prepare(f.execution);
-    expect(prepared!.manifest.skills.map(pin => pin.versionId).sort()).toEqual(f.pins.map(pin => pin.versionId).sort());
-    expect(prepared!.manifest.skills.every(pin => pin.selection === "required" && pin.loadPoint === "always")).toBe(true);
+    const platform = prepared!.manifest.skills.find(pin => pin.key === "blentera-platform")!;
+    expect(platform).toMatchObject({ selection: "required", loadPoint: "task_relevant" });
+    const authoredSkills = prepared!.manifest.skills.filter(pin => pin.key !== "blentera-platform");
+    expect(authoredSkills.map(pin => pin.versionId).sort()).toEqual(f.pins.map(pin => pin.versionId).sort());
+    expect(authoredSkills.every(pin => pin.selection === "required" && pin.loadPoint === "always")).toBe(true);
     expect(prepared!.manifest.rolePack?.systemKey).toBe("ops");
     expect(prepared!.manifest.playbooks).toEqual([]); expect(prepared!.manifest.capabilities).toEqual([]);
     expect(prepared!.contextMarkdown).toContain(f.task.description);
-    const context = await buildNativeRuntimeContext({ db, agent: f.agent, runId: f.run.id, runtimeConfig: f.config, runtimeSkillEntries: [] });
-    expect(context.mcp.bindingId).toBeNull(); expect(context.skills).toHaveLength(f.pins.length);
+    await preparePlatformSkillAdmission(db, { companyId: f.f.home, agentId: f.agent.id, runId: f.run.id,
+      responsibleUserId: f.f.userId, requireExisting: false }, blenteraPlatformContractHashes());
+    const runtimeSkillEntries = await companySkillService(db).listRuntimeSkillEntriesForCurrentExecution(f.f.home,
+      { type: "agent", source: "none", companyId: f.f.home, agentId: f.agent.id,
+        runId: f.run.id, onBehalfOfUserId: f.f.userId }, f.run.id);
+    const context = await buildNativeRuntimeContext({ db, agent: f.agent, runId: f.run.id, runtimeConfig: f.config, runtimeSkillEntries });
+    expect(context.mcp.bindingId).toBeNull(); expect(context.skills).toHaveLength(f.pins.length + 1);
+    const platformAsset = context.skills.find(skill => skill.versionId === platform.versionId)!;
+    const platformFiles = await readNativeRuntimeAssetText(platformAsset.bundle, 256000, { companyId: f.f.home, runId: f.run.id });
+    expect(platformFiles).toHaveLength(14);
+    expect(platformFiles.some(file => file.path === "SKILL.md")).toBe(true);
     for (const pin of f.pins) {
       const asset = context.skills.find(skill => skill.versionId === pin.versionId)!;
       expect(await readNativeRuntimeAssetText(asset.bundle, 32000, { companyId: f.f.home, runId: f.run.id }))
@@ -173,6 +196,76 @@ const support = await getEmbeddedPostgresTestSupport();
     const loaded = await agentRuntimeFabricService(db).loadPlaybook({ type: "agent", source: "agent_jwt", companyId: f.f.home,
       agentId: f.agent.id, runId: f.run.id, onBehalfOfUserId: f.f.userId, ignoreInstanceAdmin: true }, f.f.home, f.run.id, f.playbook!.playbookId);
     expect(loaded.markdown).toBe(f.playbook!.body);
+    const [runAfterRead] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+    expect(runAfterRead!.runnerProfileJson).toMatchObject({ nativeRuntimeProcedureReadObservations: [
+      { kind: "playbook_revision", resultDigest: expect.stringMatching(/^[a-f0-9]{64}$/), sourceQualified: false, source: null },
+    ] });
+  });
+  it("does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting", async () => {
+    const f = await installed(true);
+    await agentRuntimeFabricService(db).prepare(f.execution);
+    let release!: () => void;
+    let acquired!: () => void;
+    const ready = new Promise<void>(resolve => { acquired = resolve; });
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const holder = db.transaction(async tx => {
+      await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id)).for("update");
+      acquired();
+      await blocked;
+      await tx.update(heartbeatRuns).set({ status: "failed", responsibleUserId: null }).where(eq(heartbeatRuns.id, f.run.id));
+    });
+    await ready;
+    let settledState = "pending";
+    const loading = agentRuntimeFabricService(db).loadPlaybook({ type: "agent", source: "agent_jwt", companyId: f.f.home,
+      agentId: f.agent.id, runId: f.run.id, onBehalfOfUserId: f.f.userId, ignoreInstanceAdmin: true },
+      f.f.home, f.run.id, f.playbook!.playbookId).then(() => { settledState = "resolved"; return true; }, error => {
+        settledState = `rejected:${error instanceof Error ? error.message : String(error)}`; return false;
+      });
+    try {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(settledState).toBe("pending");
+    } finally {
+      release();
+      await holder;
+    }
+    expect(await loading).toBe(false);
+    const [withdrawn] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+    expect(withdrawn!.responsibleUserId).toBeNull();
+    expect(withdrawn!.runnerProfileJson ?? {}).not.toHaveProperty("nativeRuntimeProcedureReadObservations");
+  });
+  it("captures exact authored sources and retained Memory roots for the combined runtime input", async () => {
+    const f = await installed(true, true, true);
+    const captures: NativeRuntimeAuthoredSourceCapture[] = [];
+    const runtime = await buildRetainedNativeRuntimeContext({ db, agent: f.agent, runId: f.run.id,
+      runtimeConfig: f.config, runtimeSkillEntries: [], onAuthoredSourceCapture: value => { captures.push(value); } });
+    expect(runtime.instructions.bundle.digest).toMatch(/^[a-f0-9]{64}$/);
+    const files = await readNativeRuntimeAssetText(runtime.instructions.bundle, 128000, { companyId: f.f.home, runId: f.run.id });
+    const entry = files.find(file => file.path === runtime.instructions.entryPath)!.text;
+    for (const body of [f.preference!.body, f.knowledge!.body, f.playbook!.body]) expect(entry).toContain(body);
+    expect(captures).toHaveLength(1);
+    const capture = captures[0]!;
+    expect(capture).toEqual({
+      inputs: [
+        { kind: "authored_definition", agentId: f.agent.id, revisionId: f.definition.revisionId,
+          definitionHash: f.definition.definitionHash, procedureSnapshotHash: f.procedures.hash },
+        ...f.procedures.knowledge.map(pin => ({ kind: "foundation_revision", foundationDocumentId: pin.foundationDocumentId,
+          documentId: pin.documentId, revisionId: pin.revisionId, contentHash: pin.bodyHash })),
+        ...f.procedures.playbooks.map(pin => ({ kind: "playbook_revision", playbookId: pin.playbookId,
+          revisionId: pin.revisionId, contentHash: pin.bodyHash })),
+        ...f.procedures.skills.map(pin => ({ kind: "skill_version", skillId: pin.skillId,
+          versionId: pin.versionId, skillKey: pin.key, contentHash: pin.bodyHash })),
+        ...f.procedures.memory.map(pin => ({ kind: "memory", memoryId: pin.recordId,
+          sourceVersion: pin.version, contentHash: pin.bodyHash })),
+        { kind: "runtime_instructions", agentId: f.agent.id,
+          bundleDigest: runtime.instructions.bundle.digest, manifestDigest: runtime.instructions.bundle.manifestDigest },
+        ...runtime.skills.map(skill => ({ kind: "runtime_skill", key: skill.key, versionId: skill.versionId,
+          bundleDigest: skill.bundle.digest, manifestDigest: skill.bundle.manifestDigest })),
+      ],
+      contextManifests: [{ companyId: f.f.home, contextManifestId: expect.any(String) }],
+    });
+    const [memoryRoot] = await db.select({ memoryRecordId: contextManifestMemoryRoots.memoryRecordId })
+      .from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId, capture.contextManifests[0]!.contextManifestId));
+    expect(memoryRoot?.memoryRecordId).toBe(f.preference!.id);
   });
   it("keeps draft Playbook edits outside the pin and refuses replacement of the approved revision", async () => {
     const f = await installed(true), service = playbookService(db);

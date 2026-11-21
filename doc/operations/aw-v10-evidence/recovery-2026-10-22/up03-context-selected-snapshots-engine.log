@@ -1,0 +1,154 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[07:25:25] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"7223a86f-5c7d-4024-90b3-840c2e7e2662","actorAgentId":"15f417ad-13af-478d-b09d-3b687ac160aa","responsibleUserId":"user-7223a86f-5c7d-4024-90b3-840c2e7e2662"}[39m
+ ❯ |@paperclipai/server| src/services/context/context-engine-integration.test.ts (7 tests | 7 failed) 14035ms
+     × executes Foundation and Memory query nodes with approved and accepted sources only 1125ms
+     × assembles authorized approved Foundation and task context into a durable manifest 947ms
+     × retrieves only issue-authorized synced GitHub evidence into the governed Context packet 613ms
+     × keeps Memory hydration disabled until Memory flags are enabled 407ms
+     × hydrates only eligible relevant shared and owner-private Memory into Context 578ms
+     × omits Foundation without foundation:read but still admits authorized task context 407ms
+     × enforces the represented human's source permission for V5 even in shadow mode 372ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > executes Foundation and Memory query nodes with approved and accepted sources only
+AssertionError: expected 'failed' to be 'succeeded' // Object.is equality
+
+Expected: "succeeded"
+Received: "failed"
+
+ ❯ src/services/context/context-engine-integration.test.ts:265:31
+    263|     const executor = workflowExecutorService(db);
+    264|     const result = await executor.startManualRun(seeded.companyId, cre…
+    265|     expect(result.run.status).toBe("succeeded");
+       |                               ^
+    266|     const foundation = result.steps.find((step) => step.nodeId === "fo…
+    267|     expect(foundation.sections).toMatchObject([{ foundationDocumentId:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > assembles authorized approved Foundation and task context into a durable manifest
+Error: Context requires its actual accountable run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:191:17
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withProviderDeadline src/services/context/context-engine.ts:151:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:181:12
+ ❯ Object.assemble src/services/context/context-engine.ts:736:30
+ ❯ src/services/context/context-engine-integration.test.ts:316:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > retrieves only issue-authorized synced GitHub evidence into the governed Context packet
+Error: Context requires its actual accountable run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:191:17
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withProviderDeadline src/services/context/context-engine.ts:151:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:181:12
+ ❯ Object.assemble src/services/context/context-engine.ts:736:30
+ ❯ src/services/context/context-engine-integration.test.ts:458:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps Memory hydration disabled until Memory flags are enabled
+Error: Context requires its actual accountable run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:191:17
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withProviderDeadline src/services/context/context-engine.ts:151:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:181:12
+ ❯ Object.assemble src/services/context/context-engine.ts:736:30
+ ❯ src/services/context/context-engine-integration.test.ts:517:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > hydrates only eligible relevant shared and owner-private Memory into Context
+Error: Context requires its actual accountable run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:191:17
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withProviderDeadline src/services/context/context-engine.ts:151:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:181:12
+ ❯ Object.assemble src/services/context/context-engine.ts:736:30
+ ❯ src/services/context/context-engine-integration.test.ts:605:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > omits Foundation without foundation:read but still admits authorized task context
+Error: Context requires its actual accountable run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:191:17
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withProviderDeadline src/services/context/context-engine.ts:151:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:181:12
+ ❯ Object.assemble src/services/context/context-engine.ts:736:30
+ ❯ src/services/context/context-engine-integration.test.ts:686:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > enforces the represented human's source permission for V5 even in shadow mode
+Error: Context requires its actual accountable run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:191:17
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withProviderDeadline src/services/context/context-engine.ts:151:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:181:12
+ ❯ Object.assemble src/services/context/context-engine.ts:736:30
+ ❯ src/services/context/context-engine-integration.test.ts:714:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed (7)
+   Start at  07:24:12
+   Duration  73.66s (transform 40.42s, setup 261ms, import 58.51s, tests 14.03s, environment 1ms)
+

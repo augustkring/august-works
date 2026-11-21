@@ -9,6 +9,9 @@ import {
   bodyOf,
   type Seed,
 } from "./chat-adapters-ui.shared";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 
 /**
  * Native chat-connector messaging coverage: destination partial updates,

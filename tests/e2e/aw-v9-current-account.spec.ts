@@ -1,4 +1,7 @@
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(
     true,
@@ -99,7 +102,7 @@ test("Home hides private results during session revalidation and requires a new 
       expect(route.request().method()).toBe("GET");
       expect(
         new URL(route.request().url()).searchParams.get("expectedUserId"),
-      ).toBe("local-board");
+      ).toBe(session.user.id);
       reads++;
       if (holdRead)
         await new Promise<void>((resolve) => {
@@ -230,12 +233,12 @@ test("Feedback hides a draft during revalidation and reconciles a late Native re
     await expect(dialog.getByRole("status")).toContainText(receipt!.feedbackId);
     await expect(dialog.getByRole("status")).toBeFocused();
     expect(writes).toBe(1);expect(reads).toBe(2);
-    const original = await json(await request.get(`${base}/customer-feedback/${receipt!.id}?expectedUserId=local-board`));
+    const original = await json(await request.get(`${base}/customer-feedback/${receipt!.id}?expectedUserId=${encodeURIComponent(session.user.id)}`));
     expect(original.body).toBe("PRIVATE-BROWSER-FEEDBACK-DRAFT");
-    expect(await json(await request.get(`${base}/customer-feedback?expectedUserId=local-board`))).toHaveLength(1);
+    expect(await json(await request.get(`${base}/customer-feedback?expectedUserId=${encodeURIComponent(session.user.id)}`))).toHaveLength(1);
   } finally {
     holdSession = false;releaseSession?.();releaseAck?.();
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(request, company.id));
     await request.patch("/api/instance/settings/experimental", { data: flags });
   }
 });

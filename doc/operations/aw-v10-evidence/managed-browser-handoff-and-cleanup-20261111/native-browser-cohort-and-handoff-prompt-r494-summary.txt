@@ -1,0 +1,1 @@
+Seven selected prompt/cohort checks passed; 46 unselected. This does not qualify actual SDK, browser or a PostgreSQL instance.

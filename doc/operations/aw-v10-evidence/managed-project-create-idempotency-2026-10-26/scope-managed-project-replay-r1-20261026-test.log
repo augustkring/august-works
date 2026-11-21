@@ -1,0 +1,16 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts > managed OpenCode private Project creation > creates a private Project with a local workspace, then consumes that exact result on the next provider request
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validFrom/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validFrom/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validUntil/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validUntil/anyOf/0"
+
+ ✓ src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts > managed OpenCode private Project creation > creates a private Project with a local workspace, then consumes that exact result on the next provider request 26635ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  23:05:56
+   Duration  44.90s (transform 10.35s, setup 72ms, import 14.03s, tests 30.68s, environment 0ms)
+

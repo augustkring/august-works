@@ -1,5 +1,5 @@
 import { normalizePaperclipRunnerAdapterConfig } from "@paperclipai/adapter-utils/server-utils";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -81,6 +81,9 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(run).toBeDefined();
     const [reservation] = await db.select().from(orchestrationModelReservations).where(and(eq(orchestrationModelReservations.companyId, cid), eq(orchestrationModelReservations.planId, String(run!.contextSnapshot?.providerConformancePlanId)), eq(orchestrationModelReservations.status, "dispatched")));
     expect(reservation).toMatchObject({ purpose: "provider_conformance", maximumMinor: 3, workerId: null, workerAttemptId: null });
+    expect(reservation?.providerWireReceipt).toEqual({ version: 1, reservationId: reservation?.id,
+      requestHash: reservation?.requestHash, method: "POST", endpoint: "https://api.anthropic.com/v1/messages",
+      bodySha256: createHash("sha256").update(String(init.body), "utf8").digest("hex"), callId: null });
     const [event] = await db.select().from(activityLog).where(and(eq(activityLog.companyId, cid), eq(activityLog.runId, run!.id),
       eq(activityLog.action, "provider.draft_conformance_dispatch_started")));
     expect(event?.details).toMatchObject({ reservationId: reservation!.id, source: "native-draft-conformance", providerStreaming: false });

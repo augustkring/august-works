@@ -1,0 +1,17 @@
+2026-10-22T20:31:06Z
+fd78bdd0062ba35dd24edeb5cd97ec43ff5f7e0ef8aa2afec8290fa187095ccf  packages/shared/src/validators/issue.ts
+3d726ff7e0dfdfcde73f985c7037f26f59c6ce5310ac26162017f7bb23330ea2  packages/shared/src/validators/project.ts
+7fc035ba7489fa96631f0f17510685fbf04562445eb644437ad3587699acb917  packages/shared/src/validators/private-access.test.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  20:31:08
+   Duration  1.55s (transform 420ms, setup 0ms, import 1.07s, tests 84ms, environment 0ms)
+
+VITEST_EXIT=0

@@ -1,0 +1,115 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-0","reader":"alice","prepare":false,"result":true,"elapsedMs":126.89851199999976,"plans":[],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-0","reader":"bob","prepare":false,"result":false,"elapsedMs":122.80098899999939,"plans":[],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-0","reader":"alice","prepare":true,"result":true,"elapsedMs":127.63908599999922,"plans":[{"name":"t0vcn031wwd2","generic_plans":"0","custom_plans":"1"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-0","reader":"bob","prepare":true,"result":false,"elapsedMs":92.19743299999755,"plans":[{"name":"t0vcn031wwd2","generic_plans":"0","custom_plans":"2"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-1","reader":"bob","prepare":true,"result":false,"elapsedMs":93.25468100000217,"plans":[{"name":"t0vcn031wwd2","generic_plans":"0","custom_plans":"3"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-1","reader":"alice","prepare":true,"result":true,"elapsedMs":92.8193829999982,"plans":[{"name":"t0vcn031wwd2","generic_plans":"0","custom_plans":"4"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-1","reader":"bob","prepare":false,"result":false,"elapsedMs":108.91406099999949,"plans":[{"name":"t0vcn031wwd2","generic_plans":"0","custom_plans":"4"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-1","reader":"alice","prepare":false,"result":true,"elapsedMs":108.25039900000047,"plans":[{"name":"t0vcn031wwd2","generic_plans":"0","custom_plans":"4"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-2","reader":"alice","prepare":false,"result":true,"elapsedMs":108.60195000000022,"plans":[{"name":"t0vcn031wwd2","generic_plans":"0","custom_plans":"4"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-2","reader":"bob","prepare":false,"result":false,"elapsedMs":106.17089900000065,"plans":[{"name":"t0vcn031wwd2","generic_plans":"0","custom_plans":"4"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-2","reader":"alice","prepare":true,"result":true,"elapsedMs":92.4079219999985,"plans":[{"name":"t0vcn031wwd2","generic_plans":"0","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-2","reader":"bob","prepare":true,"result":false,"elapsedMs":93.73477600000115,"plans":[{"name":"t0vcn031wwd2","generic_plans":"1","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-3","reader":"bob","prepare":true,"result":false,"elapsedMs":5.988094000000274,"plans":[{"name":"t0vcn031wwd2","generic_plans":"2","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-3","reader":"alice","prepare":true,"result":true,"elapsedMs":5.518024000000878,"plans":[{"name":"t0vcn031wwd2","generic_plans":"3","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-3","reader":"bob","prepare":false,"result":false,"elapsedMs":87.3441840000014,"plans":[{"name":"t0vcn031wwd2","generic_plans":"3","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-3","reader":"alice","prepare":false,"result":true,"elapsedMs":91.783198000001,"plans":[{"name":"t0vcn031wwd2","generic_plans":"3","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-4","reader":"alice","prepare":false,"result":true,"elapsedMs":90.6395620000003,"plans":[{"name":"t0vcn031wwd2","generic_plans":"3","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-4","reader":"bob","prepare":false,"result":false,"elapsedMs":86.86022400000002,"plans":[{"name":"t0vcn031wwd2","generic_plans":"3","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-4","reader":"alice","prepare":true,"result":true,"elapsedMs":6.105870999999752,"plans":[{"name":"t0vcn031wwd2","generic_plans":"4","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-4","reader":"bob","prepare":true,"result":false,"elapsedMs":5.5282289999995555,"plans":[{"name":"t0vcn031wwd2","generic_plans":"5","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-5","reader":"bob","prepare":true,"result":false,"elapsedMs":5.56505499999912,"plans":[{"name":"t0vcn031wwd2","generic_plans":"6","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-5","reader":"alice","prepare":true,"result":true,"elapsedMs":5.265301999999792,"plans":[{"name":"t0vcn031wwd2","generic_plans":"7","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-5","reader":"bob","prepare":false,"result":false,"elapsedMs":86.23819400000139,"plans":[{"name":"t0vcn031wwd2","generic_plans":"7","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-5","reader":"alice","prepare":false,"result":true,"elapsedMs":88.70333599999867,"plans":[{"name":"t0vcn031wwd2","generic_plans":"7","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-6","reader":"alice","prepare":false,"result":true,"elapsedMs":86.78499999999985,"plans":[{"name":"t0vcn031wwd2","generic_plans":"7","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-6","reader":"bob","prepare":false,"result":false,"elapsedMs":87.27769400000034,"plans":[{"name":"t0vcn031wwd2","generic_plans":"7","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-6","reader":"alice","prepare":true,"result":true,"elapsedMs":7.089517000000342,"plans":[{"name":"t0vcn031wwd2","generic_plans":"8","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"auto-6","reader":"bob","prepare":true,"result":false,"elapsedMs":6.571524999999383,"plans":[{"name":"t0vcn031wwd2","generic_plans":"9","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"alice-membership-revoked","reader":"alice","prepare":false,"result":false,"elapsedMs":85.4713159999992,"plans":[{"name":"t0vcn031wwd2","generic_plans":"9","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"alice-membership-revoked","reader":"bob","prepare":false,"result":false,"elapsedMs":86.34472499999902,"plans":[{"name":"t0vcn031wwd2","generic_plans":"9","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"alice-membership-revoked","reader":"alice","prepare":true,"result":false,"elapsedMs":5.955364000001282,"plans":[{"name":"t0vcn031wwd2","generic_plans":"10","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"alice-membership-revoked","reader":"bob","prepare":true,"result":false,"elapsedMs":5.997246999999334,"plans":[{"name":"t0vcn031wwd2","generic_plans":"11","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"alice-membership-restored","reader":"alice","prepare":true,"result":true,"elapsedMs":5.696122000001196,"plans":[{"name":"t0vcn031wwd2","generic_plans":"12","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_OBSERVATION {"phase":"alice-membership-restored","reader":"alice","prepare":false,"result":true,"elapsedMs":86.0763509999997,"plans":[{"name":"t0vcn031wwd2","generic_plans":"12","custom_plans":"5"}],"sqlLength":193350,"parameterCount":27,"queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf"}
+
+stdout | src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results
+PREPARED_SETTINGS_RESTORED {"mode":"auto"}
+
+ ✓ src/__tests__/planner-prepared-probe.test.ts > measures prepared plan reuse without caching reader authorization results 6703ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:34:24
+   Duration  21.56s (transform 10.38s, setup 83ms, import 14.64s, tests 6.70s, environment 0ms)
+

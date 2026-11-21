@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, like, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { companies, documents, externalObjectMentions, externalObjects, issueComments, issueDocuments, issues, plugins } from "@paperclipai/db";
 import {
@@ -94,6 +94,12 @@ const DEFAULT_REFRESH_TTL_SECONDS = 300;
 const DEFAULT_RETRY_AFTER_SECONDS = 300;
 const DEFAULT_REFRESH_LEASE_SECONDS = 300;
 const REFRESH_LEASE_RENEW_INTERVAL_MS = 60_000;
+
+function githubObjectVersionMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 function sourceWhere(input: ExternalObjectSourceContext) {
   const conditions = [
@@ -848,6 +854,26 @@ export function externalObjectService(
     }
 
     const snapshot = result.snapshot;
+    const githubVersionedObject = object.providerKey === "github" &&
+      (object.objectType === "issue" || object.objectType === "pull_request");
+    const originalGithubVersion = githubVersionedObject ? githubObjectVersionMs(object.remoteVersion) : null;
+    const responseGithubVersion = githubVersionedObject ? githubObjectVersionMs(snapshot.remoteVersion) : null;
+    const canonicalNotFound = githubVersionedObject && snapshot.statusKey === "not_found";
+    if (githubVersionedObject && !canonicalNotFound && (responseGithubVersion === null ||
+      originalGithubVersion !== null && responseGithubVersion < originalGithubVersion)) {
+      const [deferred] = await db.update(externalObjects).set({
+        liveness: "stale",
+        nextRefreshAt: addSeconds(now, DEFAULT_RETRY_AFTER_SECONDS),
+        refreshStartedAt: null,
+        refreshToken: null,
+        updatedAt: now,
+      }).where(and(
+        refreshOwnerWhere(object, refreshToken),
+        sql`${externalObjects.remoteVersion} IS NOT DISTINCT FROM ${object.remoteVersion}`,
+      )).returning();
+      if (!deferred) return refreshSupersededResult(object, now);
+      return { object: toObjectPayload(deferred, now), refreshed: false, reason: "stale_provider_snapshot" as const };
+    }
     const patch = {
       displayKey: snapshot.displayKey ?? object.displayKey,
       iconKey: snapshot.iconKey ?? object.iconKey,
@@ -877,7 +903,13 @@ export function externalObjectService(
           ...patch,
           lastChangedAt: objectChanged(object, { ...object, ...patch }) ? now : object.lastChangedAt,
         })
-      .where(refreshOwnerWhere(object, refreshToken))
+      .where(and(
+        refreshOwnerWhere(object, refreshToken),
+        // The object version is part of the refresh claim's CAS. A GitHub
+        // webhook may commit a newer source version while this API request is
+        // in flight; its response must not overwrite that newer event.
+        sql`${externalObjects.remoteVersion} IS NOT DISTINCT FROM ${object.remoteVersion}`,
+      ))
       .returning();
     if (!updated) return refreshSupersededResult(object, now);
     const next = updated ?? object;
@@ -1023,6 +1055,8 @@ export function externalObjectService(
   }
 
   async function refreshDueObjectsUnchecked(companyId: string, limit = 50, now = new Date()) {
+    const requestedLimit = Number.isSafeInteger(limit) && limit > 0 ? limit : 50;
+    const safeLimit = Math.min(requestedLimit, 100);
     const staleRefreshStartedBefore = new Date(now.getTime() - DEFAULT_REFRESH_LEASE_SECONDS * 1000);
     const due = await db
       .select({ id: externalObjects.id })
@@ -1030,7 +1064,14 @@ export function externalObjectService(
       .where(
         and(
           eq(externalObjects.companyId, companyId),
-          eq(externalObjects.isTerminal, false),
+          or(
+            eq(externalObjects.isTerminal, false),
+            and(
+              eq(externalObjects.providerKey, "github"),
+              inArray(externalObjects.objectType, ["issue", "pull_request"]),
+              like(externalObjects.statusKey, "closed%"),
+            ),
+          ),
           lte(externalObjects.nextRefreshAt, now),
           or(
             isNull(externalObjects.refreshStartedAt),
@@ -1038,7 +1079,8 @@ export function externalObjectService(
           ),
         ),
       )
-      .limit(limit);
+      .orderBy(asc(externalObjects.nextRefreshAt), asc(externalObjects.id))
+      .limit(safeLimit);
     const results = [];
     for (const row of due) {
       results.push(await refreshObject(row.id, {

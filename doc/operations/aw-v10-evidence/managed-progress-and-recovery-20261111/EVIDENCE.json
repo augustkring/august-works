@@ -1,0 +1,71 @@
+{
+  "schema": "blentera.software-evidence.v1",
+  "preparedAtUtc": "2026-11-11T09:31:41.247578+00:00",
+  "sourceParent": "57909d18e090df7295fb0ab64365a5cda3f666e4",
+  "sourceBase": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "runs": [
+    {
+      "label": "v5-historical-manifest-key-r456",
+      "scope": "One historical V5 migration fixture with actual PostgreSQL; restores the current manifest candidate key before retained foreign keys. The original receipt has an incorrect cwd label, explicitly corrected by the retained addendum.",
+      "exit": 0,
+      "seconds": 10.225864500971511
+    },
+    {
+      "label": "native-progress-authority-regression-r458",
+      "scope": "Two selected actual PostgreSQL authority cases: durable idempotent progress and Ask Human-question advertisement; 43 unselected cases.",
+      "exit": 0,
+      "seconds": 23.567552235006588
+    },
+    {
+      "label": "native-unknown-cleanup-recovery-owner-r461",
+      "scope": "Six selected actual PostgreSQL queue cases: preserve execution/checkout pointers and finalizer claim, record one recovery action, and reject blocking foreign/newer owners; 80 unselected cases.",
+      "exit": 0,
+      "seconds": 22.616512595006498
+    },
+    {
+      "label": "native-progress-catalog-checks-r455",
+      "scope": "89 Runner capability/protocol tests and the two official generated-contract checks.",
+      "exit": 0,
+      "seconds": 2.4159186690230854
+    },
+    {
+      "label": "native-ci-wiring-and-catalog-r460",
+      "scope": "51 Node routing, browser-shard and injected-I/O observer checks plus 17 Runner semantic-catalog/reconciliation tests. This does not execute the privileged installer.",
+      "exit": 0,
+      "seconds": 25.515589752991218
+    },
+    {
+      "label": "native-progress-owner-copyback-typecheck-r463",
+      "scope": "Full server TypeScript check of the frozen source checkpoint, including the controlled copy-back regression.",
+      "exit": 0,
+      "seconds": 102.66329959500581
+    },
+    {
+      "label": "workspace-build-current-r464",
+      "scope": "Required root pnpm build, including workspace-link preflight and the normal recursive workspace build.",
+      "exit": 0,
+      "seconds": 187.8866266789846
+    },
+    {
+      "label": "native-progress-typecheck-r452",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "A result digest was referenced before declaration; corrected to the existing computed digest."
+    },
+    {
+      "label": "native-progress-catalog-checks-r454",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "31 Node checks passed; Runner tests did not start because of a doubled config path. Corrected in r455."
+    },
+    {
+      "label": "native-unknown-cleanup-recovery-owner-r459",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Three preservation assertions exposed the canonical blocked-status update clearing execution ownership; corrected before r461."
+    },
+    {
+      "label": "native-progress-owner-copyback-typecheck-r462",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Missing fixture import and out-of-scope workspace identifier; corrected to the exact prepared workspace reference before r463."
+    }
+  ],
+  "boundary": "Every receipt qualifies its exact source hashes only. No actual SDK-positive managed progress, copy-back, browser, hosted provider, privileged CI helper execution, production Host, deployed migration, representative Human, overall V10, release or merge readiness is established here."
+}

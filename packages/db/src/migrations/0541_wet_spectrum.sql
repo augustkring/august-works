@@ -1,0 +1,1 @@
+ALTER TABLE "company_user_sidebar_preferences" ADD COLUMN "preferred_agent_id" uuid;

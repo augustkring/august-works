@@ -1,0 +1,73 @@
+diff --git a/server/src/services/authorization.ts b/server/src/services/authorization.ts
+index c34192223..947208a73 100644
+--- a/server/src/services/authorization.ts
++++ b/server/src/services/authorization.ts
+@@ -584,7 +584,7 @@ export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: Auth
+ }
+ 
+ /** One native Task/Project source graph; this never authorizes a company action. */
+-function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
++function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQL, company: SQL, actor: AuthorizationActor, policyOnly = false): SQL<boolean> {
+   const contextRoots = sql`
+     select 'issue'::text as kind,case when c.agent_id=r.agent_id then c.issue_id end as id
+       where c.issue_id is not null or c.agent_id<>r.agent_id
+@@ -603,15 +603,15 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQ
+         union all select 'project',i.project_id from issues i
+           where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.project_id is not null
+         union all select 'run',case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_run_id::uuid end
+-          from issues i where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.origin_run_id is not null
++          from issues i where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.origin_run_id is not null and ${!policyOnly}
+             and not exists(select 1 from ${heartbeatRuns} own_run where own_run.company_id=i.company_id
+               and own_run.id::text=i.origin_run_id and coalesce(own_run.issue_id,own_run.native_issue_id)=i.id)
+         union all select 'issue',source.id from projects p cross join lateral unnest(p.source_issue_ids) source(id)
+-          where n.kind='project' and p.id=n.id and p.company_id=${company}
++          where n.kind='project' and p.id=n.id and p.company_id=${company} and ${!policyOnly}
+         union all select 'project',source.id from projects p cross join lateral unnest(p.source_project_ids) source(id)
+-          where n.kind='project' and p.id=n.id and p.company_id=${company}
++          where n.kind='project' and p.id=n.id and p.company_id=${company} and ${!policyOnly}
+         union all select s.source_kind,s.source_id from ${issuePrivacySources} s
+-          where n.kind='issue' and s.issue_id=n.id and s.company_id=${company}
++          where n.kind='issue' and s.issue_id=n.id and s.company_id=${company} and ${!policyOnly}
+         union all select 'issue',ref.id from ${heartbeatRuns} r cross join lateral (
+           select r.issue_id as id where r.issue_id is not null
+           union all select r.native_issue_id where r.native_issue_id is not null
+@@ -625,7 +625,7 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQ
+         union all select root.kind,root.id from ${heartbeatRuns} r
+           join context_manifests c on c.company_id=r.company_id and c.run_id=r.id
+           cross join lateral (${contextRoots}) root
+-          where r.company_id=${company} and ((n.kind='run' and r.id=n.id)
++          where ${!policyOnly} and r.company_id=${company} and ((n.kind='run' and r.id=n.id)
+             or (n.kind='issue' and coalesce(r.issue_id,r.native_issue_id)=n.id
+               and (root.id is null or root.kind<>'issue' or root.id<>n.id)))
+ `;
+@@ -673,7 +673,7 @@ export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor:
+ 
+ /** Original persisted run binding, never caller-supplied scope or context facts.
+  * This narrows payload visibility; company/action and V8 copy checks still apply. */
+-export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string }): Promise<boolean> {
++export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string }, policyOnly = false): Promise<boolean> {
+   const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId))).limit(1);
+   if (!run) return false;
+   const context = run.contextSnapshot ?? {};
+@@ -690,7 +690,7 @@ export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, ac
+   } else if (run.scopeKind !== "issue" || !refs.size) return false;
+   return (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+     eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId),
+-    taskSourcePrivacySqlCondition("run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor),
++    taskSourcePrivacySqlCondition("run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor, policyOnly),
+   )).limit(1)).length > 0;
+ }
+ 
+diff --git a/server/src/services/memory/memory-privacy.ts b/server/src/services/memory/memory-privacy.ts
+index 43ed118a5..dc80fa166 100644
+--- a/server/src/services/memory/memory-privacy.ts
++++ b/server/src/services/memory/memory-privacy.ts
+@@ -180,7 +180,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
+     return visited.size+runs.size+tasks.size+projectIds.size+revisions.size<=256;
+   };
+   if (!await visit(recordId)) return false;
+-  for (const id of runs) if (performance.now()>deadline || !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) return false;
++  for (const id of runs) if (performance.now()>deadline || !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id},true)) return false;
+   for (const id of tasks) if (performance.now()>deadline || !await canActorReadIssuePrivacy(db,actor,{companyId,id})) return false;
+   for (const id of projectIds) if (performance.now()>deadline || !await canActorReadProjectPrivacy(db,actor,{companyId,id})) return false;
+   if (revisions.size) {

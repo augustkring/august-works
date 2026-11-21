@@ -1,0 +1,1 @@
+timeout_seconds=240ntest_file=src/__tests__/v7-model-reservations.integration.test.tsntest_pattern=binds live reservations to the actual Human session|settles the actual qualified conversation usage|allows the last exact-budget dispatch|dispatches the 64th actual funded call|rolls back settlement if an actual reservation receipt|retains an actual unknown conversation holdn

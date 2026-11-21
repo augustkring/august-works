@@ -1,4 +1,4 @@
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, isNull, notInArray } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agents, companyMemberships, principalPermissionGrants } from "@paperclipai/db";
 import type { PermissionKey, PrincipalType } from "@paperclipai/shared";
@@ -14,8 +14,10 @@ export type PrincipalAccessCompatibilityBackfillStats = {
   humanGrantsInserted: number;
 };
 
+type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
 export async function insertMissingPrincipalGrants(
-  db: Db,
+  db: Pick<Db, "insert"> | Pick<DbTransaction, "insert">,
   input: {
     companyId: string;
     principalType: PrincipalType;
@@ -64,12 +66,27 @@ export async function ensureHumanRoleDefaultGrants(
   },
 ): Promise<number> {
   const role = normalizeHumanRole(input.membershipRole, "operator");
-  return insertMissingPrincipalGrants(db, {
-    companyId: input.companyId,
-    principalType: "user",
-    principalId: input.principalId,
-    grants: grantsForHumanRole(role),
-    grantedByUserId: input.grantedByUserId,
+  return db.transaction(async tx => {
+    const [membership] = await tx.select({
+      id: companyMemberships.id,
+      permissionsInitializedAt: companyMemberships.permissionsInitializedAt,
+    }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, input.companyId),
+      eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, input.principalId),
+    )).for("update");
+    if (!membership || membership.permissionsInitializedAt) return 0;
+
+    const inserted = await insertMissingPrincipalGrants(tx, {
+      companyId: input.companyId,
+      principalType: "user",
+      principalId: input.principalId,
+      grants: grantsForHumanRole(role),
+      grantedByUserId: input.grantedByUserId,
+    });
+    await tx.update(companyMemberships).set({ permissionsInitializedAt: new Date() })
+      .where(and(eq(companyMemberships.id, membership.id), isNull(companyMemberships.permissionsInitializedAt)));
+    return inserted;
   });
 }
 

@@ -1,6 +1,7 @@
 // Opt-in qualification of the installed CLI, not the fake protocol server.
 // PAPERCLIP_OPENCODE_QUALIFY=1 node --test scripts/qualify-opencode-runtime.test.mjs
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -87,6 +88,16 @@ test("the pinned OpenCode executable serves health, sessions, SSE, and a local-p
   let output = "";
   for (const stream of [child.stdout, child.stderr]) stream.on("data", (chunk) => { output = `${output}${chunk}`.slice(-16384); });
   exited = once(child, "exit");
+  await once(child, "spawn");
+  if (process.platform === "linux") {
+    const hash = bytes => createHash("sha256").update(bytes).digest("hex");
+    assert.equal(hash(await readFile(`/proc/${child.pid}/exe`)), hash(await readFile(command)),
+      "the actual SDK process must execute the configured pinned binary");
+    const environment = (await readFile(`/proc/${child.pid}/environ`, "utf8")).split("\0");
+    for (const expected of [`XDG_DATA_HOME=${join(root, "data")}`, `OPENCODE_CONFIG=${config}`,
+      "OPENCODE_DISABLE_DEFAULT_PLUGINS=true", "OPENCODE_DISABLE_MODELS_FETCH=true"])
+      assert.ok(environment.includes(expected), "the actual SDK process must retain its isolated qualification environment");
+  }
   let baseUrl;
   for (let attempt = 0; attempt < 150; attempt++) {
     baseUrl = output.match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];

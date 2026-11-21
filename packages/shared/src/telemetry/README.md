@@ -13,6 +13,31 @@ Shared enum constants live in `packages/shared/src/constants.ts`. Use those
 constants when code needs a reusable domain, but treat the generated telemetry
 types as the final authority for emitted first-party telemetry shapes.
 
+## Delivery Admission
+
+Telemetry is off by default. An operator must both set `telemetry.enabled: true`
+in the instance configuration and supply `PAPERCLIP_TELEMETRY_ENDPOINT` with the
+intended HTTP(S) ingest URL. An endpoint alone or an enabled flag alone does not
+admit collection. CI, `DO_NOT_TRACK=1`, and `PAPERCLIP_TELEMETRY_DISABLED=1` still
+disable it. Newly generated CLI configurations keep telemetry disabled.
+
+The destination must not contain URL credentials, query parameters or a
+fragment. Missing or invalid destinations disable the client without creating
+installation state, hashing private references, starting timers, or sending
+events. Direct `TelemetryClient` callers must also provide both enablement and
+a valid destination. There are no built-in processors, fallback destinations,
+or followed redirects. Bounded retries retain the same explicit destination
+and the existing batch identity.
+
+Server and CLI initialization resolve configuration when the process starts.
+Apply configuration changes by restarting the process; these controls do not
+provide live consent withdrawal or clear an already running client's queue.
+
+The event envelope, schema version and registered dimensions retain their
+compatible wire shape; delivery admission is not a new event or permission to
+send private content. Feedback export, announcements, OpenTelemetry and the
+local run log retain their separate owners and controls.
+
 ## Public Sources
 
 Use these files when reviewing or changing telemetry code:

@@ -1,0 +1,49 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts (469 tests | 2 failed | 467 skipped) 362ms
+     × stages from the authenticated run snapshot and cleans up after the provider turn 343ms
+     × does not admit the provider when staged attachment capture persistence fails 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts > runnerd provider runtime wiring > stages from the authenticated run snapshot and cleans up after the provider turn
+AssertionError: promise rejected "AssertionError: expected undefined to be … { …(4) }" instead of resolving
+ ❯ src/services/native-runtime/native-session-executor.test.ts:7959:6
+    7957|         useRunnerd: true,
+    7958|       }),
+    7959|     ).resolves.toBeDefined();
+       |      ^
+    7960|     expect(providerAdmissionReached).toBe(true);
+    7961|
+
+Caused by: AssertionError: expected undefined to be defined
+ ❯ src/services/native-runtime/native-session-executor.test.ts:7924:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts > runnerd provider runtime wiring > does not admit the provider when staged attachment capture persistence fails
+AssertionError: expected [Function] to throw error including 'native_attachment_stage_capture_write…' but got 'Cannot read properties of undefined (…'
+
+Expected: "native_attachment_stage_capture_write_failed"
+Received: "Cannot read properties of undefined (reading 'runTerminalState')"
+
+ ❯ src/services/native-runtime/native-session-executor.test.ts:8033:8
+    8031|       runnerInstanceId: "runner-attachment-capture-failure",
+    8032|       useRunnerd: true,
+    8033|     })).rejects.toThrow("native_attachment_stage_capture_write_failed"…
+       |        ^
+    8034|     expect(providerAdmissionReached).toBe(false);
+    8035|     expect(state.createTransport).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 467 skipped (469)
+   Start at  12:08:33
+   Duration  50.87s (transform 36.46s, setup 630ms, import 48.06s, tests 362ms, environment 0ms)
+

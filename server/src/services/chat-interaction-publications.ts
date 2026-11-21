@@ -1,6 +1,5 @@
 import { nativeInteractionExperience } from "./experience/chat-card.js";
 import { v9FeatureEnabled } from "@paperclipai/shared";
-import { instanceSettings } from "@paperclipai/db";
 import { nativePhotonInteraction } from "./photon/interactions.js";
 import { randomBytes } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -26,6 +25,7 @@ import {
   chatQuestionFormActionRecords,
   createChatQuestionFormDraft,
 } from "./chat-question-forms.js";
+import { instanceSettingsService } from "./instance-settings.js";
 
 const MAX_NATIVE_QUESTION_OPTIONS = 12;
 const QUESTION_ACTION_PREFIX = "pcq:";
@@ -33,7 +33,7 @@ const QUESTION_ACTION_TOKEN_BYTES = 16;
 export const CHAT_QUESTION_ACTION_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 export const TELEGRAM_CALLBACK_DATA_LIMIT_BYTES = 64;
 
-type ChatPublicationDb = Pick<Db, "select" | "insert" | "update">;
+type ChatPublicationDb = Pick<Db, "select" | "insert" | "update" | "transaction">;
 
 function terminalNativeInteractionCopy(
   interaction: IssueThreadInteraction,
@@ -300,9 +300,8 @@ export async function enqueueIssueInteractionChatPublications(
     interaction.kind === "ask_user_questions"
       ? nativeChatQuestion(interaction)
       : null;
-  const [settings] = await db.select({ experimental: instanceSettings.experimental }).from(instanceSettings)
-    .where(eq(instanceSettings.singletonKey, "default"));
-  const semantic = v9FeatureEnabled(settings?.experimental ?? {}, "action_cards_v9")
+  const experimental = await instanceSettingsService(db).getExperimental();
+  const semantic = v9FeatureEnabled(experimental, "action_cards_v9")
     ? nativeInteractionExperience(interaction) : undefined;
   const inserted: Array<typeof chatPublications.$inferSelect> = [];
   for (const { conversation, endpoint } of bindings) {

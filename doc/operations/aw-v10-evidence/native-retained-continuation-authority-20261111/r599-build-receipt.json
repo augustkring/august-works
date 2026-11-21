@@ -1,0 +1,59 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.7743042949878145,
+      "filesAdvised": 513243,
+      "memoryAfter": 6167408640,
+      "contentChanged": false
+    },
+    {
+      "elapsedSeconds": 6.502156005997676,
+      "filesAdvised": 513249,
+      "memoryAfter": 12572594176,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "pnpm",
+        "--filter",
+        "@paperclipai/server",
+        "typecheck"
+      ],
+      "exit": 0,
+      "seconds": 179.63257362900185,
+      "peakGroupRssBytes": 6478610432,
+      "stopped": null
+    },
+    {
+      "command": [
+        "pnpm",
+        "--filter",
+        "@paperclipai/server",
+        "build"
+      ],
+      "exit": 0,
+      "seconds": 176.5449425910192,
+      "peakGroupRssBytes": 6403883008,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "node_modules/@playwright/test/cli.js",
+        "test",
+        "--list",
+        "--config",
+        "tests/e2e/playwright.config.ts",
+        "tests/e2e/pipelines-tutorial-flow.spec.ts"
+      ],
+      "exit": 0,
+      "seconds": 8.472278842993546,
+      "peakGroupRssBytes": 942641152,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

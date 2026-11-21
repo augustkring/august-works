@@ -1,0 +1,6 @@
+bacbaf19835c5e8b73107f0c68dafd2368b1aa2162e7a889800ae8a2f3af32a3  packages/db/src/migrations/0515_happy_screwball.sql
+24aa06502dddce6463e9715d6a77d283e8ad877426a4d243478b3b45db98c1e1  server/src/__tests__/support-case-storage.integration.test.ts
+620f474d165282588ade343b274f4d45c71af5e57da307552e56650203aed12f  server/src/__tests__/v6-database-quarantine.integration.test.ts
+1661f8ecf088d171d262ad9084ac0399e7bae94d7aa574601e9ff3a94ea50516  server/src/services/saas/quarantine.ts
+b7b59f6b8369a2f7ff62df2f026ba7ee5f813e386bb7142f2f83f17bd75899e0  server/src/services/saas/company-purge.ts
+494dc43b48fb3e295565efc882038795b810421e710a1bf397d4ad3dc3e46b28  deploy/v6/deletion-ledger.mjs

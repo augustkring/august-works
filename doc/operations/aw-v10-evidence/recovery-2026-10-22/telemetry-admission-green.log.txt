@@ -1,0 +1,31 @@
+2026-10-22T19:36:59Z
+647b3ee53b4cba845628abf281b7ddbb51028e04acb5a4f73934ece8a0fcd8c4  AGENTS.md
+23b24565be7a7d57d2e9c6082aca145355cf971b7b9a3b04453962736f02153f  packages/shared/src/telemetry/generated/paperclip-telemetry.ts
+fba289f0cc32eaa220ab4d6fd0e9a6b5a1dd5ce6fcb4f1b1466332140afa33fa  packages/shared/src/telemetry/README.md
+ca845f532863908408f6a665ed6261e76c6edb3238b3ad85ea670b1d0c1814ee  packages/shared/src/telemetry/config.ts
+9d98a2d42200b2f4fde7d561c4abab256b62b9b5f73eb6b27ea0fc4ea80a92b5  packages/shared/src/telemetry/client.ts
+9994a3a23587b428aa94fa628e3277668bf48f4e3ba73818a9f73a1488734dc3  packages/shared/src/telemetry/types.ts
+0af3e98afd2e0f1aee172c4b09ad27607e2f4ad418d3e2c2ba0dff13923bf826  packages/shared/src/config-schema.ts
+e790eb0719b9f5692c765fa2c490d861715c0db6df38b13e5faebfde6d17ade3  packages/shared/src/telemetry/admission.test.ts
+57078887f59e544a49af44d42f0120724ef20726f758563122c4f2488a6ed520  packages/shared/src/telemetry/client.test.ts
+f9f81f20ea69a6b688ea86d7f016c2af1722512f544caa54376c1705efb0859c  server/src/config.ts
+2702c99312c99c08c676f1f651adac777b752c2d09592fde01f63ae1aaa26df3  server/src/telemetry.ts
+20453f2f8189bd33d8390888ad3db0ba2270185b235add3c19d1d6a77b8de5d7  server/src/__tests__/telemetry-admission.test.ts
+7bbf7b58f9f792fd12a9fc33eb84b0a1c64490391d66bb5959170ec6e9f84964  server/src/__tests__/telemetry-client-flush.test.ts
+cdceb677a7d067f3bf64d5ab814ac85bef5f40a7ca54ac866b65989a760217ca  cli/src/telemetry.ts
+1e9b9fdf637709311b790e8420db389a72269dd4332b83b5147652d50cce7a08  cli/src/__tests__/telemetry.test.ts
+86d257b3b35ac8a59b9d77bfda645c06d14bd9214efbb494c0d977ff68304cbc  cli/src/commands/configure.ts
+7fc849383233cc58bb475a7d474bb231dbb711537163e2c087b5de3ecab21893  cli/src/commands/onboard.ts
+cab80305b621e187f93389a264ce23383aacbb407dcf4e50c053696d2f9a0ace  cli/src/commands/worktree-lib.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+
+ Test Files  10 passed (10)
+      Tests  69 passed (69)
+   Start at  19:37:00
+   Duration  15.45s (transform 5.88s, setup 329ms, import 9.48s, tests 1.33s, environment 2ms)
+

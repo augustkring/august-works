@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/db| src/native-run-input-source-receipt.test.ts (7 tests | 1 failed) 13077ms
+     × permits only marker-backed whole-profile erasure and forbids resurrection 47ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/db| src/native-run-input-source-receipt.test.ts > Original run input receipt database binding > permits only marker-backed whole-profile erasure and forbids resurrection
+AssertionError: expected null to deeply equal {}
+
+- Expected:
+{}
+
++ Received:
+null
+
+ ❯ src/native-run-input-source-receipt.test.ts:150:42
+    148|       await expect(db`update heartbeat_runs set runner_profile_json=${…
+    149|       const [saved]=await db`select runner_profile_json from heartbeat…
+    150|       expect(saved!.runner_profile_json).toEqual(clear);
+       |                                          ^
+    151|     }
+    152|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  07:08:24
+   Duration  25.89s (transform 8.07s, setup 0ms, import 12.19s, tests 13.08s, environment 0ms)
+

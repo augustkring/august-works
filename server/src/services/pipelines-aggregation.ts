@@ -281,10 +281,13 @@ export async function listPipelineAttention(
 
 export async function listCompanyCaseEvents(
   db: Db,
-  input: { companyId: string; types?: string[]; limit?: number; offset?: number },
+  input: { companyId: string; types?: string[]; limit?: number; offset?: number; caseIds?: string[]; eventIds?: string[] },
 ) {
   const limit = boundedLimit(input.limit, COMPANY_CASE_EVENTS_DEFAULT_LIMIT, COMPANY_CASE_EVENTS_MAX_LIMIT);
   const offset = Math.max(0, Math.floor(input.offset ?? 0));
+  if (input.caseIds?.length === 0 || input.eventIds?.length === 0) {
+    return { items: [], pagination: { limit, offset, nextOffset: null, hasMore: false } };
+  }
   const fromStage = alias(pipelineStages, "from_stage");
   const toStage = alias(pipelineStages, "to_stage");
   const actorAgent = alias(agents, "actor_agent");
@@ -312,6 +315,8 @@ export async function listCompanyCaseEvents(
     .where(and(
       eq(pipelineCaseEvents.companyId, input.companyId),
       eq(pipelineCases.companyId, input.companyId),
+      input.caseIds ? inArray(pipelineCases.id, input.caseIds) : undefined,
+      input.eventIds ? inArray(pipelineCaseEvents.id, input.eventIds) : undefined,
       input.types && input.types.length > 0 ? inArray(pipelineCaseEvents.type, input.types) : undefined,
     ))
     .orderBy(desc(pipelineCaseEvents.createdAt), desc(pipelineCaseEvents.id))

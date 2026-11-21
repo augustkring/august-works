@@ -1,0 +1,42 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > fails closed before queueing unless the configured operator has a current passkey session
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > caps the durable apply command at the original policy expiry and rejects an already expired request before queueing
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > persists an encrypted current native scope and rejects mismatched receipts without earning capability
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > cancels queued scope after generation changes
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > cancels queued scope after host epoch changes
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > cancels queued scope after owner revocation changes
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > cancels queued scope after rollout rollback changes
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > keeps the legacy engine out of the sandbox lane and permits scoped Stop after rollout rollback
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > rejects host 6.0.0 without immutable instance pinning
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > rejects host 6.0.1 without immutable instance pinning
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > retains unsupported host qualification without treating configured image as physical preparation
+ × src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > admits a qualified native Task through the HTTP route and meters only the signed host start/stop receipts (CI transport simulation) 2729ms
+   → ENOSPC: no space left on device, mkdir '/home/agent/.paperclip/instances/default/companies/7a0c49f8-7e06-49b7-ac5f-d2a48a50a645'
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > rejects a late completion after host fencing and expires bounded pending work
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > admits a qualified native Task through the HTTP route and meters only the signed host start/stop receipts (CI transport simulation)
+Error: ENOSPC: no space left on device, mkdir '/home/agent/.paperclip/instances/default/companies/7a0c49f8-7e06-49b7-ac5f-d2a48a50a645'
+ ❯ ensurePrivateDir ../packages/adapters/codex-local/src/server/codex-auth-cache.ts:192:3
+    190|     return;
+    191|   }
+    192|   await mkdir(dir, { recursive: true, mode: PRIVATE_DIR_MODE });
+       |   ^
+    193| }
+    194|
+ ❯ withAccountHomeSecretMutationLock ../packages/adapters/codex-local/src/server/codex-auth-cache.ts:343:3
+ ❯ src/__tests__/v7-sandbox-host-bridge.integration.test.ts:649:30
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -28, code: 'ENOSPC', syscall: 'mkdir', path: '/home/agent/.paperclip/instances/default/companies/7a0c49f8-7e06-49b7-ac5f-d2a48a50a645' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 skipped (13)
+   Start at  03:39:58
+   Duration  22.21s (transform 10.41s, setup 77ms, import 14.81s, tests 7.21s, environment 0ms)
+

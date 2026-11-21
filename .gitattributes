@@ -1,1 +1,4 @@
 patches/*.patch whitespace=-space-before-tab
+
+# Unified patch blank context lines contain a required single space.
+third_party/openshell/rt01/*.patch whitespace=-blank-at-eol

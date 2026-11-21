@@ -17,6 +17,7 @@ import {
   readNativeWorkspaceSyncReference,
   resumeNativeWorkspaceSync,
 } from "./native-workspace-sync.js";
+import { nativeReviewerLaneRecorded } from "./native-review-participant.js";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -116,6 +117,19 @@ export async function resumeNativeWorkspaceFinalization(input: {
         : "workspace_directory",
     },
     run: async () => {
+      // MS1h17. A completion Reviewer's sandbox content is never copied back
+      // into the Task workspace (read-only Reviewer); its sandbox is destroyed
+      // by the controller's lease release, not by a resumed copy-back.
+      if (nativeWorkspaceSync && await nativeReviewerLaneRecorded(input.db, {
+        companyId: bound.companyId, runId: input.runId,
+      })) {
+        return {
+          status: "succeeded",
+          exitCode: 0,
+          system: "Completion Reviewer workspace discarded by design; the Task workspace was not changed.\n",
+          metadata: { nativeReviewerWorkspace: "discarded_by_design" },
+        };
+      }
       if (nativeWorkspaceSync) {
         if (!input.environmentRuntime) {
           return {

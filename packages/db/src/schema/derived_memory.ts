@@ -2,7 +2,6 @@ import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, timestamp, integer, doublePrecision, unique, foreignKey, check, index } from "drizzle-orm/pg-core";
 import type { EvidenceSensitivity } from "@paperclipai/shared";
 import { companies } from "./companies.js";
-import { memoryRecords } from "./memory.js";
 const timestamps = () => ({ createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow() });
 export const memoryObservations = pgTable("memory_observations", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
@@ -20,12 +19,12 @@ export const memoryObservations = pgTable("memory_observations", {
   sensitivityCheck: check("observations_sensitivity_check", sql`${t.sensitivity} in ('public','internal','confidential','restricted')`),
   statusIdx: index("observations_company_status_idx").on(t.companyId, t.status),
 }));
+// Source UUID/version survives erasure; owning-object foreign keys still cascade.
 export const memoryObservationEvidence = pgTable("memory_observation_evidence", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }), observationId: uuid("observation_id").notNull(),
   memoryRecordId: uuid("memory_record_id").notNull(), sourceVersion: text("source_version").notNull(), relationship: text("relationship").notNull(), rootFingerprint: text("root_fingerprint").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({ observationFk: foreignKey({ name: "observation_evidence_observation_fk", columns: [t.companyId, t.observationId], foreignColumns: [memoryObservations.companyId, memoryObservations.id] }).onDelete("cascade"),
-  memoryFk: foreignKey({ name: "observation_evidence_memory_fk", columns: [t.companyId, t.memoryRecordId], foreignColumns: [memoryRecords.companyId, memoryRecords.id] }).onDelete("cascade"),
   rootUq: unique("observation_evidence_root_uq").on(t.observationId, t.memoryRecordId),
   relationCheck: check("observation_evidence_relation_check", sql`${t.relationship} in ('supports','contradicts','context')`),
 }));
@@ -50,13 +49,12 @@ export const memoryModelVersions = pgTable("memory_model_versions", {
   versionUq: unique("model_versions_company_model_version_uq").on(t.companyId, t.modelId, t.version),
   versionCheck: check("model_versions_version_check", sql`${t.version} > 0`),
 }));
+// Source UUID/version survives erasure; insertion keeps native tenant integrity.
 export const memoryModelEvidence = pgTable("memory_model_evidence", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }), modelId: uuid("model_id").notNull(), modelVersion: integer("model_version").notNull(),
   memoryRecordId: uuid("memory_record_id").notNull(), observationId: uuid("observation_id"), observationVersion: integer("observation_version"), sourceVersion: text("source_version").notNull(),
   relationship: text("relationship").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({ modelVersionFk: foreignKey({ name: "model_evidence_version_fk", columns: [t.companyId, t.modelId, t.modelVersion], foreignColumns: [memoryModelVersions.companyId, memoryModelVersions.modelId, memoryModelVersions.version] }).onDelete("cascade"),
-  memoryFk: foreignKey({ name: "model_evidence_memory_fk", columns: [t.companyId, t.memoryRecordId], foreignColumns: [memoryRecords.companyId, memoryRecords.id] }).onDelete("cascade"),
-  observationFk: foreignKey({ name: "model_evidence_observation_fk", columns: [t.companyId, t.observationId], foreignColumns: [memoryObservations.companyId, memoryObservations.id] }).onDelete("cascade"),
   observationCheck: check("model_evidence_observation_check", sql`(${t.observationId} is null) = (${t.observationVersion} is null)`),
   relationCheck: check("model_evidence_relation_check", sql`${t.relationship} in ('supports','contradicts','context','derived_from')`),
 }));

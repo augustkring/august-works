@@ -1,0 +1,25 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql": "4a6098f05c202229e8234629f7ad54f12cc8e5544851c5ea9e06660f17e2ae90",
+    "packages/db/src/migrations/meta/0574_snapshot.json": "804da7d5deea4494079703cd85a852ae533460b315f7c92772e02a2996a5a6bf",
+    "packages/db/src/migrations/meta/_journal.json": "1f25a898ed58f761b6a8cc666040136615fa5544a478a3a20d7c0a2ef3cf998b",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "92886f6eda16b2a905674cc7a71a2e60994d443a2883177d64a910808efc5896",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "c6d8fafc7413c4bae22f959468545ef032cf8efbb8de548156aa3456b70a2b99",
+    "server/src/__tests__/native-remote-workload-stop-projection.integration.test.ts": "c747aa0d13fc7a3fe401dfc78e604593c4e8a1525abc8d214dc01f110dd33803",
+    "server/src/services/execution-continuation.ts": "7e2c234c5baa6d316aaeaaac313d4b573a51e74705a8ef544baac7ae2f10f0f0",
+    "server/src/services/native-direct-input.ts": "bcde77dd74909d88b7cb204e62eec55cbe2b1bc07aa43da1fb9ffaee805bea08",
+    "server/src/services/native-local-process-stop.ts": "eb8b745482355d518555e4de7a11a06ac1d22abab150db061a8838ad2ffe265f",
+    "server/src/services/native-runtime/aw-text-draft-backend.ts": "6769ff9bcdc3e447087d04faa7f28382a6f5a6ea55edb0bf1c26f7e98891eff7",
+    "server/src/services/native-runtime/native-interaction-bridge.ts": "18a1dc59bcbfc1b8f4147afaf456e84db895f6f6bff3e83d9feb572aaefb57a1",
+    "server/src/services/native-runtime/native-session-executor.test.ts": "d46e19d4ac7e63fe9d31a65a9d382b950c4cff49cf5534b51f58c876cb6dbfb8",
+    "server/src/services/native-runtime/native-session-executor.ts": "529d6a1a6159e19467668af769e02ed199ce5abffe6d27f91142fea96adebc91",
+    "server/src/services/native-stage-task-body-source.test.ts": "49683505e76446dc54e83a5e54060c507a04ba94ee18100d4ba14e32753f1350",
+    "server/src/services/orchestration/native-draft-runtime.ts": "c24be8b90fdb93411140030c2c19eef999e0de5bccbc04bc5c0c9c36d9398fc2",
+    "server/src/services/orchestration/worker-model-gateway.ts": "4999c60a21f364ee62cf6264a6f7796ec3a8b5d5e021e92be578ab4cc47b029e",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "allPinsUnchanged": true
+}

@@ -109,3 +109,19 @@ export function watchLegacyControllerLease(db: Db, run: Run, controller: AbortCo
   timer.unref();
   return { assertOwned, stop() { stopped = true; clearInterval(timer); clearTimeout(deadline); } };
 }
+
+
+/** The bootstrap controller may bind its realized workspace before Native
+ * selection. The SQL owner proof is also used by the source-binding trigger;
+ * a caller-supplied boot string alone never grants preparation authority. */
+export async function assertWorkspacePreparationBindingOwned(db: Db, input: {
+  companyId: string; issueId: string; agentId: string; runId: string; workspaceId: string; controllerBootId: string;
+}) {
+  if (input.controllerBootId !== legacyControllerBootId)
+    throw new Error("workspace_preparation_controller_changed");
+  const [proof] = await db.execute<{ owned: boolean }>(sql`select public.aw_workspace_preparation_binding_owned(
+    ${input.companyId}::uuid,${input.issueId}::uuid,${input.agentId}::uuid,${input.runId}::uuid,
+    ${input.workspaceId}::uuid,${legacyControllerBootId}::uuid) as owned`);
+  if (proof?.owned !== true) throw new Error("workspace_preparation_binding_owner_changed");
+  return { ...input, controllerBootId: legacyControllerBootId };
+}

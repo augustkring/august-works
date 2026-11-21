@@ -7,6 +7,11 @@ description: >
   endpoints.
 ---
 
+> Compatibility procedure: Blentera control-plane work uses the required
+> `blentera-platform` Skill and current machine contracts. This legacy package
+> remains readable for pinned historical integrations; its recipes do not
+> override current authorization, capability pins or approval semantics.
+
 # Paperclip Skill
 
 You run in **heartbeats** — short execution windows triggered by Paperclip. Each heartbeat, you wake up, check your work, do something useful, and exit. You do not run continuously.

@@ -1,0 +1,59 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > reads an exact independently finished outcome review through the actual SDK without recording new judgments
+ × src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > atomically links one native Learning cycle under concurrent human review conversion without promoting authority 21018ms
+   → Failed query: select pg_advisory_xact_lock(hashtextextended($1, 0))
+params: business-events:b4ef1ab7-87a2-4f14-afe1-c648219e1e8c
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > rejects premature, unverified, foreign and stale review conversions without leaving a partial cycle
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > retains a signed management packet after an authorized outcome revision changes and requires a fresh exact pin for publication
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > inherits all six original outcome judgments and receipt erasure into a separately published native management review
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > requires an actual surviving prospective binding and schedules only the chosen declared horizon
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > records six independent judgments without treating a bad outcome as a bad choice or causing canonical changes
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > uses CAS and immutable human receipts; direct status updates without a receipt roll back
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > requires all frozen assumptions and chosen-option expectations; early outcomes cannot be completed
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > computes native expected-versus-actual comparisons while preserving the frozen baseline and human process judgment
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > denies old observations as later outcomes and rechecks hidden sources on reads and writes
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > erases review prose and descendants with native sources even after rollout rollback
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > runs retention while paused and flags off and preserves another company on purge
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > erases an entire reviewed aggregate when a later-only measurement source is forgotten, without erasing the prospective choice
+ ↓ src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > purges a live frozen review with flags off while preserving another company's content
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/decision-outcome-reviews.integration.test.ts > Native decision outcome reviews on migrated PostgreSQL > atomically links one native Learning cycle under concurrent human review conversion without promoting authority
+Error: Failed query: select pg_advisory_xact_lock(hashtextextended($1, 0))
+params: business-events:b4ef1ab7-87a2-4f14-afe1-c648219e1e8c
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ lockAnalyticalCompany src/services/analytical-privacy.ts:11:3
+      9|  * event projection and analytical publication use one ordering bounda…
+     10| export async function lockAnalyticalCompany(tx: Pick<Db, "execute">, c…
+     11|   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended($…
+       |   ^
+     12| }
+     13| /** Native privacy/verified restore callers own admission. Rollout nev…
+ ❯ locks src/services/decision-intelligence.ts:43:3
+ ❯ inspectBoundDecisionContext src/services/decision-intelligence.ts:194:3
+ ❯ src/services/decision-outcome-reviews.ts:173:21
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { query: 'select pg_advisory_xact_lock(hashtextextended($1, 0))', params: [ 'business-events:b4ef1ab7-87a2-4f14-afe1-c648219e1e8c' ] }
+Caused by: PostgresError: canceling statement due to statement timeout
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '57014', file: 'postgres.c', routine: 'ProcessInterrupts', query: 'select pg_advisory_xact_lock(hashtextextended($1, 0))', parameters: [ 'business-events:b4ef1ab7-87a2-4f14-afe1-c648219e1e8c' ], args: [ 'business-events:b4ef1ab7-87a2-4f14-afe1-c648219e1e8c' ], types: [ 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 skipped (15)
+   Start at  21:07:19
+   Duration  42.19s (transform 11.15s, setup 95ms, import 15.77s, tests 26.20s, environment 0ms)
+

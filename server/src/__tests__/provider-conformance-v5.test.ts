@@ -9,6 +9,7 @@ import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import * as nativeBridge from "../services/native-provider-conformance.js";
 import { providerConformanceService } from "../services/provider-conformance.js";
+import * as secrets from "../services/secrets.js";
 import { providerDiscoveryService } from "../services/provider-discovery.js";
 
 const support = await getEmbeddedPostgresTestSupport(), adapterType = "aw_v5_conformance_fixture";
@@ -46,39 +47,83 @@ describe.skipIf(!support.supported)("operator conformance accounting and authori
     await bindings.attach(f.actor, f.home, f.presence.id, { providerBindingId: binding.id, providerProfileRef: f.presence.id }); return f;
   }
   const input = { acknowledgeProviderRuns: true as const, maximumCostCents: 100, isolationPeer: null };
-  it("pauses a presence when its provider termination cannot be confirmed", async () => {
-    const f = await fixture(); terminationUnconfirmed = true;
-    const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
-    expect(result.runIds).toHaveLength(1); expect(result.failure).toBeTruthy();
-    expect((await db.select().from(agents).where(eq(agents.id, f.presence.id)))[0]?.status).toBe("paused");
-    await expect(agentProviderBindingService(db).assertRuntime(f.home, f.presence.id)).rejects.toMatchObject({ status: 409 });
-  });
-  it("retains each real adapter invocation, charges its source company and pins tested configuration", async () => {
-    const f = await fixture(), result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
-    expect(result.failure).toBeNull(); expect(result.binding.status).toBe("active"); expect(result.runIds).toHaveLength(2);
-    const runs = await db.select().from(heartbeatRuns).where(inArray(heartbeatRuns.id, result.runIds));
-    expect(runs.every((run) => run.companyId === f.home && run.responsibleUserId === f.userId && run.status === "succeeded" && run.contextSnapshot?.platformToolsGranted === false)).toBe(true);
-    const costs = await db.select().from(costEvents).where(and(eq(costEvents.companyId, f.home), inArray(costEvents.heartbeatRunId, result.runIds))); expect(costs).toHaveLength(2);
-    await expect(agentProviderBindingService(db).assertRuntime(f.home, f.presence.id)).resolves.toBeDefined();
-  });
-  it("refuses a late report for a revoked local runtime without changing its retained proof", async () => {
+  it.each([
+    { reportedCost: 0, maximumCostCents: 100, terminationUnconfirmed: false },
+    { reportedCost: undefined, maximumCostCents: 100, terminationUnconfirmed: false },
+    { reportedCost: 2, maximumCostCents: 1, terminationUnconfirmed: false },
+    { reportedCost: 0, maximumCostCents: 100, terminationUnconfirmed: true },
+  ])("refuses unreserved paid probes before credential selection and adapter invocation (%j)", async (scenario) => {
     const f = await fixture();
-    const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
-    const bindings = agentProviderBindingService(db);
+    reportedCost = scenario.reportedCost; terminationUnconfirmed = scenario.terminationUnconfirmed;
+    const execute = vi.spyOn(adapter, "execute");
+    const secretSelection = vi.spyOn(secrets, "secretService");
+    const before = await agentProviderBindingService(db).getForPresence(f.actor, f.home, f.presence.id);
+    try {
+      await expect(providerConformanceService(db).test(f.actor, f.home, f.presence.id,
+        { ...input, maximumCostCents: scenario.maximumCostCents })).rejects.toMatchObject({ status: 409,
+        details: { code: "configuration_incomplete", configurationIncomplete: { reason: "paid_transport_unqualified" } } });
+      expect(execute).not.toHaveBeenCalled(); expect(secretSelection).not.toHaveBeenCalled();
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(costEvents).where(eq(costEvents.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(issues).where(eq(issues.companyId, f.home))).toEqual([]);
+      expect(await agentProviderBindingService(db).getForPresence(f.actor, f.home, f.presence.id)).toEqual(before);
+    } finally { execute.mockRestore(); secretSelection.mockRestore(); }
+  });
+
+  it("denies a native paid harness before creating a Task or invoking the provider", async () => {
+    const f = await fixture();
+    await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: { provider: "codex" } })
+      .where(eq(agents.id, f.presence.id));
+    const probe = vi.spyOn(nativeBridge, "executeNativeProviderConformance");
+    const secretSelection = vi.spyOn(secrets, "secretService");
+    try {
+      await expect(providerConformanceService(db).test(f.actor, f.home, f.presence.id, input))
+        .rejects.toMatchObject({ status: 409, details: { configurationIncomplete: { reason: "paid_transport_unqualified" } } });
+      expect(probe).not.toHaveBeenCalled(); expect(secretSelection).not.toHaveBeenCalled();
+      expect(await db.select().from(issues).where(eq(issues.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+    } finally { probe.mockRestore(); secretSelection.mockRestore(); }
+  });
+
+  it("does not let an isolation peer or operator ceiling admit unreserved model probes", async () => {
+    const f = await fixture(), bindings = agentProviderBindingService(db);
+    await db.update(agents).set({ adapterType, adapterConfig: {} }).where(eq(agents.id, f.guestPresence.id));
+    const peer = await bindings.create(f.actor, f.guest, f.guestPresence.id, { providerType: "custom",
+      providerAgentRef: f.guestPresence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
+    await bindings.attach(f.actor, f.guest, f.guestPresence.id,
+      { providerBindingId: peer.id, providerProfileRef: f.guestPresence.id });
+    const before = await bindings.getForPresence(f.actor, f.guest, f.guestPresence.id);
+    const execute = vi.spyOn(adapter, "execute");
+    try {
+      await expect(providerConformanceService(db).test(f.actor, f.home, f.presence.id,
+        { ...input, isolationPeer: { companyId: f.guest, agentId: f.guestPresence.id } }))
+        .rejects.toMatchObject({ status: 409, details: { configurationIncomplete: { reason: "paid_transport_unqualified" } } });
+      expect(execute).not.toHaveBeenCalled();
+      expect(await bindings.getForPresence(f.actor, f.guest, f.guestPresence.id)).toEqual(before);
+      expect(await db.select().from(heartbeatRuns).where(inArray(heartbeatRuns.companyId, [f.home, f.guest]))).toEqual([]);
+    } finally { execute.mockRestore(); }
+  });
+
+  it("keeps non-paid discovery available without earning conformance and rejects revoked late reports", async () => {
+    const f = await fixture(), bindings = agentProviderBindingService(db);
+    await providerDiscoveryService(db).discover(f.actor, f.home, f.presence.id);
     const before = await bindings.getForPresence(f.actor, f.home, f.presence.id);
+    expect(before?.provider.capabilitySnapshot).toBeDefined();
+    await expect(bindings.assertRuntime(f.home, f.presence.id)).rejects.toMatchObject({ status: 409 });
+    const snapshot = await adapter.discoverCapabilities?.({ companyId: f.home, adapterType, config: {} });
+    if (!before || !snapshot) throw new Error("Fixture discovery missing");
     await db.update(agentPresenceRuntimeBindings).set({ status: "revoked" })
-      .where(eq(agentPresenceRuntimeBindings.id, before!.runtime.id));
-    const { hash: _hash, ...snapshot } = result.binding.capabilitySnapshot!;
+      .where(eq(agentPresenceRuntimeBindings.id, before.runtime.id));
     await expect(bindings.recordDiscovery(f.home, f.presence.id, snapshot,
       { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true }))
       .rejects.toMatchObject({ status: 404 });
     const [retained] = await db.select().from(agentPresenceRuntimeBindings)
-      .where(eq(agentPresenceRuntimeBindings.id, before!.runtime.id));
-    expect(retained).toMatchObject({ status: "revoked", conformanceReport: before!.runtime.conformanceReport,
-      qualifiedConfigurationHash: before!.runtime.qualifiedConfigurationHash,
-      conformanceSnapshotHash: before!.runtime.conformanceSnapshotHash });
-    await expect(bindings.assertRuntime(f.home, f.presence.id)).rejects.toMatchObject({ status: 409 });
+      .where(eq(agentPresenceRuntimeBindings.id, before.runtime.id));
+    expect(retained).toMatchObject({ status: "revoked", conformanceReport: before.runtime.conformanceReport,
+      qualifiedConfigurationHash: before.runtime.qualifiedConfigurationHash,
+      conformanceSnapshotHash: before.runtime.conformanceSnapshotHash });
   });
+
   it("invalidates native proof when the included backend contract changes", async () => {
     const f = await seedV5Presences(db), bindings = agentProviderBindingService(db);
     await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: { provider: "codex" } }).where(eq(agents.id, f.presence.id));
@@ -90,70 +135,23 @@ describe.skipIf(!support.supported)("operator conformance accounting and authori
     await expect(bindings.assertRuntime(f.home, f.presence.id)).rejects.toMatchObject({ status: 409 });
     expect((await bindings.getForPresence(f.actor, f.home, f.presence.id))!.runtime.status).toBe("degraded");
   });
-  it("retains a native harness task and stops qualification when actual cost is unknown", async () => {
-    const f = await seedV5Presences(db), bindings = agentProviderBindingService(db);
-    await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: { provider: "codex" } }).where(eq(agents.id, f.presence.id));
-    const binding = await bindings.create(f.actor, f.home, f.presence.id, { providerType: "paperclip_native", providerAgentRef: f.presence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
-    await bindings.attach(f.actor, f.home, f.presence.id, { providerBindingId: binding.id, providerProfileRef: "native-fixture-profile" });
-    const probe = vi.spyOn(nativeBridge, "executeNativeProviderConformance").mockImplementation(async ctx => {
-      expect(ctx.authToken).toBeUndefined(); expect(ctx.runtimeTools).toBeUndefined();
-      const [task] = await db.select().from(issues).where(eq(issues.id, String(ctx.context.providerConformanceIssueId)));
-      expect(task).toMatchObject({ companyId: f.home, assigneeAgentId: f.presence.id, harnessKind: "provider_conformance" }); expect(task!.hiddenAt).toBeTruthy();
-      return { exitCode: 0, signal: null, timedOut: false, resultJson: { status: "completed", output: "Synthetic fixture; no live provider proof" } };
-    });
+  it("denies agent self-qualification before any probe", async () => {
+    const f = await fixture(), execute = vi.spyOn(adapter, "execute");
     try {
-      const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
-      expect(probe).toHaveBeenCalledTimes(1); expect(result.spentCents).toBeNull(); expect(result.binding.status).toBe("unqualified");
-      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, result.runIds[0]!));
-      const [task] = await db.select().from(issues).where(eq(issues.id, String(run!.contextSnapshot?.providerConformanceIssueId)));
-      expect(task!.status).toBe("blocked"); expect(task!.completedAt).toBeNull();
-    } finally { probe.mockRestore(); }
+      await expect(providerConformanceService(db).test({ type: "agent", companyId: f.home,
+        agentId: f.presence.id, source: "agent_jwt", onBehalfOfUserId: f.userId }, f.home, f.presence.id, input))
+        .rejects.toMatchObject({ status: 403 });
+      expect(execute).not.toHaveBeenCalled();
+    } finally { execute.mockRestore(); }
   });
-  it("unknown cost stops further probes and cannot fabricate passing conformance", async () => {
-    const f = await fixture(); reportedCost = undefined;
-    const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
-    expect(result.runIds).toHaveLength(1); expect(result.spentCents).toBeNull(); expect(result.binding.status).toBe("unqualified"); expect(result.failure).toBeTruthy();
-  });
-  it("unknown accounting on the last probe cannot bypass qualification or be manually revalidated", async () => {
-    const f = await fixture(); unknownLastCost = true;
-    const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
-    expect(result.runIds).toHaveLength(2); expect(result.binding.status).toBe("unqualified"); expect(result.spentCents).toBeNull(); expect(result.failure).toContain("every probe");
-    const bindings = agentProviderBindingService(db), record = await bindings.getForPresence(f.actor, f.home, f.presence.id);
-    expect(record!.runtime.conformanceReport?.accountingComplete).toBe(false);
-    await expect(bindings.revalidate(f.actor, f.home, f.presence.id, result.binding.capabilitySnapshot!.hash, "Operator cannot replace missing actual accounting with an acknowledgement")).rejects.toMatchObject({ status: 409 });
-  });
-  it("pins the isolation peer and rejects later changes to its tested physical profile", async () => {
-    const f = await fixture(), bindings = agentProviderBindingService(db);
-    await db.update(agents).set({ adapterType, adapterConfig: {} }).where(eq(agents.id, f.guestPresence.id));
-    const peerBinding = await bindings.create(f.actor, f.guest, f.guestPresence.id, { providerType: "custom", providerAgentRef: f.guestPresence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
-    await bindings.attach(f.actor, f.guest, f.guestPresence.id, { providerBindingId: peerBinding.id, providerProfileRef: f.guestPresence.id });
-    const tested = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, { ...input, isolationPeer: { companyId: f.guest, agentId: f.guestPresence.id } });
-    const record = await bindings.assertRuntime(f.home, f.presence.id);
-    expect(record.runtime.conformanceReport?.isolationPeer).toMatchObject({ companyId: f.guest, agentId: f.guestPresence.id, bindingId: peerBinding.id });
-    await db.update(agents).set({ adapterConfig: { changedPeerProfile: true } }).where(eq(agents.id, f.guestPresence.id));
-    await expect(bindings.assertRuntime(f.home, f.presence.id)).rejects.toMatchObject({ status: 409 });
-    await expect(bindings.revalidate(f.actor, f.home, f.presence.id, tested.binding.capabilitySnapshot!.hash, "Review after changing the previously tested peer")).rejects.toMatchObject({ status: 409 });
-  });
-  it("denies agent self-qualification and invalidates concurrent configuration changes", async () => {
-    const f = await fixture(), service = providerConformanceService(db);
-    await expect(service.test({ type: "agent", companyId: f.home, agentId: f.presence.id, source: "agent_jwt", onBehalfOfUserId: f.userId }, f.home, f.presence.id, input)).rejects.toMatchObject({ status: 403 });
-    changeConfiguration = true;
-    await expect(service.test(f.actor, f.home, f.presence.id, input)).rejects.toMatchObject({ status: 409 });
-    await expect(agentProviderBindingService(db).assertRuntime(f.home, f.presence.id)).rejects.toMatchObject({ status: 409 });
-  });
-  it("lost provider discovery invalidates previously passing proof", async () => {
-    const f = await fixture(); await providerConformanceService(db).test(f.actor, f.home, f.presence.id, input);
+
+  it("lost non-paid discovery degrades retained advertisements without inventing passing proof", async () => {
+    const f = await fixture(); await providerDiscoveryService(db).discover(f.actor, f.home, f.presence.id);
     discoveryFails = true;
-    await expect(providerDiscoveryService(db).discover(f.actor, f.home, f.presence.id)).rejects.toMatchObject({ status: 409, message: "Provider capability discovery failed; repeat conformance after restoring the configured connection" });
-    const record = await agentProviderBindingService(db).getForPresence(f.actor, f.home, f.presence.id);
-    expect(record).toMatchObject({ provider: { status: "degraded" }, runtime: { status: "degraded", qualifiedConfigurationHash: null } });
+    await expect(providerDiscoveryService(db).discover(f.actor, f.home, f.presence.id)).rejects.toMatchObject({ status: 409,
+      message: "Provider capability discovery failed; repeat conformance after restoring the configured connection" });
+    expect(await agentProviderBindingService(db).getForPresence(f.actor, f.home, f.presence.id))
+      .toMatchObject({ provider: { status: "degraded" }, runtime: { status: "degraded", qualifiedConfigurationHash: null } });
     await expect(agentProviderBindingService(db).assertRuntime(f.home, f.presence.id)).rejects.toMatchObject({ status: 409 });
-  });
-  it("charges a settled probe in full and stops further calls at the declared ceiling", async () => {
-    const f = await fixture(); reportedCost = 2;
-    const result = await providerConformanceService(db).test(f.actor, f.home, f.presence.id, { ...input, maximumCostCents: 1 });
-    expect(result.runIds).toHaveLength(1); expect(result.spentCents).toBe(200); expect(result.binding.status).toBe("unqualified");
-    const costs = await db.select().from(costEvents).where(eq(costEvents.heartbeatRunId, result.runIds[0]!));
-    expect(costs[0]).toMatchObject({ companyId: f.home, costCents: 200, costStatus: "reported" });
   });
 });

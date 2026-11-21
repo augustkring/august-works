@@ -9,6 +9,10 @@ async function json(response: APIResponse) {
 // current-state and read-only owner checks run in the PostgreSQL suites.
 // This does not qualify hosted runtime provisioning, repair or human usability.
 test("current runtime recovery cards localize and offer only keyboard-accessible native navigation", async ({ page, request }) => {
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedUserId = session.user.id;
+  const preferences = await json(await request.get(`/api/auth/preferences?expectedUserId=${encodeURIComponent(expectedUserId)}`));
+  await json(await request.patch("/api/auth/preferences", { data: { expectedUserId, locale: "en" } }));
   const flags = await json(await request.get("/api/instance/settings/experimental"));
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable recovery-card UI fixture" } }));
   const source = { domain: "runtime_cell", companyId: company.id, resourceId: randomUUID(), version: "a".repeat(64), observedAt: new Date().toISOString() };
@@ -47,6 +51,7 @@ test("current runtime recovery cards localize and offer only keyboard-accessible
     expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run("main")).violations)).toEqual([]);
     expect(mutations).toBe(0);
   } finally {
+    await json(await request.patch("/api/auth/preferences", { data: { expectedUserId, locale: preferences.locale ?? null } }));
     await request.patch("/api/instance/settings/experimental", { data: {
       experience_projection_v9: flags.experience_projection_v9, progressive_shell_v9: flags.progressive_shell_v9, home_v9: flags.home_v9 } });
   }

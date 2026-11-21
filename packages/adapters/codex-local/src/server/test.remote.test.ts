@@ -108,6 +108,21 @@ vi.mock("./codex-home.js", async () => {
 
 import { testEnvironment } from "./test.js";
 
+function expectUnavailableBeforePaidEffects(result: Awaited<ReturnType<typeof testEnvironment>>) {
+  expect(result.status).toBe("fail");
+  for (const code of ["codex_cwd_valid", "codex_command_resolvable", "paid_transport_unqualified"])
+    expect(result.checks.some(check => check.code === code)).toBe(true);
+  for (const code of ["adapter_auth_missing", "codex_hello_probe_auth_required", "codex_hello_probe_passed",
+    "codex_hello_probe_error", "codex_hello_probe_unexpected_output"])
+    expect(result.checks.some(check => check.code === code)).toBe(false);
+  expect(runAdapterExecutionTargetProcess).not.toHaveBeenCalled();
+  expect(prepareManagedCodexHome).not.toHaveBeenCalled();
+  expect(prepareAdapterExecutionTargetRuntime).not.toHaveBeenCalled();
+  expect(restoreWorkspace).not.toHaveBeenCalled();
+  expect(capturedHomeAssetFiles.value).toBeNull();
+  expect(capturedHomeAssetAuthJson.value).toBeNull();
+}
+
 describe("codex remote environment diagnostics", () => {
   const scratchDirs: string[] = [];
 
@@ -118,10 +133,9 @@ describe("codex remote environment diagnostics", () => {
   }
 
   beforeEach(async () => {
-    // The probe mirrors execute's home preparation, which reads the shared
-    // source home and the auth cache from `process.env`. Pin both to empty
-    // scratch locations so no test ever reads or writes the real ~/.codex or
-    // the real instance tree.
+    // Isolate credential-bearing configuration even if a future regression
+    // enters home preparation. These diagnostics must refuse the paid phase
+    // before reading/staging credentials or spawning a hello process.
     vi.stubEnv("CODEX_HOME", await makeScratchDir("paperclip-test-shared-codex-"));
     vi.stubEnv("PAPERCLIP_HOME", await makeScratchDir("paperclip-test-instance-"));
     vi.stubEnv("PAPERCLIP_INSTANCE_ID", "default");
@@ -139,7 +153,7 @@ describe("codex remote environment diagnostics", () => {
     }
   });
 
-  it("stages managed CODEX_HOME in an isolated runtime dir and keeps the probe cwd on the original remote workspace", async () => {
+  it("keeps SSH setup diagnostics and refuses paid hello before managed home staging", async () => {
     const remoteTarget: AdapterExecutionTarget = {
       kind: "remote",
       transport: "ssh",
@@ -167,51 +181,10 @@ describe("codex remote environment diagnostics", () => {
       environmentName: "QA SSH",
     });
 
-    expect(result.status).toBe("pass");
-    expect(result.checks.some((check) => check.code === "codex_hello_probe_passed")).toBe(true);
-    expect(prepareManagedCodexHome).toHaveBeenCalledTimes(1);
-    expect(prepareAdapterExecutionTargetRuntime).toHaveBeenCalledTimes(1);
-    const runtimeCalls = prepareAdapterExecutionTargetRuntime.mock.calls as unknown as Array<[
-      {
-        workspaceLocalDir: string;
-        target?: { remoteCwd?: string };
-        workspaceRemoteDir?: string;
-        assets?: Array<{ key: string; localDir: string }>;
-      },
-    ]>;
-    const runtimeInput = runtimeCalls[0]?.[0];
-    // The probe must upload only a minimal credentials-only home, never the
-    // full managed CODEX_HOME (which can be hundreds of MB of session history).
-    const homeAsset = runtimeInput?.assets?.find((asset) => asset.key === "home");
-    expect(homeAsset?.localDir).toContain(`${os.tmpdir()}/paperclip-codex-probe-home-`);
-    expect(capturedHomeAssetFiles.value).toEqual(["auth.json", "config.toml"]);
-    expect(runtimeInput?.workspaceLocalDir).toContain(`${os.tmpdir()}/paperclip-codex-envtest-`);
-    expect(runtimeInput?.workspaceLocalDir).not.toBe("/remote/workspace");
-    expect(await fs.stat(runtimeInput!.workspaceLocalDir).catch(() => null)).toBeNull();
-    expect(runtimeInput?.target?.remoteCwd).toBe("/remote/workspace");
-    // `workspaceRemoteDir` is the base path passed to the runtime; the
-    // helper's per-run subdirectory is appended internally inside
-    // `prepareRemoteManagedRuntime`. Pre-building a per-run prefix here
-    // would double-nest the run id in the final path.
-    expect(runtimeInput?.workspaceRemoteDir).toBe("/remote/workspace");
-    expect(runAdapterExecutionTargetProcess).toHaveBeenCalledTimes(1);
-    const probeCall = runAdapterExecutionTargetProcess.mock.calls[0] as unknown as
-      | [string, { kind: string; remoteCwd: string }, string, string[], { cwd: string; env: Record<string, string> }]
-      | undefined;
-    expect(probeCall?.[1]).toMatchObject({
-      kind: "remote",
-      remoteCwd: "/remote/workspace",
-    });
-    expect(probeCall?.[4]).toMatchObject({
-      cwd: "/remote/workspace",
-      env: expect.objectContaining({
-        CODEX_HOME: "/remote/workspace/.paperclip-runtime/runs/test/workspace/.paperclip-runtime/codex/home",
-      }),
-    });
-    expect(restoreWorkspace).toHaveBeenCalledTimes(1);
+    expectUnavailableBeforePaidEffects(result);
   });
 
-  it("avoids /tmp CODEX_HOME for remote API-key hello probes", async () => {
+  it("keeps configured API-key metadata but refuses paid sandbox hello before probe home creation", async () => {
     const remoteTarget: AdapterExecutionTarget = {
       kind: "remote",
       transport: "sandbox",
@@ -244,20 +217,16 @@ describe("codex remote environment diagnostics", () => {
       environmentName: "QA Cloudflare",
     });
 
-    expect(result.status).toBe("pass");
-    const probeCall = runAdapterExecutionTargetProcess.mock.calls[0] as unknown as
-      | [string, AdapterExecutionTarget, string, string[], { cwd: string; env: Record<string, string> }]
-      | undefined;
-    expect(probeCall?.[4].env.CODEX_HOME).toContain("/remote/workspace/.paperclip-runtime/codex/probe-home-codex-envtest-");
-    expect(probeCall?.[4].env.CODEX_HOME?.startsWith("/tmp/")).toBe(false);
-    expect(probeCall?.[3]).toContain("--skip-git-repo-check");
+
+    expectUnavailableBeforePaidEffects(result);
+    expect(result.checks.some(check => check.code === "codex_openai_api_key_present")).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("sk-test");
+
   });
 
-  it("emits the canonical adapter_auth_missing check when a sandbox hello probe reports missing auth", async () => {
-    // The sandbox has no seedable credentials, so the hello probe returns an
-    // authentication-required error. The Test must emit the neutral canonical
-    // check code. The user interface reads this code to decide login
-    // eligibility; it does not parse the message text or the top-level status.
+  it("does not infer adapter_auth_missing from an unexecuted sandbox hello", async () => {
+    // Even a configured upstream auth failure cannot stand in for an actual
+    // hello result: the paid phase is refused before any process runs.
     prepareManagedCodexHome.mockImplementationOnce(async () => {
       const dir = await fs.mkdtemp(`${os.tmpdir()}/paperclip-managed-codex-home-noauth-`);
       await fs.writeFile(`${dir}/config.toml`, "model = \"gpt-5\"\n");
@@ -299,18 +268,14 @@ describe("codex remote environment diagnostics", () => {
       environmentName: "QA Daytona",
     });
 
-    // A missing-auth probe is a warning, not a failure, so the environment stays
-    // testable and the user interface can offer login.
-    expect(result.status).toBe("warn");
-    expect(result.checks.some((check) => check.code === "adapter_auth_missing")).toBe(true);
-    // The descriptive probe check stays, so existing diagnostics keep working.
-    expect(result.checks.some((check) => check.code === "codex_hello_probe_auth_required")).toBe(true);
+    // The paid probe never runs, so its configured authentication failure
+    // cannot produce a login warning or override the admission refusal.
+    expectUnavailableBeforePaidEffects(result);
   });
 
-  it("does not override CODEX_HOME when the host has no credentials to seed", async () => {
-    // Custom-image flow: the login lives inside the captured snapshot, and the
-    // host has no Codex auth.json. The probe must not upload an empty home or
-    // set CODEX_HOME, so Codex falls back to the sandbox's baked-in login.
+  it("refuses paid sandbox hello without creating or overriding an unseeded home", async () => {
+    // An image-local login cannot authorize the unavailable paid phase.
+    // No empty home may be uploaded and no CODEX_HOME override is produced.
     prepareManagedCodexHome.mockImplementationOnce(async () => {
       const dir = await fs.mkdtemp(`${os.tmpdir()}/paperclip-managed-codex-home-noauth-`);
       // No auth.json — only a config file.
@@ -344,13 +309,7 @@ describe("codex remote environment diagnostics", () => {
       environmentName: "QA Daytona",
     });
 
-    expect(result.status).toBe("pass");
-    // No managed-home upload, so the full-runtime staging is skipped entirely.
-    expect(prepareAdapterExecutionTargetRuntime).not.toHaveBeenCalled();
-    const probeCall = runAdapterExecutionTargetProcess.mock.calls[0] as unknown as
-      | [string, AdapterExecutionTarget, string, string[], { cwd: string; env: Record<string, string> }]
-      | undefined;
-    expect(probeCall?.[4].env.CODEX_HOME).toBeUndefined();
+    expectUnavailableBeforePaidEffects(result);
   });
 
   const subscriptionAuth = (accountId: string, marker: string, lastRefresh: string) =>
@@ -384,10 +343,9 @@ describe("codex remote environment diagnostics", () => {
     };
   }
 
-  it("stages a configured managed per-agent CODEX_HOME instead of the company default home", async () => {
-    // Execute honors env.CODEX_HOME, so the probe must exercise that same home
-    // — otherwise the Test and real runs authenticate with different
-    // credentials and can disagree in both directions.
+  it("does not stage or mutate a configured managed per-agent home for an unqualified hello", async () => {
+    // A configured managed home supplies no permission for a paid hello.
+    // Its original regular-file credential must remain unchanged.
     const perAgentHome = path.join(
       process.env.PAPERCLIP_HOME!,
       "instances",
@@ -415,19 +373,16 @@ describe("codex remote environment diagnostics", () => {
       environmentName: "QA Daytona",
     });
 
-    expect(result.status).toBe("pass");
-    // The company default home preparation never ran; the configured managed
-    // home was seeded in place and its credential is what got staged.
+    expectUnavailableBeforePaidEffects(result);
+    // The unavailable probe must not seed or stage the selected home.
     expect(prepareManagedCodexHome).not.toHaveBeenCalled();
-    expect(capturedHomeAssetAuthJson.value).toBe(promoted);
-    // The real seeding pass ran on the per-agent home and kept the promoted
-    // regular-file credential (the shared source scratch home is empty).
+    // The original credential remains a regular file with the same bytes.
     const stat = await fs.lstat(path.join(perAgentHome, "auth.json"));
     expect(stat.isSymbolicLink()).toBe(false);
     expect(await fs.readFile(path.join(perAgentHome, "auth.json"), "utf8")).toBe(promoted);
   });
 
-  it("stages an external CODEX_HOME's credentials as-is and never seeds or mutates it", async () => {
+  it("does not stage or mutate external-home credentials for an unqualified hello", async () => {
     const externalHome = await makeScratchDir("paperclip-test-external-codex-");
     const external = subscriptionAuth("acct-ext", "external", "2026-07-09T01:00:00Z");
     await fs.writeFile(path.join(externalHome, "auth.json"), external, "utf8");
@@ -453,11 +408,10 @@ describe("codex remote environment diagnostics", () => {
       environmentName: "QA Daytona",
     });
 
-    expect(result.status).toBe("pass");
+    expectUnavailableBeforePaidEffects(result);
     expect(prepareManagedCodexHome).not.toHaveBeenCalled();
-    // The external home's own credential is what got staged — not the shared
-    // source's fresher copy, because an external override manages its own auth.
-    expect(capturedHomeAssetAuthJson.value).toBe(external);
+    // Neither the external credential nor the fresher shared one is staged;
+    // the external override remains unchanged and independently managed.
     const stat = await fs.lstat(path.join(externalHome, "auth.json"));
     expect(stat.isSymbolicLink()).toBe(false);
     expect(await fs.readFile(path.join(externalHome, "auth.json"), "utf8")).toBe(external);

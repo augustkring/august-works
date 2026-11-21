@@ -1,0 +1,104 @@
+{
+  "aggregateRunnerBeforeHostScratchSha256": "cff50fd3086e9bf39658b7450ec6af8b6cdc6a329afc7bc80b5dd90672ce83b8",
+  "aggregateRunnerSha256": "aaa028697d0cc1f83a254ff3b93fbacbc89139c23a84cfe37d0868a5fbdcf9ad",
+  "archive": {
+    "bytes": 255094,
+    "path": "private-delta.tar.gz",
+    "sha256": "17feb1567661f0b8675445e95c16a2dbcad1a4bb6509a956704182b3b3d855a2",
+    "verifiedEntries": 66
+  },
+  "baseCheckpoint": {
+    "archiveSha256": "b2e7e962dbe811cc006dab613e54d430a7849326d4f7ff40fedb64f12d19b5d3",
+    "manifestSha256": "c15736a55c1d56d43ec779243b3da4b52c9885eff734fc2213cbe1f67e5c87f4",
+    "name": "Corrected R75 checkpoint"
+  },
+  "capturedAtUtc": "2026-11-01T23:18:53.062812+00:00",
+  "excluded": [
+    "active Native R147 and all mutable qualification outputs",
+    "DB/private IDs/raw private runtime data and raw actual-C7 log",
+    "full 127-source bundles, overlay snapshots, complete backup archives, dependency/build payloads",
+    "Main/Mirror/Git mutations and any source activation"
+  ],
+  "factoryCandidateStatus": [
+    {
+      "candidateSourceSha256": "149ec86beb326bb710824d927a2a1879dcf6daafb87c1eb9ba3d6bdffdf993ec",
+      "patches": [
+        "factory-real-backing-followup.patch"
+      ],
+      "pinsSha256": "bd8cbda00294e4cce76fac454288516c0b252620345faa88374bbd6638d7ec36",
+      "qualification": "Oxc syntax only; coherent C7/full TypeScript pending Native integration; no physical Docker qualification",
+      "revision": "r3"
+    },
+    {
+      "candidateSourceSha256": "fb20eeeed3fbecce221ddd7b1add13e11d2b0d254c8029ae35e05756b956e761",
+      "patches": [
+        "factory-real-backing-followup.patch",
+        "conversation-factory-assertion.patch",
+        "helper-name-filter-followup.patch"
+      ],
+      "pinsSha256": "121febefe8b572aade04661058e8b599b7be5563645ed85fe0352e518be5907a",
+      "qualification": "Oxc syntax only; coherent C7/full TypeScript pending Native integration; no physical Docker qualification",
+      "revision": "r4"
+    },
+    {
+      "candidateSourceSha256": "efc7edc7043da1c940d61f6d8594fe9de79c6ee39dc44655ec5352fd238e78d5",
+      "patches": [
+        "factory-real-backing-followup.patch",
+        "conversation-factory-assertion.patch",
+        "helper-name-filter-followup.patch",
+        "typescript-followup.patch"
+      ],
+      "pinsSha256": "76958979c677e50982e97b7d0ddcbaf6873453bfda36975e29a946c56e0c2e45",
+      "qualification": "Oxc syntax only; coherent C7/full TypeScript pending Native integration; no physical Docker qualification",
+      "revision": "r5"
+    },
+    {
+      "candidateSourceSha256": "16e9c5e9d9094a245f431c4501df74a84654123284af062e9cd35ffee443cebd",
+      "patches": [
+        "factory-real-backing-followup.patch",
+        "conversation-factory-assertion.patch",
+        "helper-name-filter-followup.patch",
+        "typescript-followup.patch",
+        "http-overload-passthrough.patch"
+      ],
+      "pinsSha256": "a66ccfadf7dbce61aa3ae8ef84150197d68746719e5ce296105ca3e3e769575b",
+      "qualification": "Oxc syntax only; coherent C7/full TypeScript pending Native integration; no physical Docker qualification",
+      "revision": "r6"
+    }
+  ],
+  "hostDeadlinePinnedMjsSha256": "599bbc644ae1a7348c5e1c555fec8e31837ff115ceb06d0ded9866c7fabb9c1d",
+  "hostDeadlineQualificationV2": {
+    "host-node-tests": 0,
+    "isolated-deadline": 0,
+    "shared-build": 0,
+    "source-oxc": 0
+  },
+  "hostDeadlineSourcePinsSha256": "4e67caaa1e4595711789fec26652ced2afaeb8c7ef75e3e7f8e07cf45bc72f5d",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "mainHead": "838b42f9c91dd6061e66e66eed67704be11fe8c9",
+  "nativeR143R144SafeFailureSummary": {
+    "c7EffectReached": false,
+    "failedCaseCount": 1,
+    "firstObservedCode": "native_session_interrupted",
+    "intentionallyUnselected": 4,
+    "passedCaseCount": 0,
+    "rawActualC7LogExcluded": true,
+    "reason": "Raw runtime log may contain private run data; receipt and exit marker preserve the bounded result.",
+    "restore": "pinned sources restored to pre-snapshot source bytes and modes; compiled outputs and tsbuildinfo restored byte-for-byte",
+    "sourceReceipt": "native-stopped-session-erasure-actual-c7-r144/qualification-receipt.json"
+  },
+  "purpose": "RECOVERY ONLY; closed artifacts after R75; no source activation, publication, or broad qualification claim.",
+  "qualificationStatus": {
+    "aggregate": "Final aggregate runner and before-host-scratch snapshot are provenance only; no aggregate run claimed.",
+    "hostDeadline": "Final MJS source matches the pinned 599bbc hash. Qualification-v2 passed 118 Host Node tests, isolated deadline regression, Oxc/shared build, and exact source/build restore. No physical Docker qualification.",
+    "hostFactoryR3toR6": "All four source pins are fixture-only Oxc syntax candidates; coherent C7/full TypeScript and physical Docker qualification remain unclaimed. R146 is a separate local real-HTTP overload regression, not production/SDK acceptance.",
+    "nativeR142": "Frozen assertion inputs only; no acceptance claim.",
+    "nativeR143": "Oxc/shared/DB passed; full TypeScript failed on the two recorded helper type errors; actual C7 was not run; exact restore verified.",
+    "nativeR144": "Oxc/shared/DB/full TypeScript passed, but selected actual-C7 test failed before C7 effect; four tests intentionally unselected; exact restore verified. Raw actual-C7 log excluded.",
+    "nativeR145": "Failure checkpoint patch is frozen test-only material; no qualification claim.",
+    "nativeR146": "Scoped local HTTP regression demonstrates old URL/options callback form did not deliver; fixed-r6 form delivered both supported forms. No Docker, PG, SDK, public seam, or production change.",
+    "preview": "Read-only 147-path source publication preview; explicitly obsolete pending R6/R145/deadline final127 and does not activate source."
+  },
+  "sourceAndReceiptCount": 66,
+  "sourcePublicationPreviewSha256": "a2db77757d70e4106498c132eef7ba33e9fa2b040ee766ea2d26b071056fe5e4"
+}

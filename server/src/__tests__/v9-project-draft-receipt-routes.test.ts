@@ -101,7 +101,8 @@ const support = await getEmbeddedPostgresTestSupport();
     const id = await company(), creator = await user(id), key = randomUUID(), server = app(creator, id);
     await request(server).post(`/api/companies/${id}/projects`).send({ name: "REVOKED-PRIVATE-PROJECT", idempotencyKey: key }).expect(201);
     await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, id), eq(companyMemberships.principalId, creator)));
-    const denied = await request(server).get(path(id, key)).expect(403).expect("Cache-Control", "no-store");
+    // The canonical Project reader hides objects after current membership is withdrawn.
+    const denied = await request(server).get(path(id, key)).expect(404).expect("Cache-Control", "no-store");
     expect(JSON.stringify(denied.body)).not.toContain("REVOKED-PRIVATE-PROJECT");
   });
   it("rejects malformed keys without creating any receipt", async () => {

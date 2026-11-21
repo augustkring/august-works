@@ -1,0 +1,1 @@
+V10 mounted UI operation classification verified: 6 Agent tool operations, 159 unqualified existing API-only contracts, 996 exact mounted UI callsites reviewed; API-only contracts expose no tools.

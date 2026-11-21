@@ -45,7 +45,14 @@ import { authorizationService } from "./authorization.js";
 import { issueService } from "./issues.js";
 import { logActivity } from "./activity-log.js";
 import { instanceSettingsService } from "./instance-settings.js";
-import { toolAccessPolicyService } from "./tool-access-policy.js";
+import {
+  createToolRateLimitTokenLedger,
+  restoreToolRateLimitTokenLedger,
+  toolAccessPolicyService,
+  toolPolicyRefusal,
+  toolRateLimitCharge,
+  type ToolRateLimitTokenLedger,
+} from "./tool-access-policy.js";
 import type { heartbeatService } from "./heartbeat.js";
 import type { StorageService } from "../storage/types.js";
 import {
@@ -71,6 +78,14 @@ export type EmailActor = {
   runId?: string;
   localImplicit?: boolean;
 };
+/**
+ * The actor stored with a queued send. `rateLimitCharge` is the rate-limit
+ * charge its publication admission took (a `ToolRateLimitCharge` bound to
+ * `email-send:<publicationId>`); the dispatch re-check excludes exactly it.
+ */
+type StoredEmailActor = EmailActor & { rateLimitCharge?: unknown };
+const emailSendRateLimitOwner = (publicationId: string) =>
+  `email-send:${publicationId}`;
 type Endpoint = typeof chatEndpoints.$inferSelect;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export interface EmailChannelOptions {
@@ -112,7 +127,11 @@ const envelope = (m: AgentmailMessage): EmailEnvelope => ({
 const diagnostic = (e: unknown) =>
   e instanceof AgentmailApiError
     ? e.message
-    : "Email operation failed; retry or reconnect the inbox.";
+    : e instanceof HttpError &&
+        e.status === 429 &&
+        (e.details as { code?: unknown } | undefined)?.code === "rate_limited"
+      ? e.message
+      : "Email operation failed; retry or reconnect the inbox.";
 
 export function emailChannelService(db: Db, options: EmailChannelOptions) {
   const secrets = secretService(db);
@@ -585,11 +604,19 @@ export function emailChannelService(db: Db, options: EmailChannelOptions) {
     }
     return task;
   }
+  /**
+   * Tool Access policy for one send. Publication admits it (`consume`) and
+   * takes its rate-limit tokens into `rateLimitTokens`; the dispatch re-check
+   * passes the ledger restored from the send's stored charge, so it does not
+   * count the send's own token. A refusal uses the Tool Access refusal: 429
+   * `rate_limited` for a rate limit, 403 with the reason code otherwise.
+   */
   async function policy(
     endpoint: Endpoint,
     input: EmailSendInput,
     actor: EmailActor,
     consume: boolean,
+    rateLimitTokens: ToolRateLimitTokenLedger,
   ) {
     const service = toolAccessPolicyService(db);
     const request = {
@@ -610,9 +637,18 @@ export function emailChannelService(db: Db, options: EmailChannelOptions) {
       },
       consumeRateLimit: consume,
     };
-    const decision = await service.decide(request);
+    const decision = await service.decide(request, { rateLimitTokens });
     await service.writeAudit(request, decision);
-    if (!decision.allowed) throw forbidden(decision.explanation);
+    if (!decision.allowed) {
+      const refusal = toolPolicyRefusal(decision, {
+        publicationId: input.idempotencyKey,
+        tool: request.request.toolName,
+      });
+      throw new HttpError(refusal.status, refusal.message, {
+        code: refusal.reasonCode,
+        ...refusal.details,
+      });
+    }
   }
 
   async function setup(
@@ -1322,7 +1358,12 @@ export function emailChannelService(db: Db, options: EmailChannelOptions) {
               status: "todo",
               priority: "medium",
               assigneeAgentId: endpoint.assignedAgentId,
+              // The sender is an external correspondent, never a Human here.
+              // Record the inbox sponsor (the Human who configured this inbox
+              // and its agent) as the accountable Human; untrusted, this value
+              // was dropped and the Run fell back to the company default.
               responsibleUserId: endpoint.sponsorUserId,
+              trustExplicitResponsibleUserId: true,
               originKind: "chat_channel",
               originId: `email:${endpoint.id}:${message.thread_id}`,
               idempotencyKey: `email:${endpoint.id}:${message.thread_id}`,
@@ -1489,7 +1530,22 @@ export function emailChannelService(db: Db, options: EmailChannelOptions) {
         );
       return publication(input.idempotencyKey, companyId);
     }
-    await policy(endpoint, input, actor, true);
+    // The send's admission takes its rate-limit tokens here. The queued row
+    // stores them, bound to this publication, for the dispatch re-check. A
+    // send that this call does not queue holds no token.
+    const rateLimitTokens = createToolRateLimitTokenLedger();
+    await policy(endpoint, input, actor, true, rateLimitTokens);
+    const releaseUnqueued = () =>
+      toolAccessPolicyService(db).releaseRateLimitTokens(rateLimitTokens);
+    const { rateLimitCharge: _untrusted, ...sendActor } =
+      actor as StoredEmailActor;
+    const rateLimitCharge = toolRateLimitCharge(
+      rateLimitTokens,
+      emailSendRateLimitOwner(input.idempotencyKey),
+    );
+    const storedActor: StoredEmailActor = rateLimitCharge
+      ? { ...sendActor, rateLimitCharge }
+      : sendActor;
     const attachmentIssueId = input.parentIssueId ?? conversation!.issueId;
     for (const id of input.attachmentIds) {
       const attachment = await issueService(db).getAttachmentById(id);
@@ -1497,10 +1553,12 @@ export function emailChannelService(db: Db, options: EmailChannelOptions) {
         !attachment ||
         attachment.companyId !== companyId ||
         attachment.issueId !== attachmentIssueId
-      )
+      ) {
+        await releaseUnqueued();
         throw forbidden("Email attachments must belong to the source task");
+      }
     }
-    await db.transaction(async (tx) => {
+    const queued = await db.transaction(async (tx) => {
       await lock(tx, input.idempotencyKey);
       const [prior] = await tx
         .select()
@@ -1509,7 +1567,7 @@ export function emailChannelService(db: Db, options: EmailChannelOptions) {
       if (prior) {
         if (prior.companyId !== companyId || prior.digest !== digest)
           throw conflict("Email idempotency key conflict");
-        return;
+        return false;
       }
       if (!conversation) {
         const task = await issueService(db).create(
@@ -1571,10 +1629,15 @@ export function emailChannelService(db: Db, options: EmailChannelOptions) {
         companyId,
         endpointId: endpoint.id,
         request: input,
-        actor,
+        actor: storedActor,
         digest,
       });
+      return true;
+    }).catch(async (error: unknown) => {
+      await releaseUnqueued();
+      throw error;
     });
+    if (!queued) await releaseUnqueued();
     await audit(endpoint, "email.queued", actor, {
       publicationId: input.idempotencyKey,
     });
@@ -1666,7 +1729,19 @@ export function emailChannelService(db: Db, options: EmailChannelOptions) {
         (send.actor.agentId && emailTask.assigneeAgentId !== send.actor.agentId)
       )
         throw forbidden("Email task is no longer authorized for this send");
-      await policy(endpoint, input, send.actor, false);
+      await policy(
+        endpoint,
+        input,
+        send.actor,
+        false,
+        restoreToolRateLimitTokenLedger(
+          (send.actor as StoredEmailActor).rateLimitCharge,
+          {
+            owner: emailSendRateLimitOwner(send.publicationId),
+            companyId: send.companyId,
+          },
+        ),
+      );
       const attachments: {
         filename: string;
         content_type: string;

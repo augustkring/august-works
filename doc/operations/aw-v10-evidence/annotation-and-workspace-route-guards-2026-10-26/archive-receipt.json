@@ -1,0 +1,26 @@
+[
+  {
+    "originalArtifact": "route-annotations-workspace-guards-r1-20261026-source-pins.json",
+    "storedArtifact": "source-pins.json",
+    "originalSha256": "ae048ff3861119f666376b5b0ec462ae5efe4aff2bd43209ae6b6a0ec7abecd5",
+    "storedSha256": "ae048ff3861119f666376b5b0ec462ae5efe4aff2bd43209ae6b6a0ec7abecd5"
+  },
+  {
+    "originalArtifact": "route-annotations-workspace-guards-r1-20261026-snapshot.log",
+    "storedArtifact": "snapshot.log.gz",
+    "originalSha256": "f80a2457345fd2de1585cd75f94ab4559c5d618f37db8027001ba50abdbd4085",
+    "storedSha256": "bf02fe653e23d3d5dd391bada8839de67625c4572f0dad73d8ec8224466950fb"
+  },
+  {
+    "originalArtifact": "route-annotations-workspace-guards-r1-20261026-test.log",
+    "storedArtifact": "test.log.gz",
+    "originalSha256": "78d6988686f0803b44618cc91f5f48fe28e2c139e59050c698aa0f6d22c93a2d",
+    "storedSha256": "2ffd8f65140a6cd0505d9a9e3e5acb11e7207a9c9ba2d9a2f4f8b89cb929e8a3"
+  },
+  {
+    "originalArtifact": "route-annotations-workspace-guards-r1-20261026-test.exit",
+    "storedArtifact": "test.exit",
+    "originalSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  }
+]

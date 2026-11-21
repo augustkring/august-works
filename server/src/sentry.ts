@@ -132,6 +132,8 @@ export interface RunFailureEvent {
   agentAdapter: string;
   /** The run status that triggered this report. */
   runStatus: RunFailureStatus;
+  /** Closed, content-free execution labels only. */
+  executionDiagnostics?: Record<string, string | number | boolean>;
 }
 
 /**
@@ -167,6 +169,7 @@ export function captureRunFailure(event: RunFailureEvent): void {
           errorMessage: event.errorMessage,
           errorCode,
           agentAdapter: event.agentAdapter,
+          ...(event.executionDiagnostics ? { executionDiagnostics: event.executionDiagnostics } : {}),
         },
       },
       fingerprint: [errorCode, event.agentAdapter],

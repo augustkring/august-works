@@ -1,0 +1,6 @@
+eaecc2352c6a55c0e761ad4a71b2af1fc59614f7bbc20f109383f731df1025f3  server/src/services/authorization.ts
+3a3feb64d3e86f3e9be3a32b9abb8b472352571d5e96899af90fd9cd802b39b0  server/src/middleware/auth.ts
+98364ac7cd59490185f8f86a62c99ceaec647d88097acf0e12ea6f10a04da841  server/src/types/express.d.ts
+743f6b63a896419ce9bf4d23f31c19bfc8c48aeacabf9c72492e0a1c6c5ed292  server/src/agent-auth-jwt.ts
+36b4e56fa33a448ae449344daa8439776f9ba0ab274c30a55b53784d360b3a02  server/src/__tests__/foundation-read-source-authority.integration.test.ts
+14b33b14768236851b3eb2e15b966317089cf843d04a32adb88b6d90e99d3eb4  server/src/__tests__/agent-auth-middleware.test.ts

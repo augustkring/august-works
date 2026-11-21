@@ -119,6 +119,7 @@ describe("onboard", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     process.env = { ...ORIGINAL_ENV };
     process.chdir(ORIGINAL_CWD);
     process.exitCode = ORIGINAL_EXIT_CODE;
@@ -143,6 +144,25 @@ describe("onboard", () => {
     expect(fs.readFileSync(fixture.configPath, "utf8")).toBe(fixture.configText);
     expect(fs.existsSync(`${fixture.configPath}.backup`)).toBe(false);
     expect(fs.existsSync(path.join(path.dirname(fixture.configPath), ".env"))).toBe(true);
+  });
+
+  it("prints the Blentera banner and canonical setup commands", async () => {
+    const output: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...args) => output.push(args.join(" ")));
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      output.push(String(chunk));
+      return true;
+    });
+
+    await onboard({ config: createFreshConfigPath(), yes: true, invokedByRun: true });
+
+    const text = output.join("");
+    expect(text).toContain("BLENTERA");
+    expect(text).toContain("blentera onboard");
+    expect(text).toContain("blentera run");
+    expect(text).toContain("blentera configure");
+    expect(text).toContain("blentera doctor");
+    expect(text).not.toContain("paperclipai run");
   });
 
   it("does not opt into opening a browser for a non-interactive existing setup", async () => {

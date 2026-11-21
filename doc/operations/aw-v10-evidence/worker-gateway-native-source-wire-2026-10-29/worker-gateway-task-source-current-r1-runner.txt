@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/v7-worker-model-gateway.integration.test.ts
+test_pattern=preserves known or unknown provider usage without disclosure when Task source changes during inference

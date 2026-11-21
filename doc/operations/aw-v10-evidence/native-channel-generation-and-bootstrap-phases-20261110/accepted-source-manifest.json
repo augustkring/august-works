@@ -1,0 +1,89 @@
+{
+  "status": "root_accepted",
+  "sourceHead": "5966242526b757987dcc572c42c00d2858299196",
+  "sourceGraphSha256": "75381f0fac6d1efed5d091ed95df78bcd9790748d595c103da5ebeb420d69c7a",
+  "paths": [
+    {
+      "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
+      "sha256": "2ec17e3dd3b5e8bde84e4165f184f18d82f82ce480098109c5ecbfe2b60dcf65"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+      "sha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "c210ca5c1f8648f6da31861ff8c620096c0218af2c130d950212bd7b43719c6c"
+    },
+    {
+      "path": "server/src/services/chat-channels.ts",
+      "sha256": "52fc828496ac817d006106d57827e6caf2b58827cdbb8685c19709583be16dee"
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd"
+    },
+    {
+      "path": "server/src/services/issue-assignment-wakeup.ts",
+      "sha256": "e76a16e492cb0ea46ddd657c8c72fde8a43b5a1434fdf20a896dc74b94a3b65e"
+    }
+  ],
+  "qualification": {
+    "r314": {
+      "status": "passed",
+      "seconds": 33.91
+    },
+    "r315": {
+      "status": "passed",
+      "seconds": 69.78,
+      "peakOwnedDescendantRssBytes": 6467788800,
+      "ownedDescendantRssLimitBytes": 8589934592,
+      "sourcePinsStable": true,
+      "oom": false
+    },
+    "currentRetry": {
+      "status": "unqualified",
+      "summary": "The generic test-only pre-Runner handoff failure now reaches the current retry coordinator and is correctly denied as ineligible. A real Native bootstrap-initialization failure fixture is under construction; no retry success is claimed."
+    },
+    "additionalReceipts": [
+      {
+        "name": "native-stop-intent-write-fault-r320",
+        "status": "passed",
+        "receiptPath": "/workspace/v10-preparation/combined-source-20261109/native-text-stop-intent-write-fault-r320-receipt.json",
+        "receiptSha256": "6ac24b15789b6ab398f759109efb0297b6d9ab8e198e7df6d255b58b47bc1044"
+      },
+      {
+        "name": "server-typecheck-r327",
+        "status": "passed",
+        "receiptPath": "/workspace/v10-preparation/combined-source-20261109/native-wakeup-current-typecheck-r327/build-receipt.json",
+        "receiptSha256": "76378287e75cd436e91cd7a2cd300a18b37e44e1421abc4e6cfeaf8766bdc407"
+      }
+    ]
+  },
+  "helpReviews": [
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "recovering-work",
+      "decision": "no_change",
+      "rationale": "Reviewed the managed sandbox preparation phase change against the English recovery guide. It reuses the existing source-bound workspace callback for qualified non-conversation chat Tasks; available retry actions, original-task recovery, pending Stop and unknown-outcome guidance remain accurate."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "recovering-work-da",
+      "decision": "no_change",
+      "rationale": "Gennemgået den udskudte workspace-forberedelse mod den danske genoprettelsesvejledning. Ændringen bruger den eksisterende kildebundne callback for kvalificerede chatopgaver; vejledningen om oprindelig opgave, viste genforsøg, afventende stop og ukendt resultat er fortsat korrekt."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "export-and-delete",
+      "decision": "no_change",
+      "rationale": "Reviewed the exact non-conversation sandbox preparation routing against the English deletion guide. Native termination, runtime-file erasure verification, retention and external-provider limits are unchanged; deferred preparation does not turn a request or Memory deletion into proof of completed erasure."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "export-and-delete-da",
+      "decision": "no_change",
+      "rationale": "Gennemgået den præcise ændring i chatopgavers forberedelsesfase mod den danske slettevejledning. Native-stop, verificeret filoprydning, opbevaring og begrænsningen for udbyderdata er uændrede; vejledningens kvitteringer og afventende status er fortsat korrekte."
+    }
+  ]
+}

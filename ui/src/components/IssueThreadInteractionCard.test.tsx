@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { ApiError } from "../api/client";
 import { i18n } from "../i18n";
 import { IssueThreadInteractionCard } from "./IssueThreadInteractionCard";
@@ -876,7 +877,7 @@ describe("IssueThreadInteractionCard", () => {
     expect((resumeFailed.firstElementChild as HTMLElement).className).toContain("border-amber-500/70");
     expect(resumeFailed.textContent).toContain("Approved — agent resume failed");
     expect(resumeFailed.textContent).toContain("Agent resume failed");
-    expect(resumeFailed.textContent).toContain("Paperclip needs attention before the agent can resume this approved work.");
+    expect(resumeFailed.textContent).toContain(`${PRODUCT_IDENTITY.productName} needs attention before the agent can resume this approved work.`);
     expect(resumeFailed.textContent).toContain("adapter_failed");
 
     act(() => root?.unmount());

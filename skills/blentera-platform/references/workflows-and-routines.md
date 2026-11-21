@@ -1,0 +1,3 @@
+# Workflow and Routine lifecycle
+
+Use the canonical sequence: DESCRIBE → DRAFT → REVIEW → ACCESS → APPROVAL POLICY → TEST → INSPECT → FIX → CHECK → PUBLISH → OPERATE → CHANGE → RECOVER → RETIRE. A draft edit does not change the published version. Inspect actual test receipts, required access and approval policy before publication; a green step does not qualify the entire live Workflow. Routines use canonical schedules, occurrence identity and current source authorization. Preserve accepted occurrence and execution receipts across restart; do not duplicate work on a delayed response. Refresh a stale version, reconnect through the Connection owner, reconcile partial effects, and stop only with truthful observed state. Discover live authoring and lifecycle capabilities.

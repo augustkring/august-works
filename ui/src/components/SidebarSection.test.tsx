@@ -107,6 +107,22 @@ describe("SidebarSection", () => {
     expect(container.querySelector('button[aria-label="Collapse Projects"] svg')).toBeTruthy();
   });
 
+  it("draws section labels in the full muted tone for AA contrast (EXIT-R1)", async () => {
+    const currentRoot = createRoot(container);
+    root = currentRoot;
+    await act(async () => {
+      currentRoot.render(
+        <SidebarSection label="Projects" collapsible={{ open: true, onOpenChange: vi.fn() }}>
+          <a href="/projects">Projects</a>
+        </SidebarSection>,
+      );
+    });
+    await flushReact();
+    const label = Array.from(container.querySelectorAll("span")).find((element) => element.textContent === "Projects");
+    const tones = label?.className.split(/\s+/).filter((name) => name.startsWith("text-muted-foreground"));
+    expect(tones).toEqual(["text-muted-foreground"]);
+  });
+
   it("keeps collapse on the caret and opens the menu from the heading", async () => {
     const onOpenChange = vi.fn();
     const currentRoot = createRoot(container);

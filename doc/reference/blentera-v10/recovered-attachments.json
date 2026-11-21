@@ -1,0 +1,314 @@
+[
+  {
+    "fileId": "file_00000000426082108a905ea30fcf596c",
+    "suppliedFileName": "03_engineering_workflow_sdlc_configuration_management_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/03_engineering_workflow_sdlc_configuration_management_v2.md",
+    "sha256": "66d7afea2dbc7b035f034e6984addd774d732ad892b7629099901d1d0441f6d1",
+    "sizeBytes": 121918,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000870882108d8d32306e4b0116",
+    "suppliedFileName": "02_software_architecture_system_design_v2.1_research_audited_golden_master.md",
+    "path": "doc/reference/aw-v9/playbooks/02_software_architecture_system_design_v2.1_research_audited_golden_master.md",
+    "sha256": "42b8612fa4942ffde2efa90254f3d3d45c879c8e2ae70a7764d8287fa41eaa0f",
+    "sizeBytes": 163435,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000c6d88210b6261e0c684d4610",
+    "suppliedFileName": "01_requirements_specification_domain_engineering_master_playbook_v2.2.md",
+    "path": "doc/reference/aw-v9/playbooks/01_requirements_specification_domain_engineering_master_playbook_v2.2.md",
+    "sha256": "ed1a535e40a62e0e3bf7f55ad0eb4a3275090a91727c2b775c8e3063136b6a54",
+    "sizeBytes": 158850,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000465082109df3eb2a14508962",
+    "suppliedFileName": "05_verification_validation_testing_quality_engineering_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/05_verification_validation_testing_quality_engineering_v2.md",
+    "sha256": "ce9f27bbb8fb89ede84075f411d4861099618dfa5c36d6829ed05b53bd058236",
+    "sizeBytes": 132218,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000a53c8210b406483b923debfd",
+    "suppliedFileName": "04_software_construction_code_quality_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/04_software_construction_code_quality_v2.md",
+    "sha256": "c185f38376976b7e80f289fb039188e503d450cd7af9d159b079475d850733f5",
+    "sizeBytes": 100560,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000057c082108d35d091b50e5fdc",
+    "suppliedFileName": "06_security_engineering_v2_golden_master.md",
+    "path": "doc/reference/aw-v9/playbooks/06_security_engineering_v2_golden_master.md",
+    "sha256": "6ee0530424263b86e33ded1f09132f3e7adaed90711903fa4fc401f58bd7873e",
+    "sizeBytes": 279064,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000f8d88210937d66b2db95c80e",
+    "suppliedFileName": "07_privacy_data_protection_engineering_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/07_privacy_data_protection_engineering_v2.md",
+    "sha256": "73eec8b3584696f0dec1f706781d007d80c92479aa2d6ca7fa667588674bc264",
+    "sizeBytes": 119003,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000dc088210be199d27adaf1da7",
+    "suppliedFileName": "09_performance_scalability_resource_cost_engineering_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/09_performance_scalability_resource_cost_engineering_v2.md",
+    "sha256": "628f15dcf3499da24c2f8941f0cde630622f13fb68147fb91c5f18bc9bc5d58f",
+    "sizeBytes": 116313,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000c3fc82109922f25e252c7e4f",
+    "suppliedFileName": "08_reliability_resilience_observability_sre_v2_golden_master.md",
+    "path": "doc/reference/aw-v9/playbooks/08_reliability_resilience_observability_sre_v2_golden_master.md",
+    "sha256": "1a6e338476890b2b3f2ff9fc8cb0cb29681260eba6f89645ea42c2445760575e",
+    "sizeBytes": 159077,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_000000004e7082108c124fd831535091",
+    "suppliedFileName": "11_maintenance_evolution_migration_technical_debt_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/11_maintenance_evolution_migration_technical_debt_v2.md",
+    "sha256": "d1da27c2ddde4c6d8b8638257e3d3a0ca82fb7af2f19e191f9bf548d5e14e5f9",
+    "sizeBytes": 109030,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_000000000de08210a12101db6afdb090",
+    "suppliedFileName": "10_devops_cicd_release_platform_supply_chain_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/10_devops_cicd_release_platform_supply_chain_v2.md",
+    "sha256": "4a9ef5835b8cc4948a8f6547b351ed5a563c6cacc3270743f341f8928d5c283c",
+    "sizeBytes": 141225,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000029248210853cf28bd39923dc",
+    "suppliedFileName": "12_data_database_storage_engineering_v2_golden_master.md",
+    "path": "doc/reference/aw-v9/playbooks/12_data_database_storage_engineering_v2_golden_master.md",
+    "sha256": "2e45000659a24de43a6187be8808f3a17807936571bc9248abf44a1697c6a711",
+    "sizeBytes": 150942,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_000000005ea8821095b3290a2b61d85c",
+    "suppliedFileName": "13_api_integration_distributed_systems_engineering_v2_golden_master.md",
+    "path": "doc/reference/aw-v9/playbooks/13_api_integration_distributed_systems_engineering_v2_golden_master.md",
+    "sha256": "bfa0e4a9deae39ed3302ea6aa1a915d8c0d771967ae4dfad2c55129e3a5c79da",
+    "sizeBytes": 124805,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_000000003f648210a7b7120a545b9d72",
+    "suppliedFileName": "14_web_frontend_engineering_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/web_frontend_engineering_master_playbook_v2.md",
+    "sha256": "e8b60779a7174ff54b2e95595b9de85f5363b5b61123ff7023dee89383ed8ac3",
+    "sizeBytes": 113728,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000055e08210afa4080d0dc58add",
+    "suppliedFileName": "15_backend_services_engine_engineering_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/15_backend_services_engine_engineering_v2.md",
+    "sha256": "e22a3bc783a3007e186c87da9d5cf69b728cc4e06d722dac971054d4ae71249f",
+    "sizeBytes": 105634,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000c3248210977a9644f8495532",
+    "suppliedFileName": "17_cloud_infrastructure_networking_iac_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/17_cloud_infrastructure_networking_iac_v2.md",
+    "sha256": "31c10af587bb34ac41a38e1102010ebdb4906961a77f178d39037fb2154dab21",
+    "sizeBytes": 106303,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000004a08210a2651b46f218a37a",
+    "suppliedFileName": "16_mobile_desktop_application_engineering_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/16_mobile_desktop_application_engineering_v2.md",
+    "sha256": "61ac6979672db4c8fc078a9010f5a042ce9832f4471db2b01328bae2eb4559b9",
+    "sizeBytes": 100826,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000075b48210b29e49bc92a218cd",
+    "suppliedFileName": "18_ai_ml_llm_systems_engineering_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/18_ai_ml_llm_systems_engineering_master_playbook_v2.md",
+    "sha256": "7b1a948da1cc874c1aec68f30a427ccd10e4136c0a527659af54067a79f0f398",
+    "sizeBytes": 145898,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000c0e8821091b20d8fa798fba6",
+    "suppliedFileName": "20_blockchain_smart_contract_engineering_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/20_blockchain_smart_contract_engineering_v2.md",
+    "sha256": "66a13d5d4bd7e16e041f4e62f17a16e2feb46742eb2515229ff279f8d87e69f9",
+    "sizeBytes": 101780,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000020fc8210950c6124d8f9fd33",
+    "suppliedFileName": "19_agentic_ai_engineering_v2_golden_master.md",
+    "path": "doc/reference/aw-v9/playbooks/19_agentic_ai_engineering_v2_golden_master.md",
+    "sha256": "6273cbb23263df0383094bd1aa7b303c46b75b8d8c1f699b4b1bb049dc2f3162",
+    "sizeBytes": 190147,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000b77c8210bb65a3d922aa2022",
+    "suppliedFileName": "21_systems_embedded_real_time_engineering_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/21_systems_embedded_real_time_engineering_v2.md",
+    "sha256": "1af242f1d68ea672d98ac8d9d51554f8b430409a97960c24a9d51a44bd35779d",
+    "sizeBytes": 161648,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000a8a48210b95854e2fbe5fbbd",
+    "suppliedFileName": "brand_strategy_positioning_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/brand_strategy_positioning_master_playbook_v2.md",
+    "sha256": "2bcbff7f36d6bdd433e18b608e48100cd4ae1ce7793a392fa474b28384365471",
+    "sizeBytes": 115466,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000e554821098ba3b0632760473",
+    "suppliedFileName": "22_language_runtime_engineering_standards_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/22_language_runtime_engineering_standards_v2.md",
+    "sha256": "16a78607ebb0cfe75b5bc199b5bacc962a74b8a3384c75cad77f9a676061e51d",
+    "sizeBytes": 95138,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000975c82109fb69b3c93b139bd",
+    "suppliedFileName": "concept_business_design_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/concept_business_design_master_playbook_v2.md",
+    "sha256": "4a13b027673013d9ab92bc0c71d93239231c0bc3b5f9ffeaafed08b86bb8c794",
+    "sizeBytes": 111559,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000db248210a6f42d459bc6b096",
+    "suppliedFileName": "digital_graphics_illustration_generative_visual_production_master_playbook_v2.1_golden_master.md",
+    "path": "doc/reference/aw-v9/playbooks/digital_graphics_illustration_generative_visual_production_master_playbook_v2.1_golden_master.md",
+    "sha256": "4646aba5823f7765dd517a4ab3333ab4c93306ba4f9870e7f455a61b48a6200c",
+    "sizeBytes": 171520,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000087a882109c74b3c038bc3679",
+    "suppliedFileName": "digital_visual_design_art_direction_master_playbook_v2.1_golden_master.md",
+    "path": "doc/reference/aw-v9/playbooks/digital_visual_design_art_direction_master_playbook_v2.1_golden_master.md",
+    "sha256": "7e5cd92f82fcc82f91d8eb54121433d7dbd542bacdfdbdc8ff93c70d6695b1d2",
+    "sizeBytes": 189008,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000068ac8210aa10c4b6409e4720",
+    "suppliedFileName": "google_ads_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/google_ads_master_playbook_v2.md",
+    "sha256": "fe9b3fc3221921072ca5244e9c1ebd2233a3fc6c84c7b65f709a97bf589a775f",
+    "sizeBytes": 127430,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_000000008b748210816cda366168fabd",
+    "suppliedFileName": "market_validation_pretotyping_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/market_validation_pretotyping_master_playbook_v2.md",
+    "sha256": "36b1941aead8b74a55999a3f29952bbb9a26a2ac54593e05796b1fc8e19d4a46",
+    "sizeBytes": 147041,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000081948210b8aa7fe4d5e69a07",
+    "suppliedFileName": "marketing_measurement_attribution_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/marketing_measurement_attribution_master_playbook_v2.md",
+    "sha256": "4dd41d59a12676830843cef734d300bed1f5dcd89106408a3181b1fc9429bd14",
+    "sizeBytes": 118078,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000064448210bdd6a7db52dfc904",
+    "suppliedFileName": "master_playbook_standard_v2.0.md",
+    "path": "doc/reference/aw-v9/playbooks/master_playbook_standard_v2.0.md",
+    "sha256": "3d5aa0b87d87ca345402f18dedde7893a67b1af21b23100b8117a082f55ff890",
+    "sizeBytes": 214638,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000064fc8210858ff9ad668036b8",
+    "suppliedFileName": "meta_ads_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/meta_ads_master_playbook_v2.md",
+    "sha256": "df73a733fab4058af29355584aa84b7d10d36642461f0fb5a759146e03c8ac16",
+    "sizeBytes": 121142,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000036b882109735f4c85c86a991",
+    "suppliedFileName": "organic_discoverability_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/organic_discoverability_master_playbook_v2.md",
+    "sha256": "ab4d130d89613f302a53aa83896cd1351483dc5d635dc1fc9ac97bd3a479a1fd",
+    "sizeBytes": 172349,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000e0ec8210b3d851888342b0cc",
+    "suppliedFileName": "ui_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/ui_master_playbook_v2.md",
+    "sha256": "863c87a97de488d60eb5cb687da2b85d177095cd59545742c048bb402a1ce656",
+    "sizeBytes": 170427,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_0000000090c48210b106770fedc3e6d6",
+    "suppliedFileName": "universal_design_principles_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/universal_design_principles_master_playbook_v2.md",
+    "sha256": "e1311908de3f296f17d99d5cbaa514b3488cf1cb39e71b6396a3627037aa687f",
+    "sizeBytes": 144109,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000410c82109bc59b4e50e51a97",
+    "suppliedFileName": "universal_software_ai_engineering_master_playbook_v2.md",
+    "path": "doc/reference/aw-v9/playbooks/universal_software_ai_engineering_master_playbook_v2.md",
+    "sha256": "df11fe0389acc15df5afe87f873eb726d06b6131d282d20f26472b05e47792e5",
+    "sizeBytes": 201414,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_000000000cc08210a24bba3500a69e79",
+    "suppliedFileName": "ux_master_playbook_v2_double_validated_2026-09-21.md",
+    "path": "doc/reference/aw-v9/playbooks/ux_master_playbook_v2_double_validated_2026-09-21.md",
+    "sha256": "47978d13e56cd7d3dc0e69985f03759161a79e2e4fe3f610ff42b8d2fc86ba49",
+    "sizeBytes": 165540,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000bff88210966aa3f8a2d0d69d",
+    "suppliedFileName": "WR-00_Universal_Writing_Content_Editorial_Standard_v2.0.md",
+    "path": "doc/reference/aw-v9/playbooks/WR-00_Universal_Writing_Content_Editorial_Standard_v2.0.md",
+    "sha256": "a13b422b84cc94d30d5b19318006f9e156b852507d5926ad19d73e8d9ce4de5e",
+    "sizeBytes": 226697,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_00000000a3148210b0dc28394d7acae1",
+    "suppliedFileName": "WR-01_Copywriting_Persuasive_Communication_Master_Playbook_v2.0.md",
+    "path": "doc/reference/aw-v9/playbooks/WR-01_Copywriting_Persuasive_Communication_Master_Playbook_v2.0.md",
+    "sha256": "fa6920831186d2a2a791a5048b4143b46b1830ea9d29ac853e97e57eea37ea76",
+    "sizeBytes": 302057,
+    "matchesExistingV9Bytes": true
+  },
+  {
+    "fileId": "file_000000002ac08210b15330e99a3d3a74",
+    "suppliedFileName": "WR-02_Storytelling_Narrative_Design_Master_Playbook_v2.0.md",
+    "path": "doc/reference/aw-v9/playbooks/WR-02_Storytelling_Narrative_Design_Master_Playbook_v2.0.md",
+    "sha256": "2c18169d9a4d2c6c400f005a9bb74f945e32232787080cea6a0d876824a35f80",
+    "sizeBytes": 269019,
+    "matchesExistingV9Bytes": true
+  }
+]

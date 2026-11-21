@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts
+test_pattern=uses the authenticated chat route

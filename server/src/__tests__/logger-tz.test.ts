@@ -70,10 +70,48 @@ describe("logger translateTime respects TZ environment variable", () => {
 
   it("does not construct a pretty transport in production", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    await import("../middleware/logger.js");
+    const middleware = await import("../middleware/logger.js");
 
     expect(mockTransport).not.toHaveBeenCalled();
     expect(mockPino).toHaveBeenCalledWith(expect.objectContaining({ level: "info" }));
+    const options = mockPino.mock.calls[0]![0] as { serializers: Record<string, (value: unknown) => unknown> };
+    expect(options.serializers.err).toBe(middleware.safeErrorLogProjection);
+    expect(options.serializers.error).toBe(middleware.safeErrorLogProjection);
+  });
+
+  it("projects nested errors without messages, parameters, queries, or private stack text", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const middleware = await import("../middleware/logger.js");
+    const cause = Object.assign(new Error("db private profile payload marker"), {
+      code: "23505",
+      query: "insert into users values ('sql private marker')",
+      params: ["drizzle private parameter marker"],
+      stack: "Error: db private profile payload marker\n    at query (/private/profile marker.ts:42:7)",
+    });
+    const outer = Object.assign(new Error("outer private error marker"), { cause });
+    const serialized = JSON.stringify(middleware.safeErrorLogProjection(outer));
+    expect(serialized).not.toContain("private");
+    expect(serialized).not.toContain("profile marker");
+    expect(serialized).not.toContain("sql private");
+    expect(serialized).not.toContain("drizzle");
+    expect(JSON.parse(serialized)).toMatchObject({
+      type: "Error",
+      cause: { type: "DatabaseError", sqlState: "23505", location: { line: 42, column: 7 } },
+    });
+  });
+
+  it("keeps bounded operational error metadata", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const middleware = await import("../middleware/logger.js");
+    const error = Object.assign(new TypeError("ordinary operational prose"), {
+      statusCode: 503,
+      stack: "TypeError: ordinary operational prose\n    at reconcile (/srv/app/recovery.ts:18:4)",
+    });
+    const options = mockPino.mock.calls[0]![0] as { serializers: Record<string, (value: unknown) => unknown> };
+    expect(options.serializers.err(error)).toMatchObject({
+      type: "HttpError", status: 503, location: { line: 18, column: 4 },
+    });
+    expect(middleware.safeErrorLogProjection(error)).not.toHaveProperty("message");
   });
 
   it("SYS: prefix produces timezone-sensitive output: UTC epoch formats differently under UTC vs UTC+8", () => {

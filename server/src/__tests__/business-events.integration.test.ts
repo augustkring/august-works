@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { activityLog, analyticalLineageEdges, analyticalLineageManifests, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, governanceObligations, createDb, applyPendingMigrations, runDatabaseBackup, runDatabaseRestore, issues, projects } from "@paperclipai/db";
+import { activityLog, analyticalLineageEdges, analyticalLineageManifests, businessEvents, businessEventObjects, businessEventSuppressions, businessEventBackfillRuns, companies, governanceObligations, principalPermissionGrants, createDb, applyPendingMigrations, runDatabaseBackup, runDatabaseRestore, issues, projects } from "@paperclipai/db";
 import { businessEventBackfillSchema } from "@paperclipai/shared";
 import { businessEventService } from "../services/business-events.js";
 import { businessEventExportService } from "../services/business-event-export.js";
@@ -22,10 +22,12 @@ import { eraseBusinessEventObjectUnderMemory } from "../services/business-event-
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { disableV8Rollout } from "./helpers/v8-rollout.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import type { AuthorizationActor } from "../services/authorization.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const suite = support.supported ? describe : describe.skip;
-const actor = { type: "board" as const, source: "local_implicit" as const };
+let actor: AuthorizationActor;
 const timeWindow = { from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", limit: 100 };
 suite("Native V8 business event projection on migrated PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -43,20 +45,23 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
   });
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
-    companyId = randomUUID(); otherCompanyId = randomUUID(); issueId = randomUUID(); projectId = randomUUID();
+    companyId = randomUUID(); otherCompanyId = randomUUID();
     await db.insert(companies).values([
       { id: companyId, name: "Event test", issuePrefix: randomUUID() },
       { id: otherCompanyId, name: "Other event test", issuePrefix: randomUUID() },
     ]);
-    await db.insert(projects).values({ id: projectId, companyId, name: "Project" });
-    await db.insert(issues).values({ id: issueId, companyId, projectId, title: "Issue" });
+    actor = await seedCurrentHumanSourceActor(db, [companyId, otherCompanyId]);
+    await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: actor.userId!, permissionKey: "audit:view_agent_actions", scope: null, grantedByUserId: actor.userId });
+    const project = await createCanonicalHumanProject(db, companyId, actor, "Project"); projectId = project.id;
+    const issue = await issueService(db).create(companyId, { projectId, title: "Issue", createdByUserId: actor.userId, responsibleUserId: actor.userId }, db, undefined, { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+    issueId = issue.id;
     const policy = analyticalPurpose(); policy.citation = "Controlled process purpose";
     policy.analyticalPurpose!.purpose = "process_intelligence"; policy.analyticalPurpose!.capabilities = ["process"];
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id;
     window = { ...timeWindow, governanceObligationRefs: [policyId], retentionDays: 30 };
   });
   async function source(details: Record<string, unknown> = { status: "todo" }, overrides: Partial<typeof activityLog.$inferInsert> = {}) {
-    const [row] = await db.insert(activityLog).values({ companyId, actorType: "user", actorId: "private-identity", action: "issue.updated", entityType: "issue", entityId: issueId, createdAt: new Date("2026-01-01T12:00:00Z"), details, ...overrides }).returning();
+    const [row] = await db.insert(activityLog).values({ companyId, actorType: "user", actorId: actor.userId!, action: "issue.updated", entityType: "issue", entityId: issueId, createdAt: new Date("2026-01-01T12:00:00Z"), details, ...overrides }).returning();
     return row;
   }
   const service = () => businessEventService(db);
@@ -76,7 +81,10 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       for (const entry of entries) await copyFile(new URL(`${entry.tag}.sql`, migrationsRoot), join(directory, `${entry.tag}.sql`));
       await writeFile(join(directory, "meta/_journal.json"), JSON.stringify({ ...journal, entries }));
       await migrate(legacy, { migrationsFolder: directory });
-      await legacy.insert(companies).values({ id: companyId, name: "Legacy metadata software fixture", issuePrefix: randomUUID() });
+      // This database deliberately stops before the locale/timezone migration;
+      // use its real legacy column set instead of the current Drizzle schema.
+      await legacy.execute(sql`insert into companies (id, name, issue_prefix)
+        values (${companyId}::uuid, 'Legacy metadata software fixture', ${randomUUID()})`);
       const id = randomUUID();
       await legacy.execute(sql`insert into business_event_backfill_runs
         (id,company_id,projector_version,window_from,window_until,last_source_cursor_json,batch_limit,projected,unchanged,status)
@@ -339,7 +347,7 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       // The old backup has projections, but no post-backup suppression register.
       const suppressedAt = new Date().toISOString();
       const marker = { company_id: companyId, source_ref: erased.id, suppressed_at: suppressedAt };
-      const ledger = { companies: [], memory: [], analyticalSources: [], feedback: [], businessEvents: [marker, marker,
+      const ledger = { companies: [], memory: [], analyticalSources: [], feedback: [], supportCases: [], businessEvents: [marker, marker,
         { ...marker, company_id: otherCompanyId, source_ref: retained.id },
         { ...marker, company_id: randomUUID() }] };
       await prepareRestoredQuarantine(restored, target.toString(), ledger);
@@ -368,13 +376,17 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
     const erased = await source();
     await service().backfill(companyId, actor, window);
     const unprojected = await source({ status: "done" });
+    // Include the original Human capture audit as well as projected and late activities.
+    const sourceIdentities = await db.select({ id: activityLog.id }).from(activityLog).where(and(
+      eq(activityLog.companyId, companyId), eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId)));
+    expect(sourceIdentities.map(row => row.id)).toEqual(expect.arrayContaining([erased.id, unprojected.id]));
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ business_events_v8: false });
     try {
       expect((await issueService(db).remove(issueId))?.id).toBe(issueId);
       expect(await stored()).toHaveLength(0);
       expect(await db.select().from(businessEventObjects).where(eq(businessEventObjects.companyId, companyId))).toHaveLength(0);
       const guards = await db.select().from(businessEventSuppressions).where(eq(businessEventSuppressions.companyId, companyId));
-      expect(guards.map(row => row.sourceRef).sort()).toEqual([erased.id, unprojected.id].sort());
+      expect(guards.map(row => row.sourceRef).sort()).toEqual(sourceIdentities.map(row => row.id).sort());
     } finally {
       await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ business_events_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true });
     }
@@ -474,7 +486,7 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       await tx.execute(sql`set local lock_timeout='1s'`);
       await eraseAnalyticalSourcesUnderMemory(tx, companyId, "issue", [issueId]);
       await eraseBusinessEventObjectUnderMemory(tx, companyId, "issue", issueId);
-      await tx.update(issues).set({ title: "Erased workflow task", description: null }).where(eq(issues.id, issueId));
+      await tx.update(issues).set({ title: "Erased workflow task", description: null, payloadSourceSnapshot: null }).where(eq(issues.id, issueId));
     });
     await held; const read = service().list(companyId, actor, timeWindow);
     try {
@@ -517,7 +529,7 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, companyId);
       await eraseAnalyticalSourcesUnderMemory(tx, companyId, "issue", [issueId]);
       await eraseBusinessEventObjectUnderMemory(tx, companyId, "issue", issueId);
-      await tx.update(issues).set({ title: "Erased workflow task", description: null }).where(eq(issues.id, issueId));
+      await tx.update(issues).set({ title: "Erased workflow task", description: null, payloadSourceSnapshot: null }).where(eq(issues.id, issueId));
     });
     expect(await stored()).toHaveLength(0);
     const late = await source({ status: "done" });

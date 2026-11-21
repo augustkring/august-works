@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "observedUtc": "2026-11-09T16:56:33.637176+00:00",
+  "sourceParentHead": "d8c89488f54a6de1c39cc8da56c68612da55c9e2",
+  "capture": "Root-observed actual tool command exits on this working source, not a new execution claim",
+  "checks": [
+    {
+      "command": "node scripts/check-v10-safe-change-graph.mjs",
+      "exit": 0,
+      "sourceDeltaPaths": 1947,
+      "crosswalkRows": 169,
+      "orderedMigrations": 570
+    },
+    {
+      "command": "node scripts/check-v10-capability-projection.mjs",
+      "exit": 0
+    },
+    {
+      "command": "node scripts/check-agent-native-tool-alias-compatibility.mjs",
+      "exit": 0,
+      "activeAliases": 38,
+      "consumerPaths": 20
+    },
+    {
+      "command": "node scripts/check-v10-169-migration-phase-register.mjs",
+      "exit": 0,
+      "coveredMigrations": 70,
+      "ownerGroups": 12
+    },
+    {
+      "interface": "validateHelpChangeReview with actual working files and base diff",
+      "exit": 0,
+      "reviewedPairs": 298,
+      "committedSnapshotCli": "pending normal commit"
+    }
+  ],
+  "preservation": {
+    "all169CrosswalkRowsUnchanged": true,
+    "all50OwnerAssessmentsUnchanged": true,
+    "allPriorSourceBeforePinsRetained": true,
+    "phaseMatrixOnlyReviewedNativeExecutorLeafChanged": true,
+    "noHistoricalQualificationPromotion": true
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "purpose": "RECOVERY ONLY",
+  "components": [
+    {
+      "name": "Host-VALID.21",
+      "sourcePinsSha256": "aed2015d8faafb0902d467ac2efcdc867dff9234df83f6420eb803167768b09d",
+      "sourceFiles": 76,
+      "tests": "99/99 pass; exact restore; actual Host3 acceptance pending."
+    },
+    {
+      "name": "installed-broker-profiles",
+      "sourcePinsSha256": "20617cd9287b5b477449d03f770ac707ce7af905eb38d86081d8b9149a0f2b4c",
+      "patchSha256": "ebc15233b50aa8bf577fef937591ec7ae7cafceea42fe16ce9b1b5c22be63017",
+      "requestTimeReusePatchSha256": "4d2c555370072fac8ec0b24cc180ea90cc30cb80b15a04fe4c23a5abe15756b6",
+      "tests": "32/32 software-only; Host integration pending."
+    },
+    {
+      "name": "Native-capacity-R4-plus-R99-fixture-correction",
+      "R4": "exact total work 2048; 1/1 checkpoint pass; PG payload/raw logs excluded",
+      "R99patchSha256": "846ff952993531ac0dab06c05af431bf5a0d49633cd03713989d9c0c6dd2bd3b",
+      "R99pinsSha256": "295d20bbc6a891502a338ef333d5ad09ba9386ffd46920259e22ae49bd419ddb",
+      "R99": "canonical PG seal/digest, privacy edges and valid active fields; full temporal/Sandbox9 pending."
+    },
+    {
+      "name": "Native-R102-handoff",
+      "sourcePinsSha256": "bcf70dfa40bb38e8bab6e24707fbeb13dc8292bd5e2df47946b5e900b8ec872f",
+      "patchSha256": "c63272cc3f722ff69d6f2080e7f8be92ff84f9f9b03be7cf548e749d09fe0931",
+      "sourceFiles": 3,
+      "status": "Frozen private handoff; no qualification claim."
+    },
+    {
+      "name": "C7-original-short-boundary",
+      "patchSha256": "bf7815acd9fd8c4bbc7a46eb6e025c839265619582f48d05313b2c3cf97e8bf5",
+      "sourcePinsSha256": "0c9e5ce501d2acc497bb231c2a690fc69a428842e81834852dc624641b280163",
+      "sourceFiles": 2,
+      "status": "Private fixture only; acceptance pending."
+    },
+    {
+      "name": "Native-R94-profile",
+      "candidateManifestSha256": "aa7821839634fdfe340a2a7611cb6b40519c4ca205108c8e85c230413d953fb0",
+      "scopedReceipt": "13/13 R2 tests pass; source and receipt in R57 base. Full Native9/Project2/Learning42 not established.",
+      "baseArchive": "../r57-recovery-prepared-nov01/private-candidates.tar.gz",
+      "baseArchiveSha256": "dca8eb472b99481f88f4b7440891102e9e297ca47227500fbf71a340014bdd5d"
+    },
+    {
+      "name": "SDK-mechanics",
+      "pinsSha256": "d153f035220c2f31e37a4e1a281bc12ac9218012f01e73b58a4483d369115bd8",
+      "tests": "1 pass, 0 skip, 3.44s; pinned nonpaid Node process; source restored byte-for-byte and mode."
+    },
+    {
+      "name": "final-aggregate-runner",
+      "runnerSha256": "ccd464b59f324740dc1f6e629ea9050d52f6e33b5f25491cc9d356f26712d21b",
+      "status": "Prepared, not executed; requires >=1 GiB temporary floor."
+    },
+    {
+      "name": "root-notes-and-storage-receipts",
+      "status": "Current note at capture time plus compact receipts only; source archives excluded."
+    }
+  ],
+  "exclusions": [
+    "active server-dimension component",
+    "Native R101 profile",
+    "unqualified helper .24",
+    "rejected Host14 route",
+    "deps/build/dist/PG/provider archives/raw logs/secrets/Help metadata views",
+    "Git/Main/Mirror mutation"
+  ],
+  "baseR57": {
+    "manifestSha256": "87f88679ee67e250ea2181ca319722fc29ca18ebf89843752d3302b2b4c0d15e",
+    "archiveSha256": "dca8eb472b99481f88f4b7440891102e9e297ca47227500fbf71a340014bdd5d"
+  },
+  "sourceHead": "ecd12655875af8612e603eacc359838ba26cd671",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d"
+}

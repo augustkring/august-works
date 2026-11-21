@@ -1,0 +1,98 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > retains the exact document read before later revision edits without inventing source history 132ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > authenticates a single-use native HTTP effect claim against the current dispatch, lease and exact request 159ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > denies native Task output until the provider input boundary is attested 748ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > binds an unknown Project tool result to its actual acknowledged dispatch without qualifying inputs 40ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > keeps the document dispatch unknown for missing_ack without retroactive rebinding 40ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > keeps the document dispatch unknown for missing_call without retroactive rebinding 29ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > keeps the document dispatch unknown for other_tool without retroactive rebinding 39ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > keeps the document dispatch unknown for ambiguous_turn without retroactive rebinding 51ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > keeps the document dispatch unknown for prior_attempt without retroactive rebinding 43ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > keeps the document dispatch unknown for prior_launch without retroactive rebinding 42ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > retains an actual direct Human revision snapshot and rejects a substituted owner 214ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > binds actual rendered task/document sources to the canonical model envelope and acknowledged PG dispatch 2600ms
+ × src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rechecks a captured interaction against current item verdicts after an acknowledged PG dispatch 284ms
+   → promise rejected "Error: The Native source prefix owner is … { …(2) }" instead of resolving
+ × src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission 856ms
+   → native_session_checkpoint_binding_mismatch
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > merges legacy and current result histories, deduplicating only exact facts 33ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses document capture with a changed launch binding 23ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses document capture with a changed lease binding 11ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses document capture with a changed attempt binding 11ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses document capture with a changed foreign_task binding 8ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses exhausted document result history without replacing the retained facts 16ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses a silently suppressed document fact and hides private database diagnostics 32ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > stores bounded factual input metadata without message bytes (responsible user: '2594e576-55fd-4cd6-ac60-1232c358d008') 54ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > stores bounded factual input metadata without message bytes (responsible user: null) 22ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > binds backend turn acknowledgements to exact same-input dispatch UUIDs 43ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses acknowledgement with 'wrong dispatch' mismatch without changing the intent 54ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses acknowledgement with 'wrong event' mismatch without changing the intent 76ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses acknowledgement with 'wrong attempt' mismatch without changing the intent 24ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses acknowledgement with 'different input' mismatch without changing the intent 23ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses duplicate and invalid backend turn acknowledgements 29ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > associates an actual backend tool call only with its unique acknowledged turn 85ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses malformed association history without replacing it 28ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > refuses duplicate or misbound prior call associations without changing history 105ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > does not acknowledge after lease expiry 1432ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > keeps an intent unacknowledged when adding the backend id would exceed the profile budget 153ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rejects a dispatch without its 'wrong launch sequence' binding 16ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rejects a dispatch without its 'wrong run' binding 10ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rejects a dispatch without its 'wrong lease owner' binding 11ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rejects a dispatch without its 'wrong attempt' binding 10ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rejects exhausted and oversized histories atomically 77ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rechecks lease expiry with database wall time after a transaction wait 1426ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > returns a private stable error when the dispatch profile write is rejected 84ms
+ ✓ src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rejects a database update that silently suppresses the dispatch intent 89ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rechecks a captured interaction against current item verdicts after an acknowledged PG dispatch
+AssertionError: promise rejected "Error: The Native source prefix owner is … { …(2) }" instead of resolving
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:844:33
+    842|     const checkCurrent = () => assertNativePayloadSourceSetCurrent(db,…
+    843|       actor: nativeActor, policy: sourceSet!.policy, inputs: sourceSet…
+    844|     await expect(checkCurrent()).resolves.toBeUndefined();
+       |                                 ^
+    845|     await interactionService.submitItemVerdicts({ id: createdIssue.id,…
+    846|       { verdicts: [{ id: "two", verdict: "reject", reason: "Needs revi…
+
+Caused by: Error: The Native source prefix owner is unavailable
+ ❯ forbidden src/errors.ts:21:10
+ ❯ assertNativePayloadSourceSetCurrentInScope src/services/native-direct-input.ts:633:11
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:844:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 403, details: undefined }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_session_checkpoint_binding_mismatch
+ ❯ PaperclipControlPlanePort.loadSessionCheckpoint src/services/native-runtime/paperclip-control-plane-port.ts:140:13
+    138|       !run
+    139|       || !this.#matchesPersistedBinding(run)
+    140|     ) throw new Error("native_session_checkpoint_binding_mismatch");
+       |             ^
+    141|     const candidate = record(run.runnerProfileJson).sessionCheckpoint;
+    142|     if (candidate === undefined || candidate === null) return null;
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:1837:8
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9389:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9381:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8361:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:330:7
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:851:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 40 passed (42)
+   Start at  00:56:06
+   Duration  26.67s (transform 9.82s, setup 88ms, import 13.36s, tests 13.09s, environment 0ms)
+

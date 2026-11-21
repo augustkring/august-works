@@ -211,6 +211,8 @@ export function environmentRunOrchestrator(
     persistedExecutionWorkspace: Pick<ExecutionWorkspace, "id" | "mode"> | null;
     executionWorkspaceSettings: IssueExecutionWorkspaceSettings | null;
     adapterType: string | null;
+    requestedExpiresAt?: Date | null;
+    nativeLeaseOwner?: string;
   }): Promise<EnvironmentRuntimeLeaseRecord> {
     try {
       return await environmentRuntime.acquireRunLease(input);
@@ -273,6 +275,8 @@ export function environmentRunOrchestrator(
     agentId: string;
     persistedExecutionWorkspace: Pick<ExecutionWorkspace, "id" | "mode"> | null;
     executionWorkspaceSettings: IssueExecutionWorkspaceSettings | null;
+    requestedExpiresAt?: Date | null;
+    nativeLeaseOwner?: string;
   }): Promise<EnvironmentAcquisitionResult> {
     // Step 1: Resolve environment
     const selectedEnvironment = await resolveEnvironment({
@@ -295,6 +299,8 @@ export function environmentRunOrchestrator(
       persistedExecutionWorkspace: input.persistedExecutionWorkspace,
       executionWorkspaceSettings: input.executionWorkspaceSettings,
       adapterType: input.adapterType ?? null,
+      requestedExpiresAt: input.requestedExpiresAt,
+      nativeLeaseOwner: input.admittedLifecycleMode === "per_turn" ? input.nativeLeaseOwner : undefined,
     });
 
     // Step 3: Log lease acquisition activity
@@ -495,6 +501,12 @@ export function environmentRunOrchestrator(
     if (Object.keys(workspaceRealization).length > 0) {
       const nextLeaseMetadata = {
         ...(lease.metadata ?? {}),
+        // The sandbox target and its authorization owner read this durable
+        // root. Keep the driver's realized cwd when resolving that target;
+        // otherwise a lease without a provider root falls back to the default.
+        ...(environment.driver === "sandbox" && realizedWorkspaceCwd
+          ? { remoteCwd: realizedWorkspaceCwd }
+          : {}),
         workspaceRealization,
       };
       const updatedLease = await environmentsSvc.updateLeaseMetadata(lease.id, nextLeaseMetadata);

@@ -1,0 +1,48 @@
+{
+  "scope": "Preserve irreversible feedback privacy admission across concurrent general-settings writes",
+  "sources": {
+    "server/src/services/instance-settings.ts": "962926b768987910aec2f8f8876022c157eadc549ff717feacfbfdc470506273",
+    "server/src/__tests__/v9-customer-feedback.integration.test.ts": "e220fa9e8813ea1576f7dc8f4f56183171a44359cf143ac6b5278d1f8dc2f1e9",
+    "server/src/__tests__/instance-settings-operator-defaults.test.ts": "93f91ffcdbe9792008d9e6aebc5f8077c526973efc8c833b4a4fa2c3fa7002fe"
+  },
+  "initialFixtureAttempt": {
+    "exit": 1,
+    "durationSeconds": 58.41,
+    "log": "feedback-race-focused-pg.log",
+    "cause": "Second row-lock waiter was blocked behind first writer, so direct holder-PID filter incorrectly counted one. This is not evidence of the production defect."
+  },
+  "baseline": {
+    "exit": 1,
+    "failed": 1,
+    "filtered": 18,
+    "durationSeconds": 58.07,
+    "log": "feedback-race-corrected-baseline.log",
+    "cause": "Two actual settings Lock waiters were observed, flag enablement committed first, and stale updateGeneral erased aw-v9-local-v1."
+  },
+  "current": {
+    "actualPostgresRace": {
+      "exit": 0,
+      "passed": 1,
+      "filtered": 18,
+      "durationSeconds": 113.74,
+      "log": "feedback-race-fixed-pg.log"
+    },
+    "settingsUnits": {
+      "exit": 0,
+      "passed": 22,
+      "files": 2,
+      "durationSeconds": 17.71,
+      "log": "feedback-race-unit-regressions.retry.log"
+    },
+    "serverCompilerExit": 0,
+    "serverCompilerLog": "up03-answer-feedback-race-server-types.log",
+    "allFinalPinsMatch": true
+  },
+  "unitInvocationFailure": {
+    "exit": 1,
+    "log": "feedback-race-unit-regressions.log",
+    "cause": "Wrong initial pnpm environment attempted dependency status installation and aborted its non-TTY module purge before tests; supported provided tooling rerun passed."
+  },
+  "review": "updateGeneral reuses original updateExperimental transaction/row-lock pattern. Full JSON is derived from locked latest row, preserving sticky privacy policy, operator echo stripping and native internal state. Actual local-profile flag enablement proves a real concurrent writer; mixed deployment profiles are not assumed. Only the existing operator-defaults DB stub was adapted to transaction/for API, with assertions unchanged. Root reviewed and independently verified all source pins and compiler closure. Bounded gpt-6-luna assistance.",
+  "limits": "Scoped feedback privacy race, not full outbound/processor/deployment/restore/V10 qualification. Existing deadlines unchanged."
+}

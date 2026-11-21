@@ -1,0 +1,47 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.3849527410056908,
+      "filesAdvised": 513339,
+      "memoryAfter": 6141526016,
+      "contentChanged": false
+    },
+    {
+      "elapsedSeconds": 4.723549971997272,
+      "filesAdvised": 513344,
+      "memoryAfter": 12363677696,
+      "contentChanged": false
+    },
+    {
+      "elapsedSeconds": 8.522548850014573,
+      "filesAdvised": 513347,
+      "memoryAfter": 12213727232,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "pnpm",
+        "-r",
+        "typecheck"
+      ],
+      "exit": 0,
+      "seconds": 294.4518234800198,
+      "peakGroupRssBytes": 6403780608,
+      "stopped": null
+    },
+    {
+      "command": [
+        "pnpm",
+        "build"
+      ],
+      "exit": 0,
+      "seconds": 202.46396283601644,
+      "peakGroupRssBytes": 6457806848,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

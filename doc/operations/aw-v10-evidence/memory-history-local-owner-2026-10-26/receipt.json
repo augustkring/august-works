@@ -1,0 +1,18 @@
+{
+  "pg": {
+    "command": "vitest run src/services/memory/memory-maintenance.test.ts --maxWorkers=1",
+    "passed": 15,
+    "exitCode": 0
+  },
+  "browser": {
+    "command": "PAPERCLIP_PLAYWRIGHT_EXECUTABLE=/usr/bin/chromium playwright test --config tests/e2e/playwright.config.ts aw-v9-memory-maintenance-history.spec.ts --workers=1",
+    "passed": 1,
+    "exitCode": 0
+  },
+  "scope": "Local software fixtures; original canonical Human Task and reviewed Memory constructors, real local PostgreSQL index worker and built browser. The scoped legacy maintenance unit fixtures do not qualify managed model output or deployed provider profiles.",
+  "sourceHashes": {
+    "server/src/services/memory/memory-jobs.ts": "92945471691dd2f9e696cef8260522ceb3766ea2272fe76496340d95e1ca0a1a",
+    "server/src/services/memory/memory-maintenance.test.ts": "89614ec543a108d1c661cc4c2966d64eb11b76da47dd493ffdab93b13c269502",
+    "tests/e2e/aw-v9-memory-maintenance-history.spec.ts": "cde6e50b572147405abb22bf109452ea9883ea7dd35528bc60607e7a3d3f92f7"
+  }
+}

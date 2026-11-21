@@ -1,0 +1,6 @@
+root=/workspace/v10-dep-qualification
+started_utc=20261026T191746Z
+pnpm=9.15.4
+node=v24.19.0
+typescript=Version 7.0.2
+finished_utc=20261026T192320Z

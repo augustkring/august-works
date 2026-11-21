@@ -1,0 +1,75 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts (6 tests | 2 failed) 13136ms
+     × checks the actual private project named by projectId 54ms
+     × checks the actual private project named by entityId 49ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > checks the actual private project named by projectId
+AssertionError: expected null to deeply equal { id: 1, …(4) }
+
+- Expected:
+{
+  "companyId": "a55002be-d4ef-4881-8be9-17f097b88b39",
+  "createdAt": "2026-10-22T22:01:29.334Z",
+  "id": 1,
+  "payload": {
+    "name": "PRIVATE project bytes",
+    "projectId": "f02219ce-accf-45f5-8731-460136c811eb",
+  },
+  "type": "activity.logged",
+}
+
++ Received:
+null
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:50:73
+     48|   it.each(["projectId","entityId"])("checks the actual private project…
+     49|     const value=event({[key]:projectId,...(key==="entityId"?{entityTyp…
+     50|     expect(await analyticalLiveEventForReader(db,value,actor(ownerId))…
+       |                                                                         ^
+     51|     expect(await analyticalLiveEventForReader(db,value,actor(readerId)…
+     52|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > checks the actual private project named by entityId
+AssertionError: expected null to deeply equal { id: 1, …(4) }
+
+- Expected:
+{
+  "companyId": "c6bb1f55-ff95-49a1-b62d-a7aca9c64ac1",
+  "createdAt": "2026-10-22T22:01:29.393Z",
+  "id": 1,
+  "payload": {
+    "entityId": "a63484ed-425a-43c5-ae82-af6656a36cc9",
+    "entityType": "project",
+    "name": "PRIVATE project bytes",
+  },
+  "type": "activity.logged",
+}
+
++ Received:
+null
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:50:73
+     48|   it.each(["projectId","entityId"])("checks the actual private project…
+     49|     const value=event({[key]:projectId,...(key==="entityId"?{entityTyp…
+     50|     expect(await analyticalLiveEventForReader(db,value,actor(ownerId))…
+       |                                                                         ^
+     51|     expect(await analyticalLiveEventForReader(db,value,actor(readerId)…
+     52|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 10 passed (12)
+   Start at  22:00:59
+   Duration  30.82s (transform 7.35s, setup 387ms, import 16.35s, tests 13.15s, environment 1ms)
+

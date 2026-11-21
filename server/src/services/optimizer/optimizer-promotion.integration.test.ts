@@ -233,7 +233,7 @@ describePg("optimizer promotion service", () => {
     principal: { type: "system" as const, service: "optimizer-promotion-test" },
   };
 
-  it("atomically prepares canary and activates the same revision-bound artifact", async () => {
+  it("prepares canary but refuses activation from a caller boolean without durable receipts", async () => {
     const seeded = await seed();
     await instanceSettingsService(db).updateExperimental({
       enableWorkflowOptimizerPromotion: true,
@@ -256,7 +256,7 @@ describePg("optimizer promotion service", () => {
       .from(workflowOptimizerSuggestions);
     expect(ready?.status).toBe("ready_to_promote");
 
-    const activated = await service.activate({
+    await expect(service.activate({
       companyId: seeded.company.id,
       suggestionId: seeded.suggestion.id,
       artifactId: seeded.artifactId,
@@ -264,23 +264,18 @@ describePg("optimizer promotion service", () => {
       policy,
       evidence: evidence({ canaryPassed: true }),
       actor,
-    });
-    expect(activated.status).toBe("promotion_ready");
+    })).rejects.toMatchObject({ status: 409, details: { code: "optimizer_canary_receipt_required" } });
 
     const [artifact] = await db.select().from(automationArtifacts);
     const [suggestion] = await db
       .select()
       .from(workflowOptimizerSuggestions);
-    expect(artifact?.status).toBe("active");
-    expect(suggestion?.status).toBe("promoted");
+    expect(artifact?.status).toBe("shadow");
+    expect(suggestion?.status).toBe("ready_to_promote");
 
     const activities = await db.select().from(activityLog);
-    expect(activities.map((row) => row.action)).toEqual(
-      expect.arrayContaining([
-        "optimizer.canary_ready",
-        "optimizer.promoted",
-      ]),
-    );
+    expect(activities.map((row) => row.action)).toContain("optimizer.canary_ready");
+    expect(activities.map((row) => row.action)).not.toContain("optimizer.promoted");
   });
 
   it("fails closed while promotion is disabled", async () => {

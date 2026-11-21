@@ -2,7 +2,7 @@ import { Readable } from "node:stream";
 import type { IncomingMessage } from "node:http";
 import express from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StorageService } from "../storage/types.js";
 
 const mockIssueService = vi.hoisted(() => ({
@@ -32,6 +32,12 @@ const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
 
 function registerRouteMocks() {
+  // This suite isolates HTTP/storage and artifact metadata. Native source
+  // admission is exercised against PostgreSQL by the attachment integration suites.
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    canActorReadIssuePrivacy: vi.fn(async () => true),
+  }));
   vi.doMock("../services/analytical-context-authority.js", () => ({
     assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
   }));
@@ -175,7 +181,11 @@ async function createApp(storage: StorageService, options?: { companyIds?: strin
     };
     next();
   });
-  app.use("/api", issueRoutes({} as any, storage));
+  app.use("/api", issueRoutes({ transaction: async () => false } as any, storage));
+  app.use((error: unknown, _req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    app.locals.routeError = error;
+    next(error);
+  });
   app.use(errorHandler);
   return app;
 }
@@ -228,6 +238,12 @@ describe("MAX_ATTACHMENT_BYTES", () => {
 });
 
 describe("issue attachment routes", () => {
+  beforeAll(async () => {
+    // Compile the full native route graph as fixture setup, rather than
+    // consuming the first HTTP assertion's 30-second deadline.
+    registerRouteMocks();
+    await createApp(createStorageService());
+  }, 90_000);
   beforeEach(() => {
     vi.resetModules();
     vi.doUnmock("@paperclipai/shared/telemetry");
@@ -278,7 +294,7 @@ describe("issue attachment routes", () => {
       .post("/api/companies/company-1/issues/11111111-1111-4111-8111-111111111111/attachments")
       .attach("file", Buffer.from("zip"), { filename: "bundle.zip", contentType: "application/zip" });
 
-    expect([200, 201]).toContain(res.status);
+    expect([200, 201], String(app.locals.routeError?.stack ?? app.locals.routeError)).toContain(res.status);
     const putFileCall = storage.__calls.putFile;
     expect(putFileCall).toMatchObject({
       companyId: "company-1",
@@ -524,7 +540,7 @@ describe("issue attachment routes", () => {
     mockIssueService.getAttachmentById.mockResolvedValue(attachment);
     const res = await request(await createApp(storage)).get("/api/attachments/attachment-1/content");
     expect(res.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: attachment.issueId });
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: attachment.issueId }, undefined, { privacyLockMode: "read" });
     expect(storage.getObject).not.toHaveBeenCalled();
   });
 
@@ -539,10 +555,7 @@ describe("issue attachment routes", () => {
       .parse(parseBinaryResponse);
 
     expect(res.status).toBe(200);
-    expect([
-      undefined,
-      'attachment; filename="report.html"',
-    ]).toContain(res.headers["content-disposition"]);
+    expect(res.headers["content-disposition"]).toBe('attachment; filename="report.html"');
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
   });
 
@@ -741,7 +754,7 @@ describe("issue attachment routes", () => {
     const app = await createApp(storage);
     const res = await request(app).get("/api/attachments/attachment-1/content");
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     expect(storage.getObject).not.toHaveBeenCalled();
   });
 
@@ -788,7 +801,7 @@ describe("issue attachment routes", () => {
         },
       });
 
-    expect(res.status).toBe(201);
+    expect(res.status, String(app.locals.routeError?.stack ?? app.locals.routeError)).toBe(201);
     expect(mockWorkProductService.createForIssue).toHaveBeenCalledWith(
       issue.id,
       issue.companyId,
@@ -835,7 +848,7 @@ describe("issue attachment routes", () => {
         },
       });
 
-    expect(res.status).toBe(422);
+    expect(res.status, String(app.locals.routeError?.stack ?? app.locals.routeError)).toBe(422);
     expect(res.body.error).toBe("Attachment artifact must reference an attachment on the same issue");
     expect(mockWorkProductService.createForIssue).not.toHaveBeenCalled();
   });

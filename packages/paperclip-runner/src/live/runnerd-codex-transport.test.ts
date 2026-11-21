@@ -74,6 +74,7 @@ import {
   rehydrateRunnerdUsageNotification,
   rehydrateRunnerdWorkspaceChangeNotification,
   runnerdCanonicalNotificationMethod,
+  runnerdEnvironmentInternals,
   runnerdLaunchProfileInternals,
   runnerdRecoveryInternals,
   resolveRunnerdAcpxPermissionMode,
@@ -383,6 +384,41 @@ it("launches runnerd with its production durable outbox limits", () => {
   expect(runnerdLaunchProfileInternals.p0ReserveBytes).toBe(1024 * 1024);
 });
 
+it("forwards only a complete bounded managed-model tuple through the OpenCode runner environment", () => {
+  const safe = runnerdEnvironmentInternals.createSanitizedOpenCodeRunnerEnvironment({
+    PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+    PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+    PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+    ANTHROPIC_API_KEY: "caller-secret-must-not-pass",
+    OPENAI_API_KEY: "caller-secret-must-not-pass",
+    UNRELATED_PRIVATE_VALUE: "must-not-pass",
+  });
+  expect(safe.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN).toBe("https://broker.example.test");
+  expect(safe.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND).toBe("12000");
+  expect(safe.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS).toBe("1024");
+  expect(safe.ANTHROPIC_API_KEY).toBeUndefined();
+  expect(safe.OPENAI_API_KEY).toBeUndefined();
+  expect(safe.UNRELATED_PRIVATE_VALUE).toBeUndefined();
+
+  for (const invalid of [
+    { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "http://broker.example.test" },
+    { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://user:pass@broker.example.test" },
+    { PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "2000001" },
+    { PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "32000" },
+    { PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "01024" },
+  ]) {
+    const stripped = runnerdEnvironmentInternals.createSanitizedOpenCodeRunnerEnvironment({
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+      PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+      PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+      ...invalid,
+    });
+    expect(stripped.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN).toBeUndefined();
+    expect(stripped.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND).toBeUndefined();
+    expect(stripped.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS).toBeUndefined();
+  }
+});
+
 it("requires an explicit retained state directory before adopting a runner", () => {
   const launch = vi.fn();
   const signal = vi.fn();
@@ -464,6 +500,60 @@ it("carries the provider attachment seed across consecutive authority rotations"
     },
     workspace: { cwd: "/workspace" },
   });
+});
+
+it("accepts an archived predecessor identity only with exact verified cold-handoff evidence (CONF15 A2)", async () => {
+  const { mkdtempSync, mkdirSync, rmSync, writeFileSync } = await import("node:fs");
+  const prior = { runnerInstanceId: "runner-cold", environmentLeaseId: "lease-run-one",
+    runId: "run-one", normalizedSessionId: "session-cold" };
+  const desired = { runnerInstanceId: "runner-cold", environmentLeaseId: "lease-run-two",
+    runId: "run-two", normalizedSessionId: "session-cold", turnId: "turn-run-two", itemId: "item-run-two" };
+  const root = mkdtempSync(join(tmpdir(), "cold-lease-handoff-"));
+  try {
+    const archived = resolve(root, "continuity-breaks", "token-1", "control-plane");
+    mkdirSync(archived, { recursive: true });
+    const state = { schema: "paperclip.runner.durable.control-plane-state.v1",
+      identity: { ...prior, turnId: "turn-run-one", itemId: "item-run-one" },
+      commands: [{ type: "run.prepare", payload: { provider: { kind: "opencode" } } }] };
+    writeFileSync(resolve(archived, "control-plane-state.json"), JSON.stringify(state));
+    const handoff = { archivedControlPlaneDirectory: archived, priorIdentity: prior, evidenceDigest: "a".repeat(64) };
+    const seed = (value = handoff, target = desired, local = true) =>
+      runnerdRecoveryInternals.coldLeaseHandoffSeedState(root, value, target, local);
+    expect(seed()).toEqual(state);
+    // The archived state is only a seed: the next run.attach targets the new Run and lease.
+    expect(runnerdRecoveryInternals.rotatedRunAttachPayload(seed(), desired, null, undefined))
+      .toMatchObject({ provider: { kind: "opencode" } });
+    const refused = "native_runner_cold_lease_handoff_unproven";
+    // Missing or malformed evidence digest.
+    expect(() => seed({ ...handoff, evidenceDigest: "" })).toThrow(refused);
+    // Another runner instance, session, the same Run, or the same lease (ordinary rotation).
+    expect(() => seed(handoff, { ...desired, runnerInstanceId: "runner-other" })).toThrow(refused);
+    expect(() => seed(handoff, { ...desired, normalizedSessionId: "session-other" })).toThrow(refused);
+    expect(() => seed(handoff, { ...desired, runId: prior.runId })).toThrow(refused);
+    expect(() => seed(handoff, { ...desired, environmentLeaseId: prior.environmentLeaseId })).toThrow(refused);
+    // Evidence naming another prior Run or lease than the archived identity.
+    expect(() => seed({ ...handoff, priorIdentity: { ...prior, runId: "run-zero" } })).toThrow(refused);
+    expect(() => seed({ ...handoff, priorIdentity: { ...prior, environmentLeaseId: "lease-zero" } })).toThrow(refused);
+    // Only an archive under this root's continuity-breaks is accepted.
+    const outside = resolve(root, "authority-epochs", "epoch-1", "control-plane");
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(resolve(outside, "control-plane-state.json"), JSON.stringify(state));
+    expect(() => seed({ ...handoff, archivedControlPlaneDirectory: outside })).toThrow(refused);
+    // An active control plane or local runner state is not a fresh runner.
+    mkdirSync(resolve(root, "runner"), { recursive: true });
+    writeFileSync(resolve(root, "runner", "runner-state.json"), "{}");
+    expect(() => seed()).toThrow(refused);
+    expect(seed(handoff, desired, false)).toEqual(state);
+    rmSync(resolve(root, "runner"), { recursive: true });
+    mkdirSync(resolve(root, "control-plane"));
+    expect(() => seed()).toThrow(refused);
+    rmSync(resolve(root, "control-plane"), { recursive: true });
+    // Warm-transition evidence in the archive is refused.
+    writeFileSync(resolve(archived, "control-plane-state.json"), JSON.stringify({ ...state, warmTransition: {} }));
+    expect(() => seed()).toThrow(refused);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 it("replays the durable run attachment outcome and latest provider identity", () => {
@@ -678,6 +768,82 @@ it("refuses a reusable close checkpoint when the local provider snapshot is unre
     expect(checkpoint).toHaveBeenCalledWith("unsettled");
     expect(checkpoint).not.toHaveBeenCalledWith("settled");
     expect((await stat(stateDirectory)).isDirectory()).toBe(true);
+  } finally {
+    await bundle.transport.close().catch(() => undefined);
+    await rm(stateDirectory, { recursive: true, force: true });
+  }
+}, 15_000);
+
+// MS1h18. A controller-confirmed discard (a read-only completion Reviewer whose
+// sandbox the controller destroys) closes without the suspension barrier, the
+// process exit wait or a checkpoint. The unreadable provider store below makes
+// the barrier fail, so only a skipped barrier can close cleanly.
+it.each([
+  ["the discard check resolves false", async () => false],
+  ["the discard check fails", async () => { throw new Error("check unavailable"); }],
+] as const)("keeps the checkpointing close when %s", async (_name, discardWithoutCheckpoint) => {
+  const stateDirectory = await mkdtemp(join(tmpdir(), "runnerd-close-keep-"));
+  const checkpoint = vi.fn();
+  const diagnostics: string[] = [];
+  const bundle = createCapabilityRunnerdCodexTransport({
+    runnerBinary: defaultCapabilityRunnerdBinary(),
+    codexCommand: fakeCodex,
+    codexArgs: fakeCodexArgs(stateDirectory),
+    stateDirectory,
+    closeGraceMs: 3_000,
+    discardWithoutCheckpoint,
+    onDiagnostic: (message) => diagnostics.push(message),
+    controlPlaneRegistration: async (authority) => {
+      await authority.start();
+      return { checkpoint, release: () => undefined };
+    },
+  });
+  try {
+    await bundle.transport.request("thread/start", { cwd: tmpdir() });
+    const providerPath = join(stateDirectory, "runner", "codex-provider-state.json");
+    await rename(providerPath, `${providerPath}.preserved`);
+    await mkdir(providerPath);
+    await expect(bundle.transport.close()).rejects.toBeInstanceOf(NativeSessionCloseUnrecoverableError);
+    expect(checkpoint).toHaveBeenCalledWith("unsettled");
+    // The checkpointing branch ran: its suspension barrier, then its exit wait.
+    expect(diagnostics).toContain("runner did not prove durable suspension before checkpoint");
+    expect(diagnostics).not.toContain("runner closed without a suspension checkpoint: the controller discards its sandbox");
+  } finally {
+    await bundle.transport.close().catch(() => undefined);
+    await rm(stateDirectory, { recursive: true, force: true });
+  }
+}, 15_000);
+
+it("closes a controller-discarded runner without the suspension barrier or a checkpoint", async () => {
+  const stateDirectory = await mkdtemp(join(tmpdir(), "runnerd-close-discard-"));
+  const checkpoint = vi.fn();
+  const release = vi.fn();
+  const diagnostics: string[] = [];
+  const discardWithoutCheckpoint = vi.fn(async () => true);
+  const bundle = createCapabilityRunnerdCodexTransport({
+    runnerBinary: defaultCapabilityRunnerdBinary(),
+    codexCommand: fakeCodex,
+    codexArgs: fakeCodexArgs(stateDirectory),
+    stateDirectory,
+    closeGraceMs: 3_000,
+    discardWithoutCheckpoint,
+    onDiagnostic: (message) => diagnostics.push(message),
+    controlPlaneRegistration: async (authority) => {
+      await authority.start();
+      return { checkpoint, release };
+    },
+  });
+  try {
+    await bundle.transport.request("thread/start", { cwd: tmpdir() });
+    const providerPath = join(stateDirectory, "runner", "codex-provider-state.json");
+    await rename(providerPath, `${providerPath}.preserved`);
+    await mkdir(providerPath);
+    await expect(bundle.transport.close()).resolves.toBeUndefined();
+    expect(discardWithoutCheckpoint).toHaveBeenCalledTimes(1);
+    expect(checkpoint).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(diagnostics).toContain("runner closed without a suspension checkpoint: the controller discards its sandbox");
+    expect(diagnostics).not.toContain("runner did not prove durable suspension before checkpoint");
   } finally {
     await bundle.transport.close().catch(() => undefined);
     await rm(stateDirectory, { recursive: true, force: true });
@@ -1035,6 +1201,72 @@ it.each(["before", "after"] as const)(
       await rm(root, { recursive: true, force: true });
     }
   },
+);
+
+it.each(["rejected", "pending"] as const)(
+  "keeps an exact %s process cleanup completion unsettled after durable suspension",
+  async (cleanupCompletion) => {
+    const directory = await mkdtemp(join(tmpdir(), "runnerd-close-completion-"));
+    const steps: string[] = [];
+    let process: ReturnType<typeof spawn> | undefined;
+    let physicalExit: Promise<void> | undefined;
+    const runnerState = async () => JSON.parse(await readFile(
+      join(directory, "runner", "runner-state.json"), "utf8"));
+    const bundle = createCapabilityRunnerdCodexTransport({
+      runnerBinary: defaultCapabilityRunnerdBinary(),
+      codexCommand: fakeCodex,
+      codexArgs: fakeCodexArgs(directory),
+      stateDirectory: directory,
+      lifecyclePolicy: { mode: "warm", idleTimeoutMs: 60_000 },
+      closeGraceMs: 4_000,
+      readRunnerState: runnerState,
+      controlPlaneRegistration: async (authority) => {
+        await authority.start();
+        return {
+          release: () => { steps.push("release"); },
+          checkpoint: async (settlement) => {
+            expect((await runnerState()).lifecycle).toBe("suspended");
+            steps.push(`checkpoint:${settlement}`);
+          },
+        };
+      },
+      runnerProcessLauncher: (spec) => {
+        const child = spawn(spec.command, [...spec.args], {
+          cwd: spec.cwd, env: spec.environment, stdio: "ignore",
+        });
+        process = child;
+        physicalExit = new Promise<void>((resolveExit) => {
+          child.once("exit", () => resolveExit());
+        });
+        // Like the remote launcher, physical child exit precedes completion
+        // of its original awaited broker Stop. Neither a rejected nor a still
+        // pending cleanup promise can establish that Stop's acknowledgement.
+        const completion = new Promise<durableControlPlane.RunnerProcessResult>((_resolve, reject) => {
+          child.once("error", reject);
+          child.once("exit", () => {
+            if (cleanupCompletion === "rejected") reject(new Error("fixed_cleanup_ack_unavailable"));
+          });
+        });
+        return { child, completion };
+      },
+    });
+    try {
+      await bundle.transport.request("thread/start", { cwd: directory, dynamicTools: [] });
+      const close = bundle.transport.close();
+      await expect(close).rejects.toMatchObject({ code: "native_session_close_unrecoverable" });
+      expect(bundle.transport.close()).toBe(close);
+      expect(steps).toEqual(["release", "checkpoint:unsettled"]);
+      await physicalExit;
+      expect(process?.exitCode).not.toBeNull();
+      expect((await runnerState()).lifecycle).toBe("suspended");
+    } finally {
+      await bundle.transport.close().catch(() => undefined);
+      process?.kill("SIGKILL");
+      await physicalExit;
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  20_000,
 );
 
 it("quiesces the control route before checkpoint and containment regardless of process completion", async () => {
@@ -1520,6 +1752,54 @@ it("preserves OpenCode runtime bindings when a durable runner is respawned", () 
   );
 });
 
+it("uses the explicit server-selected managed OpenCode tuple instead of ambient values", () => {
+  const names = [
+    "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+  ] as const;
+  const previous = names.map((name) => process.env[name]);
+  try {
+    process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = "https://ambient.example.test";
+    process.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = "9000";
+    process.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = "2048";
+    const environment = createCapabilityRunnerdProviderEnvironment({
+      provider: "opencode",
+      options: {
+        provider: "opencode",
+        environment: {
+          PATH: "/bin",
+          PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://selected.example.test",
+          PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+          PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+        },
+      },
+      identity: {
+        runnerInstanceId: "runner-1",
+        environmentLeaseId: "lease-1",
+        runId: "run-1",
+        normalizedSessionId: "session-1",
+        turnId: "turn-1",
+        itemId: "item-1",
+      },
+      codexHome: "/isolated/codex-home",
+      runtimeContextPath: "/isolated/runtime-context.json",
+      hasRuntimeContext: false,
+    });
+    expect(environment).toMatchObject({
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://selected.example.test",
+      PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+      PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+    });
+  } finally {
+    names.forEach((name, index) => {
+      const value = previous[index];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    });
+  }
+});
+
 it("passes the configured Codex API key only through the provider process environment", () => {
   const environment = createCapabilityRunnerdProviderEnvironment({
     provider: "codex",
@@ -1644,6 +1924,19 @@ it("uses file-backed AWS workload identity without forwarding access keys or Pap
   expect(environment.AWS_SHARED_CREDENTIALS_FILE).toBeUndefined();
   expect(environment.PAPERCLIP_NATIVE_MCP_URL).toBeUndefined();
   expect(environment.PAPERCLIP_NATIVE_MCP_TOKEN).toBeUndefined();
+});
+
+it("does not merge ambient API credentials into an explicit OpenCode environment", () => {
+  const prior = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = "ambient-server-only-key";
+  try {
+    const environment = runnerdEnvironmentInternals.createSanitizedOpenCodeRunnerEnvironment({ PATH: "/bin" });
+    expect(environment.PATH).toBe("/bin");
+    expect(environment.OPENROUTER_API_KEY).toBeUndefined();
+  } finally {
+    if (prior === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = prior;
+  }
 });
 
 it.each([

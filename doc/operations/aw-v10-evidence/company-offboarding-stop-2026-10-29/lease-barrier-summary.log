@@ -1,0 +1,5 @@
+ ✓ src/__tests__/company-offboarding-revoke-lease.integration.test.ts > company offboarding revoke lease fencing > does not let a stale worker overwrite the newer claim after a late stop completion 283ms
+ ✓ src/__tests__/company-offboarding-revoke-lease.integration.test.ts > company offboarding revoke lease fencing > does not let a stale worker overwrite the newer claim after a late stop error 115ms
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Duration  18.73s (transform 8.80s, setup 68ms, import 13.39s, tests 5.16s, environment 0ms)

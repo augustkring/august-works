@@ -1,13 +1,15 @@
 import { disableV8Rollout } from "./helpers/v8-rollout.js";
 import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixture.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import express from "express";
 import request from "supertest";
+import type { RequestHandler } from "express";
 import {decisionIntelligenceRoutes} from "../routes/decision-intelligence.js";
 import {errorHandler} from "../middleware/index.js";
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
-import {agents,authUsers,companies,companyMemberships,createDb,decisions,heartbeatRuns,issues,projects,issueComments,
+import {agents,authUsers,companies,companyMemberships,principalPermissionGrants,createDb,decisions,heartbeatRuns,issues,projects,issueComments,
   decisionContexts,decisionContextVersions,decisionContextBindings,decisionContextPreparations,decisionCriteria,decisionAssumptions,decisionExpectedOutcomes,
   decisionEvidenceLinks,analyticalLineageManifests,analyticalLineageEdges} from "@paperclipai/db";
 import {decisionContextDefinitionSchema,type DecisionContextDefinition} from "@paperclipai/shared";
@@ -23,8 +25,11 @@ import {eraseExpiredAnalyticalLineage} from "../services/analytical-retention.js
 import {purgeCompanyContent} from "../services/saas/company-purge.js";
 import {analyticalPurpose,metricDefinition} from "./helpers/business-metric-fixture.js";
 import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "./helpers/embedded-postgres.js";
+import {projectRoutes} from "../routes/projects.js";
+import {initializeRunIdentity} from "../services/run-identity.js";
+import {grantsForHumanRole} from "../services/company-member-roles.js";
 const support=await getEmbeddedPostgresTestSupport(),suite=support.supported?describe:describe.skip;
-const actor={type:"board" as const,source:"local_implicit" as const};
+let actor:{type:"board";source:"session";userId:string;sessionId:string;companyIds:string[]};
 const flags={analytical_lineage_v8:true,business_metrics_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true};
 suite("Native prospective decision context on migrated PostgreSQL",()=>{
   let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>;
@@ -35,14 +40,25 @@ suite("Native prospective decision context on migrated PostgreSQL",()=>{
   afterAll(async()=>database?.cleanup());
   beforeEach(async()=>{
     await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);
-    companyId=randomUUID();foreignId=randomUUID();originId=randomUUID();targetId=randomUUID();projectId=randomUUID();agentId=randomUUID();runId=randomUUID();
+    companyId=randomUUID();foreignId=randomUUID();originId=randomUUID();targetId=randomUUID();agentId=randomUUID();runId=randomUUID();
+    const sessionId=await seedNativePasskeySession(db,"local-board");
+    actor={type:"board",source:"session",userId:"local-board",sessionId,companyIds:[companyId,foreignId]};
     await db.insert(companies).values([{id:companyId,name:"Native decision context",issuePrefix:randomUUID()},{id:foreignId,name:"Other context tenant",issuePrefix:randomUUID()}]);
-    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"});
-    await db.insert(projects).values({id:projectId,companyId,name:"Controlled native project"});
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"owner",status:"active"});
+    await db.insert(companyMemberships).values({companyId:foreignId,principalType:"user",principalId:"local-board",membershipRole:"owner",status:"active"});
+    await db.insert(principalPermissionGrants).values([companyId,foreignId].flatMap(tenantId=>grantsForHumanRole("owner").map(grant=>({companyId:tenantId,principalType:"user",principalId:"local-board",...grant}))));
     await db.insert(agents).values({id:agentId,companyId,name:"Proposer",role:"engineer",status:"active",adapterType:"codex_local"});
+    await db.insert(companyMemberships).values({companyId,principalType:"agent",principalId:agentId,membershipRole:"member",status:"active"});
+    const projectApp=express();projectApp.use(express.json());projectApp.use(((req,_res,next)=>{req.actor={...actor,companyIds:[companyId],memberships:[{companyId,membershipRole:"owner",status:"active"}]};next();}) as RequestHandler);
+    projectApp.use("/api",projectRoutes(db));projectApp.use(errorHandler);
+    const createdProject=await request(projectApp).post(`/api/companies/${companyId}/projects`).send({name:"Controlled native project"});
+    if(createdProject.status!==201)throw new Error(`Canonical Human Project fixture creation failed: ${createdProject.status}`);
+    projectId=createdProject.body.id;
     await db.insert(issues).values([{id:originId,companyId,projectId,title:"Private origin title",status:"done",responsibleUserId:"local-board",createdAt:new Date("2026-01-01T12:00:00Z")},
       {id:targetId,companyId,projectId,title:"Private target title",status:"todo",responsibleUserId:"local-board",createdAt:new Date("2026-01-01T12:00:00Z")}]);
-    await db.insert(heartbeatRuns).values({id:runId,companyId,agentId,status:"running",responsibleUserId:"local-board",contextSnapshot:{issueId:originId}});
+    await db.insert(heartbeatRuns).values({id:runId,companyId,agentId,status:"running",responsibleUserId:"local-board",runtimeMode:"native",nativeIssueId:originId,invocationSource:"assignment",triggerDetail:"system",contextSnapshot:{issueId:originId}});
+    await db.update(issues).set({executionRunId:runId}).where(eq(issues.id,originId));
+    await initializeRunIdentity(db,{companyId,runId,issueId:originId,responsibleUserId:"local-board",cause:"instruction"});
     const policy=analyticalPurpose();policy.analyticalPurpose!.capabilities=["metrics","decision"];
     policyId=(await aiGovernanceService(db).obligation(actor,companyId,policy)).id;
   });
@@ -70,8 +86,8 @@ suite("Native prospective decision context on migrated PostgreSQL",()=>{
     await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({management_reviews_v8:false});await db.insert(projects).values({companyId:foreignId,name:"Foreign private project"});
     const choices=await service().scopeOptions(companyId,actor,"project");expect(choices.items.map(item=>item.title)).toEqual(["Controlled native project"]);expect(choices.coverage).toBe("bounded_authorized_native_choices");
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,targetId));const tasks=await service().scopeOptions(companyId,actor,"issue");expect(tasks.items.map(item=>item.title)).toEqual(["Task · Private origin title"]);
-    const app=express();app.use((req,_res,next)=>{req.actor={...actor,userId:"operator"};next();});app.use(decisionIntelligenceRoutes(db));app.use(errorHandler);const path=`/companies/${companyId}/decision-context-source-options`;
-    const good=await request(app).get(`${path}?kind=project&expectedUserId=operator`);expect(good.status,JSON.stringify(good.body)).toBe(200);expect(good.headers["cache-control"]).toBe("no-store");const changed=await request(app).get(`${path}?kind=project&expectedUserId=other`);expect(changed.status).toBe(409);expect(JSON.stringify(changed.body)).not.toContain("Controlled native project");expect((await request(app).get(`${path}?kind=project&facts=1`)).status).toBe(400);expect((await request(app).get(`${path}?kind=all`)).status).toBe(400);
+    const app=express();app.use((req,_res,next)=>{req.actor={...actor};next();});app.use(decisionIntelligenceRoutes(db));app.use(errorHandler);const path=`/companies/${companyId}/decision-context-source-options`;
+    const good=await request(app).get(`${path}?kind=project&expectedUserId=local-board`);expect(good.status,JSON.stringify(good.body)).toBe(200);expect(good.headers["cache-control"]).toBe("no-store");const changed=await request(app).get(`${path}?kind=project&expectedUserId=other`);expect(changed.status).toBe(409);expect(JSON.stringify(changed.body)).not.toContain("Controlled native project");expect((await request(app).get(`${path}?kind=project&facts=1`)).status).toBe(400);expect((await request(app).get(`${path}?kind=all`)).status).toBe(400);
     await expect(service().scopeOptions(companyId,{type:"agent",agentId,companyId,source:"agent_jwt"},"project")).rejects.toMatchObject({status:403});await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({decision_intelligence_v8:false});await expect(service().scopeOptions(companyId,actor,"project")).rejects.toMatchObject({status:404});
   });
   it("separates immutable proposal versions and explicit preparation, with native CAS and tenant constraints",async()=>{

@@ -68,6 +68,24 @@ function isoDate(value: unknown): string | null {
   return new Date(candidate).toISOString();
 }
 
+function providerVersionMs(value: unknown): number | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function eventSnapshotMatchesCurrent(
+  current: typeof externalObjects.$inferSelect,
+  snapshot: ReturnType<typeof githubSnapshotUpdate>,
+): boolean {
+  if (!snapshot || current.statusKey !== snapshot.statusKey ||
+    current.statusCategory !== snapshot.statusCategory || current.isTerminal !== snapshot.merged) {
+    return false;
+  }
+  const currentData = record(current.data);
+  return Object.entries(snapshot.data).every(([key, value]) => currentData[key] === value);
+}
+
 function commitSha(value: unknown): string | null {
   return typeof value === "string" && /^[0-9a-f]{40,64}$/i.test(value) ? value.toLowerCase() : null;
 }
@@ -239,26 +257,56 @@ export function githubConnectionEventService(
     const snapshot = githubSnapshotUpdate(event.payload);
     if (!snapshot) return;
     const appliedAt = now();
-    await db.update(externalObjects).set({
-      statusKey: snapshot.statusKey,
-      statusLabel: snapshot.statusLabel,
-      statusCategory: snapshot.statusCategory,
-      statusTone: snapshot.statusTone,
-      statusIconKey: snapshot.statusIconKey,
-      isTerminal: snapshot.merged || snapshot.state === "closed",
-      data: sql`${externalObjects.data} || ${JSON.stringify(snapshot.data)}::jsonb`,
-      remoteVersion: snapshot.remoteVersion,
-      lastResolvedAt: appliedAt,
-      lastChangedAt: appliedAt,
-      nextRefreshAt: appliedAt,
-      updatedAt: appliedAt,
-    }).where(and(
-      eq(externalObjects.companyId, companyId),
-      eq(externalObjects.providerKey, "github"),
-      eq(externalObjects.objectType, "pull_request"),
-      sql`lower(${externalObjects.externalId}) = lower(${snapshot.externalId})`,
-    ));
-    if (snapshot.merged && event.action === "closed") {
+    const disposition = await db.transaction(async (tx) => {
+      const where = and(
+        eq(externalObjects.companyId, companyId),
+        eq(externalObjects.providerKey, "github"),
+        eq(externalObjects.objectType, "pull_request"),
+        sql`lower(${externalObjects.externalId}) = lower(${snapshot.externalId})`,
+      );
+      const [current] = await tx.select().from(externalObjects).where(where).for("update").limit(1);
+      if (!current) return "untracked" as const;
+      const incomingVersion = providerVersionMs(snapshot.remoteVersion);
+      const currentVersion = providerVersionMs(current.remoteVersion);
+      // Webhook delivery IDs deduplicate retries, but they do not order distinct
+      // deliveries. Only GitHub's object updated_at can order these snapshots.
+      // Unknown/equal-conflicting versions are refreshed through the canonical
+      // object GET; an opaque delivery ID or receipt time is never an ordering key.
+      if (incomingVersion === null || currentVersion === null || incomingVersion < currentVersion ||
+        incomingVersion === currentVersion && !eventSnapshotMatchesCurrent(current, snapshot)) {
+        await tx.update(externalObjects).set({
+          nextRefreshAt: appliedAt,
+          refreshStartedAt: null,
+          refreshToken: null,
+          updatedAt: appliedAt,
+        }).where(and(eq(externalObjects.id, current.id), eq(externalObjects.companyId, companyId)));
+        return "rejected" as const;
+      }
+      if (incomingVersion === currentVersion) return "current_equal" as const;
+      await tx.update(externalObjects).set({
+        statusKey: snapshot.statusKey,
+        statusLabel: snapshot.statusLabel,
+        statusCategory: snapshot.statusCategory,
+        statusTone: snapshot.statusTone,
+        statusIconKey: snapshot.statusIconKey,
+        // Closed but unmerged PRs can reopen; keep them in the bounded object
+        // refresh sweep so a missed reopen delivery is eventually observed.
+        isTerminal: snapshot.merged,
+        data: sql`${externalObjects.data} || ${JSON.stringify(snapshot.data)}::jsonb`,
+        remoteVersion: snapshot.remoteVersion,
+        etag: null,
+        lastChangedAt: appliedAt,
+        nextRefreshAt: appliedAt,
+        refreshStartedAt: null,
+        refreshToken: null,
+        updatedAt: appliedAt,
+      }).where(and(eq(externalObjects.id, current.id), eq(externalObjects.companyId, companyId)));
+      return "applied" as const;
+    });
+    // A merge hint may fast-path confirmation resolution only when the locked
+    // object row admitted this provider version (or already held the exact
+    // same snapshot). Untracked or rejected event bodies are not merge proof.
+    if (disposition !== "untracked" && disposition !== "rejected" && snapshot.merged && event.action === "closed") {
       await issueThreadInteractionService(db, { wakeup: options.wakeup })
         .sweepMergedPullRequestConfirmations([{
           companyId,
@@ -318,6 +366,16 @@ export function githubConnectionEventService(
         installationCount: installationIds.length,
         repositoryCount,
         repositorySelection: repositoryCount === 0 ? "none" as const : github.repositorySelection,
+        repositoryAccessReconciliation: {
+          ...(github.repositoryAccessReconciliation ?? {}),
+          state: "required" as const,
+          mode: "full" as const,
+          requiredReason: "source_event_invalidated" as const,
+          nextAttemptAt: now().toISOString(),
+          lastErrorCode: undefined,
+          reconcileLeaseId: undefined,
+          reconcileLeaseUntil: undefined,
+        },
         lastWebhookAt: now().toISOString(),
         webhookHealth: unavailable ? "unhealthy" as const : "healthy" as const,
       },

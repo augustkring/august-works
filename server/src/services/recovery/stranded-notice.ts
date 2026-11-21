@@ -1,3 +1,4 @@
+import { NATIVE_PAID_ADMISSION_REASON, NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE } from "../native-runtime/paid-transport-admission.js";
 import type { IssueCommentMetadata, IssueCommentPresentation } from "@paperclipai/shared";
 import {
   agentLinkRow,
@@ -113,6 +114,16 @@ export function sandboxProviderPluginRemedy(pluginStatus: string): string {
 export function buildConfigurationIncompleteRecoveryNoticeSeed(
   configurationIncomplete?: Record<string, unknown> | null,
 ): StrandedRecoveryNoticeSeed {
+  if (readNonEmptyStringField(configurationIncomplete, "reason") === NATIVE_PAID_ADMISSION_REASON) {
+    const agentId = readNonEmptyStringField(configurationIncomplete, "agentId");
+    // The failure owner supplies the Agent ID. Never reflect arbitrary action
+    // URLs, provider diagnostics or error details into the retained notice.
+    const runtimeAction = agentId && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(agentId)
+      ? ` [Runtime settings](/agents/${agentId}/runtime).` : "";
+    return { title: "Configuration incomplete", tone: "danger",
+      body: NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE + runtimeAction,
+      nextAction: "Choose an available runtime in Runtime settings, then continue the task." };
+  }
   if (readNonEmptyStringField(configurationIncomplete, "reason") === "ai_connection_unavailable") {
     return {
       title: "AI connection needs attention",

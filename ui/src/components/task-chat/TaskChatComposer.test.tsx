@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
 import { act, createRef, StrictMode, useState, type ReactElement } from "react";
+import { i18n } from "../../i18n";
+import experienceEn from "../../i18n/experience/en.json";
+import experienceDa from "../../i18n/experience/da.json";
 import type { IssueChatComposerHandle } from "../IssueChatThread";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -1010,6 +1013,60 @@ describe("TaskChatComposer", () => {
     ).not.toBeNull();
   });
 
+  it("names the attach button per language and opens the file picker from it", async () => {
+    const previousLocale = i18n.language;
+    const pickerClick = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+    try {
+      for (const [locale, name] of [["en", "Attach file"], ["da", "Vedhæft fil"]] as const) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        render(
+          <TaskChatComposer
+            onAdd={vi.fn()}
+            workMode="standard"
+            onAttachImage={vi.fn().mockResolvedValue(undefined)}
+          />,
+        );
+        const attach = container.querySelector<HTMLButtonElement>('[data-testid="task-chat-composer-attach"]');
+        expect(attach?.getAttribute("aria-label")).toBe(name);
+        pickerClick.mockClear();
+        act(() => { attach?.click(); });
+        expect(pickerClick).toHaveBeenCalledTimes(1);
+        expect((pickerClick.mock.contexts[0] as HTMLInputElement).type).toBe("file");
+      }
+    } finally {
+      pickerClick.mockRestore();
+      await act(async () => { await i18n.changeLanguage(previousLocale); });
+    }
+  });
+
+  it("shows the pending-decision hint as the editor's description in English and Danish (APR-E2E-1)", async () => {
+    const previousLocale = i18n.language;
+    try {
+      for (const [locale, text] of [
+        ["en", "The agent will see this after you decide."],
+        ["da", "Agenten ser dette, når du har truffet din beslutning."],
+      ] as const) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect((locale === "en" ? experienceEn : experienceDa).screens.chat.decisionPendingHint).toBe(text);
+        render(
+          <TaskChatComposer onAdd={vi.fn()} workMode="standard"
+            hint={(locale === "en" ? experienceEn : experienceDa).screens.chat.decisionPendingHint} />,
+        );
+        await flushAsync();
+        const hint = container.querySelector<HTMLElement>('[data-testid="task-chat-composer-hint"]');
+        expect(hint?.textContent).toBe(text);
+        expect(hint?.id).toBeTruthy();
+        expect(editable().getAttribute("aria-describedby")).toBe(hint!.id);
+      }
+      render(<TaskChatComposer onAdd={vi.fn()} workMode="standard" />);
+      await flushAsync();
+      expect(container.querySelector('[data-testid="task-chat-composer-hint"]')).toBeNull();
+      expect(editable().hasAttribute("aria-describedby")).toBe(false);
+    } finally {
+      await act(async () => { await i18n.changeLanguage(previousLocale); });
+    }
+  });
+
   it("wires the editor's inline image upload to onAttachImage and returns the attachment URL", async () => {
     const onAttachImage = vi.fn().mockResolvedValue({
       contentPath: "/attachments/shot.png",
@@ -1834,6 +1891,35 @@ describe("TaskChatComposer", () => {
       expect(sendButton().disabled).toBe(false);
       await act(async () => sendButton().click());
       expect(onAdd).toHaveBeenCalledWith("/new", undefined, undefined, undefined, expect.any(String));
+    });
+
+    it.each(["en", "da"] as const)("preserves the draft and blocks messages while pause scope is unknown (%s)", async locale => {
+      const previousLocale = i18n.language;
+      const onAdd = vi.fn(), onResume = vi.fn();
+      const props = { onAdd, workMode: "standard" as const, draftKey: `unknown-pause-${locale}` };
+      const copy = locale === "da" ? experienceDa.taskChatPause : experienceEn.taskChatPause;
+      try {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        render(<TaskChatComposer {...props} />);
+        typeText("Keep this exact draft.");
+        act(() => root!.render(<TaskChatComposer {...props} pause={{ scope: "unknown", onResume }} />));
+        expect(container.querySelector('[contenteditable="true"]')).toBeNull();
+        expect(container.querySelector('button[aria-label="Send"]')).toBeNull();
+        expect(container.textContent).toContain(copy.unknownTitle);
+        expect(container.textContent).toContain(copy.unknownDetail);
+        const review = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.trim() === copy.reviewResume);
+        if (!review) throw new Error("Expected the localized neutral review action");
+        act(() => review.click());
+        expect(onResume).toHaveBeenCalledOnce();
+        expect(onAdd).not.toHaveBeenCalled();
+        act(() => root!.render(<TaskChatComposer {...props} pause={{ scope: "subtree", onResume }} />));
+        expect(container.querySelector('[contenteditable="true"]')).toBeNull();
+        act(() => root!.render(<TaskChatComposer {...props} />));
+        expect(editable().textContent).toBe("Keep this exact draft.");
+        expect(onAdd).not.toHaveBeenCalled();
+      } finally {
+        await act(async () => { await i18n.changeLanguage(previousLocale); });
+      }
     });
 
     it("preserves a typed draft and blocks sending until resume completes", async () => {

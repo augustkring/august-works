@@ -21,6 +21,7 @@ import {
   instanceSettings,
   memoryBindings,
   memoryRecords,
+  heartbeatRuns,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -181,6 +182,27 @@ const image = process.env.AW_TEST_DATABASE_DUMP_IMAGE;
           observedAt: now,
         })
         .returning();
+      // Preserve one historical Native input whose source provenance is unknown.
+      // Restore must not promote this row merely because newer receipts exist.
+      const [legacyAgent] = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(eq(agents.companyId, retained.companyId))
+        .limit(1);
+      const legacyNativeRunId = randomUUID();
+      await db.insert(heartbeatRuns).values({
+        id: legacyNativeRunId,
+        companyId: retained.companyId,
+        agentId: legacyAgent!.id,
+        responsibleUserId: "restore-owner",
+        runtimeMode: "native",
+        nativeInputSourceProtocolVersion: 0,
+        sourceContextProvenanceQualified: false,
+        status: "succeeded",
+        runnerProfileJson: {
+          nativeExecutionInput: { schema: "legacy-native-input", fixture: "provenance unknown" },
+        },
+      });
       const source = new URL(database.connectionString);
       await db
         .insert(authUsers)
@@ -232,7 +254,7 @@ const image = process.env.AW_TEST_DATABASE_DUMP_IMAGE;
         environment: "staging",
         exportedAt: new Date().toISOString(),
         companies: [{ company_id: erased.companyId }],
-        businessEvents: [], analyticalSources: [], feedback: [],
+        businessEvents: [], analyticalSources: [], feedback: [], supportCases: [],
         identityHomes: [
           { id: identity!.id, home_company_id: retained.companyId },
         ],
@@ -309,6 +331,27 @@ const image = process.env.AW_TEST_DATABASE_DUMP_IMAGE;
           .from(agents)
           .where(eq(agents.companyId, erased.companyId)),
       ).toHaveLength(0);
+      const [unknownNativeRun] = await restored
+        .select()
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, legacyNativeRunId));
+      expect(unknownNativeRun).toMatchObject({
+        companyId: retained.companyId,
+        nativeInputSourceProtocolVersion: 0,
+        sourceContextProvenanceQualified: false,
+      });
+      expect(unknownNativeRun!.runnerProfileJson).toMatchObject({
+        nativeExecutionInput: { fixture: "provenance unknown" },
+      });
+      expect(unknownNativeRun!.runnerProfileJson).not.toHaveProperty(
+        "nativeInputSourceReceipt",
+      );
+      await expect(
+        restored
+          .update(heartbeatRuns)
+          .set({ nativeInputSourceProtocolVersion: 1 })
+          .where(eq(heartbeatRuns.id, legacyNativeRunId)),
+      ).rejects.toMatchObject({ cause: { code: "23514" } });
       const [tombstone] = await restored
         .select()
         .from(companies)

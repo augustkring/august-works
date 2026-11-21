@@ -1,0 +1,20 @@
+{
+  "kind": "generated-snapshot-and-journal-publication",
+  "generator": "drizzle-kit 0.31.10, actual source schema in isolated output",
+  "generatedSQL": "/workspace/v10-preparation/conversation-migration-generation-vq_kc6eq/migrations/0547_native_conversation_model_reservations.sql",
+  "customSQL": "packages/db/src/migrations/0547_native_conversation_model_reservations.sql",
+  "customSQLSha256": "6e159194289122609b6a6d861b9c43c913e7f012b8efc721e66f37750cb9ddab",
+  "schemaHashes": {
+    "packages/db/src/schema/orchestration.ts": "f29218518403f4b456a03c208296bffffe5b1e45f4c8d604a0c25c25fa0cbca0",
+    "packages/db/src/schema/cost_events.ts": "a385269dc41b977b2f036c7765723cc7544aec810089ff5fbd2988149ad7ff22"
+  },
+  "snapshotSha256": "66b831e55cd83341409450f71e059621dbc337202218386818764bd4bef5edd8",
+  "journalEntry": {
+    "idx": 547,
+    "version": "7",
+    "when": 1793008397951,
+    "tag": "0547_native_conversation_model_reservations",
+    "breakpoints": true
+  },
+  "scope": "Metadata generated and schema alignment checked. Migration application and financial/source acceptance are separate pending tests."
+}

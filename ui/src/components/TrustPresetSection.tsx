@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useEffect, useMemo, useState } from "react";
 import type { AgentPermissions, TrustPreset } from "@paperclipai/shared";
 import { Lock, ShieldAlert } from "lucide-react";
@@ -108,7 +109,7 @@ export function TrustPresetSection({
     <div>
       <h3 className="mb-3 text-sm font-medium">Trust</h3>
       <div className="rounded-lg border border-border p-4 space-y-3">
-        <Field label="Trust preset" hint="Choose how broadly this agent can read and act on Paperclip work objects.">
+        <Field label="Trust preset" hint={`Choose how broadly this agent can read and act on ${PRODUCT_IDENTITY.productName} work objects.`}>
           <select
             className={inputClass}
             value={preset}
@@ -212,15 +213,7 @@ export function TrustPresetSection({
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                Want to set more than one containment boundary?{" "}
-                <a
-                  className="underline underline-offset-2 hover:text-foreground"
-                  href="https://paperclip.ing/ee"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Get Paperclip EE.
-                </a>
+                Additional containment boundaries require an enabled policy API. Ask your administrator.
               </p>
               <CollapsibleSection
                 title="View policy"

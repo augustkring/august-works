@@ -1605,6 +1605,39 @@ export class DurablePrpControlPlane {
     ).length;
   }
 
+  /**
+   * The identity the single live authenticated runner presented in its
+   * `auth_hello`, only when it equals this authority's current durable
+   * identity. No, or more than one, authenticated runner yields null.
+   */
+  authenticatedRunnerIdentity(): DurableRecoveryIdentity | null {
+    const authenticated = [...this.#connections].filter(
+      (connection) =>
+        connection.secureChannel !== null && connection.identity !== null,
+    );
+    if (authenticated.length !== 1) return null;
+    const identity = authenticated[0]!.identity!;
+    const current = this.#store.state.identity;
+    const fields = [
+      "runnerInstanceId",
+      "environmentLeaseId",
+      "runId",
+      "normalizedSessionId",
+      "turnId",
+      "itemId",
+    ] as const;
+    for (const field of fields) {
+      if (
+        typeof identity[field] !== "string" ||
+        identity[field] === "" ||
+        identity[field] !== current[field] ||
+        identity[field] !== this.#identity[field]
+      )
+        return null;
+    }
+    return structuredClone(identity);
+  }
+
   /** A reusable close requires every admitted callback's exact durable result. */
   semanticToolResultsSettled(): boolean {
     return (
@@ -3279,6 +3312,9 @@ const runnerPlatformEnvironmentKeys = [
 const runnerExplicitProviderEnvironmentKeys = [
   "OPENROUTER_API_KEY",
   "ANTHROPIC_API_KEY",
+  "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+  "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+  "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
   "CLAUDE_CODE_OAUTH_TOKEN",
   "OPENAI_API_KEY",
   "CODEX_API_KEY",
@@ -3308,6 +3344,36 @@ const runnerExplicitProviderEnvironmentKeys = [
   "PAPERCLIP_PROVIDER_TRACE_MAX_BYTES",
 ] as const;
 
+const managedModelEnvironmentKeys = [
+  "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+  "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+  "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+] as const;
+
+function hasValidManagedModelEnvironment(source: NodeJS.ProcessEnv): boolean {
+  const present = managedModelEnvironmentKeys.filter(key => source[key] !== undefined);
+  if (!present.length) return false;
+  const origin = source.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
+  const inputBound = source.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND;
+  const outputBound = source.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS;
+  const validBound = (raw: string | undefined, min: number, max: number) => {
+    if (!raw || !/^(?:0|[1-9][0-9]*)$/.test(raw)) return false;
+    const value = Number(raw);
+    return Number.isSafeInteger(value) && value >= min && value <= max;
+  };
+  let validOrigin = false;
+  try {
+    const parsed = new URL(origin ?? "");
+    validOrigin = parsed.protocol === "https:" && parsed.username === "" && parsed.password === "" &&
+      parsed.pathname === "/" && parsed.search === "" && parsed.hash === "" && origin === parsed.origin;
+  } catch { /* closed below */ }
+  if (present.length !== managedModelEnvironmentKeys.length || !validOrigin ||
+    !validBound(inputBound, 1, 2_000_000) || !validBound(outputBound, 256, 8_192)) {
+    throw new Error("managed_model_profile_environment_invalid");
+  }
+  return true;
+}
+
 function runnerEnvironment(
   ticket: string,
   explicitSource?: NodeJS.ProcessEnv,
@@ -3324,7 +3390,9 @@ function runnerEnvironment(
   // already-sanitized environment for this run. Never inherit them implicitly
   // from the server process.
   if (explicitSource !== undefined) {
+    const managedModel = hasValidManagedModelEnvironment(explicitSource);
     for (const key of runnerExplicitProviderEnvironmentKeys) {
+      if (managedModel && key === "ANTHROPIC_API_KEY") continue;
       const value = explicitSource[key];
       if (value !== undefined) environment[key] = value;
     }
@@ -3477,6 +3545,14 @@ export function spawnRunner(options: {
 
   const command = options.runnerBinaryPath ?? runnerBinary;
   const environment = runnerEnvironment(options.ticket, options.environment);
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    console.warn("managed_model_runner_environment_diagnostic", {
+      stage: "runner_process_launch",
+      brokerOriginPresent: typeof environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string",
+      inputBoundPresent: typeof environment.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === "string",
+      outputBoundPresent: typeof environment.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === "string",
+    });
+  }
   const withRestart = (handle: RunnerProcessHandle): RunnerProcessHandle => ({
     ...handle,
     restart: (ticket) => spawnRunner({ ...options, ticket }),

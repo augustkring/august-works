@@ -1,0 +1,47 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[06:30:20] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[06:30:26] [31mERROR[39m: [36mNative authentication request failed[39m [90m{"component":"native-authentication"}[39m
+[06:30:50] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[06:30:50] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[06:30:51] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[06:30:55] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[06:31:20] [33mWARN[39m: [36mFailed to publish committed CLI approval activity[39m 
+    err: {
+      "type": "Error",
+      "message": "Injected publication failure",
+      "stack":
+          Error: Injected publication failure
+              at EventEmitter.<anonymous> (/workspace/blentera-v10/server/src/services/board-auth.test.ts:433:67)
+              at EventEmitter.emit (node:events:514:28)
+              at publishLiveEvent (/workspace/blentera-v10/server/src/services/live-events.ts:34:11)
+              at publishActivity (/workspace/blentera-v10/server/src/services/activity-log.ts:152:3)
+              at Object.approveCliAuthChallenge (/workspace/blentera-v10/server/src/services/board-auth.ts:559:13)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/services/board-auth.test.ts:436:24
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[06:31:20] [33mWARN[39m: [36mFailed to publish committed CLI approval activity[39m 
+    err: {
+      "type": "Error",
+      "message": "Synthetic publication failure",
+      "stack":
+          Error: Synthetic publication failure
+              at EventEmitter.<anonymous> (/workspace/blentera-v10/server/src/services/board-auth.test.ts:512:67)
+              at EventEmitter.emit (node:events:514:28)
+              at publishLiveEvent (/workspace/blentera-v10/server/src/services/live-events.ts:34:11)
+              at publishActivity (/workspace/blentera-v10/server/src/services/activity-log.ts:152:3)
+              at Object.approveCliAuthChallenge (/workspace/blentera-v10/server/src/services/board-auth.ts:559:13)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/routes/access.ts:2879:24
+    }
+
+ Test Files  4 passed (4)
+      Tests  84 passed (84)
+   Start at  06:28:18
+   Duration  182.99s (transform 32.57s, setup 551ms, import 31.27s, tests 149.71s, environment 1ms)
+

@@ -1,0 +1,13 @@
+attempt=relay-c0-final-source-r1
+evidence_revision=119
+repo=/workspace/blentera-v10
+test_file=src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts
+test_pattern=.
+suite_mode=all
+binary=/workspace/.cloud-setup/lockfile/node_modules/.pnpm/opencode-linux-x64@1.18.32/node_modules/opencode-linux-x64/bin/opencode
+binary_sha256=513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080
+provider_pack=/tmp/paperclip-runner-provider-pack-v10-a0275fd01
+outer_timeout_seconds=none
+inner_timeout_seconds=600
+lock_wait_timeout_seconds=unbounded
+command=PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH=/tmp/paperclip-runner-provider-pack-v10-a0275fd01 PAPERCLIP_NATIVE_RELAY_FAILURE_EVIDENCE_PATH=/workspace/blentera-v10/doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r119/runner-stderr-redacted.txt PAPERCLIP_PINNED_NATIVE_TEST_TIMEOUT_SECONDS=600 /workspace/v10-preparation/run-pinned-native-test.sh relay-c0-final-source-r1 src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts .

@@ -3,7 +3,7 @@ import { automationArtifactService } from "../automation-artifacts/automation-ar
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { companies, companyMemberships, createDb, instanceSettings, workflowOptimizerEvaluations, workflowOptimizerObservations, workflowOptimizerSuggestions } from "@paperclipai/db";
+import { authUsers, companies, companyMemberships, createDb, instanceSettings, workflowOptimizerEvaluations, workflowOptimizerObservations, workflowOptimizerSuggestions } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowExecutorService } from "../workflows/workflow-executor.js";
@@ -32,6 +32,8 @@ suite("governed optimizer workflow integration", () => {
       .onConflictDoUpdate({ target: instanceSettings.singletonKey, set: { experimental } });
     const [company] = await db.insert(companies).values({ name: "Optimizer integration", issuePrefix: `O${randomUUID().slice(0, 6).toUpperCase()}` }).returning();
     const userId = `owner-${randomUUID()}`;
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Optimizer owner", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companyMemberships).values({ companyId: company!.id, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" });
     const actor = { principal: { type: "user" as const, userId } };
     const svc = workflowService(db);

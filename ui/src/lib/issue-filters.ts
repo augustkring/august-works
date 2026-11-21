@@ -1,3 +1,4 @@
+import { valueLabel } from "../i18n/value-labels";
 import type { ExternalObjectSummary, Issue } from "@paperclipai/shared";
 
 export type IssueFilterWorkspaceLookup = {
@@ -87,7 +88,7 @@ export const issueQuickFilterPresets = [
 ];
 
 export function issueFilterLabel(value: string): string {
-  return value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  return valueLabel("title", value, value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()));
 }
 
 export function issueFilterArraysEqual(a: string[], b: string[]): boolean {

@@ -39,6 +39,7 @@ const describePg = support.supported ? describe.sequential : describe.skip;
 describePg("V9 actual unpublished native workflow tests", () => {
   let db!: ReturnType<typeof createDb>;
   let fixture: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
+  const routeErrors: Array<{ name: string; message: string; top: string[] }> = [];
   const local: Express.Request["actor"] = {
     type: "board",
     source: "local_implicit",
@@ -75,6 +76,14 @@ describePg("V9 actual unpublished native workflow tests", () => {
       next();
     });
     app.use("/api", workflowRoutes(db));
+    app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (err instanceof Error) routeErrors.push({
+        name: err.name,
+        message: err.message,
+        top: (err.stack ?? "").split("\n").slice(0, 7),
+      });
+      errorHandler(err, req, res, next);
+    });
     app.use(errorHandler);
     return request(app);
   }
@@ -255,13 +264,17 @@ describePg("V9 actual unpublished native workflow tests", () => {
     });
   });
   it("serializes identical original requests and recovers one receipt after draft replacement and publication", async () => {
+    routeErrors.length = 0;
     const detail = await seed(),
       input = command(detail);
     const [first, second] = await Promise.all([
       http().post(path(detail)).send(input),
       http().post(path(detail)).send(input),
     ]);
-    expect([first.status, second.status]).toEqual([200, 200]);
+    expect(
+      [first.status, second.status],
+      JSON.stringify({ bodies: [first.body, second.body], routeErrors }),
+    ).toEqual([200, 200]);
     expect(first.body).toEqual(second.body);
     const changed = await workflowService(db).updateDraft(
       detail.companyId,

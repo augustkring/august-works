@@ -1,0 +1,14 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v6-costs.integration.test.ts > cost allocation keeps integer precision, unallocated capacity and rounding without exceeding a host envelope
+ ✓ src/__tests__/v6-costs.integration.test.ts > V6 operator cost evidence and automatic spend admission > keeps missing costs unknown, requires owned current coverage and records exact scoped estimates once 92ms
+ ✓ src/__tests__/v6-costs.integration.test.ts > V6 operator cost evidence and automatic spend admission > refuses cost publication without current recent passkey proof, including a password session 10ms
+ ✓ src/__tests__/v6-costs.integration.test.ts > V6 operator cost evidence and automatic spend admission > keeps shared billing account host estimates unallocated instead of splitting them across companies 23ms
+ ✓ src/__tests__/v6-costs.integration.test.ts > V6 operator cost evidence and automatic spend admission > serializes automatic creation against a fresh cost envelope and closes admission without an explicit EUR ceiling 20ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 1 skipped (5)
+   Start at  21:40:25
+   Duration  19.97s (transform 10.09s, setup 84ms, import 14.86s, tests 4.91s, environment 0ms)
+

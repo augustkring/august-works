@@ -1,0 +1,136 @@
+{
+  "document": {
+    "filesystem_policy": {
+      "include_workdir": false,
+      "read_only": [
+        "/.openshell/runtime",
+        "/bin",
+        "/etc",
+        "/etc/os-release",
+        "/proc",
+        "/proc/self/status",
+        "/proc/sys/kernel/cap_last_cap",
+        "/proc/sys/net/ipv4/ip_unprivileged_port_start",
+        "/sys/fs/cgroup",
+        "/usr/bin"
+      ],
+      "read_write": [
+        "/workspace/project"
+      ]
+    },
+    "landlock": {
+      "compatibility": "hard_requirement"
+    },
+    "network_policies": {
+      "aw_probe_0": {
+        "binaries": [
+          {
+            "path": "/usr/bin/curl"
+          }
+        ],
+        "endpoints": [
+          {
+            "enforcement": "enforce",
+            "host": "canary.example.test",
+            "port": 443,
+            "protocol": "rest",
+            "rules": [
+              {
+                "allow": {
+                  "method": "GET",
+                  "path": "/__aw_qualification_l7_sentinel__"
+                }
+              },
+              {
+                "allow": {
+                  "method": "GET",
+                  "path": "/allow/????????????????????????????????"
+                }
+              },
+              {
+                "allow": {
+                  "method": "GET",
+                  "path": "/dns-redirect/????????????????????????????????"
+                }
+              },
+              {
+                "allow": {
+                  "method": "GET",
+                  "path": "/l7-allow/????????????????????????????????"
+                }
+              },
+              {
+                "allow": {
+                  "method": "GET",
+                  "path": "/redirect/????????????????????????????????"
+                }
+              }
+            ]
+          }
+        ],
+        "name": "aw_probe_0"
+      }
+    },
+    "process": {
+      "run_as_group": "1000",
+      "run_as_user": "1000"
+    },
+    "version": 1
+  },
+  "fixture": {
+    "filesystem": {
+      "allowedReadMarker": "a",
+      "allowedReadPath": "/etc/os-release",
+      "deniedReadMarker": "d",
+      "deniedReadPath": "/opt/aw-denied-canary",
+      "escapeOperand": "/etc/../opt/aw-escape-canary",
+      "escapeReadMarker": "e",
+      "escapeTargetPath": "/opt/aw-escape-canary",
+      "escapeViaRoot": "/etc",
+      "workdirPath": "/workspace/project"
+    },
+    "fixtureHash": "ec5ed87cdc97e734bd471e8eaf0f7ceadae8f53e93d3cf791046095b629ebb03",
+    "network": {
+      "allow": {
+        "marker": "canary-ok",
+        "method": "GET",
+        "urlTemplate": "https://canary.example.test/allow/{nonce}"
+      },
+      "dnsRedirectDeny": {
+        "marker": "canary-ok",
+        "method": "GET",
+        "resolveIp": "203.0.113.8",
+        "urlTemplate": "https://canary.example.test/dns-redirect/{nonce}"
+      },
+      "hostPortDeny": {
+        "marker": "canary-ok",
+        "method": "GET",
+        "urlTemplate": "https://canary.example.test:444/port-deny/{nonce}"
+      },
+      "l7Allow": {
+        "marker": "canary-ok",
+        "method": "GET",
+        "urlTemplate": "https://canary.example.test/l7-allow/{nonce}"
+      },
+      "l7Deny": {
+        "marker": "canary-ok",
+        "method": "POST",
+        "urlTemplate": "https://canary.example.test/l7-deny/{nonce}"
+      },
+      "redirectDeny": {
+        "marker": "canary-ok",
+        "method": "GET",
+        "urlTemplate": "https://canary.example.test/redirect/{nonce}"
+      },
+      "version": 1,
+      "wrongHostDeny": {
+        "marker": "canary-ok",
+        "method": "GET",
+        "urlTemplate": "https://wrong-canary.example.test/host-deny/{nonce}"
+      }
+    },
+    "runAsGroup": "1000",
+    "runAsUser": "1000",
+    "version": 1
+  }
+}

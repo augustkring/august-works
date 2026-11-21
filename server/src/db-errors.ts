@@ -50,3 +50,18 @@ export function isForeignKeyViolation(error: unknown): boolean {
   }
   return false;
 }
+
+/**
+ * Recognizes only the server-owned orchestration completion guard. Its SQLSTATE
+ * and exact exception message are both required so unrelated check violations
+ * remain database errors.
+ */
+export function isOrchestrationCompletionGuardViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && current && typeof current === "object"; depth += 1) {
+    const candidate = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (candidate.code === "23514" && candidate.message === "orchestration_completion_requires_server_verification") return true;
+    current = candidate.cause;
+  }
+  return false;
+}

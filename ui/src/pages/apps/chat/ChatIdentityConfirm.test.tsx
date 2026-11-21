@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { ChatIdentityConfirm } from "./ChatIdentityConfirm";
 
 const mocks = vi.hoisted(() => ({
@@ -46,7 +47,7 @@ describe("self-service Slack identity confirmation", () => {
     expect(mocks.confirmIdentityLink).not.toHaveBeenCalled();
     button("Confirm identity").click();
     await vi.waitFor(() => expect(container.textContent).toContain("Identity linked"));
-    expect(container.textContent).toContain("current Paperclip permissions");
+    expect(container.textContent).toContain(`current ${PRODUCT_IDENTITY.productName} permissions`);
     expect(container.querySelector('a')?.textContent).toBe("Return to Slack");
   });
   it("keeps other providers out of the Slack return flow", async () => {

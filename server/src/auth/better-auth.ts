@@ -1,17 +1,28 @@
+import { isIP } from "node:net";
+import { LOCAL_PASSWORD_MIN_LENGTH, LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "@paperclipai/shared/local-password-policy";
+import { localPasswordPolicy } from "./local-password-policy.js";
+import { logger } from "../middleware/logger.js";
+import { nativePasskeyPlugin } from "./native-passkey.js";
+import { nativeTwoFactorPlugin } from "./native-two-factor.js";
+import { nativeAuthenticationAssurancePlugin } from "./native-authentication-assurance.js";
 import { enterpriseAuthPlugins, ENTERPRISE_DISABLED_AUTH_PATHS } from "./enterprise-auth-plugins.js";
 import { enterpriseIdentityPolicies, enterpriseSubjectBindings, ssoProvider, scimConnectionBinding, scimIdentityTombstone, scimSubject, scimUser, scimProjectionGrant, scimGroup, scimGroupMember, companyMemberships, principalPermissionGrants, activityLog } from "@paperclipai/db";
 import type { Request, RequestHandler } from "express";
 import type { IncomingHttpHeaders } from "node:http";
+import { APIError, isAPIError } from "better-auth/api";
 import { betterAuth, type Auth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { toNodeHandler } from "better-auth/node";
 import type { Db } from "@paperclipai/db";
+import { accountLocaleSchema } from "@paperclipai/shared/validators/access";
 import {
   authAccounts,
   authSessions,
   authUsers,
   authVerifications,
   authRateLimits,
+  authTwoFactors,
+  authPasskeys,
 } from "@paperclipai/db";
 import type { Config } from "../config.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
@@ -33,7 +44,7 @@ export type BetterAuthSessionUser = {
 };
 
 export type BetterAuthSessionResult = {
-  session: { id: string; userId: string } | null;
+  session: { id: string; userId: string; expiresAt?: Date } | null;
   user: BetterAuthSessionUser | null;
 };
 
@@ -254,8 +265,14 @@ export function resolveWorkspaceHandoffIdentity(
 export type SaasAuthDelivery = {
   signupEnabled: boolean;
   verificationRequired: boolean;
-  sendVerification(input: { user: { id: string; email: string }; url: string; token: string }): Promise<void>;
-  sendPasswordReset(input: { user: { id: string; email: string }; url: string; token: string }): Promise<void>;
+  sendVerification(
+    input: { user: { id: string; email: string; locale?: unknown }; url: string; token: string },
+    request?: globalThis.Request,
+  ): Promise<void>;
+  sendPasswordReset(
+    input: { user: { id: string; email: string; locale?: unknown }; url: string; token: string },
+    request?: globalThis.Request,
+  ): Promise<void>;
   recordSecurityEvent(userId: string, action: "email_verified" | "password_reset_completed"): Promise<void>;
 };
 
@@ -279,30 +296,64 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     publicUrl,
   });
 
-  const enterprisePlugins = config.deploymentProfile === "saas" && config.saasPlatform && config.publicOriginConfig ? enterpriseAuthPlugins(db, config.saasPlatform.deployment.sourceSha) : [];
+  const enterprisePlugins = config.deploymentProfile === "saas" && config.saasPlatform && config.publicOriginConfig ? enterpriseAuthPlugins(db, config.saasPlatform.deployment.sourceSha, config.saasPlatform.operatorUserIds) : [];
+  const authSchema = {
+    user: authUsers,
+    session: authSessions,
+    account: authAccounts,
+    verification: authVerifications,
+    twoFactor: authTwoFactors,
+    passkey: authPasskeys,
+    ...(config.deploymentProfile === "saas" ? {rateLimit:authRateLimits} : {}),
+    ...(enterprisePlugins.length ? { ssoProvider,scimConnectionBinding,scimIdentityTombstone,scimSubject,scimUser,scimProjectionGrant,scimGroup,scimGroupMember,awEnterprisePolicy:enterpriseIdentityPolicies,awEnterpriseBinding:enterpriseSubjectBindings,awCompanyMembership:companyMemberships,awPermissionGrant:principalPermissionGrants,awActivity:activityLog } : {}),
+  };
+  let passkeyOrigin: string | undefined;
+  const configuredPasskeyUrl = baseUrl ?? publicUrl;
+  if (configuredPasskeyUrl && URL.canParse(configuredPasskeyUrl)) {
+    const configured = new URL(configuredPasskeyUrl);
+    if (!configured.username && !configured.password && !isIP(configured.hostname.replace(/^\[|\]$/g, "")) && (configured.protocol === "https:" ||
+      configured.protocol === "http:" && configured.hostname === "localhost")) passkeyOrigin = configured.origin;
+  }
   const authConfig = {
+    // Native verifier exceptions can embed clientDataJSON challenge/origin.
+    // Keep SDK diagnostics separate from ceremony and credential payloads.
+    logger: { log(level: "debug" | "info" | "warn" | "error") {
+      logger[level]({ component: "native-authentication" }, "Native authentication provider event");
+    } },
+    onAPIError: { onError(error: unknown) {
+      if (isAPIError(error) && error.statusCode<500) return;
+      logger.error({ component: "native-authentication" }, "Native authentication request failed");
+      // Better Call otherwise prints unknown exceptions directly, outside the
+      // configured SDK logger, potentially including native SQL parameters.
+      throw new APIError("INTERNAL_SERVER_ERROR", { code: "AUTHENTICATION_UNAVAILABLE", message: "Authentication is temporarily unavailable" });
+    } },
     baseURL: baseUrl,
     secret,
     trustedOrigins,
+    user: {
+      additionalFields: {
+        locale: {
+          type: "string" as const,
+          required: false,
+          input: false,
+          returned: false,
+          validator: { output: accountLocaleSchema.nullable() },
+        },
+      },
+    },
     database: drizzleAdapter(db, {
       provider: "pg",
       transaction: enterprisePlugins.length > 0,
-      schema: {
-        user: authUsers,
-        session: authSessions,
-        account: authAccounts,
-        verification: authVerifications,
-        ...(config.deploymentProfile === "saas" ? {rateLimit:authRateLimits} : {}),
-        ...(enterprisePlugins.length ? { ssoProvider,scimConnectionBinding,scimIdentityTombstone,scimSubject,scimUser,scimProjectionGrant,scimGroup,scimGroupMember,awEnterprisePolicy:enterpriseIdentityPolicies,awEnterpriseBinding:enterpriseSubjectBindings,awCompanyMembership:companyMemberships,awPermissionGrant:principalPermissionGrants,awActivity:activityLog } : {}),
-      },
+      schema: authSchema,
     }),
+    hooks: { before: localPasswordPolicy },
     emailAndPassword: {
       enabled: true,
+      minPasswordLength: LOCAL_PASSWORD_MIN_LENGTH,
+      maxPasswordLength: LOCAL_PASSWORD_MAX_UTF16_LENGTH,
       requireEmailVerification: saasDelivery?.verificationRequired ?? false,
       disableSignUp: config.deploymentProfile === "saas" ? !(saasDelivery?.signupEnabled) : config.authDisableSignUp,
       ...(saasDelivery ? {
-        minPasswordLength: 12,
-        maxPasswordLength: 128,
         resetPasswordTokenExpiresIn: 900,
         revokeSessionsOnPasswordReset: true,
         sendResetPassword: saasDelivery.sendPasswordReset,
@@ -326,7 +377,8 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     ...(enterprisePlugins.length ? { disabledPaths: ENTERPRISE_DISABLED_AUTH_PATHS } : {}),
     plugins: [ ...enterprisePlugins, ...(resolveWorkspaceHandoffIdentity(config) ? [workspaceLoginHandoffPlugin({ db,
       resolveExpectedIdentity: () => resolveWorkspaceHandoffIdentity(config) ?? {key:null,instanceId:null,executionWorkspaceId:null,companyId:null,origin:null},
-    })] : []) ],
+    })] : []), ...(passkeyOrigin ? [nativePasskeyPlugin(db, authSchema, passkeyOrigin, config.saasPlatform?.operatorUserIds ?? [],
+      config.saasPlatform?.deployment.sourceSha ?? "")] : []), nativeTwoFactorPlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []), nativeAuthenticationAssurancePlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? [], !!passkeyOrigin) ],
   };
 
   if (!baseUrl) {
@@ -391,17 +443,25 @@ export async function resolveBetterAuthSessionFromHeaders(
   const api = auth.api;
   if (!api?.getSession) return null;
 
-  const sessionValue = await api.getSession({
-    headers,
-  });
+  let sessionValue: unknown;
+  try { sessionValue = await api.getSession({ headers }); }
+  catch {
+    // The caller logs lookup failures; raw driver errors may contain the
+    // native token parameter even though no authenticated session was returned.
+    throw new Error("Native authentication session resolution failed");
+  }
   if (!sessionValue || typeof sessionValue !== "object") return null;
 
   const value = sessionValue as {
-    session?: { id?: string; userId?: string } | null;
+    session?: { id?: string; userId?: string; expiresAt?: unknown } | null;
     user?: { id?: string; email?: string | null; name?: string | null } | null;
   };
+  const rawExpiry = value.session?.expiresAt;
+  const expiresAt = rawExpiry instanceof Date ? rawExpiry
+    : typeof rawExpiry === "string" ? new Date(rawExpiry) : undefined;
+  if (rawExpiry !== undefined && (!expiresAt || !Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() <= 0)) return null;
   const session = value.session?.id && value.session.userId
-    ? { id: value.session.id, userId: value.session.userId }
+    ? { id: value.session.id, userId: value.session.userId, ...(expiresAt ? { expiresAt } : {}) }
     : null;
   const user = value.user?.id
     ? {
@@ -411,7 +471,7 @@ export async function resolveBetterAuthSessionFromHeaders(
       }
     : null;
 
-  if (!session || !user) return null;
+  if (!session || !user || session.userId !== user.id) return null;
   return { session, user };
 }
 

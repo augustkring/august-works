@@ -1,0 +1,94 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (15 tests | 3 failed | 12 skipped) 8868ms
+     × erases a captured derived issue through the original transactional purge 317ms
+     × erases a captured derived comment through the original transactional purge 132ms
+     × erases a captured derived document_revision through the original transactional purge 155ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > erases a captured derived issue through the original transactional purge
+Error: Failed query: update "issues" set "title" = $1, "description" = $2, "updated_at" = $3 where ("issues"."company_id" = $4 and "issues"."id" in ($5, $6))
+params: Erased workflow task,,2026-10-23T21:58:32.234Z,8308d0fb-a61b-49ab-928a-5f4dff65a090,c8405409-dc49-40cc-942a-17a738c8e463,9b6b8406-fed7-4e22-a766-80fe9eec7916
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ purgeDerivedWorkflowMemory src/services/memory/memory-privacy.ts:556:5
+    554|     await eraseAnalyticalSourcesUnderMemory(db, companyId, "issue", is…
+    555|     for (const issueId of issueIds) await eraseBusinessEventObjectUnde…
+    556|     await db.update(issues).set({ title: "Erased workflow task", descr…
+       |     ^
+    557|       .where(and(eq(issues.companyId, companyId), inArray(issues.id, i…
+    558|     await db.update(completionContracts).set({ contractJson: { payload…
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:265:7
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:261:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issues" set "title" = $1, "description" = $2, "updated_at" = $3 where ("issues"."company_id" = $4 and "issues"."id" in ($5, $6))', parameters: [ 'Erased workflow task', null, '2026-10-23T21:58:32.234Z', '8308d0fb-a61b-49ab-928a-5f4dff65a090', 'c8405409-dc49-40cc-942a-17a738c8e463', '9b6b8406-fed7-4e22-a766-80fe9eec7916' ], args: [ 'Erased workflow task', null, '2026-10-23T21:58:32.234Z', '8308d0fb-a61b-49ab-928a-5f4dff65a090', 'c8405409-dc49-40cc-942a-17a738c8e463', '9b6b8406-fed7-4e22-a766-80fe9eec7916' ], types: [ 25, 25, 1184, 2950, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > erases a captured derived comment through the original transactional purge
+Error: Failed query: update "issue_comments" set "body" = $1, "updated_at" = $2 where ("issue_comments"."company_id" = $3 and "issue_comments"."issue_id" in ($4, $5))
+params: Source payload erased,2026-10-23T21:58:32.379Z,8308d0fb-a61b-49ab-928a-5f4dff65a090,9f4d4e0a-36ce-4dc3-96b5-3e71ef068c5f,ae05977a-589e-4552-9b49-9af99e3d64c2
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ purgeDerivedWorkflowMemory src/services/memory/memory-privacy.ts:561:5
+    559|     await db.update(issueWorkProducts).set({ title: "Erased workflow o…
+    560|       .where(and(eq(issueWorkProducts.companyId, companyId), inArray(i…
+    561|     await db.update(issueComments).set({ body: "Source payload erased"…
+       |     ^
+    562|       .where(and(eq(issueComments.companyId, companyId), inArray(issue…
+    563|     const linkedDocs = await db.select({ id: issueDocuments.documentId…
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:265:7
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:261:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issue_comments" set "body" = $1, "updated_at" = $2 where ("issue_comments"."company_id" = $3 and "issue_comments"."issue_id" in ($4, $5))', parameters: [ 'Source payload erased', '2026-10-23T21:58:32.379Z', '8308d0fb-a61b-49ab-928a-5f4dff65a090', '9f4d4e0a-36ce-4dc3-96b5-3e71ef068c5f', 'ae05977a-589e-4552-9b49-9af99e3d64c2' ], args: [ 'Source payload erased', '2026-10-23T21:58:32.379Z', '8308d0fb-a61b-49ab-928a-5f4dff65a090', '9f4d4e0a-36ce-4dc3-96b5-3e71ef068c5f', 'ae05977a-589e-4552-9b49-9af99e3d64c2' ], types: [ 25, 1184, 2950, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > erases a captured derived document_revision through the original transactional purge
+Error: Failed query: update "document_revisions" set "title" = $1, "body" = $2, "change_summary" = $3 where ("document_revisions"."company_id" = $4 and "document_revisions"."document_id" in ($5))
+params: ,,,8308d0fb-a61b-49ab-928a-5f4dff65a090,66b88aa1-cbd2-420b-bf0b-f4157781dc4b
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ purgeDerivedWorkflowMemory src/services/memory/memory-privacy.ts:570:7
+    568|       await db.update(documents).set({ title: "Erased workflow documen…
+    569|         .where(and(eq(documents.companyId, companyId), inArray(documen…
+    570|       await db.update(documentRevisions).set({ title: null, body: "", …
+       |       ^
+    571|         .where(and(eq(documentRevisions.companyId, companyId), inArray…
+    572|     }
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:265:7
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:261:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "document_revisions" set "title" = $1, "body" = $2, "change_summary" = $3 where ("document_revisions"."company_id" = $4 and "document_revisions"."document_id" in ($5))', parameters: [ null, '', null, '8308d0fb-a61b-49ab-928a-5f4dff65a090', '66b88aa1-cbd2-420b-bf0b-f4157781dc4b' ], args: [ null, '', null, '8308d0fb-a61b-49ab-928a-5f4dff65a090', '66b88aa1-cbd2-420b-bf0b-f4157781dc4b' ], types: [ 25, 25, 25, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 12 skipped (15)
+   Start at  21:57:37
+   Duration  54.76s (transform 33.67s, setup 171ms, import 45.30s, tests 8.87s, environment 0ms)
+

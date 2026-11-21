@@ -582,6 +582,10 @@ it.each([
         const stuckAuthorization = new Promise<void>((release) => {
           releaseAuthorization = release;
         });
+        let markAuthorizationStarted!: () => void;
+        const authorizationStarted = new Promise<void>((resolve) => {
+          markAuthorizationStarted = resolve;
+        });
         let drain: Promise<void> | undefined;
         if (interruption === "timeout")
           vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -589,9 +593,16 @@ it.each([
           const blocked = settleRetainedRunnerdSession({
             ...input,
             signal: abort.signal,
-            authorize: () => stuckAuthorization,
+            authorize: () => {
+              markAuthorizationStarted();
+              return stuckAuthorization;
+            },
           });
           const observed = blocked.catch((error: unknown) => error);
+          await Promise.race([
+            authorizationStarted,
+            observed.then((error) => { throw error; }),
+          ]);
           if (interruption === "abort") abort.abort();
           else await vi.advanceTimersByTimeAsync(30_000);
           expect(await observed).toMatchObject({

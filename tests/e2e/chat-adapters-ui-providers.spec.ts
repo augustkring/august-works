@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
+import { PRODUCT_IDENTITY } from "../../packages/shared/src/product-identity.ts";
 
 import {
   expectMinimumProviderSetup,
@@ -332,7 +333,7 @@ test.describe.serial("native chat adapter UI", () => {
 
       if (provider.provider === "slack") {
         await expect(page.getByRole("heading", { name: "Verify Slack connection" })).toBeVisible();
-        await expect(page.getByText("Slack needs to confirm that it can reach your Paperclip instance.")).toBeVisible();
+        await expect(page.getByText(`Slack needs to confirm that it can reach your ${PRODUCT_IDENTITY.productName} instance.`)).toBeVisible();
         mock.setWebhookVerified();
         await expect(page.getByRole("heading", { name: "Give Maya a face in Slack" })).toBeVisible();
         const downloadEvent = page.waitForEvent("download");
@@ -346,7 +347,7 @@ test.describe.serial("native chat adapter UI", () => {
         await page.getByRole("button", { name: "I’ve uploaded the avatar" }).click();
         await expect(page.getByRole("heading", { name: "Connect your Slack account" })).toBeVisible();
         await expect(page.getByText("/maya-public connect", { exact: true })).toBeVisible();
-        await page.getByRole("button", { name: "Link Test operator to my Paperclip account" }).click();
+        await page.getByRole("button", { name: `Link Test operator to my ${PRODUCT_IDENTITY.productName} account` }).click();
         await page.getByRole("button", { name: "Continue to message test" }).click();
       }
 
@@ -508,7 +509,7 @@ test.describe.serial("native chat adapter UI", () => {
       ).toBeVisible();
       await expect(
         page.getByText(
-          /Their tasks run only with an isolated workspace and sandbox environment; otherwise Paperclip safely refuses the request/,
+          new RegExp(`Their tasks run only with an isolated workspace and sandbox environment; otherwise ${PRODUCT_IDENTITY.productName} safely refuses the request`),
         ),
       ).toBeVisible();
       const allowUnlinked = page.getByRole("switch", {

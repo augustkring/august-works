@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");

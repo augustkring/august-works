@@ -1,0 +1,31 @@
+{
+  "status": "passed",
+  "module": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+  "executionRoot": "/workspace/blentera-v10/server",
+  "passed": 11,
+  "failed": 0,
+  "skipped": 0,
+  "exit": 0,
+  "seconds": 120.82673110799988,
+  "observedPeakSumOwnedRssBytes": 3021103104,
+  "nodeHeapMiB": 768,
+  "poolMax": 3,
+  "deadlineSeconds": 180,
+  "originalCaseTimeoutsUnchanged": true,
+  "sourceManifest": "full-pg-main-r2-source-manifest.json",
+  "endSourceManifest": "full-pg-main-r2-source-after.json",
+  "allRecordedSourcePinsUnchanged": true,
+  "allQualificationInputPinsUnchanged": true,
+  "cleanup": {
+    "remainingOwnedPostgresProcesses": [],
+    "normalTestProcessExit": 0,
+    "postRunKillsPerformed": false,
+    "tempRoot": "/var/tmp/mpg-n008viu9",
+    "emptyOuterTempRootRemoved": true,
+    "canonicalLockAvailableAfterRun": true,
+    "observedUtc": "2026-11-09T14:33:04.552273+00:00"
+  },
+  "priorR1": "preserved global-memory-reserve stop with no summary/count outcome; Root corrected four owned infinite-EOF writers, no production source changes; see recovery checkpoint",
+  "externalProviderSdkHostQualification": "not claimed",
+  "mainSourceWritesByThisAgent": false
+}

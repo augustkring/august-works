@@ -1,0 +1,39 @@
+{
+  "recordedAt": "2026-10-22T23:36:31.878792+00:00",
+  "scope": "Bounded native maintenance publication after actual outer PostgreSQL commit; no outbox, crash recovery, socket, provider, hosted or full V10 acceptance.",
+  "sourcePins": "up03-maintenance-publication-current-pins.json",
+  "sourcePinsUnchanged": 11,
+  "regression": "up03-maintenance-publication-open.json",
+  "changes": [
+    "Pass existing postCommitPublications through original maintenance candidate writer.",
+    "Publish candidate and completion only after outer owned/unexpired job transaction settles and commits."
+  ],
+  "captures": [
+    {
+      "sessionId": 49580,
+      "command": "GOMEMLIMIT=1GiB GOMAXPROCS=2 node --max-old-space-size=2048 node_modules/vitest/vitest.mjs run server/src/__tests__/memory-maintenance-publication.integration.test.ts server/src/services/memory/memory-maintenance.test.ts server/src/services/memory/memory-jobs.test.ts server/src/services/memory/memory-post-run-extraction.test.ts --maxWorkers=1",
+      "exitCode": 1,
+      "passedTests": 50,
+      "failedTests": 1,
+      "durationSeconds": 327.81,
+      "failure": "Original maintenance history 5s wall-clock budget exceeded; not a source/publication assertion failure. Both new publication cases passed.",
+      "log": "up03-maintenance-publication-current.log.txt"
+    },
+    {
+      "sessionId": 6229,
+      "command": "GOMEMLIMIT=1GiB GOMAXPROCS=2 node --max-old-space-size=2048 node_modules/vitest/vitest.mjs run server/src/services/memory/memory-maintenance.test.ts --maxWorkers=1",
+      "exitCode": 0,
+      "passedTests": 14,
+      "durationSeconds": 58.61,
+      "limits": "Unchanged original history deadline and test timeout; separate retry is not a combined51-case pass.",
+      "log": "up03-maintenance-publication-maintenance-solo.log.txt"
+    },
+    {
+      "sessionId": 55323,
+      "command": "GOMEMLIMIT=6GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=6144 CARGO_NET_OFFLINE=true pnpm --filter @paperclipai/server typecheck",
+      "exitCode": 0,
+      "log": "up03-maintenance-publication-server-types.log.txt",
+      "limits": "Normal Runner and plugin prerequisites then server compiler; src/__tests__ excluded by native server tsconfig."
+    }
+  ]
+}

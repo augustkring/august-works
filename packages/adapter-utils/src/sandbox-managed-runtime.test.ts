@@ -3114,6 +3114,50 @@ describe("sandbox managed runtime", () => {
     expect(prepared.workspaceRemoteDir).toBe(remoteWorkspaceDir);
   });
 
+  it("skips Git and parent-ignore discovery only for a server-verified repository-free task root", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-verified-no-repo-"));
+    cleanupDirs.push(rootDir);
+    const localWorkspaceDir = path.join(rootDir, "local-workspace");
+    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    await mkdir(localWorkspaceDir, { recursive: true });
+    await writeFile(path.join(localWorkspaceDir, "README.md"), "private task workspace\n", "utf8");
+
+    const gitOperations: string[] = [];
+    const openedSpans: string[] = [];
+    setExpensiveWorkspaceGitExecutor(async (input) => {
+      gitOperations.push(input.operation);
+      throw new Error("verified repository-free mode must not run Git discovery");
+    });
+    try {
+      const prepared = await prepareSandboxManagedRuntime({
+        spec: {
+          transport: "sandbox",
+          provider: "test",
+          sandboxId: "sandbox-verified-no-repo",
+          remoteCwd: remoteWorkspaceDir,
+          timeoutMs: 30_000,
+          apiKey: null,
+        },
+        adapterKey: "test-adapter",
+        client: makeFilesystemClient(),
+        workspaceLocalDir: localWorkspaceDir,
+        workspaceRepositoryMode: "server_verified_none",
+        runtimeSpan: async (name, work) => {
+          openedSpans.push(name);
+          return await work();
+        },
+      });
+
+      expect(gitOperations).toEqual([]);
+      expect(openedSpans).not.toContain("snapshot.git");
+      await expect(readFile(path.join(remoteWorkspaceDir, "README.md"), "utf8"))
+        .resolves.toBe("private task workspace\n");
+      expect(prepared.workspaceRemoteDir).toBe(remoteWorkspaceDir);
+    } finally {
+      setExpensiveWorkspaceGitExecutor(null);
+    }
+  });
+
   it("nests the host pack span under the stage.workspace task span", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-pack-nest-"));
     cleanupDirs.push(rootDir);

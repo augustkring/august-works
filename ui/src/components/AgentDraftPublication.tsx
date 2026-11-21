@@ -142,6 +142,9 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
     <AlertDialog open={open && !unknown && !receiptOnly && !receipt && review.isSuccess && !review.isFetching && current(true)} onOpenChange={value => { setOpen(value); if (!value) { setPublication(false); setActivation(false); } }}>
       <AlertDialogContent className="max-h-(--sz-85vh) overflow-y-auto"><AlertDialogHeader><AlertDialogTitle>{t("agentPublication.confirmTitle")}</AlertDialogTitle>
         <AlertDialogDescription>{t("agentPublication.boundary")}</AlertDialogDescription></AlertDialogHeader>
+        {review.data?.modelMigration.required ? <p role="note" className="rounded-md border border-amber-600/50 bg-amber-50/50 p-3 text-sm dark:bg-amber-950/20">
+          {t(review.data.modelMigration.action === "rollback" ? "agentPublication.modelRollback" : "agentPublication.modelMigration")}
+        </p> : null}
         <dl className="max-h-60 space-y-2 overflow-y-auto" tabIndex={0} aria-label={t("agentPublication.changes")}>
           <dt>{t("agentPublication.versions", { before: review.data?.previousVersion ?? 0, after: review.data?.nextVersion ?? 1 })}</dt><dd>{review.data?.after.name}</dd>
           {change("customAgent.responsibility", review.data?.before?.outcome, review.data?.after.outcome)}

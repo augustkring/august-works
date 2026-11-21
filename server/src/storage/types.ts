@@ -43,6 +43,8 @@ export interface StorageProvider {
   getObject(input: GetObjectInput): Promise<GetObjectResult>;
   headObject(input: GetObjectInput): Promise<HeadObjectResult>;
   deleteObject(input: GetObjectInput): Promise<void>;
+  /** Removes every physical copy/version of one exact key and confirms absence. */
+  eraseObject?(input: GetObjectInput): Promise<void>;
 }
 
 export interface PutFileInput {
@@ -57,9 +59,9 @@ export interface PutFileInput {
   /** Observed only after the actual provider write fulfils. A rejected or
    * unknown provider acknowledgement never invokes this callback. */
   onTransportSettled?: (objectKey: string) => Promise<void>;
-  /** The Original Storage owner refused accounting/admission before invoking
-   * its provider. This proves no PUT can later arrive from this operation;
-   * it is not a successful write or a provider-rejection acknowledgement. */
+  /** The original Storage owner refused allocation or accounting/admission
+   * before invoking its provider. This proves no PUT can later arrive from
+   * this operation; it is not a successful write or provider acknowledgement. */
   onWritePrevented?: (objectKey: string) => Promise<void>;
 }
 
@@ -87,4 +89,6 @@ export interface StorageService {
   getObject(companyId: string, objectKey: string, options?: Pick<GetObjectInput, "range">): Promise<GetObjectResult>;
   headObject(companyId: string, objectKey: string): Promise<HeadObjectResult>;
   deleteObject(companyId: string, objectKey: string): Promise<void>;
+  /** Optional stronger deletion; unavailable providers must leave erasure pending. */
+  eraseObject?(companyId: string, objectKey: string): Promise<void>;
 }

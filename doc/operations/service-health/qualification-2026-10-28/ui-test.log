@@ -1,0 +1,16 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10/ui
+
+ ✓ src/components/ServiceHealth.test.tsx > discards a previous all-clear on a failed refresh and retains the independent handoff 42ms
+ ✓ src/components/ServiceHealth.test.tsx > shows the compact projection for a current incident and renders provider titles as text 13ms
+ ✓ src/components/ServiceHealth.test.tsx > shows the account-impact uncertainty in Danish without changing an all-clear 22ms
+ ✓ src/components/ServiceHealth.test.tsx > does not turn an unconfigured provider into a green service claim or a global incident 4ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  17:46:18
+   Duration  4.25s (transform 2.23s, setup 30ms, import 3.28s, tests 86ms, environment 690ms)
+

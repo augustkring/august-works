@@ -1,0 +1,24 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Interaction constructor unit tests pass 21/21. Server tsc attempt exited 137 during concurrent work; no diagnostic or pass claim. Awaiting serialized PostgreSQL window before integration test.",
+  "logs": [
+    {
+      "name": "native-interaction-server-tsc",
+      "exitCode": 137,
+      "exitSidecar": "native-interaction-server-tsc.log.exit",
+      "rawSha256": "6764098ab537bc2ce6484d9e0b0859229c3fc792ce172e12ae4fd37ac802630c",
+      "sanitizedSha256": "6764098ab537bc2ce6484d9e0b0859229c3fc792ce172e12ae4fd37ac802630c",
+      "archiveSha256": "2321b70d63872e6807505f7ffe14c0db061a91ec4e6fc8200812deba72d9b658",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

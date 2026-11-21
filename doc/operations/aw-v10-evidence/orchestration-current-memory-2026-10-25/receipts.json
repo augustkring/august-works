@@ -1,0 +1,46 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "7acabf9242048262a25a3cbe053f874dacc05351",
+  "meaning": "Original full Orchestration integration: canonical current Human Memory sources; original erasure/Stop assertions retained. First run had a missing test import, final complete32PASS.",
+  "logs": [
+    {
+      "name": "orchestration-canonical-memory-full",
+      "exitCode": 1,
+      "rawSha256": "66a1b93d469a6d311bf639412bf69aefad570c653d78ffa54e5e82ae15a40a53",
+      "sanitizedSha256": "c19da3d863b2196e71ad4fe9f3b3754d4330326c50b0282869c0eee8b345abe2",
+      "archiveSha256": "c3ef028182d01c3111715062fb1ed62aa2d70f9494d5b85595aa799679770c27",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 31 passed (32)",
+        "Duration  68.57s (transform 12.48s, setup 75ms, import 17.52s, tests 50.83s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "orchestration-canonical-memory-full-final",
+      "exitCode": 0,
+      "rawSha256": "e6a45cfa1f9ea5212aeb641c8ab67572656c283393fe0cb803fd1405c19e9e68",
+      "sanitizedSha256": "4730d565b0bb2754f7cc53f0e0d9d14a55a03af252ee048608c7f1363996d7c6",
+      "archiveSha256": "740b4234142a4ae96a1feda4db370ed74a220f2b7f447196956f1f9e68d40bb8",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  32 passed (32)",
+        "Duration  60.97s (transform 10.63s, setup 74ms, import 14.86s, tests 45.92s, environment 0ms)"
+      ]
+    }
+  ]
+}

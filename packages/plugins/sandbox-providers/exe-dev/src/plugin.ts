@@ -633,6 +633,14 @@ async function runSshCommand(
       });
 
       if (options.stdin != null && child.stdin) {
+        // Listen before writing: an ssh process that exits before reading
+        // stdin raises EPIPE, and an unhandled stream error would stop the
+        // plugin worker. The exit status above decides the result; any other
+        // stdin error rejects.
+        child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+          if (error.code === "EPIPE" || error.code === "ERR_STREAM_DESTROYED" || error.code === "ECONNRESET") return;
+          reject(error);
+        });
         child.stdin.write(options.stdin);
         child.stdin.end();
       }

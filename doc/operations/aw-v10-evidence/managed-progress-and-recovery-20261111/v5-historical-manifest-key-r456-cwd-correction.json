@@ -1,0 +1,7 @@
+{
+  "receipt": "v5-historical-manifest-key-r456-receipt.json",
+  "reportedCwdInReceipt": "/workspace/blentera-v10/server",
+  "actualExecutionCwd": "/workspace/blentera-v10/packages/db",
+  "reason": "Private DB harness changed Popen cwd at line72 but left receipt label from server template. Actual test log identifies packages/db and actual package test passed. Original receipt is preserved.",
+  "qualificationUnchanged": true
+}

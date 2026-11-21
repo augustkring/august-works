@@ -5,6 +5,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { Transform } from "node:stream";
+import { guardChildStdin, writeChildStdin } from "./child-stdin.js";
 import type { CommandManagedRuntimeRunner } from "./command-managed-runtime.js";
 import {
   createUnrelatedHistoryGraftCommit,
@@ -321,7 +322,9 @@ async function spawnText(
     });
 
     if (options.stdin != null && child.stdin) {
-      child.stdin.end(options.stdin);
+      // A child that exits before reading stdin raises EPIPE; the exit status
+      // above decides the result. Any other stdin error rejects.
+      writeChildStdin(child, options.stdin, { onError: finishReject });
     }
   });
 }
@@ -684,12 +687,12 @@ async function streamLocalFileToSsh(input: {
     });
     source.on("error", fail);
     ssh.on("error", fail);
-    if (input.progress) {
-      input.progress.counter.on("error", fail);
-      source.pipe(input.progress.counter).pipe(ssh.stdin ?? null);
-    } else {
-      source.pipe(ssh.stdin ?? null);
-    }
+    const upstream = input.progress ? source.pipe(input.progress.counter) : source;
+    if (input.progress) input.progress.counter.on("error", fail);
+    // pipe() re-throws a destination error that has no listener of its own.
+    // If ssh stops reading (EPIPE), drain the rest so ssh's exit status decides.
+    guardChildStdin(ssh, { onError: fail, onExpectedError: () => upstream.resume() });
+    upstream.pipe(ssh.stdin ?? null);
     ssh.on("close", (code) => {
       if (settled) return;
       settled = true;
@@ -1403,12 +1406,12 @@ export async function syncDirectoryToSsh(input: {
       reject(error);
     };
 
-    if (progress) {
-      progress.counter.on("error", fail);
-      tar.stdout?.pipe(progress.counter).pipe(ssh.stdin ?? null);
-    } else {
-      tar.stdout?.pipe(ssh.stdin ?? null);
-    }
+    const tarUpstream = progress ? tar.stdout?.pipe(progress.counter) : tar.stdout;
+    if (progress) progress.counter.on("error", fail);
+    // pipe() re-throws a destination error that has no listener of its own.
+    // If ssh stops reading (EPIPE), drain tar's output so both exit statuses decide.
+    guardChildStdin(ssh, { onError: fail, onExpectedError: () => tarUpstream?.resume() });
+    tarUpstream?.pipe(ssh.stdin ?? null);
     tar.stderr?.on("data", (chunk) => {
       tarStderr += String(chunk);
     });
@@ -1514,12 +1517,12 @@ export async function syncDirectoryFromSsh(input: {
         reject(error);
       };
 
-      if (progress) {
-        progress.counter.on("error", fail);
-        ssh.stdout?.pipe(progress.counter).pipe(tar.stdin ?? null);
-      } else {
-        ssh.stdout?.pipe(tar.stdin ?? null);
-      }
+      const sshUpstream = progress ? ssh.stdout?.pipe(progress.counter) : ssh.stdout;
+      if (progress) progress.counter.on("error", fail);
+      // pipe() re-throws a destination error that has no listener of its own.
+      // If tar stops reading (EPIPE), drain ssh's output so both exit statuses decide.
+      guardChildStdin(tar, { onError: fail, onExpectedError: () => sshUpstream?.resume() });
+      sshUpstream?.pipe(tar.stdin ?? null);
       ssh.stderr?.on("data", (chunk) => {
         sshStderr += String(chunk);
       });

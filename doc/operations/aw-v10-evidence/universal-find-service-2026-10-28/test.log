@@ -1,0 +1,54 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stdout | src/__tests__/company-search-service.test.ts > companySearchService
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42710',
+  message: 'extension "pg_trgm" already exists, skipping',
+  file: 'extension.c',
+  line: '1991',
+  routine: 'CreateExtension'
+}
+
+ ✓ src/__tests__/company-search-service.test.ts > company search query validation > accepts Help as a first-class search scope 4ms
+ ✓ src/__tests__/company-search-service.test.ts > company search query validation > truncates long text queries but rejects invalid filters, sort, and pagination 6ms
+ ✓ src/__tests__/company-search-service.test.ts > company search query validation > includes offset in the internal per-branch fetch window 0ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > reports bounded federated counts and an unavailable owner without implying complete coverage 1590ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > excludes private tasks and projects before counts, facets and pagination (native) 1312ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > excludes private tasks and projects before counts, facets and pagination (filtered) 1461ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > does not let an unreadable literal task suppress a readable fuzzy task (native) 844ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > does not let an unreadable literal task suppress a readable fuzzy task (filtered) 770ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > keeps exact entity names ahead of speculative task typos and rejects empty quotes 1748ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > ranks exact issue identifiers before weaker title matches 846ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > ranks phrase before reordered title words and rejects partial matches 844ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > matches multiple tokens across the same issue thread and returns comment snippets 916ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > searches issue documents and returns document metadata for snippets 631ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > searches artifact projections through the artifacts scope 904ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > does not pass high-offset search fetch windows through to artifact query validation 990ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > applies issue filters before sorting and pagination 916ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > returns issue rows for filter-only searches 365ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > returns zero-result loosen data and suppresses agent/project rows while issue filters are active 985ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > does not leak hidden issue-backed artifacts 659ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > excludes hidden issues and other companies' data 800ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > treats bare SQL wildcard characters as literals instead of match-all queries 1694ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > matches percent characters literally across issue, comment, document, agent, and project results 800ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > applies offset after merging cross-type result ranking 721ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > escapes underscore and backslash characters in issue phrase and token patterns 596ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > does not interpret short UI terms as the middle of unrelated words 544ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > keeps typo fallback inside the requested filters 596ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > keeps exact title hits on the task and chooses the most complete context evidence 1290ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > preserves comment evidence when title and identifier both match 641ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > preserves document evidence when title and identifier both match 627ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > reflects edits, deleted comments and document updates immediately 3565ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > uses pg_trgm for conservative fuzzy title matches 784ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > matches transposition typos against multi-word titles 2206ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > searches checked V10 Help articles with maturity labels, scope counts, pagination, and issue-filter isolation 5283ms
+ ✓ src/__tests__/company-search-service.test.ts > companySearchService > filters checked Help by the requested locale before counting and paging 1553ms
+
+ Test Files  1 passed (1)
+      Tests  34 passed (34)
+   Start at  07:53:22
+   Duration  66.64s (transform 16.18s, setup 320ms, import 23.29s, tests 42.65s, environment 0ms)
+

@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "result": "verified",
+  "note": "Seven changed/captured source files match both current integration pin manifests. activation-first-value.ts is unchanged from the pinned qualification base and is not in either changed-file list. The separate specialist unit snapshot predates the final activation publication arg; its unit-relevant profile/test files match current, and the mismatch is explicitly scoped in README.",
+  "files": [
+    {
+      "path": "packages/shared/src/agent-package-candidates.ts",
+      "currentSha256": "6262fbccfe1a7e77562ce6962dc1736adfec644e4210c4af719c62e4f3c8563d",
+      "snapshots": {
+        "activation-manual-input-20261029-r9": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "6262fbccfe1a7e77562ce6962dc1736adfec644e4210c4af719c62e4f3c8563d",
+          "matchesCurrent": true
+        },
+        "activation-owner-flows-20261029-r3": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "6262fbccfe1a7e77562ce6962dc1736adfec644e4210c4af719c62e4f3c8563d",
+          "matchesCurrent": true
+        }
+      },
+      "qualificationBase": {
+        "commit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "sha256": "01ccba5e61ca795ac57edda6321b8a99a6c1f0832b2ffa6098dd2b249bd50568",
+        "matchesCurrent": false
+      }
+    },
+    {
+      "path": "packages/shared/src/specialist-packages.ts",
+      "currentSha256": "e9796411a09911ddd3d84e41665f2ecf3851db3979a82efa28a04aad1e8127cc",
+      "snapshots": {
+        "activation-manual-input-20261029-r9": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "e9796411a09911ddd3d84e41665f2ecf3851db3979a82efa28a04aad1e8127cc",
+          "matchesCurrent": true
+        },
+        "activation-owner-flows-20261029-r3": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "e9796411a09911ddd3d84e41665f2ecf3851db3979a82efa28a04aad1e8127cc",
+          "matchesCurrent": true
+        }
+      },
+      "qualificationBase": {
+        "commit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "sha256": "d8f8fa2bf4669a9a7c10d9e5fb108bc74a5ed2dd20454ca4ae8530ede83256cc",
+        "matchesCurrent": false
+      }
+    },
+    {
+      "path": "server/src/services/saas/activation-first-task-preparation.ts",
+      "currentSha256": "e4419f6e0b09ebe6a099938ae458b5210dce82b87352fd73e1abfaeb65709ce5",
+      "snapshots": {
+        "activation-manual-input-20261029-r9": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "e4419f6e0b09ebe6a099938ae458b5210dce82b87352fd73e1abfaeb65709ce5",
+          "matchesCurrent": true
+        },
+        "activation-owner-flows-20261029-r3": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "e4419f6e0b09ebe6a099938ae458b5210dce82b87352fd73e1abfaeb65709ce5",
+          "matchesCurrent": true
+        }
+      },
+      "qualificationBase": {
+        "commit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "sha256": "098bfbb39f9e2f56b6efa52e7432cc5e849e99fdd654e19e10f9c2df4b914de0",
+        "matchesCurrent": false
+      }
+    },
+    {
+      "path": "server/src/services/saas/activation-first-value.ts",
+      "currentSha256": "8de5d8219dc779816aa3b6c26f10bec165b7027ed51284be73ec160eefa53312",
+      "snapshots": {
+        "activation-manual-input-20261029-r9": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": null,
+          "matchesCurrent": null
+        },
+        "activation-owner-flows-20261029-r3": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": null,
+          "matchesCurrent": null
+        }
+      },
+      "qualificationBase": {
+        "commit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "sha256": "8de5d8219dc779816aa3b6c26f10bec165b7027ed51284be73ec160eefa53312",
+        "matchesCurrent": true
+      }
+    },
+    {
+      "path": "server/src/__tests__/v7-agent-packages.integration.test.ts",
+      "currentSha256": "8c757618ef5c67573908e451dd8d916926e04b4db708706027eebcd92c935c5f",
+      "snapshots": {
+        "activation-manual-input-20261029-r9": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "8c757618ef5c67573908e451dd8d916926e04b4db708706027eebcd92c935c5f",
+          "matchesCurrent": true
+        },
+        "activation-owner-flows-20261029-r3": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "8c757618ef5c67573908e451dd8d916926e04b4db708706027eebcd92c935c5f",
+          "matchesCurrent": true
+        }
+      },
+      "qualificationBase": {
+        "commit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "sha256": "a0d63996f19e346303388d66cfd8695e85a84cef24f3af90953c83b5b368ccbe",
+        "matchesCurrent": false
+      }
+    },
+    {
+      "path": "server/src/__tests__/v7-specialist-candidates.test.ts",
+      "currentSha256": "e2011432826880134f1a93ed56ca1004684a21341193870f078cbd0a1f6c8929",
+      "snapshots": {
+        "activation-manual-input-20261029-r9": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "e2011432826880134f1a93ed56ca1004684a21341193870f078cbd0a1f6c8929",
+          "matchesCurrent": true
+        },
+        "activation-owner-flows-20261029-r3": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "e2011432826880134f1a93ed56ca1004684a21341193870f078cbd0a1f6c8929",
+          "matchesCurrent": true
+        }
+      },
+      "qualificationBase": {
+        "commit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "sha256": "59d1e57b110c28a4b4c40f12330e4cfffe51b1c34a3d9f7b7959f5ea47a44266",
+        "matchesCurrent": false
+      }
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "currentSha256": "78c9545827a80360dafe7835baf0b267ee218da49e982bda55248900f4a3474e",
+      "snapshots": {
+        "activation-manual-input-20261029-r9": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "78c9545827a80360dafe7835baf0b267ee218da49e982bda55248900f4a3474e",
+          "matchesCurrent": true
+        },
+        "activation-owner-flows-20261029-r3": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "78c9545827a80360dafe7835baf0b267ee218da49e982bda55248900f4a3474e",
+          "matchesCurrent": true
+        }
+      },
+      "qualificationBase": {
+        "commit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "sha256": "fdc430ee5bdf838046f8ad8b0cc29408be77732516770efeb81a79ee6d7ea1b4",
+        "matchesCurrent": false
+      }
+    },
+    {
+      "path": "server/src/services/saas/activation-owner.ts",
+      "currentSha256": "d348105ae7d887ae68d1c699768fd4c2ef24fc5b7a1b704fcfbf83ae44ed3273",
+      "snapshots": {
+        "activation-manual-input-20261029-r9": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "d348105ae7d887ae68d1c699768fd4c2ef24fc5b7a1b704fcfbf83ae44ed3273",
+          "matchesCurrent": true
+        },
+        "activation-owner-flows-20261029-r3": {
+          "sourceHead": "d0b7039e811bc7c645def6b679ecf889dd61f148",
+          "sha256": "d348105ae7d887ae68d1c699768fd4c2ef24fc5b7a1b704fcfbf83ae44ed3273",
+          "matchesCurrent": true
+        }
+      },
+      "qualificationBase": {
+        "commit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "sha256": "e412940ee396a8f577212d1a3ac33a1f0631d06ec5a6f55f1184f0ca24cadf6c",
+        "matchesCurrent": false
+      }
+    }
+  ]
+}

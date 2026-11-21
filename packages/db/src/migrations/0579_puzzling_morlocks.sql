@@ -1,0 +1,3 @@
+ALTER TABLE "account_deletion_operations" ADD COLUMN "receipt_key_hash" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "account_deletion_operations_receipt_key_uq" ON "account_deletion_operations" USING btree ("receipt_key_hash");--> statement-breakpoint
+ALTER TABLE "account_deletion_operations" ADD CONSTRAINT "account_deletion_operations_receipt_key_ck" CHECK ("account_deletion_operations"."receipt_key_hash" is null or "account_deletion_operations"."receipt_key_hash" ~ '^[a-f0-9]{64}$');

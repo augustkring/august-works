@@ -1,0 +1,133 @@
+{
+  "kind": "Interrupted implementation checkpoint; not PR or release acceptance",
+  "recordedAt": "2026-10-28",
+  "sourceBranch": "codex/blentera-v10",
+  "verifiedRemoteSourceCommit": "71590e795090887529d99edd3f64f0b0b0356d38",
+  "pullRequest": "https://github.com/augustkring/august-works/pull/42",
+  "readiness": "draft; implementation and final qualification incomplete",
+  "executorObservation": {
+    "selectedEnvironment": "ccarenv_b64_Y2NhcmVudl9mY2Q4NWY3NzMwZTQ4MTkxOTE5ZGRmMTMyZDliMWMxYQ",
+    "commandExecutor": "No usable execution environment is available",
+    "managedStatus": "observations_current=true; observed_phase=running; connectivity=connected; network enforced",
+    "retainedDiagnostics": "not_found; no records",
+    "limits": "These observations do not establish data loss, filesystem availability, or the results of interrupted tests. No restart capability is exposed by the available environment tools."
+  },
+  "remoteEvidence": {
+    "signedSaml": "doc/operations/aw-v10-evidence/account-delete-saml-2026-10-28/r1/",
+    "sourceSnapshotFormat": "temporary-source-head-index-v2",
+    "snapshotReconstruction": "Committed sourceHead plus gzip patch and untracked-source-files archive in the SAML receipt reconstruct its exact captured snapshot. It is not a backup claim for edits made after that snapshot."
+  },
+  "completedScopedChecks": [
+    {
+      "scope": "Real signed SAML account-deletion freshness and one-use proof consumption",
+      "passed": 1,
+      "limits": "OIDC/native MFA regression against the latest package remains pending; enterprise PR/passkey extension remains incomplete."
+    },
+    {
+      "scope": "Selected cost-domain PostgreSQL describe",
+      "passed": 4,
+      "skipped": 1
+    },
+    {
+      "scope": "Historical pre-0497 replay-source migration",
+      "passed": 1
+    },
+    {
+      "scope": "Remote marker persistence",
+      "passed": 1,
+      "skipped": 141
+    },
+    {
+      "scope": "Authored Agent definition owner",
+      "passed": 7
+    },
+    {
+      "scope": "Cloud session actor cases",
+      "passed": 6,
+      "skipped": 7
+    },
+    {
+      "scope": "Provider trace source-denial read/write assertions",
+      "passed": 2,
+      "skipped": 85
+    },
+    {
+      "scope": "Heartbeat responsible-user invariant suite",
+      "passed": 14,
+      "limits": "Other heartbeat/chat suites remain unverified."
+    },
+    {
+      "scope": "Six targeted UI component suites",
+      "passed": 103,
+      "limits": "Telegram E2E did not complete after dependency-mirror CLI-link repair."
+    },
+    {
+      "scope": "Help checker unit cases",
+      "passed": 14
+    },
+    {
+      "scope": "Help current source/article review",
+      "pairs": 324
+    },
+    {
+      "scope": "Mounted UI operation AST inventory",
+      "result": "passed",
+      "inventorySha256": "4ffff1f22ba72a7fffc25ef5d9eedaa9d29f3134361a4779fc88f89eedb09e1f"
+    }
+  ],
+  "pendingWorkspaceWork": [
+    {
+      "owner": "temporal_recovery",
+      "files": [
+        "server/src/services/context/native-bootstrap-context-witness.ts",
+        "server/src/services/native-direct-input.ts",
+        "server/src/services/context/context-manifest.ts",
+        "server/src/services/orchestration/native-tool-boundary.ts"
+      ],
+      "finding": "Task snapshot legitimately contains a prior Context. Witness previously rejected all nested Context inputs. Bounded preservation/currentness checks were drafted but not qualified. Latest attempted snapshot contains a duplicate expectedInputs.push(source), which must be removed before a new run. Preserve exactly one current manifest source, unique bounded Context references, full live owner/currentness and the global graph budget. Add withdrawn nested Context denial regression; remove all temporary diagnostics after green and run plain Temporal7.",
+      "lastResult": "No Temporal7 assertions passed; 7 skipped on setup failure. One profile completed Context at3990ms of4000ms; final Memory ACL1810ms for3roots."
+    },
+    {
+      "owner": "relay_resume2",
+      "files": [
+        "server/src/services/runtime/control.ts",
+        "server/src/services/native-runtime/runtime-asset-retention.ts",
+        "server/src/services/native-runtime/remote-runner-identity.ts",
+        "server/src/services/heartbeat.ts",
+        "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts"
+      ],
+      "finding": "C0 r105: actual controlled provider start succeeds, marker/run/runner/lease/session facts all match, but physical erasure returns process_stop:1 with no receipt. That stage includes inner cleanup plus post-stop marker/state checks; subdivided static diagnostics are drafted. Corrected diagnostic code must save $? before assigning stage. Focused corrected live/dead test result unavailable. New successful signed-start binding cleanup authority is drafted; preserve fresh protected-capability expiry and all target/job/purge/generation checks.",
+      "next": "Close actual shell failure. Implement narrowly approved cleanup-only fresh signed capabilities plus canonical fixed probes through original host command owner, tied to exact MemoryJob/purge/start locator/host epoch/cell/binding/image/policy. Do not impersonate an operator, mutate live policy hashes, accept arbitrary argv, or extend expired evidence with a new command deadline. Full C0+retry and full five-case suite remain open."
+    },
+    {
+      "owner": "inventory_resume2",
+      "finding": "Active V2 runtime manifest was restored after an invalid intermediate edit. Reviewed V3 is private and has not been intentionally activated; filesystem effects of the last publication-runner creation command are unverified. Check files before resuming.",
+      "activeV2RuntimeSourceSha256": "0edf1d490451db04125e8fab3d26df563d3cea17092a8be7187ad39cdb3813d4",
+      "privateCandidate": "/workspace/v10-preparation/v10-121-api-v3-candidate-20261028/",
+      "candidateOperationManifestHash": "52fe608c583066221d3cee9562cd2216e17abdb9d0860ba74d9b9adf33e50e20",
+      "candidateRuntimeSourceSha256": "357914e4d50210f4bdd696e3a5717dd7a64a51b32829a00145078d448f967c4f",
+      "toolCatalogHashUnchanged": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+      "next": "Publish runtime metadata/doc contracts/new immutable V3/registry/hash test as one coherent change under shared lock. Preserve V1/V2 bytes and existing Run pins. Four PG admission and manifest unit groups required. All159 API-only contracts/62critical cases remain source-only until actual qualification."
+    },
+    {
+      "owner": "lifecycle_finish",
+      "finding": "SAML r10 is pushed and green. OIDC/native factor combined regression was queued. Purpose-scoped pre-enrolled passkey verification for PR enterprise deletion is only an approved design, not implemented. Enterprise ordinary native sign-in/enrollment prohibitions remain; no inferred IdP PR assurance."
+    },
+    {
+      "owner": "brand_boundary_audit",
+      "finding": "103 UI tests and Help/brand checks passed. Telegram browser and root runtime-candidate/publication browser cases were blocked by missing mirror CLI dependency symlinks; locked repair uses existing installed runtime packages and workspace aliases, not a new dependency install. Latest retry result unavailable."
+    },
+    {
+      "owner": "final_reconciliation",
+      "finding": "Responsible-user suite14/14 is green. Full comment-batching was started, other liveness/durable-chat/native/tool-authority/chat regressions still need actual results. Source-only fixture alignment is not qualification."
+    }
+  ],
+  "resumeOrder": [
+    "Recover the existing workspace; do not reset/reclone/delete pending edits or backups. Read /workspace/v10-preparation/root-continuation-2200-delta.md plus this later checkpoint and the current Git status.",
+    "Fetch the remote branch. A documentation-only connector commit was created after the verified source commit; preserve local dirty files and inspect differences before fast-forwarding.",
+    "Check whether old processes/locks are still live before relaunching; use fresh artifact attempt names if files already exist.",
+    "Use the shared /workspace/v10-preparation/v10-pg-tests.lock for dependency/compiler/browser/PG/global AST work and snapshot after lock acquisition. Do not force reinstall or edit the mirror during a run.",
+    "Confirm current patch/lock/module coherence: SSO1.7.7 patch_hash ayxfwplohotay23bo5cq37rkc4, moduleSHA7ff8d9b6a5777746dca7ec4c3114db4f2a05eca0e1b39b45a42eef26d6c7d60a; SCIM unchanged. OpenCode1.18.32 SHA513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080.",
+    "Complete pending implementation and qualification, remove temporary diagnostics, reconcile all169 requirements and inherited gates honestly, then run required full workspace typecheck/test/build and browser/runtime/CI on an unchanged head. Keep PR draft until ready; never merge/deploy."
+  ]
+}

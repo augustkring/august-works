@@ -1,0 +1,70 @@
+{
+  "parentCommit": "e94408914",
+  "requirements": [
+    "UP-03",
+    "CE-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "originalBothCallerCounterexamples": {
+      "exit": 1,
+      "failed": 2,
+      "log": "native-child-review-privacy-red.log"
+    },
+    "initialNativeAndExistingContinuationControl": {
+      "exit": 1,
+      "passed": 42,
+      "failed": 3,
+      "suites": 3,
+      "log": "native-child-review-privacy-owned.log"
+    },
+    "parentProductionControlPlaneFailures": {
+      "exit": 1,
+      "failed": 3,
+      "unselected": 12,
+      "log": "native-child-review-privacy-parent-control.log"
+    },
+    "expandedContinuationAndReplacementSuites": {
+      "exit": 1,
+      "passed": 252,
+      "failed": 2,
+      "suites": 5,
+      "log": "native-child-review-privacy-final.log"
+    },
+    "parentProductionReplacementFailures": {
+      "exit": 1,
+      "failed": 2,
+      "unselected": 57,
+      "log": "native-child-review-privacy-replacement-parent.log"
+    },
+    "initialCompilerFixtureFailure": {
+      "exit": 1,
+      "log": "native-child-review-privacy-types.log"
+    },
+    "finalNativeAndExistingToolContinuationSuites": {
+      "exit": 0,
+      "passed": 56,
+      "suites": 3,
+      "log": "native-child-review-privacy-checked.log"
+    },
+    "finalServerCompiler": {
+      "exit": 0,
+      "log": "native-child-review-privacy-types-final.log"
+    }
+  },
+  "observations": [
+    "The original shared childReviewOutcomes helper disclosed private child identifiers, status and reviewer/run identities through both get_task_context and buildExecutionContinuation. Separate actual PostgreSQL counterexamples reproduce both disclosures with Alice/Bob/public controls.",
+    "The original shared helper now narrows child, source run and reviewer run privacy in SQL before its50-row ordering/limit. Source/reviewer runs must match their actual company/child; a non-null creator or reviewer Agent must match the corresponding run. A null historical/system creator is not upgraded into an Agent identity.",
+    "The original native tool uses its bound current run/Agent/DB Human reader. Continuation dispatch loads only the server-supplied actual running receiver by company/agent/run, confirms the Task reference and canonical current run readability, then uses its actual DB Human. Missing/unmatched/unreadable receiver remains public-only. Context claims, task ownership and latest-run inference supply no private authority; no synthetic run is created for preflight.",
+    "The final two native caller variants also test no-run preflight with forged context identity hints, a real explicit sharing row and subsequent revocation, wrong reviewer-Task binding, and mismatched source creator Agent. Their source/result/assessment/decision rows are structurally native consumer projection fixtures with real FK ownership, not provider-success or complete-input proof. Alice access uses an actual User/session/membership.",
+    "Final56 cases across native privacy, existing continuation and existing tool authority suites pass; server compilation passes. The compiler first caught an incomplete request-confirmation fixture payload; it was corrected to the existing version1/prompt contract without weakening assertions.",
+    "Broader tests expose five independent existing failures. Parent production reproduces all five: ControlPlanePort attempts a DB-forbidden immutable nativeIssueId edit, two review interaction Task updates lose actual actor run/Human context, and two safe-replacement blocking fixtures use an absent operator User/membership. These remain explicitly open for the next focused fix; they are not hidden as green.",
+    "A bounded gpt-6-luna agent prepared the projection regressions and reviewed actual caller identity/SQL correlations. Root corrected structural fixture identity/version issues and implemented the shared owner narrowing and actual receiver resolution."
+  ],
+  "limits": [
+    "This is current privacy and relational-source narrowing only. Company/per-resource action permissions, V8 copy/erasure closure, exact historical payload inputs and physical credential/source lifetimes remain separate requirements. No complete input/source receipt or new permission is produced.",
+    "When no actual current running receiver is available, continuation can inspect public child/source/reviewer graphs only. This does not infer a Human from a saved owner or context DTO and does not qualify a private pre-run preview.",
+    "No UI/provider/host code changed. Native projection and existing SDK/runtime/replacement fixtures do not qualify real provider transport, hardware, representative host execution, beta availability or release.",
+    "The five reproduced native baseline failures, six typed/private-Memory/temporal regressions and broader V10/PR acceptance remain open. No private-work enablement, full V10/PR readiness, release, merge or deployment is claimed."
+  ]
+}

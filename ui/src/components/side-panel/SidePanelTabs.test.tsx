@@ -323,6 +323,19 @@ describe("SidePanelTabs", () => {
     expect(onCloseTab).toHaveBeenCalledWith("properties");
   });
 
+  it("closes the focused tab with Delete and keeps the tablist owning only tabs", () => {
+    const onCloseTab = vi.fn();
+    renderTabs("properties", onCloseTab);
+    const properties = container.querySelector<HTMLButtonElement>('[data-side-panel-tab-target="properties"]')!;
+    expect(properties.getAttribute("aria-keyshortcuts")).toBe("Delete");
+    const close = container.querySelector<HTMLButtonElement>('button[aria-label="Close Properties"]')!;
+    expect(close.getAttribute("aria-hidden")).toBe("true");
+    expect(close.tabIndex).toBe(-1);
+    expect(container.querySelector('[role="tablist"] [role="status"]')).toBeNull();
+    act(() => properties.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Delete" })));
+    expect(onCloseTab).toHaveBeenCalledWith("properties");
+  });
+
   it("supports middle-click close", () => {
     const onCloseTab = vi.fn();
     renderTabs("properties", onCloseTab);

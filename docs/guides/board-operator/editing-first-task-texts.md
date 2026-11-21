@@ -16,7 +16,7 @@ The text for a new organization's first task lives in `server/src/onboarding-ass
 | `chief-of-staff/AGENTS.md` | The first agent's chief-of-staff persona. |
 | `README.md` | A maintainer reference for the files, placeholders, toggle, and update behavior. |
 
-The templates support `{{agentName}}`, `{{organizationName}}`, and `{{proposalMode}}`. Paperclip fills them when it creates the first agent and first task. The proposal mode is `confirmation` or `plan`; the full policy lives in the skill.
+The templates support `{{agentName}}`, `{{organizationName}}`, and `{{proposalMode}}`. Blentera fills them when it creates the first agent and first task. The proposal mode is `confirmation` or `plan`; the full policy lives in the skill.
 
 ## How the first-task flow works
 
@@ -32,7 +32,7 @@ The agent may create hires or tasks only after the user accepts a confirmation o
 
 ## Apply an edit
 
-Edit the Markdown with GitHub's web editor or locally, open a pull request, and merge it. A local instance loads the change after its next server restart; Cloud tenants receive it with the next release.
+Edit the Markdown with GitHub's web editor or locally, open a pull request, and merge it. A local instance loads the change after its next server restart; centrally managed installations receive it through their operator's release process.
 
 An existing first task keeps its stored description, and an existing first agent keeps its instruction file. The skill is assigned automatically to new onboarding agents; existing agents are not migrated. You can edit the agent's copy of its persona in the app under **Instructions**.
 
@@ -45,4 +45,4 @@ Open **Settings > Experimental** and find **First task: propose with a plan docu
 - **Off:** the chief of staff answers a single-task request with one confirmation card.
 - **On:** the chief of staff writes a short plan document and adds a checkbox card.
 
-Paperclip reads this setting once, when it creates an organization's first task. Changing it later does not alter an existing first task.
+Blentera reads this setting once, when it creates an organization's first task. Changing it later does not alter an existing first task.

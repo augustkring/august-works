@@ -1,0 +1,89 @@
+{
+  "format": "selected-vitest-case-receipts-v1",
+  "createdUtc": "2026-10-29",
+  "selectionPolicy": "Only the two named case patterns below were executed; all other tests in the file were filtered/skipped. Raw test output is intentionally not copied into this receipt.",
+  "cases": [
+    {
+      "id": "discord_registered_gateway_source_authority",
+      "testFile": "src/__tests__/chat-channels.integration.test.ts",
+      "testNameExact": "preserves exact Discord source authority through registered Gateway file_revisions updates",
+      "result": {
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "filteredOrSkipped": 1050,
+        "totalSelectedFileCases": 1051
+      },
+      "rationale": "Fixture changes supplied the required responsible Human/run/admission context, allowing the test to reach the guarded Gateway source-authority path; expected denial remained intact.",
+      "snapshot": {
+        "sourceHead": "0de39c2c17cb5ce713ecea4e20845ae825a562be",
+        "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "selectedTestSourceSha256": "f6db41f670efa67d10da579d652cd4abfd96933533e7dc2f8e9dc6fe0245d832",
+        "sourcePatchSha256": "2e26af90bd4b20221a4e026671f01de461fab837f299d723e00479840f3b1d74",
+        "copiedSourceFileCount": 994,
+        "sourcePinsArtifact": "discord_registered_gateway_source_authority/source-pins.json"
+      },
+      "runner": {
+        "script": "/workspace/v10-preparation/run-pinned-native-test.sh",
+        "runnerArtifact": "discord_registered_gateway_source_authority/runner.txt",
+        "pinnedOpenCodeSha256": "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080",
+        "snapshotExit": 0,
+        "syntaxExit": 0,
+        "testExit": 0,
+        "finalExit": 0
+      },
+      "logArchive": {
+        "rawSha256": "ee310ef82572c82bd800cbbb6395dd024d129661c82f5e71c2217946ef2a6cc3",
+        "sanitizedSha256": "ee310ef82572c82bd800cbbb6395dd024d129661c82f5e71c2217946ef2a6cc3",
+        "redactions": {
+          "jwt": 0,
+          "bearer": 0,
+          "invite": 0,
+          "credential": 0
+        },
+        "path": "discord_registered_gateway_source_authority/test.log.sanitized.gz"
+      }
+    },
+    {
+      "id": "direct_external_chat_final_persistence",
+      "testFile": "src/__tests__/chat-channels.integration.test.ts",
+      "testNameExact": "materializes direct external-chat finals once and accepts the next turn without agent bookkeeping writes",
+      "result": {
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "filteredOrSkipped": 1050,
+        "totalSelectedFileCases": 1051
+      },
+      "rationale": "The diagnostic run showed bootstrap failed before adapter execution because PAPERCLIP_API_URL was absent. The case now sets/restores its test API URL and verifies both persisted direct finals and the follow-up turn.",
+      "snapshot": {
+        "sourceHead": "fedef69c4134b497b39e9c68717da5d6dbab9534",
+        "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+        "selectedTestSourceSha256": "5045491541e2e2e7522584e6e05c295d16291857dd69e33c627c8a073357274a",
+        "sourcePatchSha256": "bf3ad5d6f9e6d3ce8518fed3ccbea569fc216acd28d8273e9b51d473a9d149d3",
+        "copiedSourceFileCount": 995,
+        "sourcePinsArtifact": "direct_external_chat_final_persistence/source-pins.json"
+      },
+      "runner": {
+        "script": "/workspace/v10-preparation/run-pinned-native-test.sh",
+        "runnerArtifact": "direct_external_chat_final_persistence/runner.txt",
+        "pinnedOpenCodeSha256": "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080",
+        "snapshotExit": 0,
+        "syntaxExit": 0,
+        "testExit": 0,
+        "finalExit": 0
+      },
+      "logArchive": {
+        "rawSha256": "67d9b1597807f124b9dbc5f15cc776b7ad17ce6ddc32e8c03b68194dbaf20ced",
+        "sanitizedSha256": "67d9b1597807f124b9dbc5f15cc776b7ad17ce6ddc32e8c03b68194dbaf20ced",
+        "redactions": {
+          "jwt": 0,
+          "bearer": 0,
+          "invite": 0,
+          "credential": 0
+        },
+        "path": "direct_external_chat_final_persistence/test.log.sanitized.gz"
+      }
+    }
+  ]
+}

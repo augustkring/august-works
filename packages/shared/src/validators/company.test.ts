@@ -7,6 +7,21 @@ import {
 import { portabilityCompanyManifestEntrySchema } from "./company-portability.js";
 
 describe("company schemas without the retired settings", () => {
+  it("accepts supported company locale and strict IANA timezone defaults", () => {
+    expect(updateCompanySchema.parse({ locale: "da", timezone: "Europe/Copenhagen" })).toMatchObject({
+      locale: "da",
+      timezone: "Europe/Copenhagen",
+    });
+  });
+
+  it.each(["Mars/Olympus", "", "Not_A_Timezone", "+01:00"])("rejects invalid company timezone %s", (timezone) => {
+    expect(updateCompanySchema.safeParse({ timezone }).success).toBe(false);
+  });
+
+  it("rejects locales not shipped by the app", () => {
+    expect(updateCompanySchema.safeParse({ locale: "fr" }).success).toBe(false);
+  });
+
   it("strips brandColor and attachmentMaxBytes from a create payload", () => {
     const parsed = createCompanySchema.parse({
       name: "Acme",
@@ -19,16 +34,19 @@ describe("company schemas without the retired settings", () => {
     expect(parsed.name).toBe("Acme");
   });
 
-  it("strips brandColor and attachmentMaxBytes from an update payload", () => {
-    const parsed = updateCompanySchema.parse({
+  it.each(["brandColor", "attachmentMaxBytes"])("rejects the retired update field %s", (key) => {
+    const result = updateCompanySchema.safeParse({
       description: "Updated",
-      brandColor: "#123456",
-      attachmentMaxBytes: 25_000_000,
+      [key]: key === "brandColor" ? "#123456" : 25_000_000,
     });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({
+      code: "unrecognized_keys", keys: [key],
+    }));
+  });
 
-    expect(parsed).not.toHaveProperty("brandColor");
-    expect(parsed).not.toHaveProperty("attachmentMaxBytes");
-    expect(parsed.description).toBe("Updated");
+  it("accepts an update containing only supported company fields", () => {
+    expect(updateCompanySchema.parse({ description: "Updated" })).toEqual({ description: "Updated" });
   });
 
   it("rejects brandColor on the strict branding schema", () => {
@@ -70,5 +88,27 @@ describe("portability company manifest tolerance", () => {
     expect(parsed).not.toHaveProperty("brandColor");
     expect(parsed).not.toHaveProperty("attachmentMaxBytes");
     expect(parsed.name).toBe("Acme");
+    expect(parsed).toMatchObject({ locale: "en", timezone: "UTC" });
+  });
+
+  it("validates portable company locale and IANA timezone values", () => {
+    expect(portabilityCompanyManifestEntrySchema.parse({
+      path: "COMPANY.md",
+      name: "Acme",
+      description: null,
+      logoPath: null,
+      locale: "da",
+      timezone: "Europe/Copenhagen",
+      requireBoardApprovalForNewAgents: false,
+    })).toMatchObject({ locale: "da", timezone: "Europe/Copenhagen" });
+    expect(portabilityCompanyManifestEntrySchema.safeParse({
+      path: "COMPANY.md",
+      name: "Acme",
+      description: null,
+      logoPath: null,
+      locale: "da",
+      timezone: "+01:00",
+      requireBoardApprovalForNewAgents: false,
+    }).success).toBe(false);
   });
 });

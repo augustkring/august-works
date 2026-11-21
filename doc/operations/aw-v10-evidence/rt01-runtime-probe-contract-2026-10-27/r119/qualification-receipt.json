@@ -1,0 +1,79 @@
+{
+  "schema": "paperclip.native-runtime-erasure-qualification.v1",
+  "attempt": "relay-c0-final-source-r1",
+  "evidenceRevision": 119,
+  "qualification": "C0 managed OpenCode route, physical erasure, and MemoryJob recovery",
+  "result": {
+    "exitCode": 0,
+    "passed": 5,
+    "failed": 0,
+    "testFile": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+    "selection": ".",
+    "durationMs": 296380,
+    "testLog": "/workspace/v10-preparation/relay-c0-final-source-r1-test.log",
+    "testLogSha256": "406f3d1848c06a6f024d97951268e2ae9730316ab7f820feeb1faf9a4c487fd2",
+    "tests": [
+      "uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows",
+      "runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay",
+      "continues the real conversation after a metric tool result with its original immutable source receipt",
+      "creates one private Project from a current conversation dispatch and carries its exact result into the next request",
+      "creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request"
+    ]
+  },
+  "execution": {
+    "command": "/workspace/v10-preparation/run-c0-managed-opencode-erasure.sh relay-c0-final-source-r1 119 all",
+    "runnerCommandArtifact": "runner-command.txt",
+    "testLog": "/workspace/v10-preparation/relay-c0-final-source-r1-test.log",
+    "testExit": "/workspace/v10-preparation/relay-c0-final-source-r1-test.exit",
+    "binary": {
+      "version": "OpenCode 1.18.32",
+      "path": "/workspace/.cloud-setup/lockfile/node_modules/.pnpm/opencode-linux-x64@1.18.32/node_modules/opencode-linux-x64/bin/opencode",
+      "sha256": "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080"
+    },
+    "providerPack": {
+      "path": "/tmp/paperclip-runner-provider-pack-v10-a0275fd01/provider-pack.json",
+      "manifestSha256": "50cf4c1cc5d76f9100bcc564aa7dc5dab1a5ecb3ca15bbe0b7abbf9679cedf9f",
+      "payloadDigest": "319f431a69e377b5ba7c7e820e81ac6c78ac67433ea65cf7e941c3ce4ecadeb7"
+    }
+  },
+  "source": {
+    "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+    "sourceHead": "f93f8bf4466b2ca66c70225004a6cf98ab52333b",
+    "copiedFileCount": 1009,
+    "sourcePins": {
+      "artifact": "source-pins.json",
+      "sha256": "85758cf83b108a7009d7b9172917ce6f2d6c50895ef1233446e6b1675a87c315",
+      "preparationArtifact": "/workspace/v10-preparation/relay-c0-final-source-r1-source-pins.json"
+    },
+    "sourceReconstruction": {
+      "artifact": "source-reconstruction.patch",
+      "sha256": "410eb3a08a65d61f66dffbfa88c332e1426e1fd349c16797d6110a08f2a0b5cb",
+      "preparationArtifact": "/workspace/v10-preparation/relay-c0-final-source-r1-source-pins.source.patch"
+    }
+  },
+  "verifiedBehavior": [
+    "fresh signed cleanup attestation was issued after the original capability report expired and bound to the exact purge operation, MemoryJob, original signed start, and current host/cell generation",
+    "all fixed capability and sandbox probes succeeded before physical erasure",
+    "the exact remote process generation was stopped and its session tree was physically removed",
+    "read-only nested skill directories were removed; the lstat walk does not follow symlinks and rejects mountpoints at or below the exact session root",
+    "the neighboring session remained intact and a foreign-company same-session row did not block the current tenant cleanup",
+    "a successful host erasure receipt survived the worker crash window; the recovered attempt consumed the same receipt and the stale worker could not overwrite it"
+  ],
+  "hostAgent24": {
+    "result": { "exitCode": 0, "passed": 24, "failed": 0 },
+    "testFile": "deploy/v6/host-agent/openshell.test.mjs",
+    "preparationArtifact": "/workspace/v10-preparation/relay-host-agent-cleanup-attestation-r4-20261029/test.log",
+    "testLogSha256": "3bbf00060adaed11a962a76a5ef6a89ad51cea1a95d02a5e193bfb689fd47c5a",
+    "sourcePins": {
+      "artifact": "host-agent-24-source-pins.json",
+      "sha256": "07439649aa36ad5d50829a03a1d62cabdb956ef00f4e26e0d6a9818638603bbf",
+      "sourceHead": "0de39c2c17cb5ce713ecea4e20845ae825a562be",
+      "reconstructionArtifact": "host-agent-24-source-reconstruction.patch",
+      "reconstructionSha256": "ca9254d8fc5ce7481620e38173d2bc1a700b17f4a15c8a2d06d85c2c6d2ace36"
+    },
+    "matchingSource": {
+      "deploy/v6/host-agent/openshell.mjs": "1e35cc2e063c867d65dc7ceb0e13850abdeb79d82fbaf6241584d09890a21c9d",
+      "deploy/v6/host-agent/openshell.test.mjs": "d8c6bfc967ac8c94d10a0ee6d35db22ace0bb11241f654bf51c238850657661f"
+    }
+  }
+}

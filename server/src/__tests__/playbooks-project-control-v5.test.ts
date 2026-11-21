@@ -11,6 +11,8 @@ import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { playbookService } from "../services/playbooks.js";
 import { projectControlService, roadmapHealth } from "../services/project-control.js";
 import { budgetService } from "../services/budgets.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { issueService } from "../services/issues.js";
 
 it("health reports unknown when there is no committed schedule", () => { expect(roadmapHealth([], new Date("2026-10-03T00:00:00Z")).status).toBe("unknown"); });
 const support = await getEmbeddedPostgresTestSupport();
@@ -132,24 +134,38 @@ describe.skipIf(!support.supported)("V5 canonical procedures and schedule", () =
   });
   it("requires reviewed commitment changes, keeps forecasts separate, and pins an explicit baseline", async () => {
     const f = await seedV5Presences(db), svc = projectControlService(db);
-    const [project] = await db.insert(projects).values({ companyId: f.home, name: "Launch" }).returning();
+    const sourceActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+    const project = await createCanonicalHumanProject(db, f.home, sourceActor, "Launch");
     const actualStart = new Date("2026-10-01T00:00:00Z");
-    const [issue] = await db.insert(issues).values({ companyId: f.home, projectId: project!.id, title: "Ship", status: "in_progress", startedAt: actualStart }).returning();
-    const view = await svc.get(f.actor, f.home, project!.id);
-    const proposal = await svc.propose(f.actor, f.home, project!.id, roadmapProposalSchema.parse({ expectedProjectUpdatedAt: view.projectUpdatedAt, reason: "Commit the agreed launch schedule after human review", changes: [{ issueId: issue!.id, expectedUpdatedAt: issue!.updatedAt.toISOString(), patch: { plannedStartAt: "2026-10-03T00:00:00Z", plannedEndAt: "2026-10-10T00:00:00Z" } }] }));
-    expect(proposal.status).toBe("pending"); expect((await db.select().from(issues).where(eq(issues.id, issue!.id)))[0]!.plannedEndAt).toBeNull();
-    expect((await svc.review(f.actor, f.home, project!.id, proposal.id, true, "Approved agreed dates")).status).toBe("accepted");
-    const baseline = await svc.baseline(f.actor, f.home, project!.id, "Original plan");
-    const after = (await db.select().from(issues).where(eq(issues.id, issue!.id)))[0]!;
-    await svc.forecast(f.actor, f.home, project!.id, issue!.id, { expectedUpdatedAt: after.updatedAt.toISOString(), forecastStartAt: "2026-10-03T00:00:00Z", forecastEndAt: "2026-10-12T00:00:00Z", forecastConfidence: 0.6, forecastReason: "Dependency testing extends the likely completion date" });
-    const stored = (await db.select().from(issues).where(eq(issues.id, issue!.id)))[0]!;
+    const originalReason = "Initial delivery forecast explanation";
+    const issue = await issueService(db).create(f.home, { projectId: project.id, title: "Ship", status: "in_progress", assigneeAgentId: f.presence.id, startedAt: actualStart,
+      createdByUserId: f.userId, responsibleUserId: f.userId, forecastReason: originalReason }, db, undefined,
+      { manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor });
+    // Project-linked in-progress tasks with a forecast reason are not direct
+    // root manual-input sources; the Human remains the authenticated creator,
+    // but this fixture must not manufacture source qualification for them.
+    expect(issue.payloadSourceSnapshot).toBeNull();
+    const view = await svc.get(f.actor, f.home, project.id);
+    const proposal = await svc.propose(f.actor, f.home, project.id, roadmapProposalSchema.parse({ expectedProjectUpdatedAt: view.projectUpdatedAt, reason: "Commit the agreed launch schedule after human review", changes: [{ issueId: issue.id, expectedUpdatedAt: issue.updatedAt.toISOString(), patch: { plannedStartAt: "2026-10-03T00:00:00Z", plannedEndAt: "2026-10-10T00:00:00Z" } }] }));
+    expect(proposal.status).toBe("pending"); expect((await db.select().from(issues).where(eq(issues.id, issue.id)))[0]!.plannedEndAt).toBeNull();
+    expect((await svc.review(f.actor, f.home, project.id, proposal.id, true, "Approved agreed dates")).status).toBe("accepted");
+    const baseline = await svc.baseline(f.actor, f.home, project.id, "Original plan");
+    const after = (await db.select().from(issues).where(eq(issues.id, issue.id)))[0]!;
+    expect(after.payloadSourceSnapshot).toBeNull();
+    await svc.forecast(f.actor, f.home, project.id, issue.id, { expectedUpdatedAt: after.updatedAt.toISOString(), forecastStartAt: "2026-10-03T00:00:00Z", forecastEndAt: "2026-10-12T00:00:00Z", forecastConfidence: 0.6, forecastReason: originalReason });
+    const unchanged = (await db.select().from(issues).where(eq(issues.id, issue.id)))[0]!;
+    expect(unchanged.payloadSourceSnapshot).toBeNull();
+    expect(unchanged.payloadSourceSnapshotInvalidated).toBe(false);
+    await svc.forecast(f.actor, f.home, project.id, issue.id, { expectedUpdatedAt: unchanged.updatedAt.toISOString(), forecastStartAt: "2026-10-03T00:00:00Z", forecastEndAt: "2026-10-12T00:00:00Z", forecastConfidence: 0.6, forecastReason: "Dependency testing extends the likely completion date" });
+    const stored = (await db.select().from(issues).where(eq(issues.id, issue.id)))[0]!;
+    expect(stored.payloadSourceSnapshot).toBeNull(); expect(stored.payloadSourceSnapshotInvalidated).toBe(false);
     expect(stored.startedAt).toEqual(actualStart); expect(stored.completedAt).toBeNull(); expect(stored.plannedEndAt?.toISOString()).toBe("2026-10-10T00:00:00.000Z");
-    expect((await svc.get(f.actor, f.home, project!.id)).health.status).toBe("at_risk");
+    expect((await svc.get(f.actor, f.home, project.id)).health.status).toBe("at_risk");
     await expect(db.update(projectScheduleBaselines).set({ name: "Change original" }).where(eq(projectScheduleBaselines.id, baseline.id))).rejects.toThrow();
   });
   it.each(["reject", "accept_stale", "reject_stale"] as const)("keeps a viewer from deciding a roadmap proposal: %s", async (decision) => {
     const f = await seedV5Presences(db), svc = projectControlService(db);
-    const [project] = await db.insert(projects).values({ companyId: f.home, name: "Viewer review boundary" }).returning();
+    const [project] = await db.insert(projects).values({ companyId: f.home, name: "Viewer review boundary", sourceProvenanceQualified: true }).returning();
     const [issue] = await db.insert(issues).values({ companyId: f.home, projectId: project!.id, title: "Commitment" }).returning();
     const view = await svc.get(f.actor, f.home, project!.id);
     const proposal = await svc.propose(f.actor, f.home, project!.id, roadmapProposalSchema.parse({
@@ -167,7 +183,7 @@ describe.skipIf(!support.supported)("V5 canonical procedures and schedule", () =
   });
   it("rejects foreign milestones, dependency cycles and dual ownership of planned dates", async () => {
     const f = await seedV5Presences(db), svc = projectControlService(db);
-    const [home] = await db.insert(projects).values({ companyId: f.home, name: "Home" }).returning(), [foreign] = await db.insert(projects).values({ companyId: f.guest, name: "Foreign" }).returning();
+    const [home] = await db.insert(projects).values({ companyId: f.home, name: "Home", sourceProvenanceQualified: true }).returning(), [foreign] = await db.insert(projects).values({ companyId: f.guest, name: "Foreign", sourceProvenanceQualified: true }).returning();
     const milestone = await svc.createMilestone(f.actor, f.guest, foreign!.id, createMilestoneSchema.parse({ name: "Foreign" }));
     const [a, b] = await db.insert(issues).values([{ companyId: f.home, projectId: home!.id, title: "A" }, { companyId: f.home, projectId: home!.id, title: "B" }]).returning();
     await expect(db.update(issues).set({ milestoneId: milestone.id }).where(eq(issues.id, a!.id))).rejects.toThrow();

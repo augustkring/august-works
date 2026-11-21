@@ -1,0 +1,74 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ × src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts > managed OpenCode Project source wait > rejects a retained Task body withdrawn while the actual managed Project constructor waits 15317ms
+   → expected 'managed_opencode_runner_exit_1; provi…' to match /Native.*(?:Task|source).*(?:changed|…/i
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts > managed OpenCode Project source wait > rejects a retained Task body withdrawn while the actual managed Project constructor waits
+AssertionError: expected 'managed_opencode_runner_exit_1; provi…' to match /Native.*(?:Task|source).*(?:changed|…/i
+
+- Expected:
+/Native.*(?:Task|source).*(?:changed|unavailable)|(?:Task|source).*changed/i
+
++ Received:
+"managed_opencode_runner_exit_1; providerResponses=1; fakeFetchEntrances=[{\"host\":\"api.anthropic.com\",\"path\":\"/v1/messages\",\"apiKeyHeader\":true,\"bearerHeader\":false}]
+processInspectionFailures={\"runner_task_children:ENOENT\":7} spawnExecutableKind=runner
+governance fixture predicates: {\"planStatus\":\"running\",\"planActionClass\":\"internal_draft\",\"planRiskClass\":\"C0\",\"planStarted\":true,\"planUnexpired\":true,\"planVersionMatchesCapability\":true,\"budgetCostAvailable\":true,\"workerRunning\":true,\"workerAgentMatches\":true,\"attemptRunning\":true,\"attemptAgentMatches\":true,\"attemptRunMatches\":true,\"attemptManifestMatches\":true,\"runRunning\":true,\"runNative\":true,\"runTaskMatches\":true,\"runUserMatches\":true,\"manifestPrincipalMatches\":true,\"manifestScopesCompanyScoped\":true,\"taskAssigned\":true,\"taskRunMatches\":true}
+runner process pid 1198328
+spawn process inspection: executable=runner environment=readable
+runner process pid 1198328
+spawn process inspection: executable=runner environment=readable
+runner stdout event: {\"eventType\":\"session.started\",\"payloadKeys\":[\"context\",\"driverSessionId\",\"providerSessionId\"]}
+managed config modes before spawn: 500,400,400,400
+managed provider config: apiKey=placeholder baseURL=local
+runner stdout event: {\"eventType\":\"session.capabilities.updated\",\"payloadKeys\":[\"sessionGoals\"]}
+runner stdout event: {\"eventType\":\"session.goal.snapshot\",\"payloadKeys\":[\"goal\",\"workingNow\"]}
+runner stdout event: {\"eventType\":\"item.completed\",\"payloadKeys\":[\"kind\",\"lineage\",\"text\"]}
+runner stdout event: {\"eventType\":\"item.completed\",\"payloadKeys\":[\"kind\",\"model\",\"text\"]}
+runner stdout event: {\"eventType\":\"harness.diagnostic\",\"code\":\"provider_startup_ownership\",\"payloadKeys\":[\"code\",\"startup\"]}
+runner stdout event: {\"eventType\":\"harness.diagnostic\",\"code\":\"provider_startup_ownership\",\"payloadKeys\":[\"code\",\"startup\"]}
+turn submitted prompt metadata: {\"textPresent\":true,\"textLength\":1380}
+runner stdout event: {\"eventType\":\"turn.submitted\",\"payloadKeys\":[\"effectiveCollaborationMode\",\"envelopeSchema\",\"requestedCollaborationMode\",\"text\"]}
+managed config modes before spawn: 500,400,400,400
+runner stdout event: {\"eventType\":\"turn.started\",\"status\":\"inProgress\",\"payloadKeys\":[\"status\"]}
+runner stdout event: {\"eventType\":\"turn.accepted\",\"payloadKeys\":[\"turnId\"]}
+runner stdout event: {\"eventType\":\"item.started\",\"payloadKeys\":[\"item\",\"kind\"]}
+runner stdout event: {\"eventType\":\"item.started\",\"payloadKeys\":[\"channel\",\"item\",\"kind\",\"text\"]}
+runner stdout event: {\"eventType\":\"item.completed\",\"payloadKeys\":[\"item\",\"kind\"]}
+runner stdout event: {\"eventType\":\"item.completed\",\"payloadKeys\":[\"channel\",\"item\",\"kind\",\"text\"]}
+runner stdout event: {\"eventType\":\"item.completed\",\"payloadKeys\":[\"channel\",\"item\",\"kind\",\"text\"]}
+runner stdout event: {\"eventType\":\"item.completed\",\"payloadKeys\":[\"kind\",\"usage\"]}
+runner stdout event: {\"eventType\":\"run.result.proposed\",\"payloadKeys\":[\"artifacts\",\"attentionRequests\",\"completionClaim\",\"evidence\",\"reportedWorkDisposition\",\"schema\",\"summary\",\"verification\"]}
+runner stdout event: {\"eventType\":\"turn.failed\",\"status\":\"failed\",\"payloadKeys\":[\"error\",\"status\"]}
+runner turn failure: {\"name\":\"APIError\",\"keys\":[\"data\",\"name\"],\"dataKeys\":[\"isRetryable\",\"message\",\"metadata\",\"responseBody\",\"responseHeaders\",\"statusCode\"],\"dataStatus\":403,\"dataMessage\":\"Forbidden: Current Native human, internal draft Task, worker attempt and manifest required\"}
+runner stdout event: {\"eventType\":\"run.result.accepted\",\"payloadKeys\":[\"result\"]}
+runner stdout event: {\"eventType\":\"run.terminal\",\"payloadKeys\":[\"reportedWorkDisposition\",\"runTerminalState\",\"schema\",\"turnTerminalState\"]}
+managed write capture facts: {\"providerWriteUseCount\":0,\"matchingAssociationCount\":0,\"matchingCaptureCount\":0,\"writeInvocationStatusCounts\":{\"executing\":0,\"succeeded\":0,\"failed\":0,\"cancelled\":0},\"succeededCanonicalInvocationCount\":0,\"managedToolResultErrorCodes\":[]}
+managed document prefix facts: []
+managed memory prefix facts: []
+managed memory output qualification facts: []
+managed memory output source facts: []
+managed context invocation facts: []
+managed Context source facts: []
+managed context transaction owners: []
+Broker: [\"POST /runtime-tools/model/v1/messages\",\"managed-request-shape {\\\"keys\\\":[\\\"max_tokens\\\",\\\"messages\\\",\\\"model\\\",\\\"stream\\\",\\\"system\\\",\\\"tool_choice\\\",\\\"tools\\\"],\\\"model\\\":\\\"fixture-managed-opencode-v1\\\",\\\"max_tokens\\\":1024,\\\"stream\\\":true,\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"contentType\\\":\\\"object\\\",\\\"blocks\\\":[{\\\"type\\\":\\\"text\\\",\\\"keys\\\":[\\\"cache_control\\\",\\\"text\\\",\\\"type\\\"]}]}],\\\"tools\\\":[{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_call_api\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_create_project\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_create_task\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_get_task_context\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_get_task_history\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_paperclip_block\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_paperclip_finish\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_read_chat_attachment\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_read_context\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_read_document\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_self_remember\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_write_document\\\"}],\\\"toolChoice\\\":{\\\"keys\\\":[\\\"type\\\"],\\\"type\\\":\\\"auto\\\"},\\\"toolResultFacts\\\":[]}\",\"response POST /runtime-tools/model/v1/messages 200\",\"POST /runtime-tools/model/v1/messages\",\"managed-request-shape {\\\"keys\\\":[\\\"max_tokens\\\",\\\"messages\\\",\\\"model\\\",\\\"stream\\\",\\\"system\\\",\\\"tool_choice\\\",\\\"tools\\\"],\\\"model\\\":\\\"fixture-managed-opencode-v1\\\",\\\"max_tokens\\\":1024,\\\"stream\\\":true,\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"contentType\\\":\\\"object\\\",\\\"blocks\\\":[{\\\"type\\\":\\\"text\\\",\\\"keys\\\":[\\\"text\\\",\\\"type\\\"]}]},{\\\"role\\\":\\\"assistant\\\",\\\"contentType\\\":\\\"object\\\",\\\"blocks\\\":[{\\\"type\\\":\\\"tool_use\\\",\\\"keys\\\":[\\\"cache_control\\\",\\\"id\\\",\\\"input\\\",\\\"name\\\",\\\"type\\\"]}]},{\\\"role\\\":\\\"user\\\",\\\"contentType\\\":\\\"object\\\",\\\"blocks\\\":[{\\\"type\\\":\\\"tool_result\\\",\\\"keys\\\":[\\\"cache_control\\\",\\\"content\\\",\\\"tool_use_id\\\",\\\"type\\\"]}]}],\\\"tools\\\":[{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_call_api\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_create_project\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_create_task\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_get_task_context\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_get_task_history\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_paperclip_block\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_paperclip_finish\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_read_chat_attachment\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_read_context\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_read_document\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_self_remember\\\"},{\\\"keys\\\":[\\\"description\\\",\\\"input_schema\\\",\\\"name\\\"],\\\"name\\\":\\\"paperclip_write_document\\\"}],\\\"toolChoice\\\":{\\\"keys\\\":[\\\"type\\\"],\\\"type\\\":\\\"auto\\\"},\\\"toolResultFacts\\\":[{\\\"isError\\\":false,\\\"contentType\\\":\\\"string\\\",\\\"contentBlockTypes\\\":[],\\\"resultShape\\\":{\\\"parseSucceeded\\\":true,\\\"topLevelKeys\\\":[\\\"text\\\",\\\"type\\\"],\\\"dataKeys\\\":[],\\\"recordKeys\\\":[],\\\"status\\\":\\\"other_or_absent\\\",\\\"scopeType\\\":\\\"other_or_absent\\\"},\\\"capturePresent\\\":false,\\\"captureTools\\\":[],\\\"staticErrorCodes\\\":[],\\\"managedMemoryBoundary\\\":{\\\"messageMatches\\\":[],\\\"errorCodes\\\":[]}}]}\",\"route-error POST /runtime-tools/model/v1/messages Error: Current Native human, internal draft Task, worker attempt and manifest required     at forbidden (/workspace/v10-dep-qualification/server/src/errors.ts:21:10) |     at current (/workspace/v10-dep-qualification/server/src/services/orchestration/worker-model-gateway.ts:841:13) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at Object.callManagedMessages (/workspace/v10-dep-qualification/server/src/services/orchestration/worker-model-gateway.ts:1713:21)\",\"current-model-authority-facts {\\\"planStatus\\\":\\\"paused\\\",\\\"planStarted\\\":true,\\\"planVersionMatches\\\":false,\\\"planActionClass\\\":\\\"internal_draft\\\",\\\"planRiskClass\\\":\\\"C0\\\",\\\"planPrincipalMatches\\\":true,\\\"planCostBudgetConfigured\\\":true,\\\"workerStatus\\\":\\\"running\\\",\\\"workerAgentMatches\\\":true,\\\"attemptStatus\\\":\\\"running\\\",\\\"attemptAgentMatches\\\":true,\\\"attemptRunMatches\\\":true,\\\"attemptManifestMatches\\\":true,\\\"runStatus\\\":\\\"running\\\",\\\"runNative\\\":true,\\\"runTaskMatches\\\":true,\\\"runHumanMatches\\\":true,\\\"manifestHumanMatches\\\":true,\\\"manifestScopesCompanyScoped\\\":true,\\\"taskHidden\\\":false,\\\"taskStatusAllowed\\\":true,\\\"taskAgentMatches\\\":true,\\\"taskRunMatches\\\":true,\\\"taskCheckoutMatches\\\":true,\\\"rootHidden\\\":false,\\\"rootStatusAllowed\\\":true,\\\"delegationDepthAllowed\\\":true,\\\"agentStatusAllowed\\\":true,\\\"companyActive\\\":true,\\\"identityActive\\\":true,\\\"outputInvocationStatuses\\\":[{\\\"tool\\\":\\\"create_project\\\",\\\"status\\\":\\\"failed\\\"}],\\\"memoryInvocationFacts\\\":[],\\\"memoryRows\\\":{\\\"count\\\":0,\\\"states\\\":[]},\\\"fenceReasonCodes\\\":[],\\\"supervisionReasons\\\":[{\\\"reasonCode\\\":\\\"native_tool_result_unsettled\\\",\\\"status\\\":\\\"pending\\\"}]}\",\"response-body POST /runtime-tools/model/v1/messages {\\\"error\\\":\\\"Current Native human, internal draft Task, worker attempt and manifest required\\\"}\",\"response POST /runtime-tools/model/v1/messages 403\"]
+Artifacts: /tmp/managed-opencode-project-wait-e2e-wjP2td/run-1Onoae"
+
+ ❯ src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts:141:8
+    139|     expect(outcome.error).toBeTruthy();
+    140|     expect(String((outcome.error as Error | null)?.message ?? outcome.…
+    141|       .toMatch(/Native.*(?:Task|source).*(?:changed|unavailable)|(?:Ta…
+       |        ^
+    142|     expect(taskId).toBeTruthy();
+    143|     const [changedTask] = await db.select({ title: issues.title }).fro…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  09:47:57
+   Duration  32.91s (transform 9.59s, setup 80ms, import 13.20s, tests 19.51s, environment 0ms)
+

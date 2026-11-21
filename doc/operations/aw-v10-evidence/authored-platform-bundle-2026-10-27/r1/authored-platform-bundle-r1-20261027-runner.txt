@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/v9-agent-authored-definition.integration.test.ts
+test_pattern=keeps the immutable platform reference bundle

@@ -1,0 +1,28 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Current shared childReviewOutcomes owner regression: actual PG test through Native get_task_context and execution continuation; two cases passed with grant/revoke and wrong-run controls.",
+  "logs": [
+    {
+      "name": "child-review-current-focused-20261025-rerun",
+      "exitCode": 0,
+      "exitSidecar": "child-review-current-focused-20261025-rerun.log.exit",
+      "rawSha256": "81af28e0b8bda1435c55904d3e3cc50978dde10ea87e08401b9d137e686ca1b8",
+      "sanitizedSha256": "81af28e0b8bda1435c55904d3e3cc50978dde10ea87e08401b9d137e686ca1b8",
+      "archiveSha256": "3f26d28d754dd59470c75b0136f7b3eecd27775738497e06424cf3c4db4762e8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed (2)",
+        "Duration  24.55s (transform 10.49s, setup 83ms, import 14.04s, tests 10.31s, environment 0ms)"
+      ]
+    }
+  ]
+}

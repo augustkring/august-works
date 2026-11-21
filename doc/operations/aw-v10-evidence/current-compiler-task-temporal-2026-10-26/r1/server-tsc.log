@@ -1,0 +1,5 @@
+src/services/native-direct-input.ts(421,27): error TS2322: Type 'false | Promise<boolean>' is not assignable to type 'Promise<boolean>'.
+  Type 'boolean' is not assignable to type 'Promise<boolean>'.
+src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts(459,51): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'PgColumn<{ name: "started_at"; tableName: "heartbeat_runs"; dataType: "date"; columnType: "PgTimestamp"; data: Date; driverParam: string; notNull: false; hasDefault: false; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.

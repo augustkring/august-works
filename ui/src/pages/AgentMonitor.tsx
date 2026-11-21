@@ -46,7 +46,9 @@ export function AgentMonitor({
   principal: string;
   agentId: string;
 }) {
-  const { t } = useTranslation("experience");
+  const { t, i18n } = useTranslation("experience");
+  // Dates follow the chosen UI language, not the browser's default locale.
+  const formatTime = (value: string) => new Date(value).toLocaleString(i18n.resolvedLanguage ?? i18n.language);
   const client = useQueryClient();
   const authority = useV9PrivateReadAuthority(principal, true);
   const [epoch, setEpoch] = useState(0);
@@ -157,14 +159,14 @@ export function AgentMonitor({
         <p>
           {t("agentMonitorObserved")}{" "}
           <time dateTime={view.observedAt}>
-            {new Date(view.observedAt).toLocaleString()}
+            {formatTime(view.observedAt)}
           </time>
         </p>
         <p>
           {t("agentMonitorLastRun")}{" "}
           {view.lastHeartbeatAt ? (
             <time dateTime={view.lastHeartbeatAt}>
-              {new Date(view.lastHeartbeatAt).toLocaleString()}
+              {formatTime(view.lastHeartbeatAt)}
             </time>
           ) : (
             t("agentMonitorNoRun")
@@ -185,7 +187,7 @@ export function AgentMonitor({
               </Link>
               <p>
                 <time dateTime={run.createdAt}>
-                  {new Date(run.createdAt).toLocaleString()}
+                  {formatTime(run.createdAt)}
                 </time>
               </p>
             </li>

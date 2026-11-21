@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/announcement-feed.test.ts
+test_pattern=announcement feed|customer changelog

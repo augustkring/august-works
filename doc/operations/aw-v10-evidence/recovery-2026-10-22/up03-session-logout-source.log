@@ -1,0 +1,15 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[12:01:56] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"23895713-13d4-4565-aa58-86581b654892","actorAgentId":"93c1490f-8f5d-4145-8b0f-51f9fd70464d","responsibleUserId":"5a35c714-d457-4f91-8b04-dfd8b74e4ef2"}[39m
+[12:01:56] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"foundation:read","resourceType":"company","companyId":"23895713-13d4-4565-aa58-86581b654892","actorAgentId":"93c1490f-8f5d-4145-8b0f-51f9fd70464d","responsibleUserId":"5a35c714-d457-4f91-8b04-dfd8b74e4ef2"}[39m
+[12:01:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"4090796e-e3a3-4f27-bc70-b809136f9e96","actorAgentId":"95920927-7960-4381-a356-c7ce727543c4","responsibleUserId":"65ba5b85-b155-4132-866d-d439003fd7d3"}[39m
+
+ Test Files  2 passed (2)
+      Tests  46 passed (46)
+   Start at  12:00:54
+   Duration  99.60s (transform 35.05s, setup 760ms, import 71.02s, tests 26.61s, environment 1ms)
+

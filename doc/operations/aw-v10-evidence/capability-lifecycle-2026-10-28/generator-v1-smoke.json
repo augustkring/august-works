@@ -1,0 +1,446 @@
+{
+  "catalogVersion": "2026.720.0",
+  "features": {
+    "a2ui_v9": {
+      "tier": "managed"
+    },
+    "action_cards_v9": {
+      "tier": "managed"
+    },
+    "activation_v9": {
+      "tier": "managed"
+    },
+    "adaptive_planning_v8": {
+      "tier": "managed"
+    },
+    "admin_support_v6": {
+      "tier": "managed"
+    },
+    "ag_ui_v9": {
+      "tier": "managed"
+    },
+    "agent_identities_v5": {
+      "tier": "managed"
+    },
+    "agent_multi_company_presence_v5": {
+      "tier": "managed"
+    },
+    "agent_packages_v7": {
+      "tier": "managed"
+    },
+    "agent_provider_bindings_v5": {
+      "tier": "managed"
+    },
+    "agent_runtime_fabric_v5": {
+      "tier": "managed"
+    },
+    "ai_use_cases_v7": {
+      "tier": "managed"
+    },
+    "ambient_commands_v9": {
+      "tier": "managed"
+    },
+    "analytical_lineage_v8": {
+      "tier": "managed"
+    },
+    "autoRestartDevServerWhenIdle": {
+      "tier": "preference"
+    },
+    "billing_checkout_v6": {
+      "tier": "managed"
+    },
+    "billing_entitlements_v6": {
+      "tier": "managed"
+    },
+    "billing_usage_v6": {
+      "tier": "managed"
+    },
+    "billing_v6": {
+      "tier": "managed"
+    },
+    "business_events_v8": {
+      "tier": "managed"
+    },
+    "business_experiments_v8": {
+      "tier": "managed"
+    },
+    "business_forecasting_v8": {
+      "tier": "managed"
+    },
+    "business_metrics_v8": {
+      "tier": "managed"
+    },
+    "causal_claims_v8": {
+      "tier": "managed"
+    },
+    "causal_provider_dowhy_v8": {
+      "tier": "managed"
+    },
+    "cognitive_memory_v7": {
+      "tier": "managed"
+    },
+    "company_deletion_v6": {
+      "tier": "managed"
+    },
+    "company_relationships_v5": {
+      "tier": "managed"
+    },
+    "core_stewards_v7": {
+      "tier": "managed"
+    },
+    "cross_company_execution_v5": {
+      "tier": "managed"
+    },
+    "customer_feedback_v9": {
+      "tier": "managed"
+    },
+    "decision_intelligence_v8": {
+      "tier": "managed"
+    },
+    "domain_dual_origin_v6": {
+      "tier": "managed"
+    },
+    "domain_new_primary_v6": {
+      "tier": "managed"
+    },
+    "email_verification_required_v6": {
+      "tier": "managed"
+    },
+    "enableAgentChat": {
+      "tier": "managed"
+    },
+    "enableAiWorkflowAuthoring": {
+      "tier": "managed"
+    },
+    "enableApps": {
+      "tier": "managed"
+    },
+    "enableAutomationArtifactCodeExecutionV1": {
+      "tier": "managed"
+    },
+    "enableAutomationArtifactsV1": {
+      "tier": "managed"
+    },
+    "enableBetaSkills": {
+      "tier": "preference"
+    },
+    "enableBuiltInAgents": {
+      "tier": "managed"
+    },
+    "enableCases": {
+      "tier": "managed"
+    },
+    "enableChatConnectors": {
+      "tier": "managed"
+    },
+    "enableClassicTaskInterface": {
+      "tier": "preference"
+    },
+    "enableCollectiveMemoryV1": {
+      "tier": "managed"
+    },
+    "enableConferenceRoomChat": {
+      "tier": "managed"
+    },
+    "enableContextEngineV1": {
+      "tier": "managed"
+    },
+    "enableDecisions": {
+      "tier": "preference"
+    },
+    "enableEnvironments": {
+      "tier": "managed"
+    },
+    "enableExperimentalFileViewer": {
+      "tier": "preference"
+    },
+    "enableExternalObjects": {
+      "tier": "managed"
+    },
+    "enableFirstTaskPlanProposal": {
+      "tier": "preference"
+    },
+    "enableFoundationV1": {
+      "tier": "managed"
+    },
+    "enableGoalsSidebarLink": {
+      "tier": "preference"
+    },
+    "enableIsolatedWorkspaces": {
+      "tier": "managed"
+    },
+    "enableIsolatedWorkspacesByDefault": {
+      "tier": "managed"
+    },
+    "enableIssuePlanDecompositions": {
+      "tier": "managed"
+    },
+    "enableManagedSandboxOnly": {
+      "tier": "managed"
+    },
+    "enableMcpAggregators": {
+      "tier": "managed"
+    },
+    "enableMemoryConnectors": {
+      "tier": "managed"
+    },
+    "enableMemoryPostRunExtractionV1": {
+      "tier": "managed"
+    },
+    "enableNativeRunner": {
+      "tier": "managed"
+    },
+    "enableOwnerInstanceAdmin": {
+      "tier": "managed"
+    },
+    "enablePaperclipDeveloperMode": {
+      "tier": "preference"
+    },
+    "enablePipelines": {
+      "tier": "managed"
+    },
+    "enablePrivateAgentMemoryV1": {
+      "tier": "managed"
+    },
+    "enableRunnerPreviewIngress": {
+      "tier": "managed"
+    },
+    "enableSandboxDuplexBridge": {
+      "tier": "managed"
+    },
+    "enableServerInfoDebugView": {
+      "tier": "preference"
+    },
+    "enableSimplifiedEnglishInteractions": {
+      "tier": "preference"
+    },
+    "enableSmokeLab": {
+      "tier": "managed"
+    },
+    "enableStatusCards": {
+      "tier": "managed"
+    },
+    "enableStreamlinedLeftNavigation": {
+      "tier": "preference"
+    },
+    "enableStreamlinedUi": {
+      "tier": "preference"
+    },
+    "enableSummaries": {
+      "tier": "managed"
+    },
+    "enableWorkflowAgentNodes": {
+      "tier": "managed"
+    },
+    "enableWorkflowBuilderV1": {
+      "tier": "managed"
+    },
+    "enableWorkflowExternalAgentNodes": {
+      "tier": "managed"
+    },
+    "enableWorkflowOptimizerPromotion": {
+      "tier": "managed"
+    },
+    "enableWorkflowOptimizerShadow": {
+      "tier": "managed"
+    },
+    "enableWorkflowOptimizerSuggestions": {
+      "tier": "managed"
+    },
+    "enableWorkflowsV1": {
+      "tier": "managed"
+    },
+    "enableWorkspaceBranchReconcileForward": {
+      "tier": "managed"
+    },
+    "enableWorkspaceDirtyQuarantineRepair": {
+      "tier": "managed"
+    },
+    "enableWorktreeRunExecution": {
+      "tier": "managed"
+    },
+    "enterprise_identity_v7": {
+      "tier": "managed"
+    },
+    "experience_analytics_v9": {
+      "tier": "managed"
+    },
+    "experience_projection_v9": {
+      "tier": "managed"
+    },
+    "forecast_provider_statsforecast_v8": {
+      "tier": "managed"
+    },
+    "foundation_bootstrap_v7": {
+      "tier": "managed"
+    },
+    "free_core_commercial_v7": {
+      "tier": "managed"
+    },
+    "governance_evidence_v7": {
+      "tier": "managed"
+    },
+    "hindsight_provider_v7": {
+      "tier": "managed"
+    },
+    "hire_agent_v9": {
+      "tier": "managed"
+    },
+    "home_v9": {
+      "tier": "managed"
+    },
+    "hosted_openclaw_v6": {
+      "tier": "managed"
+    },
+    "learning_engine_v7": {
+      "tier": "managed"
+    },
+    "maintenance_autopilot_v9": {
+      "tier": "managed"
+    },
+    "management_chat_tools_v8": {
+      "tier": "managed"
+    },
+    "management_reviews_v8": {
+      "tier": "managed"
+    },
+    "mcp_apps_v9": {
+      "tier": "managed"
+    },
+    "memory_models_v7": {
+      "tier": "managed"
+    },
+    "memory_observations_v7": {
+      "tier": "managed"
+    },
+    "notification_channels_v9": {
+      "tier": "managed"
+    },
+    "notification_policy_v9": {
+      "tier": "managed"
+    },
+    "openshell_v7": {
+      "tier": "managed"
+    },
+    "orchestration_v7": {
+      "tier": "managed"
+    },
+    "org_units_v5": {
+      "tier": "managed"
+    },
+    "planning_optimizer_v8": {
+      "tier": "managed"
+    },
+    "planning_provider_ortools_v8": {
+      "tier": "managed"
+    },
+    "playbook_skill_projection_v5": {
+      "tier": "managed"
+    },
+    "playbooks_v5": {
+      "tier": "managed"
+    },
+    "portfolio_skill_sharing_v5": {
+      "tier": "managed"
+    },
+    "portfolio_view_v5": {
+      "tier": "managed"
+    },
+    "proactive_followup_v7": {
+      "tier": "managed"
+    },
+    "process_intelligence_v8": {
+      "tier": "managed"
+    },
+    "process_ocel_export_v8": {
+      "tier": "managed"
+    },
+    "process_provider_external_v8": {
+      "tier": "managed"
+    },
+    "progressive_shell_v9": {
+      "tier": "managed"
+    },
+    "project_forecast_v5": {
+      "tier": "managed"
+    },
+    "project_plan_vs_actual_v5": {
+      "tier": "managed"
+    },
+    "project_roadmap_v5": {
+      "tier": "managed"
+    },
+    "readiness_engine_v7": {
+      "tier": "managed"
+    },
+    "role_packs_v5": {
+      "tier": "managed"
+    },
+    "runtime_auto_host_scale_v6": {
+      "tier": "managed"
+    },
+    "runtime_dedicated_gateway_v6": {
+      "tier": "managed"
+    },
+    "runtime_dedicated_vm_v6": {
+      "tier": "managed"
+    },
+    "runtime_host_agent_v6": {
+      "tier": "managed"
+    },
+    "saas_deployment_profile_v6": {
+      "tier": "managed"
+    },
+    "saas_self_signup_v6": {
+      "tier": "managed"
+    },
+    "sandbox_abstraction_v7": {
+      "tier": "managed"
+    },
+    "scenario_planning_v8": {
+      "tier": "managed"
+    },
+    "security_event_export_v7": {
+      "tier": "managed"
+    },
+    "semantic_provider_cube_v8": {
+      "tier": "managed"
+    },
+    "semantic_provider_metricflow_v8": {
+      "tier": "managed"
+    },
+    "server_onboarding_v6": {
+      "tier": "managed"
+    },
+    "shared_trusted_runtime_v5": {
+      "tier": "managed"
+    },
+    "skill_autonomous_promotion_v5": {
+      "tier": "managed"
+    },
+    "skill_autonomous_proposals_v5": {
+      "tier": "managed"
+    },
+    "skill_lifecycle_v5": {
+      "tier": "managed"
+    },
+    "skill_resolver_v5": {
+      "tier": "managed"
+    },
+    "strategy_execution_v8": {
+      "tier": "managed"
+    },
+    "supervision_v7": {
+      "tier": "managed"
+    },
+    "transactional_email_v6": {
+      "tier": "managed"
+    },
+    "verifier_v7": {
+      "tier": "managed"
+    },
+    "work_signals_v7": {
+      "tier": "managed"
+    }
+  }
+}

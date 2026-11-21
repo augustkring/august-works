@@ -1,0 +1,27 @@
+src/services/context/context-engine-integration.test.ts(702,68): error TS2339: Property 'input' does not exist on type 'never'.
+src/services/context/context-engine-integration.test.ts(706,68): error TS2339: Property 'input' does not exist on type 'never'.
+src/services/native-direct-input.ts(1613,24): error TS2322: Type '{ issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[]; } | undefined' is not assignable to type '{ issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[]; }'.
+  Type 'undefined' is not assignable to type '{ issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[]; }'.
+src/services/native-direct-input.ts(1613,51): error TS2322: Type '({ kind: "memory"; memoryId: string; sourceVersion: string; contentHash: string; reviewStateAtCapture?: "accepted" | "pending" | "rejected" | undefined; verificationStateAtCapture?: "corroborated" | ... 3 more ... | undefined; reviewTransitionStateHash?: string | undefined; } | ... 22 more ... | { ...; })[] | undefi...' is not assignable to type '({ kind: "memory"; memoryId: string; sourceVersion: string; contentHash: string; reviewStateAtCapture?: "accepted" | "pending" | "rejected" | undefined; verificationStateAtCapture?: "corroborated" | ... 3 more ... | undefined; reviewTransitionStateHash?: string | undefined; } | ... 22 more ... | { ...; })[]'.
+  Type 'undefined' is not assignable to type '({ kind: "memory"; memoryId: string; sourceVersion: string; contentHash: string; reviewStateAtCapture?: "accepted" | "pending" | "rejected" | undefined; verificationStateAtCapture?: "corroborated" | ... 3 more ... | undefined; reviewTransitionStateHash?: string | undefined; } | ... 22 more ... | { ...; })[]'.
+src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts(72,19): error TS18048: 'result.childTasks' is possibly 'undefined'.
+src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts(80,47): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'PgColumn<{ name: "company_id"; tableName: "issue_privacy_sources"; dataType: "string"; columnType: "PgUUID"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts(83,83): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts(86,63): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts(87,59): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts(88,68): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts(92,70): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'PgColumn<{ name: "company_id"; tableName: "issues"; dataType: "string"; columnType: "PgUUID"; data: string; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts(95,83): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/services/orchestration/model-reservations.ts(1029,54): error TS2345: Argument of type '{ id: string; companyId: string; planId: string | null; workerId: string | null; workerAttemptId: string | null; conversationAgentId: string | null; conversationRunId: string | null; ... 19 more ...; createdAt: Date; }' is not assignable to parameter of type '{ companyId: string; planId: string; purpose: "agent_safe_test" | "decision_shadow" | "provider_conformance" | "read_only_trajectory" | "read_only_verification" | "worker_model"; workerId: string | null; workerAttemptId: string | null; }'.
+  Types of property 'planId' are incompatible.
+    Type 'string | null' is not assignable to type 'string'.
+      Type 'null' is not assignable to type 'string'.

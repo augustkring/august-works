@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-22",
+  "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "branch": "codex/blentera-v10",
+  "brief": {
+    "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+    "sha256": "7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22",
+    "sizeBytes": 610172
+  },
+  "recoveredPreviousV10Source": false,
+  "recoveredPreviousV10TestReceipts": false,
+  "previousTestResultsApplicable": false,
+  "implementationComplete": false,
+  "prReady": false
+}

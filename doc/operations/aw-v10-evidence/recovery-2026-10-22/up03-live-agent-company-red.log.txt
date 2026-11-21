@@ -1,0 +1,68 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[00:43:14] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"13560cc6-2745-4390-8134-f86c59fbb7d1","actorAgentId":"59158d76-8b50-4b32-9e8c-155630bb85ad","responsibleUserId":"ac83ca8a-b873-4b89-a19e-6df7d375b922"}[39m
+[00:43:14] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"a9913c87-63c3-4cfb-b04f-55f4b0529322","actorAgentId":"c4b204f2-52d5-4ce2-8c46-84c30e3e1d17","responsibleUserId":"f4849d8d-a9eb-4432-aa40-34c4ff322101"}[39m
+ ❯ |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts (4 tests | 4 failed) 14474ms
+     × closes an existing key socket after human_membership withdrawal although the actual key remains active 285ms
+     × closes an existing key socket after human_account withdrawal although the actual key remains active 88ms
+     × rejects canonical scoped-key company subscription for 'skill_test' 38ms
+     × rejects canonical scoped-key company subscription for 'task_bridge' 25ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > closes an existing key socket after human_membership withdrawal although the actual key remains active
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > closes an existing key socket after human_account withdrawal although the actual key remains active
+AssertionError: expected { kind: 'message' } to deeply equal { kind: 'closed', code: 1008 }
+
+- Expected
++ Received
+
+  {
+-   "code": 1008,
+-   "kind": "closed",
++   "kind": "message",
+  }
+
+ ❯ src/__tests__/live-events-agent-key-authority.integration.test.ts:74:29
+     72|       const outcome = Promise.race([once(live.socket, "close").then(([…
+     73|       publishLiveEvent({ companyId: fixture.companyId, type: "agent.st…
+     74|       expect(await outcome).toEqual({ kind: "closed", code: 1008 });
+       |                             ^
+     75|     } finally { await live.close(); }
+     76|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > rejects canonical scoped-key company subscription for 'skill_test'
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > rejects canonical scoped-key company subscription for 'task_bridge'
+AssertionError: expected { kind: 'open' } to deeply equal { kind: 'denied', status: 403 }
+
+- Expected
++ Received
+
+  {
+-   "kind": "denied",
+-   "status": 403,
++   "kind": "open",
+  }
+
+ ❯ src/__tests__/live-events-agent-key-authority.integration.test.ts:87:23
+     85|         once(live.socket, "unexpected-response").then(([, response]) =…
+     86|       ]);
+     87|       expect(outcome).toEqual({ kind: "denied", status: 403 });
+       |                       ^
+     88|     } finally { await live.close(); }
+     89|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  00:42:47
+   Duration  28.25s (transform 7.85s, setup 252ms, import 12.94s, tests 14.47s, environment 0ms)
+

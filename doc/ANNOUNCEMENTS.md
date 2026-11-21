@@ -1,14 +1,23 @@
 # In-app announcements
 
-Paperclip displays one optional announcement card in the board UI. Its feed is
-`https://pages.paperclip.ing/announcements/v1/current.json`. The instance fetches
-JSON on demand and renders it with native components.
+Blentera can display one optional announcement card in the board UI. Remote
+announcements are disabled by default, with no default publisher. When an
+operator explicitly enables a qualified feed, the instance fetches JSON on
+demand and renders it with native components.
 
 ## Operator configuration
 
-- `PAPERCLIP_ANNOUNCEMENTS_ENABLED=false` disables fetching and display.
-- `PAPERCLIP_ANNOUNCEMENTS_FEED_URL` overrides the public HTTPS manifest URL.
+- Set `PAPERCLIP_ANNOUNCEMENTS_ENABLED=true` to opt in. Any other value disables
+  fetching and display.
+- Set `PAPERCLIP_ANNOUNCEMENTS_FEED_URL` to the selected public HTTPS manifest URL.
+  Both settings are required; enablement alone does not select a publisher.
   Credentials, query strings, private destinations and redirects are rejected.
+
+These retained environment names are compatibility identifiers. See
+[Blentera processor controls](operations/blentera-outbound-processors.md) for
+the separate feedback and telemetry purposes. The upstream publishing examples
+below do not authorize access to upstream infrastructure or qualify it as a
+Blentera processor; use an explicitly approved operator-owned host.
 
 Announcements are independent of telemetry. Feed/media requests originate from
 the instance without account IDs, company data, cookies or event tracking. The

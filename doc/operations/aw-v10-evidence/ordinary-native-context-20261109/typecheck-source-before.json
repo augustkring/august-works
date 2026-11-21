@@ -1,0 +1,31 @@
+{
+  "head": "d8c89488f54a6de1c39cc8da56c68612da55c9e2",
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts": "d1c64140a015428498541d0b2293f8d83d2a8005a382d32c8528a640b229beda",
+    "server/src/__tests__/heartbeat-context-summary.test.ts": "262e3e63f35a4c8d3c9586520c124398db130df06ae736fc5b4f825d479b521a",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "6546596080c85959fb85490105725d867f041539a824e57b96115b50729fdaeb",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "86bf9c63543097531fb0fd85f36eca6504e481158e767e7b00580c8c0a632ee7",
+    "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts": "4fab8318dc12967db7a5af38a9fd1cedbe59f6df369d9b32d082bddd3a274734",
+    "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts": "9f15146c1376984754fe472284b75551a1690848620a0da6a230a7bece7c7d6a",
+    "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts": "f76eee8b5731cf86dd1e1da27bc78732a8241b2bc5984a0bb3aa0fe39dae8e03",
+    "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts": "5b61e7ff245bbb926d77c7c21b92e8e39f4d2e85e3b323f4b9631b2afb3df94d",
+    "server/src/__tests__/helpers/managed-native-model-transport.ts": "adf4b9a2048a381710c343fb3a962fe388a33021d054ff68d87105ee56f47d89",
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "6c902714ab68225dff7738541cd74932fb43300231ec2f1489f70a0baddae539",
+    "server/src/services/execution-continuation.ts": "da976aa86ce86ab9cc43044fbbe6fe6fcc0f584e961f29b09ff1bb059a58b8a9",
+    "server/src/services/heartbeat.ts": "638156f1125977702a57614592c67f4f984169b80d1e0b58d2463faead80252d",
+    "server/src/services/native-direct-input.ts": "69278183d044ebe612a774e47df48f27542f332b7602adacc282be8a929ce658",
+    "server/src/services/native-runtime/native-execution-input.test.ts": "6a966e1331f22cb8d45adc08bc941de64bd3a25cc89f738c4da846f6b0124006",
+    "server/src/services/native-runtime/native-execution-input.ts": "ab466a81204cf12ed0bc53953c54aac1b4704ba0c7a3a13669d756d747b86749",
+    "server/src/services/native-runtime/native-finalization-error-diagnostic.ts": "aca517feb63a728f0d44587a79726b1454fb6ce104754c0b11fe251ceb87aa48",
+    "server/src/services/native-runtime/native-interaction-bridge.ts": "bc6a83096f52d900b1ee1b05cabc3702c4f3ff94b5e18fe22c8278478679b337",
+    "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts": "41025e3579c3949df4ef8a4f3724dfc576d5864f0d630a6b5bffc4c0bfdbaa41",
+    "server/src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts": "b52fece332e28c369ccfaa457e0fd0c335903d5811f2a730fd1b81ffb091a68e",
+    "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts": "077392b94e64dafe5c5613e538b722c1230ffb8284bd6593f7f36f562c7bd94c",
+    "server/src/services/native-runtime/native-run-finalizer.ts": "ae661747d0e51fabdba259a1afa86adb031ac6892b95fc7b6c975aec40c235b6",
+    "server/src/services/native-runtime/native-session-executor.ts": "5d14633538b52cb177c3133445dbe7da3eeb4933ebf05af75ad5b8a4b4c877b3",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  }
+}

@@ -1,0 +1,53 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/trust-document-registry-postgres.test.ts (1 test | 1 failed) 4544ms
+     × rejects direct receipt edits/deletes and permits only company-erasure cascade 57ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/trust-document-registry-postgres.test.ts > trust document acceptance receipt retention > rejects direct receipt edits/deletes and permits only company-erasure cascade
+AssertionError: expected Error: Failed query: update "trust_docume… { …(2) } to match object { code: '55000' }
+(11 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
++ DrizzleQueryError {
++   "message": "Failed query: update \"trust_document_acceptances\" set \"surface\" = $1 where \"trust_document_acceptances\".\"id\" = $2
++ params: forged,0f722bb4-c7fd-4ebc-80ce-fc457e06365f",
++   "cause": PostgresError {
++     "message": "trust document acceptance receipts are immutable",
++     "name": "PostgresError",
++     "severity_local": "ERROR",
++     "severity": "ERROR",
+      "code": "55000",
++     "where": "PL/pgSQL function aw_reject_trust_document_acceptance_mutation() line 6 at RAISE",
++     "file": "pl_exec.c",
++     "line": "3937",
++     "routine": "exec_stmt_raise",
++   },
++   "query": "update \"trust_document_acceptances\" set \"surface\" = $1 where \"trust_document_acceptances\".\"id\" = $2",
++   "params": [
++     "forged",
++     "0f722bb4-c7fd-4ebc-80ce-fc457e06365f",
++   ],
+  }
+
+ ❯ src/__tests__/trust-document-registry-postgres.test.ts:47:59
+     45|
+     46|     await expect(db.update(trustDocumentAcceptances).set({ surface: "f…
+     47|       .where(eq(trustDocumentAcceptances.id, receipt.id))).rejects.toM…
+       |                                                           ^
+     48|     await expect(db.delete(trustDocumentAcceptances)
+     49|       .where(eq(trustDocumentAcceptances.id, receipt.id))).rejects.toM…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 6 passed (7)
+   Start at  07:54:51
+   Duration  10.64s (transform 3.05s, setup 168ms, import 5.64s, tests 4.55s, environment 0ms)
+

@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { ciSmokeLabScenarios, type SmokeLabLifecycleTool, type SmokeLabScenario, type SmokeRunStepPath } from "./smoke-lab.catalog";
+import { ciSmokeLabScenarios, type SmokeLabScenario, type SmokeRunStepPath } from "./smoke-lab.catalog";
 
 type SmokeRunStepStatus = "pass" | "fail" | "skipped";
 
@@ -26,26 +26,28 @@ type ToolCatalogEntry = {
   id: string;
   toolName: string;
   name: string;
+  schemaHash?: string | null;
+  inputSchema?: Record<string, unknown> | null;
+  outputSchema?: Record<string, unknown> | null;
+  annotations?: Record<string, unknown> | null;
   riskLevel?: string | null;
   status?: string | null;
+  isReadOnly?: boolean;
+  isWrite?: boolean;
+  isDestructive?: boolean;
 };
 type FixtureInstall = {
   connections: ToolConnection[];
   catalog: ToolCatalogEntry[];
 };
-type TestCallResult = {
-  decision: "allowed" | "ask_first" | "off";
-  invocationId: string;
-  actionRequestId?: string;
-  error?: { reasonCode?: string | null; message: string };
+type ToolAccessSummary = {
+  tools: Array<{
+    toolName: string;
+    decision: "allowed" | "ask_first" | "off";
+    reasonCode?: string | null;
+    matchedPolicyIds?: string[];
+  }>;
 };
-type GatewaySession = {
-  sessionId: string;
-  token: string;
-  toolsUrl: string;
-  callUrl: string;
-};
-
 async function json<T = Json>(response: Awaited<ReturnType<APIRequestContext["get"]>>): Promise<T> {
   const body = await response.text();
   expect(response.ok(), `${response.url()} failed ${response.status()}: ${body}`).toBe(true);
@@ -229,17 +231,35 @@ async function catalog(request: APIRequestContext, connectionId: string) {
   return await json<{ catalog: ToolCatalogEntry[] }>(await request.get(`/api/tool-connections/${connectionId}/catalog`));
 }
 
-async function testCall(
+async function catalogContract(entries: ToolCatalogEntry[]) {
+  return entries
+    .map((entry) => ({
+      toolName: entry.toolName,
+      schemaHash: entry.schemaHash ?? null,
+      inputSchema: entry.inputSchema ?? null,
+      outputSchema: entry.outputSchema ?? null,
+      annotations: entry.annotations ?? null,
+      status: entry.status ?? null,
+      riskLevel: entry.riskLevel ?? null,
+      isReadOnly: entry.isReadOnly ?? null,
+      isWrite: entry.isWrite ?? null,
+      isDestructive: entry.isDestructive ?? null,
+    }))
+    .sort((left, right) => left.toolName.localeCompare(right.toolName));
+}
+
+async function accessProjection(
   request: APIRequestContext,
   connectionId: string,
   scout: Scout,
-  tool: SmokeLabLifecycleTool,
+  toolName: string,
 ) {
-  return await json<TestCallResult>(
-    await request.post(`/api/tool-connections/${connectionId}/test-calls`, {
-      data: { agentId: scout.id, toolName: tool.name, parameters: tool.parameters },
-    }),
+  const result = await json<{ access: ToolAccessSummary }>(
+    await request.get(`/api/tool-connections/${connectionId}/test-agents/${scout.id}/access`),
   );
+  const tool = result.access.tools.find((entry) => entry.toolName === toolName);
+  expect(tool, `access projection includes ${toolName}`).toBeTruthy();
+  return tool!;
 }
 
 async function policy(
@@ -255,58 +275,44 @@ async function policy(
   return await json<{ id: string }>(await request.post(`/api/companies/${companyId}/tools/policies`, { data: body }));
 }
 
-async function approveActionRequest(request: APIRequestContext, companyId: string, actionRequestId: string) {
-  await json(await request.post(`/api/tool-gateway/action-requests/${actionRequestId}/approve`, {
-    data: { companyId },
-  }));
-}
-
-async function pollTestCall(
-  request: APIRequestContext,
-  connectionId: string,
-  actionRequestId: string,
-  expectedPhase: string,
-) {
-  for (let i = 0; i < 40; i += 1) {
-    const status = await json<{ phase: string }>(
-      await request.get(`/api/tool-connections/${connectionId}/test-calls/${actionRequestId}`),
-    );
-    if (status.phase === expectedPhase) return status;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(`Timed out waiting for test-call ${actionRequestId} phase ${expectedPhase}`);
-}
-
-async function expectAuditEvent(
+async function gatewayAuditEvents(
   request: APIRequestContext,
   companyId: string,
   options: { connectionId: string; agentId: string; search: string },
 ) {
-  const audit = await json<{ events: Array<Json> }>(
+  return await json<{ events: Array<Json> }>(
     await request.get(
       `/api/tool-gateway/audit?companyId=${companyId}&app=${options.connectionId}&agent=${options.agentId}&search=${encodeURIComponent(options.search)}&limit=50`,
     ),
   );
-  expect(audit.events.length, `expected audit/activity row matching ${options.search}`).toBeGreaterThan(0);
 }
 
-async function createGatewaySession(request: APIRequestContext, companyId: string, scout: Scout): Promise<GatewaySession> {
+async function connectionActivity(request: APIRequestContext, connectionId: string) {
+  return await json<{
+    events: Array<Json>;
+    lifecycleEvents: Array<{ type: string; details?: Record<string, unknown> | null }>;
+  }>(await request.get(`/api/tool-connections/${connectionId}/activity?limit=100`));
+}
+
+async function invokeAndWaitForTerminalRun(request: APIRequestContext, scout: Scout) {
   const invoked = await json<{ id: string }>(await request.post(`/api/agents/${scout.id}/heartbeat/invoke`));
-  return await json<GatewaySession>(
-    await request.post("/api/tool-gateway/sessions", {
-      data: { companyId, agentId: scout.id, runId: invoked.id, ttlMs: 60_000 },
-    }),
-  );
-}
-
-async function gatewayFetch(request: APIRequestContext, path: string, token: string, data?: Json) {
-  const headers = { "x-paperclip-tool-gateway-token": token };
-  if (data) return await request.post(path, { headers, data });
-  return await request.get(path, { headers });
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const run = await json<{
+      id: string;
+      status: string;
+      errorCode?: string | null;
+      resultJson?: { configurationIncomplete?: { reason?: string } } | null;
+    }>(await request.get(`/api/heartbeat-runs/${invoked.id}`));
+    if (["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status)) {
+      return run;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("Timed out waiting for the Smoke Scout run to reach a terminal state");
 }
 
 export const defineSmokeLabSuite = (label: string, scenarios: SmokeLabScenario[]) => test.describe.serial(`Smoke Lab scenario catalog mirror (${label})`, () => {
-  // The lifecycle test walks all CI-safe scenarios and records eight steps per
+  // The lifecycle test walks all CI-safe scenarios and records nine steps per
   // scenario. Each scenario keeps one representative success screenshot, while
   // every failed step still captures its own evidence. On a loaded CI runner
   // the whole walk can take several minutes, so this ceiling keeps enough
@@ -320,6 +326,8 @@ export const defineSmokeLabSuite = (label: string, scenarios: SmokeLabScenario[]
     const smokeRun = await createSmokeRun(request, seed.companyId, scenarios.length);
     const failed: string[] = [];
     const isPartialRun = scenarios.length < ciSmokeLabScenarios.length;
+    const unavailableInvocations: Array<Json> = [];
+    const mutationEvidence: Array<Json> = [];
 
     try {
       await startSmokeLabServices(request, seed.companyId);
@@ -339,105 +347,158 @@ export const defineSmokeLabSuite = (label: string, scenarios: SmokeLabScenario[]
           return `${scenario.lifecycle.discoverCatalog}: ${discovered.catalog.length} entries`;
         });
 
-        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "allowed-read", async () => {
-          const read = await testCall(request, connection.id, scout, scenario.lifecycle.allowedRead);
+        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "access-projection", async () => {
+          const read = await accessProjection(request, connection.id, scout, scenario.lifecycle.allowedRead.name);
           expect(read.decision).toBe("allowed");
-          expect(read.error).toBeUndefined();
-          await expectAuditEvent(request, seed.companyId, {
-            connectionId: connection.id,
-            agentId: scout.id,
-            search: scenario.lifecycle.allowedRead.name,
-          });
-          await page.goto(`/${seed.prefix}/activity?action=tool_`);
-          return `Allowed read ${scenario.lifecycle.allowedRead.name}`;
+          await page.goto(`/${seed.prefix}/apps/${connection.id}`);
+          return `Access projection allows ${scenario.lifecycle.allowedRead.name}; no invocation was made.`;
         });
 
-        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "ask-first-write-approved", async () => {
+        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "ask-first-access-projection", async () => {
           await policy(request, seed.companyId, {
             name: `${scenario.path} require approval ${Date.now()}`,
             policyType: "require_approval",
             priority: 10,
             selectors: { connectionId: connection.id, toolNames: [scenario.lifecycle.askFirstWrite.name] },
           });
-          const pending = await testCall(request, connection.id, scout, scenario.lifecycle.askFirstWrite);
-          expect(pending.decision).toBe("ask_first");
-          expect(pending.actionRequestId).toBeTruthy();
+          const projected = await accessProjection(request, connection.id, scout, scenario.lifecycle.askFirstWrite.name);
+          expect(projected.decision).toBe("ask_first");
           await page.goto(`/${seed.prefix}/apps/${connection.id}/review`);
-          await approveActionRequest(request, seed.companyId, pending.actionRequestId!);
-          await pollTestCall(request, connection.id, pending.actionRequestId!, "done");
-          return `Approved ask-first call ${scenario.lifecycle.askFirstWrite.name}`;
+          return `Access projection requires approval for ${scenario.lifecycle.askFirstWrite.name}; no action request was created.`;
         });
 
-        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "denied-blocked-call", async () => {
+        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "blocked-access-projection", async () => {
           await policy(request, seed.companyId, {
             name: `${scenario.path} block ${Date.now()}`,
             policyType: "block",
             priority: 1,
             selectors: { connectionId: connection.id, toolNames: [scenario.lifecycle.deniedCall.name] },
           });
-          const denied = await testCall(request, connection.id, scout, scenario.lifecycle.deniedCall);
+          const denied = await accessProjection(request, connection.id, scout, scenario.lifecycle.deniedCall.name);
           expect(denied.decision).toBe("off");
-          expect(denied.error?.reasonCode).toBeTruthy();
           await page.goto(`/${seed.prefix}/apps/${connection.id}/review`);
-          return `Blocked call ${scenario.lifecycle.deniedCall.name}: ${denied.error?.reasonCode}`;
+          return `Access projection blocks ${scenario.lifecycle.deniedCall.name}; no invocation was made.`;
         });
 
-        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "schema-change-quarantine", async () => {
-          if (connection.transport !== "mcp_remote") {
-            await page.goto(`/${seed.prefix}/activity?action=tool_`);
-            return "Non-HTTP path records governance/quarantine evidence through fixture metadata.";
-          }
-          await json<ToolConnection>(await request.patch(`/api/tool-connections/${connection.id}`, {
-            data: { config: { ...(connection.config ?? {}), quarantineNewEntries: true } },
-          }));
-          await policy(request, seed.companyId, {
-            name: `${scenario.path} allow schema flip ${Date.now()}`,
-            policyType: "allow",
-            priority: 5,
-            selectors: { connectionId: connection.id, toolNames: [scenario.lifecycle.schemaChangeQuarantine.name] },
+        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "unavailable-invocation-no-effect", async () => {
+          const response = await request.post(`/api/tool-connections/${connection.id}/test-calls`, {
+            data: { agentId: scout.id, toolName: scenario.lifecycle.allowedRead.name, parameters: scenario.lifecycle.allowedRead.parameters },
           });
-          const flipped = await testCall(request, connection.id, scout, scenario.lifecycle.schemaChangeQuarantine);
-          expect(flipped.decision).toBe("allowed");
-          expect(flipped.error).toBeUndefined();
+          const body = JSON.parse(await expectError(response, 409)) as Json;
+          const configurationIncomplete = body.configurationIncomplete as Json | undefined;
+          expect(body.reasonCode).toBe("tool_model_effect_unqualified");
+          expect(body.code).toBe("configuration_incomplete");
+          expect(configurationIncomplete?.reason).toBe("tool_model_effect_unqualified");
+          expect(body.actionRequestId).toBeUndefined();
+          const audit = await gatewayAuditEvents(request, seed.companyId, {
+            connectionId: connection.id,
+            agentId: scout.id,
+            search: scenario.lifecycle.allowedRead.name,
+          });
+          expect(audit.events, "an unqualified invocation creates no gateway tool-call event").toEqual([]);
+          unavailableInvocations.push({
+            path: scenario.path,
+            toolName: scenario.lifecycle.allowedRead.name,
+            httpStatus: response.status(),
+            reasonCode: body.reasonCode,
+            actionRequestCreated: false,
+            matchingGatewayEvents: audit.events.length,
+          });
+          await page.goto(`/${seed.prefix}/apps/${connection.id}`);
+          return `Invocation remained unavailable (${response.status()}, tool_model_effect_unqualified); no action request or gateway tool-call event was created.`;
+        });
+
+        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "quarantine-config-unchanged-catalog", async () => {
+          if (connection.transport !== "mcp_remote") {
+            const before = await catalog(request, connection.id);
+            const beforeContract = await catalogContract(before.catalog);
+            await page.goto(`/${seed.prefix}/activity?action=tool_`);
+            expect(await catalogContract((await catalog(request, connection.id)).catalog)).toEqual(beforeContract);
+            return `Quarantine refresh is not applicable to ${connection.transport}; catalog contract remained unchanged.`;
+          }
+          const baselineConfig = await json<ToolConnection>(await request.patch(`/api/tool-connections/${connection.id}`, {
+            data: { config: { ...(connection.config ?? {}), quarantineNewEntries: false } },
+          }));
+          expect(baselineConfig.config?.quarantineNewEntries).toBe(false);
+          await request.post(`/api/tool-connections/${connection.id}/catalog/refresh`);
+          const before = await catalog(request, connection.id);
+          const beforeContract = await catalogContract(before.catalog);
+          const updated = await json<ToolConnection>(await request.patch(`/api/tool-connections/${connection.id}`, {
+            data: { config: { ...(baselineConfig.config ?? {}), quarantineNewEntries: true } },
+          }));
+          expect(updated.config?.quarantineNewEntries).toBe(true);
           const refresh = await json<{ quarantinedCount: number }>(
             await request.post(`/api/tool-connections/${connection.id}/catalog/refresh`),
           );
-          expect(refresh.quarantinedCount).toBeGreaterThan(0);
+          expect(refresh.quarantinedCount).toBe(0);
+          const after = await catalog(request, connection.id);
+          expect(await catalogContract(after.catalog)).toEqual(beforeContract);
+          mutationEvidence.push({
+            path: scenario.path,
+            configQuarantineEnabled: true,
+            catalogRefreshQuarantinedCount: refresh.quarantinedCount,
+            catalogContractUnchanged: true,
+          });
           await page.goto(`/${seed.prefix}/apps/connections`);
-          return `Catalog refresh quarantined ${refresh.quarantinedCount} changed entries.`;
+          return `Quarantine config was enabled; refresh found no changed entries and the catalog schema contract remained unchanged.`;
         });
 
-        await runRecordedStep(page, request, seed, smokeRun.id, scenario, "revoke", async () => {
+        const revokeStep = scenario.transport === "gateway_session"
+          ? "gateway-session-unavailable-no-token"
+          : "connection-revoke";
+        await runRecordedStep(page, request, seed, smokeRun.id, scenario, revokeStep, async () => {
           if (scenario.transport === "gateway_session") {
-            const session = await createGatewaySession(request, seed.companyId, scout);
-            const listed = await gatewayFetch(request, session.toolsUrl, session.token);
-            expect(listed.ok()).toBe(true);
-            await json(await request.post(`/api/tool-gateway/sessions/${session.sessionId}/revoke`, {
-              data: { companyId: seed.companyId },
-            }));
-            await expectError(await gatewayFetch(request, session.toolsUrl, session.token), 401);
+            const run = await invokeAndWaitForTerminalRun(request, scout);
+            expect(run.status).toBe("failed");
+            expect(run.errorCode).toBe("configuration_incomplete");
+            expect(run.resultJson?.configurationIncomplete?.reason).toBe("paid_transport_unqualified");
+            const response = await request.post("/api/tool-gateway/sessions", {
+              data: { companyId: seed.companyId, agentId: scout.id, runId: run.id, ttlMs: 60_000 },
+            });
+            const body = JSON.parse(await expectError(response, 403)) as Json;
+            expect(body.reasonCode).toBe("run_inactive");
+            expect(body.sessionId).toBeUndefined();
+            expect(body.token).toBeUndefined();
+            mutationEvidence.push({
+              path: scenario.path,
+              gatewaySessionAvailable: false,
+              terminalRunError: run.errorCode,
+              terminalRunReason: run.resultJson?.configurationIncomplete?.reason,
+              sessionCreationReason: body.reasonCode,
+              tokenIssued: false,
+            });
             await page.goto(`/${seed.prefix}/activity?action=tool_`);
-            return scenario.lifecycle.revoke;
+            return "Gateway session creation is unavailable without an active run: the invoked run ended as paid_transport_unqualified and no session token was issued.";
           }
           const disabled = await json<ToolConnection>(await request.patch(`/api/tool-connections/${connection.id}`, {
             data: { enabled: false },
           }));
           expect(disabled.enabled).toBe(false);
+          const paused = await connectionActivity(request, connection.id);
+          expect(paused.lifecycleEvents.some((event) => event.type === "app_paused" && event.details?.lifecycle === "paused")).toBe(true);
           await page.goto(`/${seed.prefix}/apps/${connection.id}`);
-          await json<ToolConnection>(await request.patch(`/api/tool-connections/${connection.id}`, {
+          const resumed = await json<ToolConnection>(await request.patch(`/api/tool-connections/${connection.id}`, {
             data: { enabled: true },
           }));
+          expect(resumed.enabled).toBe(true);
+          const activity = await connectionActivity(request, connection.id);
+          expect(activity.lifecycleEvents.some((event) => event.type === "app_resumed" && event.details?.lifecycle === "resumed")).toBe(true);
+          mutationEvidence.push({
+            path: scenario.path,
+            lifecycleActions: ["tool_connection.updated:paused", "tool_connection.updated:resumed"],
+          });
           return scenario.lifecycle.revoke;
         });
 
         await runRecordedStep(page, request, seed, smokeRun.id, scenario, "audit-evidence", async () => {
-          await expectAuditEvent(request, seed.companyId, {
+          const audit = await gatewayAuditEvents(request, seed.companyId, {
             connectionId: connection.id,
             agentId: scout.id,
             search: scenario.lifecycle.allowedRead.name,
           });
+          expect(audit.events).toEqual([]);
           await page.goto(`/${seed.prefix}/activity?action=tool_`);
-          return scenario.lifecycle.auditEvidence;
+          return `No gateway tool-call audit exists for the unqualified invocation; lifecycle mutation evidence was checked separately.`;
         });
       }
     } catch (error) {
@@ -449,6 +510,23 @@ export const defineSmokeLabSuite = (label: string, scenarios: SmokeLabScenario[]
         scenarioCount: scenarios.length,
         catalogScenarioCount: ciSmokeLabScenarios.length,
         partial: isPartialRun,
+        capabilityStatus: {
+          genericMcpInvocation: "unqualified",
+          accessProjection: "supported",
+          quarantineConfigurationAndUnchangedRefresh: "supported_for_remote_http",
+          gatewaySessionCreation: "unavailable_without_active_run",
+        },
+        supportedTests: [
+          "catalog_discovery",
+          "access_projection_allow_ask_first_block",
+          "quarantine_config_with_unchanged_remote_catalog",
+          "connection_pause_resume_and_activity_for_non_gateway_paths",
+          "gateway_session_unavailable_without_active_run_no_token_issued",
+          "screenshot_and_result_api_persistence",
+        ],
+        unqualifiedCapabilities: ["generic_mcp_model_invocation", "gateway_session_creation_without_active_run"],
+        unavailableInvocations,
+        mutationEvidence,
         failed,
       }).catch(() => undefined);
     }
@@ -462,7 +540,7 @@ export const defineSmokeLabSuite = (label: string, scenarios: SmokeLabScenario[]
     expect(completed.run.status).toBe("passed");
     for (const scenario of scenarios) {
       const steps = completed.steps.filter((step) => step.path === scenario.path);
-      expect(steps.length, `${scenario.path} should record lifecycle steps`).toBeGreaterThanOrEqual(8);
+      expect(steps.length, `${scenario.path} should record lifecycle steps`).toBeGreaterThanOrEqual(9);
       expect(steps.every((step) => step.status === "pass")).toBe(true);
       const screenshotSteps = steps.filter((step) => step.screenshotArtifactRef?.kind === "playwright_screenshot");
       expect(screenshotSteps.map((step) => step.scenarioStep)).toEqual(["connect"]);

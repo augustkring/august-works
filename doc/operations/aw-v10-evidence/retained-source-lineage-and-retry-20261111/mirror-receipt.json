@@ -1,0 +1,11 @@
+{
+  "command": [
+    "node",
+    "--test",
+    "scripts/__tests__/ci-canonicalize-ubuntu-apt-mirrors.test.mjs",
+    "scripts/ci-install-native-sandbox.test.mjs"
+  ],
+  "exit": 0,
+  "seconds": 0.15394690199173056,
+  "qualification": "offline helper and command wiring fixtures only; no actual apt, network or Host proof"
+}

@@ -26,6 +26,16 @@ export const ACPX_HANDSHAKE_TRANSPORT_POLL_MS = 250;
 // much smaller than the whole-adapter execution timeout.
 export const ACPX_DUPLEX_LOSS_CANCEL_DEADLINE_MS = 30_000;
 
+// Claude normally bounds individual MCP and Bash work below this threshold.
+// This host-side watchdog catches calls that never reach/return from those
+// bounds (including a stalled permission round trip), while leaving room for
+// the provider's own configured tool limits.
+export const ACPX_STALLED_TOOL_TIMEOUT_MS = 30 * 60 * 1000;
+export const ACPX_STALLED_TOOL_MARGIN_MS = 15 * 60 * 1000;
+export const ACPX_STALLED_TOOL_CHECK_INTERVAL_MS = 60_000;
+export const ACPX_TOOL_STALLED_ERROR_CODE = "acpx_tool_stalled";
+export const ACPX_MAX_STALLED_TOOL_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+
 export const ACPX_ADAPTER_AGENT_IDS = {
   claude_local: "claude",
   codex_local: "codex",

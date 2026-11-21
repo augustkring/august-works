@@ -47,6 +47,8 @@ function makeCompany(id: string): Company {
     id,
     name: "Paperclip",
     description: null,
+    locale: "en",
+    timezone: "UTC",
     status: "active",
     pauseReason: null,
     pausedAt: null,

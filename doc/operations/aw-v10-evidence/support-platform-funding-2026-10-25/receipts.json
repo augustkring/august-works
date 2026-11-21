@@ -1,0 +1,562 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Software-only platform-purpose budget/ledger and original offboarding controls; no real funding/inference profile or reconciliation verifier is configured or qualified.",
+  "logs": [
+    {
+      "name": "support-budget-reservation-full-final",
+      "exitCode": 0,
+      "exitSidecar": "support-budget-reservation-full-final.exit",
+      "rawSha256": "5c1128076fd522c365d878ee5f9469019a6f05ea8cab4d0e91dbaef93ec381f0",
+      "sanitizedSha256": "5c1128076fd522c365d878ee5f9469019a6f05ea8cab4d0e91dbaef93ec381f0",
+      "archiveSha256": "5d02098f44b76475cdd6aa46878cc3f3087740dda6ba451ce802398e177b4b2d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  21.86s (transform 9.53s, setup 67ms, import 13.40s, tests 8.29s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "support-budget-purge-focused3",
+      "exitCode": 0,
+      "exitSidecar": "support-budget-purge-focused3.exit",
+      "rawSha256": "5ac672c55d43d98715649858bdb0c0ec354316e3280efc631bf4deabebf82377",
+      "sanitizedSha256": "5ac672c55d43d98715649858bdb0c0ec354316e3280efc631bf4deabebf82377",
+      "archiveSha256": "c09776c65e79f2e9c3cee9b58262d8c10660e49b64414549b5e4525db372cd54",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 15 skipped (16)",
+        "Duration  20.53s (transform 11.40s, setup 88ms, import 15.86s, tests 4.46s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "support-budget-server-tsc-final",
+      "exitCode": 0,
+      "exitSidecar": "support-budget-server-tsc-final.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "support-budget-native-run-purge-controls",
+      "exitCode": 0,
+      "exitSidecar": "support-budget-native-run-purge-controls.exit",
+      "rawSha256": "04213d438b9719d48d3e6b3f5a8b4799cc397585fea44e6326cebdeb1fab0fdd",
+      "sanitizedSha256": "04213d438b9719d48d3e6b3f5a8b4799cc397585fea44e6326cebdeb1fab0fdd",
+      "archiveSha256": "c6f719dfc16386712dfebfdf9d3b6799ca90fd70c1359fede8175b2b88eadc1e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  2 passed | 70 skipped (72)",
+        "Duration  29.98s (transform 11.02s, setup 130ms, import 19.08s, tests 10.52s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "support-budget-existing-purge-regressions",
+      "exitCode": 1,
+      "exitSidecar": "support-budget-existing-purge-regressions.exit",
+      "rawSha256": "8198993e966a0b86ec512c5061b4a5d197c7b06ebc5918d63637a54620237ff6",
+      "sanitizedSha256": "a0404eea7e0c0651b9e7ad85ea3f24eda36c150dc4c02c7cebb64d43aaeec7ad",
+      "archiveSha256": "b48b752bb5f7dbe519cfc453ec5f9be81ebe75026e4aa30fe9af51e9a9fac3f0",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 7 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  2 failed | 2 passed (4)",
+        "Tests  7 failed | 42 passed (49)",
+        "Duration  62.83s (transform 11.31s, setup 254ms, import 28.13s, tests 33.90s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "support-package-model-reservations-v2",
+      "exitCode": 0,
+      "exitSidecar": "support-package-model-reservations-v2.exit",
+      "rawSha256": "9044784ce6ea6e48ad75cc7e95161551e8eca714c48bdd343fdb24b9b5214e68",
+      "sanitizedSha256": "9044784ce6ea6e48ad75cc7e95161551e8eca714c48bdd343fdb24b9b5214e68",
+      "archiveSha256": "5bd3967127880f82d6da63be06e8b4ec84df145d889a8eeaa420b60413aaa944",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  18 passed (18)",
+        "Duration  23.38s (transform 9.79s, setup 70ms, import 13.98s, tests 9.19s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "first-party-support-model-reservations-full",
+      "exitCode": 0,
+      "exitSidecar": "first-party-support-model-reservations-full.exit",
+      "rawSha256": "34e8d03228a0aad327eb1a9a6163a3f3f93af33ba16b77175cad599ffecb87bf",
+      "sanitizedSha256": "34e8d03228a0aad327eb1a9a6163a3f3f93af33ba16b77175cad599ffecb87bf",
+      "archiveSha256": "a377aed28e36f1c001645719e6fa2ba6f8bdb017ffdc694ea3853c62fa5c76f1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  23 passed (23)",
+        "Duration  31.13s (transform 9.60s, setup 70ms, import 13.58s, tests 17.36s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "first-party-support-profiles-gateway-final",
+      "exitCode": 0,
+      "exitSidecar": "first-party-support-profiles-gateway-final.exit",
+      "rawSha256": "04ae86cc7bedf5af829a2426db8116daf80b3b8bdd193c9b69734831b0c3fee8",
+      "sanitizedSha256": "04ae86cc7bedf5af829a2426db8116daf80b3b8bdd193c9b69734831b0c3fee8",
+      "archiveSha256": "10ed0e39d216719e7eac28040be1234461f389f5a227f044ddccce7e39c9457f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  3 passed (3)",
+        "Duration  13.97s (transform 9.29s, setup 121ms, import 13.61s, tests 22ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "first-party-support-profile-gateway-unit-final",
+      "exitCode": 0,
+      "exitSidecar": "first-party-support-profile-gateway-unit-final.exit",
+      "rawSha256": "4ad917173771370a6534761a0709937dcf0504530d287f7e7f661d648d4ae6f5",
+      "sanitizedSha256": "4ad917173771370a6534761a0709937dcf0504530d287f7e7f661d648d4ae6f5",
+      "archiveSha256": "bf50b6e31d9c35bee608cc03b9d07f93235be0799d84906bb1bd4872f7673f0c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  3 passed (3)",
+        "Duration  13.87s (transform 9.11s, setup 138ms, import 13.44s, tests 24ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "first-party-support-gateway-pg-final",
+      "exitCode": 0,
+      "exitSidecar": "first-party-support-gateway-pg-final.exit",
+      "rawSha256": "49e3d38c225d37caede90b56027e5f8248fae9e96576721c64bce71dbbcb0c2f",
+      "sanitizedSha256": "49e3d38c225d37caede90b56027e5f8248fae9e96576721c64bce71dbbcb0c2f",
+      "archiveSha256": "e2dd163ef6d1aad65b17927ec8fe7fb9d2a7c66baa1af30bc1759f30ab296335",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed | 18 skipped (23)",
+        "Duration  26.93s (transform 9.86s, setup 67ms, import 14.02s, tests 12.72s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "support-key-child-env-sanitizer-v2",
+      "exitCode": 0,
+      "exitSidecar": "support-key-child-env-sanitizer-v2.exit",
+      "rawSha256": "f5ebd548c12d0d79f9158db51a3c40982610235c3e2d8c50b0dd96e13a255b3a",
+      "sanitizedSha256": "f5ebd548c12d0d79f9158db51a3c40982610235c3e2d8c50b0dd96e13a255b3a",
+      "archiveSha256": "0f137607eaf2d72db58ec29edd8b96f2d10072214256f49cce84b94dbec5e7e0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  2.33s (transform 1.38s, setup 0ms, import 2.20s, tests 3ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "support-assistant-grounding-final",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-grounding-final.exit",
+      "rawSha256": "d840405ab9b2c5f13e85bd6d056cef0e40ac7fa2ffb782611861c9b3164bd59e",
+      "sanitizedSha256": "d840405ab9b2c5f13e85bd6d056cef0e40ac7fa2ffb782611861c9b3164bd59e",
+      "archiveSha256": "e552a64eb3b9d1469e8f0f5ff69c838b77cae0dabbe247a2fc89edcac79294d1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed (9)",
+        "Duration  4.61s (transform 2.84s, setup 75ms, import 4.39s, tests 20ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "support-assistant-ui-final",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-ui-final.exit",
+      "rawSha256": "05b0d2e48f1194f8ef7befc6fe68f656b211747a984db81e431e0c0fecdf52d1",
+      "sanitizedSha256": "05b0d2e48f1194f8ef7befc6fe68f656b211747a984db81e431e0c0fecdf52d1",
+      "archiveSha256": "1619ac33c947e459e5a16e44b770f7f77bc26230687714d498523602b908e7f9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  13 passed (13)",
+        "Duration  4.33s (transform 3.20s, setup 40ms, import 5.97s, tests 487ms, environment 1.71s)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "support-assistant-http-owner-full",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-http-owner-full.exit",
+      "rawSha256": "0eea43e4fce0139672898211caab27012e3ed371a9c9c34e8dae4214a291b08e",
+      "sanitizedSha256": "0eea43e4fce0139672898211caab27012e3ed371a9c9c34e8dae4214a291b08e",
+      "archiveSha256": "11e23aca5debbc2af5bd3dd5e807be34ad34d77a3899d8710a7b5affcc9bcd0a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  23 passed (23)",
+        "Duration  30.28s (transform 14.10s, setup 127ms, import 19.73s, tests 10.22s, environment 0ms)"
+      ],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "support-assistant-openapi-focused",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-openapi-focused.exit",
+      "rawSha256": "fe98a87ac0a92b2ca88988a97e07295fea9f2a0779c21d24b91178931d565330",
+      "sanitizedSha256": "fe98a87ac0a92b2ca88988a97e07295fea9f2a0779c21d24b91178931d565330",
+      "archiveSha256": "0414247e01808a27629b2c499fdbebb0c59ddcd9f182d3963ebdab5508eda3e3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 24 skipped (25)",
+        "Duration  7.71s (transform 4.38s, setup 137ms, import 7.15s, tests 245ms, environment 0ms)"
+      ],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "support-assistant-http-focused",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-http-focused.exit",
+      "rawSha256": "027146dd14f1e8de095659dfdef65476306fbef9cabad79352ae29d0d58d70ea",
+      "sanitizedSha256": "027146dd14f1e8de095659dfdef65476306fbef9cabad79352ae29d0d58d70ea",
+      "archiveSha256": "b0a569a36edc1336e24bdc9e00eb38bfd722c16ca63776834043d211310e6931",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 22 skipped (23)",
+        "Duration  32.46s (transform 19.48s, setup 96ms, import 26.76s, tests 5.46s, environment 0ms)"
+      ],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "support-gateway-current-typecheck",
+      "exitCode": 0,
+      "exitSidecar": "support-gateway-current-typecheck.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "support-assistant-help-tests-final",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "8f7d0b1fb867dbcb5d344ac0b46cf2bee933f874baa2fffd13b50bd65b291876",
+      "sanitizedSha256": "8f7d0b1fb867dbcb5d344ac0b46cf2bee933f874baa2fffd13b50bd65b291876",
+      "archiveSha256": "5331a95eba66391c98bb3917b63dd0025e12c0ef22772e92afd8f17c12e0a86a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-help-check-final",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-token-gates",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-token-gates.exit",
+      "rawSha256": "56e0a50b41173d0ba8e8f4fa615171699416bc772149facee12d2a331f72cdf5",
+      "sanitizedSha256": "56e0a50b41173d0ba8e8f4fa615171699416bc772149facee12d2a331f72cdf5",
+      "archiveSha256": "3e3e1368d204954b1213ea76597557d40173876c412b3de51c5c05931e437aaf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "v10-current-module-boundaries",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-module-boundaries.exit",
+      "rawSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "sanitizedSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "archiveSha256": "28ffaeb6deae42b712200366e5abf9e845dcf6f1559cde1626bd85ecb9f3086d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-openapi-full",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-openapi-full.exit",
+      "rawSha256": "2d7246fcbc6e3e78660cb337a6472e19d4e03c5e1e1ee037a0fd9735c0587e61",
+      "sanitizedSha256": "2d7246fcbc6e3e78660cb337a6472e19d4e03c5e1e1ee037a0fd9735c0587e61",
+      "archiveSha256": "a68b9a7c4e82a885a97f0dde61d24028df9093d40077ea9b9a7cf25ee23ab1b8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  25 passed (25)",
+        "Duration  10.38s (transform 5.42s, setup 86ms, import 8.35s, tests 1.76s, environment 0ms)"
+      ],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-help-docs-root",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-help-docs-root.exit",
+      "rawSha256": "d655ad8dc672bd8936203fd57f1a82c0fe16d7e158f5d803803c8a376a066ff8",
+      "sanitizedSha256": "d655ad8dc672bd8936203fd57f1a82c0fe16d7e158f5d803803c8a376a066ff8",
+      "archiveSha256": "cdea5ac5c86ed12abe598526103c5abf5d8948d2fa7e6ae82d48729fc212c414",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-help-review-committed",
+      "exitCode": 1,
+      "exitSidecar": "support-assistant-help-review-committed.exit",
+      "rawSha256": "1031d0daeeb9d8e170979b23a6f4a227581bf7492d6c1339f10a34eaedc39762",
+      "sanitizedSha256": "1031d0daeeb9d8e170979b23a6f4a227581bf7492d6c1339f10a34eaedc39762",
+      "archiveSha256": "479d7d21daeb1493ea3ca0ef99b80928fadf9f5486cdadafaa6d83738c77091c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-help-metadata-root",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-help-metadata-root.exit",
+      "rawSha256": "9aed7fb3157ca91075ac6148f65ae324771b2ae88f1c0a4fd5c1b6a115cae0c1",
+      "sanitizedSha256": "9aed7fb3157ca91075ac6148f65ae324771b2ae88f1c0a4fd5c1b6a115cae0c1",
+      "archiveSha256": "180b4ce55f71c0c947cb94d4ba10defb07833b5bdd8ade3a9e298c0e7d0e641d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "support-assistant-help-review-owner-committed",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-help-review-owner-committed.exit",
+      "rawSha256": "0ac3fea38c032b289950760c947503710d02ca57e26bbbade7724f75ca95f29a",
+      "sanitizedSha256": "0ac3fea38c032b289950760c947503710d02ca57e26bbbade7724f75ca95f29a",
+      "archiveSha256": "b3b5c169327982e21592d52a7ba7cca5df33a019ed60966c17cc4e5f2b6536d5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533",
+      "meaning": "Software-only first-party package/budget/inference boundary tests with a synthetic guarded-provider response. No production funding profile or live provider qualification.",
+      "logs": [
+        "support-package-model-reservations-v2",
+        "first-party-support-model-reservations-full",
+        "first-party-support-profiles-gateway-final",
+        "first-party-support-profile-gateway-unit-final",
+        "first-party-support-gateway-pg-final",
+        "support-key-child-env-sanitizer-v2",
+        "support-assistant-grounding-final",
+        "support-assistant-ui-final"
+      ]
+    },
+    {
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297",
+      "meaning": "Support HTTP current-Human routing and OpenAPI scoped proofs; original compiler failure retained separately, corrected scoped compiler result.",
+      "logs": [
+        "support-assistant-http-owner-full",
+        "support-assistant-openapi-focused",
+        "support-assistant-http-focused",
+        "support-gateway-current-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6",
+      "meaning": "Support Assistant Help metadata/paired copy, full OpenAPI, token and module boundaries; source-review mid-checkpoint stale route hashes remain failed diagnostic until next saved owner checkpoint.",
+      "logs": [
+        "support-assistant-help-tests-final",
+        "support-assistant-help-check-final",
+        "support-assistant-token-gates",
+        "v10-current-module-boundaries",
+        "support-assistant-openapi-full",
+        "support-assistant-help-docs-root",
+        "support-assistant-help-review-committed"
+      ]
+    },
+    {
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9",
+      "meaning": "Root metadata14PASS with exact exit and committed source-review covering paired Help and actual conversation owner.",
+      "logs": [
+        "support-assistant-help-metadata-root",
+        "support-assistant-help-review-owner-committed"
+      ]
+    }
+  ]
+}

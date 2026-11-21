@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-model-input-dispatch.integration.test.ts (8 tests | 1 failed) 8133ms
+     × rechecks lease expiry with database wall time after a transaction wait 351ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rechecks lease expiry with database wall time after a transaction wait
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:173:8
+    171|       await tx.execute(sql`select pg_sleep(0.3)`);
+    172|       await recordNativeModelInputDispatchIntent({ ...dispatchArgs(see…
+    173|     })).rejects.toThrow("native_session_lease_lost");
+       |        ^
+    174|     const [run] = await db.select().from(heartbeatRuns).where(eq(heart…
+    175|     expect(run!.runnerProfileJson).toEqual({ retainedProfileField: "pr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  07:01:23
+   Duration  39.12s (transform 21.38s, setup 135ms, import 30.61s, tests 8.13s, environment 0ms)
+

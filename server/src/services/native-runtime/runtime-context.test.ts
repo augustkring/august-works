@@ -29,7 +29,7 @@ vi.mock("../tool-access.js", () => ({
 }));
 
 import { createHash } from "node:crypto";
-import { buildNativeRuntimeContext, materializeAsset, readNativeRuntimeAssetText, resolveNativeRuntimeMcpSnapshot } from "./runtime-context.js";
+import { buildNativeRuntimeContext, materializeAsset, readNativeRuntimeAssetText, resolveNativeRuntimeMcpSnapshot, type NativeRuntimeAuthoredSourceCapture } from "./runtime-context.js";
 import { applyConnectorSkills, type ConnectorAssignment } from "../connector-runtime.js";
 import { nativeRuntimeAssetsRoot } from "./runtime-asset-retention.js";
 
@@ -311,8 +311,17 @@ describe("buildNativeRuntimeContext", () => {
       runtimeSkillEntries: entries,
     };
 
-    const context = await buildNativeRuntimeContext(input);
+    const captures: NativeRuntimeAuthoredSourceCapture["inputs"][] = [];
+    const context = await buildNativeRuntimeContext({ ...input, onAuthoredSourceInputs: inputs => { captures.push(inputs); } });
     const repeated = await buildNativeRuntimeContext(input);
+    expect(captures).toEqual([[
+      { kind: "runtime_instructions", agentId: input.agent.id, bundleDigest: context.instructions.bundle.digest,
+        manifestDigest: context.instructions.bundle.manifestDigest },
+      { kind: "runtime_skill", key: "company-1/reviewer", versionId: "version-1",
+        bundleDigest: context.skills[0]!.bundle.digest, manifestDigest: context.skills[0]!.bundle.manifestDigest },
+    ]]);
+    expect(JSON.stringify(captures)).not.toContain("Follow the agent instructions");
+    expect(JSON.stringify(captures)).not.toContain(selectedRoot);
 
     expect(serviceMocks.exportFiles).toHaveBeenCalledWith(input.agent, { rejectSymlinks: true });
     expect(serviceMocks.getEffectiveProfilesForAgent).toHaveBeenCalledWith("company-1", "agent-1");
@@ -321,7 +330,8 @@ describe("buildNativeRuntimeContext", () => {
       .toBe("Follow the agent instructions.\n");
     expect(await readFile(path.join(context.instructions.bundle.rootPath, "references", "policy.md"), "utf8"))
       .toBe("Company policy sibling.\n");
-    const unselected = await buildNativeRuntimeContext({ ...input, runtimeConfig: {} });
+    const unselected = await buildNativeRuntimeContext({ ...input, runtimeConfig: {}, onAuthoredSourceInputs: inputs => { captures.push(inputs); } });
+    expect(captures[1]).toEqual([expect.objectContaining({ kind: "runtime_instructions" })]);
     expect(unselected.skills).toEqual([]);
     expect(context.skills).toHaveLength(1);
     expect(context.skills[0]).toMatchObject({

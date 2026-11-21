@@ -1,0 +1,73 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts (42 tests | 4 failed | 34 skipped) 28403ms
+     × erases actual no-wait Workflow Tasks and native/preparation child copies: verified_memory 3553ms
+     × erases actual no-wait Workflow Tasks and native/preparation child copies: workflow_signal 4070ms
+     × propagates learned Foundation roots into actual Context consumers and erases late runtime writes with Learning off 1652ms
+     × erases native Skill snapshots with flags off, retries unsafe filesystem ancestors, and fences late publishers 1791ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases actual no-wait Workflow Tasks and native/preparation child copies: verified_memory
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases actual no-wait Workflow Tasks and native/preparation child copies: workflow_signal
+AssertionError: expected 'failed' to be 'succeeded' // Object.is equality
+
+Expected: "succeeded"
+Received: "failed"
+
+ ❯ src/__tests__/v7-learning.integration.test.ts:555:28
+    553|     await service.publish(companyId,created.id,{expectedDraftRevisionI…
+    554|     const executor=workflowExecutorService(db),run=await executor.star…
+    555|     expect(run.run.status).toBe("succeeded");expect(run.waits).toHaveL…
+       |                            ^
+    556|     expect(run.steps.every(step=>step.automationArtifactVersionId===nu…
+    557|     const [task]=await db.select().from(issues).where(and(eq(issues.co…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > propagates learned Foundation roots into actual Context consumers and erases late runtime writes with Learning off
+Error: Learning source access is unavailable
+ ❯ lost src/services/learning/learning-analytical-sources.ts:9:16
+      7| import type {NativeReadScope} from "../analytical-reader.js";
+      8|
+      9| const lost=()=>new HttpError(403,"Learning source access is unavailabl…
+       |                ^
+     10| export function learningActorFromPrincipal(companyId:string,principal:…
+     11|  if(principal.type==="user")return {type:"board",source:"session",user…
+ ❯ assertLearningAnalyticalSources src/services/learning/learning-analytical-sources.ts:45:94
+ ❯ assertLearnedAssetAnalyticalSources src/services/learning/learning-analytical-sources.ts:75:80
+ ❯ Object.search src/services/foundation/foundation-index.ts:416:78
+ ❯ Object.retrieve src/services/context/context-engine.ts:388:20
+ ❯ withProviderDeadline src/services/context/context-engine.ts:151:12
+ ❯ src/services/context/context-engine.ts:206:24
+ ❯ runContextProviders src/services/context/context-engine.ts:199:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases native Skill snapshots with flags off, retries unsafe filesystem ancestors, and fences late publishers
+Error: Learning source access is unavailable
+ ❯ lost src/services/learning/learning-analytical-sources.ts:9:16
+      7| import type {NativeReadScope} from "../analytical-reader.js";
+      8|
+      9| const lost=()=>new HttpError(403,"Learning source access is unavailabl…
+       |                ^
+     10| export function learningActorFromPrincipal(companyId:string,principal:…
+     11|  if(principal.type==="user")return {type:"board",source:"session",user…
+ ❯ assertLearningAnalyticalSources src/services/learning/learning-analytical-sources.ts:18:34
+ ❯ assertLearningCandidateAnalyticalSources src/services/learning/learning-analytical-sources.ts:87:68
+ ❯ getVersion src/services/company-skills.ts:3462:13
+ ❯ Object.listRuntimeSkillEntries src/services/company-skills.ts:6092:26
+ ❯ src/__tests__/v7-learning.integration.test.ts:927:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 4 passed | 34 skipped (42)
+   Start at  23:21:10
+   Duration  73.98s (transform 29.21s, setup 243ms, import 44.84s, tests 28.40s, environment 0ms)
+

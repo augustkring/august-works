@@ -5,6 +5,7 @@ import {
   activityLog,
   agents,
   companies,
+  companyMemberships,
   createDb,
   documentRevisions,
   documents,
@@ -32,12 +33,16 @@ import {
 
 import { errorHandler } from "../../middleware/index.js";
 import { issueRoutes } from "../../routes/issues.js";
+import { seedCurrentHumanSourceActor } from "./current-human-source-fixture.js";
+import { preparePlatformSkillAdmission } from "../../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../../services/tool-gateway.js";
 
 type Db = ReturnType<typeof createDb>;
 
 export interface PaperclipSemanticConformanceIds {
   readonly companyId: string;
   readonly actorId: string;
+  readonly responsibleUserId: string;
   readonly foreignCompanyId: string;
   readonly foreignTaskId: string;
   readonly blockerTaskId: string;
@@ -113,6 +118,7 @@ export async function seedPaperclipSemanticConformance(
     { id: ids.companyId, name: "Semantic Conformance", issuePrefix: "SCF" },
     { id: ids.foreignCompanyId, name: "Foreign Conformance", issuePrefix: "FRN" },
   ]);
+  await seedCurrentHumanSourceActor(db, [ids.companyId], ids.responsibleUserId);
   await db.insert(agents).values({
     id: ids.actorId,
     companyId: ids.companyId,
@@ -124,6 +130,8 @@ export async function seedPaperclipSemanticConformance(
     runtimeConfig: {},
     permissions: {},
   });
+  await db.insert(companyMemberships).values({ companyId: ids.companyId, principalType: "agent",
+    principalId: ids.actorId, status: "active" }).onConflictDoNothing();
   let sequence = 0;
   for (const [worldId, world] of Object.entries(ids.worlds)) {
     sequence += 1;
@@ -136,16 +144,21 @@ export async function seedPaperclipSemanticConformance(
       workMode: "standard",
       priority: "medium",
       assigneeAgentId: ids.actorId,
+      responsibleUserId: ids.responsibleUserId,
     });
     await db.insert(heartbeatRuns).values({
       id: world.runId,
       companyId: ids.companyId,
       agentId: ids.actorId,
+      responsibleUserId: ids.responsibleUserId,
       status: "running",
+      runtimeMode: "native",
       invocationSource: "assignment",
       triggerDetail: "system",
       contextSnapshot: { issueId: world.taskId, capabilities: world.capabilities },
     });
+    await preparePlatformSkillAdmission(db, { companyId: ids.companyId, agentId: ids.actorId,
+      runId: world.runId, responsibleUserId: ids.responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
     await db.update(issues).set({
       checkoutRunId: world.runId,
       executionRunId: world.runId,
@@ -529,12 +542,20 @@ function toFixtureRunStatus(status: string): CapabilityFixtureState["runs"][numb
 function createProductionAuthorityApp(db: Db, ids: PaperclipSemanticConformanceIds): Application {
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => {
+  app.use(async (req, _res, next) => {
+    const responsibleMembership = await db.select({ companyId: companyMemberships.companyId,
+      membershipRole: companyMemberships.membershipRole, status: companyMemberships.status })
+      .from(companyMemberships)
+      .where(and(eq(companyMemberships.companyId, ids.companyId),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, ids.responsibleUserId),
+        eq(companyMemberships.status, "active"))).then(rows => rows[0] ?? null);
     req.actor = {
       type: "agent",
       agentId: ids.actorId,
       companyId: ids.companyId,
       runId: req.header("X-Paperclip-Run-Id") ?? undefined,
+      onBehalfOfUserId: ids.responsibleUserId,
+      onBehalfOfMemberships: responsibleMembership ? [responsibleMembership] : [],
       source: "agent_jwt",
     };
     next();

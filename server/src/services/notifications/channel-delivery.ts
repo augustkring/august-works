@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { companies, notificationChannelDeliveries, notificationChannelPreferences,
   saasNotifications, saasNotificationPreferences, type Db } from "@paperclipai/db";
-import { notificationChannelCategorySchema, notificationPolicySchema, v9FeatureEnabled, type PublicOriginConfig } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY, notificationChannelCategorySchema, notificationPolicySchema, v9FeatureEnabled, type PublicOriginConfig } from "@paperclipai/shared";
 import { publicAppUrl } from "../../aw-deployment.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
@@ -97,7 +97,7 @@ export function notificationChannelDelivery(db: Db, origins: PublicOriginConfig)
       preferenceId: binding.id, preferenceVersion: binding.version, targetHash: destination.target.targetHash,
       endpointId: destination.link.endpointId, principalId: destination.link.principalId,
       threadId: destination.conversation.externalThreadId,
-      text: `${binding.deliveryLocale === "da" ? "Der er en kontoopdatering i August Works. Log ind for at gennemgå den." : "There is an account update in August Works. Sign in to review it."}\n\n${publicAppUrl(origins, notice.relativePath)}`,
+      text: `${binding.deliveryLocale === "da" ? `Der er en kontoopdatering i ${PRODUCT_IDENTITY.productName}. Log ind for at gennemgå den.` : `There is an account update in ${PRODUCT_IDENTITY.productName}. Sign in to review it.`}\n\n${publicAppUrl(origins, notice.relativePath)}`,
       providerActionId: `account-notification:${nativeSha256({ companyId: notice.companyId, userId: notice.userId,
         category: notice.category, preferenceId: binding.id, version: binding.version, source: groupKey ?? notice.id })}`,
       groupKey, notBefore: schedule.notBefore, expiresAt,

@@ -1,0 +1,7 @@
+{
+  "workflow": ".github/workflows/aw-v4-verification.yml",
+  "sha256": "25eca98d189f0162f01a164ab0b66dd6975f235b95335fefcaaa927be61dc137",
+  "uniqueYamlKeys": true,
+  "bashSyntaxSteps": 39,
+  "githubActionsExecuted": false
+}

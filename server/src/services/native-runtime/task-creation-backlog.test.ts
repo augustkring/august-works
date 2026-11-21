@@ -3,8 +3,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, agents, companies, createDb, heartbeatRuns, issues } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { documentService } from "../documents.js";
 import { issueService } from "../issues.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 
 describe("runner backlog task creation", () => {
@@ -19,10 +22,17 @@ describe("runner backlog task creation", () => {
   async function fixture(conversation: boolean) {
     const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID(), runId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Backlog", issuePrefix: `B${companyId.slice(0, 6)}` });
+    const human = await seedCurrentHumanSourceActor(db, [companyId], randomUUID());
+    const responsibleUserId = human.userId!;
     await db.insert(agents).values({ id: agentId, companyId, name: "Planner", role: "ceo", status: "active", adapterType: "paperclip_runner" });
-    await db.insert(issues).values({ id: issueId, companyId, title: "Coordinate", status: "in_progress", assigneeAgentId: agentId, conversationAgentId: conversation ? agentId : null, conversationUserId: conversation ? "operator" : null, conversationState: conversation ? "active" : null });
-    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", runtimeMode: "native", nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
+    await db.insert(issues).values({ id: issueId, companyId, title: "Coordinate", status: "in_progress", assigneeAgentId: agentId,
+      responsibleUserId, conversationAgentId: conversation ? agentId : null, conversationUserId: conversation ? responsibleUserId : null,
+      conversationState: conversation ? "active" : null });
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, responsibleUserId, status: "running", runtimeMode: "native",
+      nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId, responsibleUserId,
+      requireExisting: false }, blenteraPlatformContractHashes());
     const enqueueWakeup = vi.fn().mockResolvedValue(null);
     const binding = { companyId, agentId, issueId, runId, enqueueWakeup };
     return { companyId, agentId, issueId, runId, binding, enqueueWakeup, authority: new PaperclipRunnerToolAuthority(db, binding) };
@@ -40,8 +50,14 @@ describe("runner backlog task creation", () => {
     await expect(f.authority.execute({ ...call, callId: "retry" })).resolves.toEqual(receipt);
 
     const replacement = randomUUID();
-    await db.insert(heartbeatRuns).values({ id: replacement, companyId: f.companyId, agentId: f.agentId, status: "running", runtimeMode: "native", nativeIssueId: f.issueId, invocationSource: "assignment", triggerDetail: "system" });
+    const [currentRun] = await db.select({ responsibleUserId: heartbeatRuns.responsibleUserId })
+      .from(heartbeatRuns).where(eq(heartbeatRuns.id, f.runId));
+    await db.insert(heartbeatRuns).values({ id: replacement, companyId: f.companyId, agentId: f.agentId,
+      responsibleUserId: currentRun!.responsibleUserId, status: "running", runtimeMode: "native", nativeIssueId: f.issueId,
+      invocationSource: "assignment", triggerDetail: "system" });
     await db.update(issues).set({ executionRunId: replacement }).where(eq(issues.id, f.issueId));
+    await preparePlatformSkillAdmission(db, { companyId: f.companyId, agentId: f.agentId, runId: replacement,
+      responsibleUserId: currentRun!.responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
     await expect(new PaperclipRunnerToolAuthority(db, { ...f.binding, runId: replacement }).execute(call)).resolves.toMatchObject({ task: { id: task!.id, status: "backlog" }, scheduledWakeIds: [] });
     expect(f.enqueueWakeup).not.toHaveBeenCalled();
     const events = await db.select().from(activityLog).where(and(eq(activityLog.entityId, task!.id), eq(activityLog.action, "issue.created")));

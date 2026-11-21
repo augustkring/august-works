@@ -1,0 +1,174 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > refuses an agent assigning an issue to a paused agent
+[issue-assignee fixture error] {"name":"TypeError","frames":["    at canActorReadIssuePrivacy (/workspace/v10-dep-qualification/server/src/services/authorization.ts:1151:35)","    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:19)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16"]}
+
+stderr | src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > refuses an agent creating a child issue assigned to a paused agent
+[issue-assignee fixture error] {"name":"TypeError","frames":["    at canActorReadIssuePrivacy (/workspace/v10-dep-qualification/server/src/services/authorization.ts:1151:35)","    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:19)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16"]}
+
+stderr | src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > still allows an agent to assign to an invokable agent
+[issue-assignee fixture error] {"name":"TypeError","frames":["    at canActorReadIssuePrivacy (/workspace/v10-dep-qualification/server/src/services/authorization.ts:1151:35)","    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:19)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16"]}
+
+stderr | src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > allows a board user to assign to a paused agent deliberately
+[issue-assignee fixture error] {"name":"Error","frames":["    at notFound (/workspace/v10-dep-qualification/server/src/errors.ts:25:10)","    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:86)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16"]}
+
+stderr | src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > refuses an agent child assigned to the creator of an open ancestor
+[issue-assignee fixture error] {"name":"TypeError","frames":["    at canActorReadIssuePrivacy (/workspace/v10-dep-qualification/server/src/services/authorization.ts:1151:35)","    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:19)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16"]}
+
+stderr | src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > allows the same child when no open ancestor was created by the assignee
+[issue-assignee fixture error] {"name":"TypeError","frames":["    at canActorReadIssuePrivacy (/workspace/v10-dep-qualification/server/src/services/authorization.ts:1151:35)","    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:19)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16"]}
+
+stderr | src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > does not consult the guard for board actors
+[issue-assignee fixture error] {"name":"Error","frames":["    at notFound (/workspace/v10-dep-qualification/server/src/errors.ts:25:10)","    at assertPublicTaskWriteAdmission (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3583:86)","    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)","    at /workspace/v10-dep-qualification/server/src/routes/issues.ts:3612:16"]}
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts (7 tests | 7 failed) 97ms
+     × refuses an agent assigning an issue to a paused agent 64ms
+     × refuses an agent creating a child issue assigned to a paused agent 7ms
+     × still allows an agent to assign to an invokable agent 5ms
+     × allows a board user to assign to a paused agent deliberately 6ms
+     × refuses an agent child assigned to the creator of an open ancestor 5ms
+     × allows the same child when no open ancestor was created by the assignee 4ms
+     × does not consult the guard for board actors 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > refuses an agent assigning an issue to a paused agent
+AssertionError: {"error":"Internal server error"}: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:234:50
+    232|       .send({ assigneeAgentId: PAUSED_AGENT_ID });
+    233|
+    234|     expect(res.status, JSON.stringify(res.body)).toBe(409);
+       |                                                  ^
+    235|     expect(res.body.error).toContain("paused agent");
+    236|     expect(mockIssueService.update).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > refuses an agent creating a child issue assigned to a paused agent
+AssertionError: {"error":"Internal server error"}: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:251:50
+    249|       });
+    250|
+    251|     expect(res.status, JSON.stringify(res.body)).toBe(409);
+       |                                                  ^
+    252|     expect(res.body.error).toContain("paused agent");
+    253|     expect(mockIssueService.createChild).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > still allows an agent to assign to an invokable agent
+AssertionError: {"error":"Internal server error"}: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:267:50
+    265|       .send({ assigneeAgentId: IDLE_AGENT_ID });
+    266|
+    267|     expect(res.status, JSON.stringify(res.body)).toBe(200);
+       |                                                  ^
+    268|     expect(mockIssueService.update).toHaveBeenCalled();
+    269|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > issue assignee invokability guard > allows a board user to assign to a paused agent deliberately
+AssertionError: {"error":"Issue not found"}: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:281:50
+    279|       .send({ assigneeAgentId: PAUSED_AGENT_ID });
+    280|
+    281|     expect(res.status, JSON.stringify(res.body)).toBe(200);
+       |                                                  ^
+    282|     expect(mockIssueService.update).toHaveBeenCalled();
+    283|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > refuses an agent child assigned to the creator of an open ancestor
+AssertionError: {"error":"Internal server error"}: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:314:50
+    312|       });
+    313|
+    314|     expect(res.status, JSON.stringify(res.body)).toBe(409);
+       |                                                  ^
+    315|     expect(res.body.error).toContain("Delegation cycle");
+    316|     expect(res.body.details).toMatchObject({ code: "delegation_cycle" …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > allows the same child when no open ancestor was created by the assignee
+AssertionError: {"error":"Internal server error"}: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:337:50
+    335|       });
+    336|
+    337|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+       |                                                  ^
+    338|     expect(mockIssueService.createChild).toHaveBeenCalled();
+    339|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > does not consult the guard for board actors
+AssertionError: {"error":"Issue not found"}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:357:50
+    355|       });
+    356|
+    357|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+       |                                                  ^
+    358|     expect(mockIssueService.findOpenAncestorCreatedByAgent).not.toHave…
+    359|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed (7)
+   Start at  03:49:09
+   Duration  12.05s (transform 8.59s, setup 67ms, import 11.77s, tests 97ms, environment 0ms)
+

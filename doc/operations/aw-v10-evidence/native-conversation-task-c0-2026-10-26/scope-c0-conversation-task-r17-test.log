@@ -1,0 +1,24 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > continues the real conversation after a metric tool result with its original immutable source receipt
+ ↓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates one private Project from a current conversation dispatch and carries its exact result into the next request
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed_create_task_callback_test_facts {"turnIdPresent":true,"nativeToolCallCallbackPresent":true,"managedResultCallbackPresent":true}
+
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed_create_task_result_callback_invoked {"turnIdPresent":true}
+
+stderr | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+managed_create_task_run_receipt_test_facts {"runPresent":true,"sourceAuthorityVersion":1,"receiptValid":true,"callCount":1,"resultDigestPresent":true,"invocationPresent":false,"invocationResultMatches":false,"invocationIssueMatches":false,"receiptCompanyMatches":true,"receiptRunMatches":true,"receiptAgentMatches":true,"receiptHumanMatches":true}
+
+[22:08:12] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"256ad460-0723-4139-836c-567f7432209a","failureCode":"setup_failed"}[39m
+ ✓ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request 38404ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 4 skipped (5)
+   Start at  22:07:21
+   Duration  58.35s (transform 11.10s, setup 137ms, import 15.41s, tests 42.67s, environment 0ms)
+

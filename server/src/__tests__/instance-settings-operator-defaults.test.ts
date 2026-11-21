@@ -13,7 +13,8 @@ function defaultsEnv(raw: string | undefined = DEFAULTS_RAW) {
 function stubDb(row: Record<string, unknown>) {
   const persistedSets: Array<Record<string, unknown>> = [];
   const db = {
-    select: () => ({ from: () => ({ where: () => Promise.resolve([row]) }) }),
+    select: () => ({ from: () => ({ where: () => Object.assign(Promise.resolve([row]), { for: () => Promise.resolve([row]) }) }) }),
+    transaction: async (run: (tx: Db) => Promise<unknown>) => run(db),
     insert: () => {
       throw new Error("unexpected insert in test");
     },

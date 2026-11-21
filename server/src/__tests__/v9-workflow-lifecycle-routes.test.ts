@@ -5,6 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  authUsers,
   companies,
   companyMemberships,
   createDb,
@@ -46,6 +47,7 @@ const describePg = support.supported ? describe.sequential : describe.skip;
 describePg("V9 native workflow lifecycle", () => {
   let db!: ReturnType<typeof createDb>;
   let fixture: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
+  const routeErrors: Array<{ name: string; message: string; top: string[] }> = [];
   const local: Express.Request["actor"] = {
     type: "board",
     source: "local_implicit",
@@ -87,6 +89,14 @@ describePg("V9 native workflow lifecycle", () => {
       next();
     });
     app.use("/api", workflowRoutes(db));
+    app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (err instanceof Error) routeErrors.push({
+        name: err.name,
+        message: err.message,
+        top: (err.stack ?? "").split("\n").slice(0, 7),
+      });
+      errorHandler(err, req, res, next);
+    });
     app.use(errorHandler);
     return request(app);
   }
@@ -179,7 +189,7 @@ describePg("V9 native workflow lifecycle", () => {
   }
   const launchPath = (detail: WorkflowDetail, principal = "local-board") =>
     `/api/companies/${detail.companyId}/workflows/${detail.id}/experience/launch?expectedUserId=${principal}`;
-  async function queue(detail: WorkflowDetail) {
+  async function queue(detail: WorkflowDetail, responsibleUserId: string | null = null) {
     return db.transaction((tx) =>
       enqueueWorkflowRunInTransaction(tx as unknown as typeof db, {
         companyId: detail.companyId,
@@ -188,12 +198,17 @@ describePg("V9 native workflow lifecycle", () => {
         nodeId: "start",
         source: "manual",
         triggerPayload: {},
-        responsibleUserId: null,
+        responsibleUserId,
         idempotencyKey: randomUUID(),
         correlationId: randomUUID(),
-        actor: native,
+        actor: responsibleUserId ? { principal: { type: "user" as const, userId: responsibleUserId } } : native,
       }),
     );
+  }
+  async function seedHuman(userId: string) {
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow source owner", email: `${userId}@fixture.invalid`,
+      emailVerified: true, createdAt: now, updatedAt: now });
   }
   function stopCommand(
     detail: WorkflowDetail,
@@ -549,10 +564,8 @@ describePg("V9 native workflow lifecycle", () => {
     expect(await stops()).toHaveLength(1);
   });
   it("rechecks current run grants and membership before original stop reconciliation", async () => {
-    const detail = await seed(),
-      queued = await queue(detail),
-      input = stopCommand(detail, queued.run),
-      userId = randomUUID();
+    const detail = await seed(), userId = randomUUID();
+    await seedHuman(userId);
     await db.insert(companyMemberships).values({
       companyId: detail.companyId,
       principalType: "user",
@@ -566,6 +579,7 @@ describePg("V9 native workflow lifecycle", () => {
       principalId: userId,
       permissionKey: "workflows:read",
     });
+    const queued = await queue(detail, userId), input = stopCommand(detail, queued.run);
     const actor: Express.Request["actor"] = {
       type: "board",
       source: "session",
@@ -688,10 +702,8 @@ describePg("V9 native workflow lifecycle", () => {
     expect(await stops()).toHaveLength(1);
   });
   it("rechecks actual native admin role evidence instead of a retained admin snapshot", async () => {
-    const detail = await seed(),
-      queued = await queue(detail),
-      input = stopCommand(detail, queued.run),
-      userId = randomUUID();
+    const detail = await seed(), userId = randomUUID();
+    await seedHuman(userId);
     await db.insert(companyMemberships).values({
       companyId: detail.companyId,
       principalType: "user",
@@ -707,6 +719,7 @@ describePg("V9 native workflow lifecycle", () => {
         permissionKey,
       })),
     );
+    const queued = await queue(detail, userId), input = stopCommand(detail, queued.run);
     const actor: Express.Request["actor"] = {
       type: "board",
       source: "session",
@@ -957,6 +970,7 @@ describePg("V9 native workflow lifecycle", () => {
     ).toHaveLength(1);
   });
   it("admits one immutable native run and reconciles its original receipt after Pause", async () => {
+    routeErrors.length = 0;
     const detail = await seed(),
       input = launchCommand(detail);
     const revisionBefore = await db
@@ -967,7 +981,8 @@ describePg("V9 native workflow lifecycle", () => {
       http().post(launchPath(detail)).send(input),
       http().post(launchPath(detail)).send(input),
     ]);
-    for (const response of responses) expect(response.status).toBe(200);
+    for (const response of responses)
+      expect(response.status, JSON.stringify({ body: response.body, routeErrors })).toBe(200);
     expect(responses[0].body).toEqual(responses[1].body);
     expect(responses[0].body).toMatchObject({
       disposition: "admitted",

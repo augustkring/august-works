@@ -1,0 +1,55 @@
+{
+  "purpose": "RECOVERY ONLY; not application activation or qualification",
+  "capturedAtUtc": "2026-11-01T16:42:26.941258+00:00",
+  "mainHead": "b935bfadd81c27ef1f8e5b33b08eaaf29ad285c5",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 36,
+  "archive": {
+    "path": "private-candidates.tar.gz",
+    "bytes": 172677,
+    "sha256": "afed98933148fd1e16ddc4ec2ae667b3025fe1a10374e0614efd5566f42d4944",
+    "verifiedEntries": 36
+  },
+  "host41Delta": {
+    "baseCheckpoint": "R63",
+    "baseHost37SourcePinsSha256": "6a77db9fccf5063c0ab8062ed483a160d6ca4015cd15093b6392da10e35a539c",
+    "candidateHost41SourcePinsSha256": "1718a8e49af416d9431653008ef12bfe3629091aed8493ba062aac409258b04e",
+    "pathCounts": {
+      "base": 102,
+      "candidate": 102,
+      "added": 0,
+      "deleted": 0,
+      "changed": 3
+    },
+    "added": [],
+    "deleted": [],
+    "changed": [
+      {
+        "path": "deploy/v6/host-agent/openshell.mjs",
+        "baseSha256": "bc059f585f6868eeb1a95aeacdc64c396db4d879785fe41e1f6395bc0f5f5393",
+        "candidateSha256": "d214458f0f454116ebb47f42bbe6fe9430a4db8da84638650d72d7206336ad99",
+        "bytes": 216757
+      },
+      {
+        "path": "deploy/v6/host-agent/openshell.test.mjs",
+        "baseSha256": "a694a0ad9935f94e702db6fceb88eadc4db99eaa771869c6c89538097cd74e2e",
+        "candidateSha256": "6543648569c4aea8bb3cec90a56b4137fbdfb3007670615b131029ffa7b6e7f7",
+        "bytes": 182169
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "baseSha256": "1fa40e6f995018ad653de5bc81908f691b707182508bacd66576a54d048b31c7",
+        "candidateSha256": "76c37832c22fc236545a8105704c89eadb7ce43ddc74ccba8461c597a5e579fd",
+        "bytes": 148144
+      }
+    ]
+  },
+  "references": {
+    "R63ManifestSha256": "9d8cd640119e90a95556e0bc929b8db4c5b9cd5708a20505611a22994c891d10",
+    "R63ArchiveSha256": "6eedd0b7c9ef49608512027c60a24d821b68f2aece91e203b4104a03338f8c11",
+    "R63Host37PinsSha256": "6a77db9fccf5063c0ab8062ed483a160d6ca4015cd15093b6392da10e35a539c",
+    "Host41RunnerSha256": "1baf01a1b152a43a42f8456e7f02b276b9a7fccaec436b0969b286a9d1ee86af",
+    "SourceInventoryFinal37AuditSha256": "29f70d989742c3af0306094ef11de928b1a9b4d4bc29008ab841f17fb539a451"
+  },
+  "qualificationStatus": "Recovery delta only. Host41 source pins and runner are frozen, but Host41 qualification output is active and excluded. Hosts38\u201340 are retained as compact status/restore plus report-only 19-row summaries; overall route qualification failed. No final aggregate qualification is claimed."
+}

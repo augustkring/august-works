@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v7-free-core.integration.test.ts (7 tests | 1 failed) 4851ms
+     × composes paid capacity over Free and returns to usable Free on cancellation without deleting state 157ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-free-core.integration.test.ts > V7 permanent Free Core and canonical capacity > composes paid capacity over Free and returns to usable Free on cancellation without deleting state
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/v7-free-core.integration.test.ts:349:129
+    347|       // and native shared Memory, without requiring any V7 rollout fl…
+    348|       const exported = await exportCompanyStateV7(db, actor, companyId…
+    349|       expect(JSON.parse(exported.files["memory/records.json"]!).record…
+       |                                                                                                                                 ^
+    350|       expect(exported.files["knowledge/revisions.json"]).toContain("Pe…
+    351|       expect(exported.files["foundation/documents.json"]).toContain(pr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  10:32:21
+   Duration  19.79s (transform 10.25s, setup 75ms, import 14.75s, tests 4.85s, environment 0ms)
+

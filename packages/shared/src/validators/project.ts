@@ -101,6 +101,7 @@ export const updateProjectWorkspaceSchema = z.object({
 export type UpdateProjectWorkspace = z.infer<typeof updateProjectWorkspaceSchema>;
 
 const projectFields = {
+  visibility: z.enum(["open", "private"]).optional().default("open"),
   /** @deprecated Use goalIds instead */
   goalId: z.string().guid().optional().nullable(),
   goalIds: z.array(z.string().guid()).optional(),
@@ -133,3 +134,12 @@ export const updateProjectSchema = objectWithoutDefaults(
 export type UpdateProject = z.infer<typeof updateProjectSchema>;
 
 export type ProjectExecutionWorkspacePolicy = z.infer<typeof projectExecutionWorkspacePolicySchema>;
+
+export const addProjectAccessMemberSchema = z.object({
+  subjectType: z.enum(["user", "agent"]),
+  subjectId: z.string().trim().min(1).max(255),
+}).strict().superRefine((value, ctx) => {
+  if (value.subjectType === "agent" && !z.string().uuid().safeParse(value.subjectId).success)
+    ctx.addIssue({ code: "custom", path: ["subjectId"], message: "Agent identity must be a UUID" });
+});
+export type AddProjectAccessMember = z.infer<typeof addProjectAccessMemberSchema>;

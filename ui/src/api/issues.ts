@@ -78,6 +78,28 @@ export type ResolveRecoveryActionResponse = {
   recoveryAction: IssueRecoveryAction;
 };
 
+export type WorkspaceReconstructionDescriptor = {
+  state: "available" | "unavailable";
+  reason: string | null;
+  sourceRunId: string | null;
+  currentOwnerAgentId: string | null;
+  destruction: {
+    state: "confirmed" | "unknown";
+    receiptHash: string | null;
+    bindingId: string | null;
+    cellId: string | null;
+    generation: string | null;
+  };
+  continuation: { available: boolean; mode: "fresh_bounded" | "unavailable"; stagingScope: "local_only"; reason: string | null };
+  sources: Array<{ attachmentId: string; filename: string; contentType: string; byteSize: number; sha256: string }>;
+};
+
+export type IssueRecoveryActionsResponse = {
+  active: IssueRecoveryAction | null;
+  actions: IssueRecoveryAction[];
+  workspaceReconstruction?: WorkspaceReconstructionDescriptor | null;
+};
+
 export type IssueListFilters = {
   attention?: "blocked";
   status?: string;
@@ -286,6 +308,8 @@ export function createIssuesApi(api: typeof defaultApi = defaultApi) {
       `/issues/${id}/recovery-actions/resolve`,
       data,
     ),
+  getRecoveryActions: (id: string) =>
+    api.get<IssueRecoveryActionsResponse>(`/issues/${id}/recovery-actions`),
   previewTreeControl: (id: string, data: PreviewIssueTreeControl) =>
     api.post<IssueTreeControlPreview>(
       `/issues/${id}/tree-control/preview`,

@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stdout | src/__tests__/planner-collapse-ordinary-probe.test.ts > measures ordinary private Task ACL before and after transaction local collapse settings
+PLANNER_OBSERVATION {"actor":"alice","mode":"baseline","queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf","sqlLength":193350,"params":27,"result":true,"elapsedMs":109.44263200000205,"settings":{"j":"8","f":"8"},"planningMs":74.379,"executionMs":13.906,"totalCost":7273504.22}
+
+stdout | src/__tests__/planner-collapse-ordinary-probe.test.ts > measures ordinary private Task ACL before and after transaction local collapse settings
+PLANNER_OBSERVATION {"actor":"alice","mode":"collapse1","queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf","sqlLength":193350,"params":27,"result":true,"elapsedMs":78.67567500000223,"settings":{"j":"1","f":"1"},"planningMs":49.625,"executionMs":6.445,"totalCost":7273505.25}
+
+stdout | src/__tests__/planner-collapse-ordinary-probe.test.ts > measures ordinary private Task ACL before and after transaction local collapse settings
+PLANNER_OBSERVATION {"actor":"alice","mode":"restored","queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf","sqlLength":193350,"params":27,"result":true,"elapsedMs":108.06306799999948,"settings":{"j":"8","f":"8"},"planningMs":56.639,"executionMs":5.617,"totalCost":7273504.22}
+
+stdout | src/__tests__/planner-collapse-ordinary-probe.test.ts > measures ordinary private Task ACL before and after transaction local collapse settings
+PLANNER_OBSERVATION {"actor":"bob","mode":"baseline","queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf","sqlLength":193350,"params":27,"result":false,"elapsedMs":77.68899199999942,"settings":{"j":"8","f":"8"},"planningMs":55.377,"executionMs":6.026,"totalCost":7273504.22}
+
+stdout | src/__tests__/planner-collapse-ordinary-probe.test.ts > measures ordinary private Task ACL before and after transaction local collapse settings
+PLANNER_OBSERVATION {"actor":"bob","mode":"collapse1","queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf","sqlLength":193350,"params":27,"result":false,"elapsedMs":80.76384999999937,"settings":{"j":"1","f":"1"},"planningMs":57.127,"executionMs":6.434,"totalCost":7273505.25}
+
+stdout | src/__tests__/planner-collapse-ordinary-probe.test.ts > measures ordinary private Task ACL before and after transaction local collapse settings
+PLANNER_OBSERVATION {"actor":"bob","mode":"restored","queryHash":"f565645c9dc9ddda0cf2df607883b96384a53a55b6e17d239bf22e5f152acfbf","sqlLength":193350,"params":27,"result":false,"elapsedMs":83.63877799999682,"settings":{"j":"8","f":"8"},"planningMs":54.761,"executionMs":5.657,"totalCost":7273504.22}
+
+stdout | src/__tests__/planner-collapse-ordinary-probe.test.ts > measures ordinary private Task ACL before and after transaction local collapse settings
+PLANNER_RESTORED {"j":"8","f":"8"}
+
+ ✓ src/__tests__/planner-collapse-ordinary-probe.test.ts > measures ordinary private Task ACL before and after transaction local collapse settings 5720ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:18:00
+   Duration  19.90s (transform 9.90s, setup 73ms, import 13.99s, tests 5.72s, environment 0ms)
+

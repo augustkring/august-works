@@ -1,0 +1,98 @@
+{
+  "scope": "CE03 shared bilingual native verification/reset mail and existing public/legacy landing presentation; partial V10-166/167",
+  "sources": {
+    "packages/shared/src/auth-mail-copy.ts": "23dba75031e4d9f8d0ed0a877b19abc441768ac51329fd49ded5fa92041e311c",
+    "packages/shared/src/index.ts": "90b523d237cabf2ab91bff9f4f1c9c0bfdf437b0ca94235f476a847fdcc6c108",
+    "server/src/auth/better-auth.ts": "8ba0d5ba832b60e52fda9d1bb9da97f2eebc12152579e8a44818f5130e841e3b",
+    "server/src/services/saas/auth-delivery.ts": "5d585a8077ecaa2ff77bf502f141746b6c9f92a01bd723ac88af1316902a10fa",
+    "server/src/services/saas/auth-delivery.test.ts": "05f51ab4ab12f1ee3b0e5f06de361188afd725d4700f1f6250dd05a86eda1a28",
+    "server/src/__tests__/v6-saas-auth.integration.test.ts": "009d9855c3b173df8603fbbdd9c9d4854da1baf4b4484fa781ab86f9e4e21cdc",
+    "ui/src/api/auth.ts": "4b961f495f4b5fce4a60add503fd218f9feb0515565311cbfc834241ce74e815",
+    "ui/src/api/auth.test.ts": "3b4949f0e2243cf9a28ec935e3ac8ef9964262068cb0faa81b271ac3aea844ed",
+    "ui/src/api/saas.ts": "6e4042fd96d79554385be81645a2d30b46621523d0981d8823d0efbc4a132625",
+    "ui/src/api/saas-auth.test.ts": "4f4a9d2da6eec3b57515a072134ba20bad6f1411559d58e2b22e3c123dead355",
+    "ui/src/i18n/index.ts": "8edb0ca3c45c7a25ef46f9cb63f8fd3f9944be7aad27a900b2ffe355d583a4c4",
+    "ui/src/i18n/experience-locale-preference.ts": "8f2c154b64fb84a0edf14a744069aa30dce89deb327d6c3cfd3b3a39994555e4",
+    "ui/src/i18n/experience-locale-preference.test.ts": "ffefbc4b3aee0777e29b0279f305e8bea71c1ff27ab9cc3a94360e6c623e9b44",
+    "ui/src/i18n/experience/en.json": "36ebe49c4c92facadc6b04156b6c2e3ba9fe5003dc98394d0f8c0eb14e79d748",
+    "ui/src/i18n/experience/da.json": "2f133a4404ced12e0994561ac40df741e83cb9140aeae26f75714cb58dbe9283",
+    "ui/src/pages/Activation.tsx": "0d358b4d29fd5c927a93f30f46b32a0d5aab761b4a2d1bda55cbffacea4c65af",
+    "ui/src/pages/SaasWelcome.tsx": "211b5479a6a16aeac9ac8f47aa75a083f15ff7185bae98133cd6e055a44a1d07",
+    "ui/src/pages/SaasWelcome.test.tsx": "44eff3763c72d12549b3e78b04f6bd05415c27bdfe775d9b650736f2b3ead2a3",
+    "ui/src/pages/SaasPasswordReset.tsx": "5c79466b136e36497626d6e500d2aa8969722137bfbcae8a9c4a6698935ad57d",
+    "ui/src/pages/SaasPasswordReset.test.tsx": "366c3961f38d0f6dd167c04bd2cad5a139542bb564e924a53a713506f81802b7"
+  },
+  "implementation": [
+    "Versioned shared EN/DA authMail copy registered in original UI i18n; structural parity checked. Original native encrypted outbox/URL validation/dedupe/expiry/security audit retained.",
+    "Actual callbacks forward initiating Request; valid callback user locale takes precedence over validated current UI header, otherwise English. No new user lookup inside precommit signup callback.",
+    "Fixed native callback destinations preserve same-origin expected-path query context such as legacy=1 and carry message locale. Original i18n initialization applies valid mail locale only on exact welcome/reset routes without overwriting saved choice.",
+    "Legacy welcome and reset expose original language selector, safe localized errors and preserved drafts. Existing Activation entry loading/errors localized. No onboarding rewrite."
+  ],
+  "verification": {
+    "genuineOriginalMailBaseline": {
+      "failed": 6,
+      "passed": 2,
+      "seconds": 14.5,
+      "log": "auth-mail-baseline.log",
+      "originalProductionCommit": "8a03eb137",
+      "failedTestSource": "auth-mail-baseline-test.txt.gz"
+    },
+    "finalNativeServer": {
+      "files": 3,
+      "passed": 30,
+      "seconds": 94.26,
+      "exit": 0,
+      "log": "auth-mail-final-server.log",
+      "scope": "actual HTTP/PG signup and reset decrypt Danish outbox copy and validate callback language; existing verification/session/cookie/single-use/reset lifecycle retained; bounded mocked delivery boundary negatives also exercised"
+    },
+    "initialUI": {
+      "files": 10,
+      "passed": 99,
+      "failed": 1,
+      "seconds": 104.73,
+      "log": "auth-mail-ui.log",
+      "failure": "New actual welcome test caught i18n wrapper in account-reset effect dependencies erasing the organization draft on language change. Root removed i18n dependency; original scope-only reset retained. Failed production/test source and pins archived."
+    },
+    "finalChangedWelcome": {
+      "files": 1,
+      "passed": 1,
+      "seconds": 43.22,
+      "exit": 0,
+      "log": "auth-mail-ui-reviewed.log"
+    },
+    "finalResetAndSelector": {
+      "files": 2,
+      "passed": 13,
+      "seconds": 52.72,
+      "exit": 0,
+      "log": "auth-mail-reset.log",
+      "scope": "After adding reset language selector, actual token and entered password remain through locale toggle, no write until submit; original reset recovery and selector suites retained."
+    },
+    "types": {
+      "shared": {
+        "exit": 0,
+        "log": "auth-mail-shared-types.log"
+      },
+      "server": {
+        "exit": 0,
+        "log": "auth-mail-server-types.log"
+      },
+      "ui": {
+        "exit": 0,
+        "log": "auth-mail-ui-types.log"
+      }
+    },
+    "tokenGates": {
+      "exit": 0,
+      "log": "auth-mail-final-token-gates.log"
+    },
+    "pinsMatch": true,
+    "processesClosed": true,
+    "counts": "Distinct runs overlap. Do not sum initial UI counts and reruns. Final reruns cover changed owners; other originally passed owners unchanged."
+  },
+  "limits": [
+    "Persisted account locale is not implemented yet; callback field precedence is boundary coverage, not proof of account preference persistence.",
+    "Mail request-to-encrypted-outbox and component/i18n coverage are not a deployed provider/browser/email-client journey or editorial/manual accessibility qualification.",
+    "Full CE03 invitation return-context/MFA/recovery/reauthentication/profile validation and complete V10/workspace/release gates remain open."
+  ]
+}

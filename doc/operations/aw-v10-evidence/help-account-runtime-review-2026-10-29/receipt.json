@@ -1,0 +1,113 @@
+{
+  "base": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "head": "4d6f5aec49a9bd90505b9d6b0a95458774a804ca",
+  "scope": "reviewed committed source only; no uncommitted SaaS deletion label/upload source hashed",
+  "assessment": {
+    "articlesRead": [
+      "docs/help/export-and-delete.md",
+      "docs/da/help/export-and-delete.md",
+      "docs/help/recovering-work.md",
+      "docs/da/help/recovering-work.md"
+    ],
+    "decisions": "Existing updated/no_change decisions retained; all align with source behavior and article claims. No content discrepancy found for the reviewed entries.",
+    "rationale": "Left the current review rationales unchanged."
+  },
+  "changedEntries": [
+    {
+      "source": "server/src/services/saas/account-deletion.ts",
+      "articleId": "export-and-delete",
+      "committedSourceSha256": "ddeacb2a914b0a6d3cbe40a5228910b979d702caaffef2b4b4a96765e38fd6ba",
+      "recordedSourceSha256": "ddeacb2a914b0a6d3cbe40a5228910b979d702caaffef2b4b4a96765e38fd6ba",
+      "decision": "updated",
+      "rationale": "Deletion verifies the account-selected native factor and may require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; password confirmation remains required when a password exists. The article directs readers to follow the sign-in and factor prompts and says SSO does not replace a required factor."
+    },
+    {
+      "source": "server/src/services/saas/account-deletion.ts",
+      "articleId": "export-and-delete-da",
+      "committedSourceSha256": "ddeacb2a914b0a6d3cbe40a5228910b979d702caaffef2b4b4a96765e38fd6ba",
+      "recordedSourceSha256": "ddeacb2a914b0a6d3cbe40a5228910b979d702caaffef2b4b4a96765e38fd6ba",
+      "decision": "updated",
+      "rationale": "Deletion verifies the account-selected native factor and may require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; password confirmation remains required when a password exists. The article directs readers to follow the sign-in and factor prompts and says SSO does not replace a required factor."
+    },
+    {
+      "source": "ui/src/pages/SaasAccount.tsx",
+      "articleId": "export-and-delete",
+      "committedSourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
+      "recordedSourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
+      "decision": "updated",
+      "rationale": "The page requires the current password when present and can also require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; phishing-resistant accounts use the passkey confirmation path. The article directs readers to follow any displayed sign-in and factor prompts and says SSO does not replace a required factor."
+    },
+    {
+      "source": "ui/src/pages/SaasAccount.tsx",
+      "articleId": "export-and-delete-da",
+      "committedSourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
+      "recordedSourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
+      "decision": "updated",
+      "rationale": "The page requires the current password when present and can also require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; phishing-resistant accounts use the passkey confirmation path. The article directs readers to follow any displayed sign-in and factor prompts and says SSO does not replace a required factor."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "recovering-work",
+      "committedSourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "recordedSourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "decision": "no_change",
+      "rationale": "The heartbeat path now preserves the remote-marker provenance pair when forwarding a process observation to cleanup. Recovery guidance still directs the user to the original run and to wait for its status update."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "recovering-work-da",
+      "committedSourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "recordedSourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "decision": "no_change",
+      "rationale": "Heartbeat now preserves the remote-marker provenance pair when forwarding a process observation to cleanup. Recovery guidance still directs the user to the original run and to wait for its status update."
+    },
+    {
+      "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
+      "articleId": "export-and-delete",
+      "committedSourceSha256": "0fa6958320ef6066b7d32ec75ad9001c93cf8888b71d1a796674f11a592ad941",
+      "recordedSourceSha256": "0fa6958320ef6066b7d32ec75ad9001c93cf8888b71d1a796674f11a592ad941",
+      "decision": "no_change",
+      "rationale": "Remote cleanup now also requires the exact successful signed session-start binding for the run, lease, runner, host/cell generation, manifest, and policy. The article accurately says cleanup waits for confirmed stop and storage removal, and excludes provider-held data."
+    },
+    {
+      "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
+      "articleId": "export-and-delete-da",
+      "committedSourceSha256": "0fa6958320ef6066b7d32ec75ad9001c93cf8888b71d1a796674f11a592ad941",
+      "recordedSourceSha256": "0fa6958320ef6066b7d32ec75ad9001c93cf8888b71d1a796674f11a592ad941",
+      "decision": "no_change",
+      "rationale": "Remote cleanup now also requires the exact successful signed session-start binding for the run, lease, runner, host/cell generation, manifest, and policy. The article accurately says cleanup waits for confirmed stop and storage removal, and excludes provider-held data."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "export-and-delete",
+      "committedSourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "recordedSourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "decision": "no_change",
+      "rationale": "Heartbeat forwards the remote-marker provenance pair into cleanup, which continues to require current Native run and lease identity. The article promises only that managed cleanup waits for confirmed stop and storage removal."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "export-and-delete-da",
+      "committedSourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "recordedSourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "decision": "no_change",
+      "rationale": "Heartbeat forwards the remote-marker provenance pair into cleanup, which continues to require current Native run and lease identity. The article promises only that managed cleanup waits for confirmed stop and storage removal."
+    }
+  ],
+  "checker": {
+    "status": "passed",
+    "exit": "/workspace/v10-preparation/help-review-final-4d6-20261029.exit",
+    "evidence": "/workspace/v10-preparation/help-review-final-4d6-20261029.json",
+    "evidenceRows": 274,
+    "errors": 0
+  },
+  "docsCheck": {
+    "command": "pnpm run check:help-docs",
+    "status": "passed"
+  },
+  "tests": {
+    "command": "pnpm run test:help-docs",
+    "status": "passed",
+    "count": 14
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "kind": "dependency-recovery-not-product-acceptance",
+  "sourceHead": "225ac60de66ca64b7473d696ebd086f85a75b664",
+  "lockedPackages": {
+    "better-auth": {
+      "version": "1.7.7",
+      "path": "/tmp/blentera-dependency-recovery-20261028/node_modules.partial/.pnpm/better-auth@1.7.7_@opentelemetry+api@1.9.1_drizzle-kit@0.31.10_drizzle-orm@0.45.2_@openteleme_mnw32wihdvbtz3hygw6znjahkq/node_modules/better-auth",
+      "distSha256": "06c07fa93be0f2303aa4876f7012d91d223c0d458a01fea241cd05896017e49d"
+    },
+    "@better-auth/sso": {
+      "version": "1.7.7",
+      "path": "/tmp/blentera-dependency-recovery-20261028/node_modules.partial/.pnpm/@better-auth+sso@1.7.7_patch_hash=e4nv6g25xoxjl3vhv2we7zfwle_@better-auth+core@1.7.7_@better-_aqupqx7hc5gsl35girzdosuhue/node_modules/@better-auth/sso",
+      "distSha256": "16ad46d3afc8bc51e0c3a91ffbba6c052e828e1dc3080faa5acbfd7e86d49324"
+    },
+    "@better-auth/scim": {
+      "version": "1.7.7",
+      "path": "/tmp/blentera-dependency-recovery-20261028/node_modules.partial/.pnpm/@better-auth+scim@1.7.7_patch_hash=ht2xn7pvxano3x4prnft7mp5su_@better-auth+core@1.7.7_@better_zlse4xzp7mpthycy4yo7c2kmju/node_modules/@better-auth/scim",
+      "distSha256": "c016728f83f60ff9424f8dbbe6b6a8435111878189d3e728bc8cbe2c6601e85e"
+    }
+  },
+  "sourcePins": {
+    "package.json": "8c82ebd4e130eb4ab257294a5b1fdf5abfdbf44daa71335f91596367f72c1c32",
+    "pnpm-lock.yaml": "d0b5c3b2d522c6007c121da82b46bed3d5963e90d6e27d171a1ffd356fbbcd63",
+    "patches/@better-auth__sso@1.7.7.patch": "fba01b9e267ed50e00bf18af482402cea1be59d9bf53cd5371ab4038c645e597",
+    "patches/@better-auth__scim@1.7.7.patch": "e3541ffbb95d2a3a24249ed9df161e11bf81dab733a8732b9ecc27724140edb5"
+  },
+  "serverInstall": "frozen server dependency filter; exit 0",
+  "uiInstall": "frozen server and UI dependency filters; exit 0",
+  "installScripts": "Disabled globally. Reviewed official OpenCode postinstall ran separately; exit 0. Its installed executable matches the pinned SHA-256 and version.",
+  "opencodeVersion": "1.18.32",
+  "opencodeSha256": "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080",
+  "limits": "Dependency restoration only. No product tests or full workspace installation are claimed by this receipt."
+}

@@ -4,12 +4,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CircleStop, RefreshCw, RotateCcw, Workflow as WorkflowIcon } from "lucide-react";
 import type {
   WorkflowRunStatus,
+  WorkflowRunDetail,
+  WorkflowDetail,
   WorkflowStepRun,
   WorkflowStepRunStatus,
   WorkflowWait,
 } from "@paperclipai/shared";
 import { workflowsApi } from "@/api/workflows";
 import { useCompany } from "@/context/CompanyContext";
+import { useV9CurrentAccount, hasCurrentV9Session } from "@/hooks/useV9CurrentAccount";
+import { useTranslation } from "@/i18n";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { useNavigate, useParams } from "@/lib/router";
 import { queryKeys } from "@/lib/queryKeys";
@@ -92,8 +96,10 @@ function waitingLabel(
   return "Waiting";
 }
 
-function waitDescription(wait: WorkflowWait) {
+function waitDescription(wait: WorkflowWait, childWait: string) {
   switch (wait.kind) {
+    case "subworkflow":
+      return childWait;
     case "tool_action":
       return "Waiting for a reviewed connected action to be approved and completed.";
     case "delay":
@@ -163,13 +169,44 @@ function jsonPreview(value: unknown) {
   }
 }
 
+// Only original manual/Task requests can be replayed by this Human control.
+// Their data is already returned by the Source-checked run reader; no new key,
+// execution principal or child request is reconstructed here.
+function retainedWorkflowReplay(detail: WorkflowRunDetail | undefined, workflow: WorkflowDetail | undefined, userId: string | null, localImplicit = false) {
+  if (!detail) return null;
+  const run = detail.run, key = run.idempotencyKey;
+  if (!workflow || run.status !== "waiting" || !key || key !== key.trim() || key.length > 200 ||
+      (run.source !== "manual" && run.source !== "task") || run.triggerId || run.retryOfRunId || run.idempotencyRootRunId ||
+      run.executionAgentRunId ||
+      workflow.id !== run.workflowId || workflow.companyId !== run.companyId || workflow.status !== "active" ||
+      workflow.publishedRevisionId !== run.workflowRevisionId ||
+      detail.waits.find(wait => wait.status === "active")?.kind !== "subworkflow") return null;
+  const samePrincipal = localImplicit
+    ? userId === "local-board" && run.executionPrincipal?.type === "system" && run.executionPrincipal.service === "local-board" && !run.humanCoverageId
+    : run.executionPrincipal?.type === "user" && run.executionPrincipal.userId === userId;
+  if (!samePrincipal) return null;
+  if (!run.triggerPayload || typeof run.triggerPayload !== "object" || Array.isArray(run.triggerPayload)) return null;
+  const { task, ...taskInput } = run.triggerPayload;
+  const rawTaskId = task && typeof task === "object" && !Array.isArray(task) ? Reflect.get(task, "id") : null;
+  const taskId = typeof rawTaskId === "string" && rawTaskId.length > 0 ? rawTaskId : null;
+  if (run.source === "task" && !taskId) return null;
+  return { source: run.source, key, taskId, input: run.source === "task" ? taskInput : run.triggerPayload,
+    revisionId: run.workflowRevisionId, coverageId: run.humanCoverageId ?? null };
+}
+
 export function WorkflowRun() {
+  const { t } = useTranslation("experience");
+  const account = useV9CurrentAccount();
   const { selectedCompanyId } = useCompany();
   const { workflowId, runId } = useParams();
   const { setBreadcrumbs } = useBreadcrumbs();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const retryIdempotencyKeyRef = useRef<string | null>(null);
+  const continuationMounted = useRef(true);
+  useEffect(() => { continuationMounted.current = true; return () => { continuationMounted.current = false; }; }, []);
+  const continuationScope = useRef({ account, selectedCompanyId, workflowId, runId });
+  continuationScope.current = { account, selectedCompanyId, workflowId, runId };
 
   const runQuery = useQuery({
     queryKey: queryKeys.workflows.run(selectedCompanyId!, runId ?? ""),
@@ -230,6 +267,36 @@ export function WorkflowRun() {
     },
   });
 
+  const continueMutation = useMutation({
+    mutationFn: async (expected: { companyId: string; workflowId: string; runId: string;
+      userId: string; sessionId: string; epoch: number; localImplicit: boolean }) => {
+      const current = () => {
+        const scope = continuationScope.current;
+        return continuationMounted.current && scope.selectedCompanyId === expected.companyId && scope.workflowId === expected.workflowId && scope.runId === expected.runId &&
+          scope.account.settled && scope.account.localImplicit === expected.localImplicit && scope.account.userId === expected.userId &&
+          scope.account.sessionId === expected.sessionId && scope.account.authorityEpoch === expected.epoch &&
+          hasCurrentV9Session(queryClient, expected.userId, expected.sessionId, expected.localImplicit);
+      };
+      if (!current()) throw new Error("Current workflow continuation authority changed");
+      const original = queryClient.getQueryData<WorkflowRunDetail>(queryKeys.workflows.run(expected.companyId, expected.runId));
+      const workflow = queryClient.getQueryData<WorkflowDetail>(queryKeys.workflows.detail(expected.companyId, expected.workflowId));
+      const replay = retainedWorkflowReplay(original, workflow, expected.userId, expected.localImplicit);
+      if (!original || !replay || original.run.id !== expected.runId || original.run.companyId !== expected.companyId ||
+          original.run.workflowId !== expected.workflowId) throw new Error("Original workflow continuation is unavailable");
+      const input = { input: replay.input, revisionId: replay.revisionId };
+      const result = replay.source === "task"
+        ? await workflowsApi.startTaskRun(expected.companyId, replay.taskId!, expected.workflowId, input, replay.key, replay.coverageId)
+        : await workflowsApi.startRun(expected.companyId, expected.workflowId, input, replay.key, replay.coverageId);
+      if (!current() || result.run.id !== expected.runId || result.run.companyId !== expected.companyId ||
+          result.run.workflowId !== expected.workflowId || result.run.workflowRevisionId !== replay.revisionId ||
+          result.run.idempotencyKey !== replay.key || (result.run.humanCoverageId ?? null) !== replay.coverageId)
+        throw new Error("Original workflow continuation binding changed");
+      queryClient.setQueryData(queryKeys.workflows.run(expected.companyId, expected.runId), result);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workflows.runs(expected.companyId, expected.workflowId) });
+      // Keep the private result only in its original run query, not mutation data.
+    },
+  });
+
   useEffect(() => {
     setBreadcrumbs([
       { label: "Workflows", href: "/workflows" },
@@ -285,6 +352,9 @@ export function WorkflowRun() {
       ? waitingLabel(activeWait, activeStep?.status === "retry_scheduled")
       : runStatusLabel(run.status);
   const live = !TERMINAL_RUN_STATUSES.has(run.status);
+  const continuation = account.settled && account.userId && account.sessionId &&
+    hasCurrentV9Session(queryClient, account.userId, account.sessionId, account.localImplicit)
+    ? retainedWorkflowReplay(runQuery.data, workflowQuery.data, account.userId, account.localImplicit) : null;
 
   if (routeMismatch) {
     return (
@@ -328,7 +398,15 @@ export function WorkflowRun() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {continuation ? (
+              <Button variant="outline" size="sm" className="min-h-11" disabled={continueMutation.isPending}
+                onClick={() => continueMutation.mutate({ companyId: selectedCompanyId, workflowId: run.workflowId,
+                  runId: run.id, userId: account.userId!, sessionId: account.sessionId!, epoch: account.authorityEpoch, localImplicit: account.localImplicit })}>
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                {t(continueMutation.isPending ? "workflowRunContinuing" : "workflowRunContinue")}
+              </Button>
+            ) : null}
             {run.source !== "test" && (run.status === "failed" || run.status === "cancelled") ? (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -445,6 +523,12 @@ export function WorkflowRun() {
           {live ? `Run status: ${runStatusText}` : `Final run status: ${runStatusText}`}
         </div>
 
+        {continueMutation.isError ? (
+          <div role="alert" className="mt-5 border-l-2 border-destructive pl-4">
+            <p>{t("workflowRunContinueFailed")}</p>
+          </div>
+        ) : null}
+
         {cancelMutation.isError ? (
           <div role="alert" className="mt-5 border-l-2 border-destructive pl-4">
             <p className="font-medium">Run cancellation could not be requested</p>
@@ -480,7 +564,7 @@ export function WorkflowRun() {
             {activeWait && activeWait.nodeId === activeStep.nodeId ? (
               <div className="mt-2 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  {waitDescription(activeWait)}
+                  {waitDescription(activeWait, t("workflowRunChildWait"))}
                 </p>
                 {activeWait.kind === "tool_action" && <WorkflowToolReview companyId={selectedCompanyId!} runId={runId!} attemptId={activeStep.id} nodeId={activeWait.nodeId} />}
                 {activeWait.kind === "human_interaction" &&
@@ -613,7 +697,7 @@ export function WorkflowRun() {
                     {step.status === "waiting" ? (
                       <p className="mt-3 text-xs text-muted-foreground">
                         {stepWait
-                          ? waitDescription(stepWait)
+                          ? waitDescription(stepWait, t("workflowRunChildWait"))
                           : "Waiting for a durable workflow signal."}
                       </p>
                     ) : null}

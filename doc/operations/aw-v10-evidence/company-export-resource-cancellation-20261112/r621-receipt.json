@@ -1,0 +1,168 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.826391999988118,
+      "filesAdvised": 398004,
+      "memoryAfter": 6723809280,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "bafea5850649c61ca27cbe7f37c1f0182382e11d0a38cd14e288f9b9d4fd4649",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/__tests__/resource-governance.integration.test.ts"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 4.748100764118135e-05,
+  "sourceManifest": "company-export-resource-upgrade-r621-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 59.971752771991305,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 2432614400,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 822972,
+      "parentPid": 822948,
+      "executable": "node",
+      "rssBytes": 1049583616,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 822948,
+      "parentPid": 822896,
+      "executable": "node",
+      "rssBytes": 844763136,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 823106,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 149979136
+    },
+    {
+      "pid": 823091,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 116076544
+    },
+    {
+      "pid": 823123,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 66887680
+    },
+    {
+      "pid": 823097,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 53116928
+    },
+    {
+      "pid": 823105,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 41291776
+    },
+    {
+      "pid": 823062,
+      "parentPid": 822972,
+      "executable": "postgres",
+      "rssBytes": 24588288
+    },
+    {
+      "pid": 823122,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 20418560
+    },
+    {
+      "pid": 823063,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 13041664
+    },
+    {
+      "pid": 823066,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 11669504
+    },
+    {
+      "pid": 823069,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 8966144
+    },
+    {
+      "pid": 823070,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 7888896
+    },
+    {
+      "pid": 823071,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 7204864
+    },
+    {
+      "pid": 823067,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 6762496
+    },
+    {
+      "pid": 823064,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 5263360
+    },
+    {
+      "pid": 823065,
+      "parentPid": 823062,
+      "executable": "postgres",
+      "rssBytes": 5111808
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 21,
+  "observedPostgresRelatedPids": [
+    823049,
+    823059,
+    823062,
+    823063,
+    823064,
+    823065,
+    823066,
+    823067,
+    823069,
+    823070,
+    823071,
+    823074,
+    823091,
+    823097,
+    823105,
+    823106,
+    823122,
+    823123
+  ],
+  "uniqueTempRoot": "/var/tmp/mpg-vhfbpql9",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 242,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+}

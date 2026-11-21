@@ -48,6 +48,7 @@ import {
   type PackageInstallationView,
   type PackageRelease,
   type PackageInstallOptions,
+  FIRST_PARTY_SUPPORT_PACKAGE_KEY,
 } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { AuthorizationActor } from "../authorization.js";
@@ -61,6 +62,7 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { readinessService } from "../readiness/readiness-service.js";
 import { rolePackService } from "../role-packs.js";
@@ -119,6 +121,7 @@ export function agentPackageService(
     if (
       row.package.status !== "active" ||
       row.version.state !== "published" ||
+      row.version.release.manifest.audience === "first_party_support" ||
       packageReleaseBlockers(row.version.release).length
     )
       throw conflict(
@@ -263,6 +266,12 @@ export function agentPackageService(
     row: Installation,
     parentPublications: Parameters<typeof logActivity>[2],
   ) {
+    // The native activation hash and execution gate retain this accountable
+    // Human. A different administrator cannot borrow their source authority.
+    if (v7HumanActorId(actor) !== row.installedByUserId)
+      throw forbidden("Package activation requires its accountable Human", {
+        code: "package_accountable_human_required",
+      });
     const published = await release(tx, row.installedVersionId, true);
     available(published);
     const reasons: string[] = [],
@@ -469,7 +478,7 @@ export function agentPackageService(
       "qualified_managed"
     ) {
       const [qualified] = await tx.execute(
-        sql`select exists(select 1 from runtime_sandbox_bindings s join agent_presence_runtime_bindings r on r.company_id=s.company_id join runtime_cells c on c.company_id=s.company_id and c.id=s.runtime_cell_id and c.provider_binding_id=r.provider_binding_id where r.company_id=${row.companyId}::uuid and r.agent_id=${row.agentId}::uuid and s.status='ready' and s.cell_generation=c.generation::text) as current`,
+        sql`select exists(select 1 from runtime_sandbox_bindings s join agent_presence_runtime_bindings r on r.company_id=s.company_id join runtime_cells c on c.company_id=s.company_id and c.id=s.runtime_cell_id and c.provider_binding_id=r.provider_binding_id where r.company_id=${row.companyId}::uuid and r.agent_id=${row.agentId}::uuid and s.status in ('ready','running') and s.cell_generation=c.generation::text) as current`,
       );
       if (qualified?.current !== true)
         reasons.push("Current managed sandbox qualification is required");
@@ -485,14 +494,9 @@ export function agentPackageService(
           query: published.version.release.manifest.purpose,
         },
         {
-          actor: {
-            type: "board",
-            source:
-              actor.source === "local_implicit" ? "local_implicit" : "session",
-            userId: row.installedByUserId,
-          },
-          principalId: row.installedByUserId,
-          userId: row.installedByUserId,
+          actor,
+          principalId: v7HumanActorId(actor),
+          userId: actor.source === "local_implicit" ? null : actor.userId ?? null,
         },
         parentPublications,
         row.installedVersionId,
@@ -1243,7 +1247,9 @@ export function agentPackageService(
           and(
             eq(agentPackages.status, "active"),
             eq(agentPackageVersions.state, "published"),
-            audience ? sql`${agentPackageVersions.release}->'manifest'->>'audience'=${audience}` : undefined,
+            audience
+              ? sql`${agentPackageVersions.release}->'manifest'->>'audience'=${audience}`
+              : sql`${agentPackageVersions.release}->'manifest'->>'audience' in ('internal_test','customer')`,
           ),
         )
         .orderBy(agentPackages.key, desc(agentPackageVersions.createdAt))
@@ -1271,9 +1277,16 @@ export function agentPackageService(
         throw forbidden(
           "A configured first-party package publisher is required",
         );
+      await assertConfiguredOperatorAuthentication(db, actor, options.operatorUserIds);
       await assertV7Enabled(db, "agent_packages_v7");
       const input = packageReleaseSchema.parse(raw),
         blockers = packageReleaseBlockers(input);
+      if (
+        input.manifest.audience === "first_party_support" &&
+        (input.packageKey !== FIRST_PARTY_SUPPORT_PACKAGE_KEY ||
+          !options.sourceSha || input.manifest.sourceRevision !== options.sourceSha)
+      )
+        throw forbidden("First-party support release must use its fixed key and current server source pin");
       if (blockers.length) throw conflict(blockers.join("; "));
       for (const ref of Object.values(input.releaseEvidence).filter(
         (v) => v && typeof v === "object" && "uri" in v,
@@ -1290,6 +1303,12 @@ export function agentPackageService(
           );
       }
       return db.transaction(async (tx) => {
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds ?? [],
+          { requireRecent: true },
+        );
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtextextended(${`package:${input.packageKey}`},0))`,
         );
@@ -1350,6 +1369,14 @@ export function agentPackageService(
             audience: input.manifest.audience,
           },
         });
+        // Keep DB-clock recency valid through publication after lock waits
+        // and the component/audit writes in this transaction.
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds ?? [],
+          { requireRecent: true },
+        );
         return published!;
       });
     },
@@ -1358,6 +1385,12 @@ export function agentPackageService(
       if (!options.operatorUserIds?.includes(userId))
         throw forbidden("Configured publisher required");
       return db.transaction(async (tx) => {
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds ?? [],
+          { requireRecent: true },
+        );
         const row = await release(tx as unknown as Db, versionId, true);
         const [v] = await tx
           .update(agentPackageVersions)
@@ -1385,6 +1418,12 @@ export function agentPackageService(
           action: "agent_package.version_revoked",
           resourceId: versionId,
         });
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds ?? [],
+          { requireRecent: true },
+        );
         return v;
       });
     },

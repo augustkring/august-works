@@ -1,0 +1,63 @@
+18-bookworm: Pulling from library/postgres
+11422d7ca1a4: Pulling fs layer
+c521588a20e4: Pulling fs layer
+8ae674a5799d: Pulling fs layer
+5394b61f3adb: Pulling fs layer
+e548ddf2aec1: Pulling fs layer
+53caabbf07ef: Pulling fs layer
+5b7f9cdd3a5e: Pulling fs layer
+0eff413432fe: Pulling fs layer
+f3bbebe5f69a: Pulling fs layer
+7ccda48b8c8d: Pulling fs layer
+522fb5153653: Pulling fs layer
+666690849feb: Pulling fs layer
+c34d64930ea0: Pulling fs layer
+5b7f9cdd3a5e: Waiting
+0eff413432fe: Waiting
+f3bbebe5f69a: Waiting
+7ccda48b8c8d: Waiting
+522fb5153653: Waiting
+666690849feb: Waiting
+c34d64930ea0: Waiting
+5394b61f3adb: Waiting
+53caabbf07ef: Waiting
+e548ddf2aec1: Waiting
+c521588a20e4: Download complete
+8ae674a5799d: Verifying Checksum
+8ae674a5799d: Download complete
+5394b61f3adb: Download complete
+e548ddf2aec1: Verifying Checksum
+e548ddf2aec1: Download complete
+53caabbf07ef: Verifying Checksum
+53caabbf07ef: Download complete
+5b7f9cdd3a5e: Verifying Checksum
+5b7f9cdd3a5e: Download complete
+11422d7ca1a4: Verifying Checksum
+11422d7ca1a4: Download complete
+0eff413432fe: Verifying Checksum
+0eff413432fe: Download complete
+7ccda48b8c8d: Verifying Checksum
+7ccda48b8c8d: Download complete
+522fb5153653: Verifying Checksum
+522fb5153653: Download complete
+666690849feb: Download complete
+c34d64930ea0: Verifying Checksum
+c34d64930ea0: Download complete
+f3bbebe5f69a: Verifying Checksum
+f3bbebe5f69a: Download complete
+11422d7ca1a4: Pull complete
+c521588a20e4: Pull complete
+8ae674a5799d: Pull complete
+5394b61f3adb: Pull complete
+e548ddf2aec1: Pull complete
+53caabbf07ef: Pull complete
+5b7f9cdd3a5e: Pull complete
+0eff413432fe: Pull complete
+f3bbebe5f69a: Pull complete
+7ccda48b8c8d: Pull complete
+522fb5153653: Pull complete
+666690849feb: Pull complete
+c34d64930ea0: Pull complete
+Digest: sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc
+Status: Downloaded newer image for postgres:18-bookworm
+docker.io/library/postgres:18-bookworm

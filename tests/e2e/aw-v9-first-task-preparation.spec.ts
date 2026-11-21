@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { activationViewSchema, initialActivationState } from "../../packages/shared/src/activation.ts";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
@@ -61,5 +62,5 @@ test("prepares the reviewed first task only explicitly and recovers a lost ackno
     const runs = await json(await request.get(`${base}/heartbeat-runs`));expect(Array.isArray(runs) ? runs : runs.items).toEqual([]);
     expect(commands).toHaveLength(1);
     await page.screenshot({ path: info.outputPath("v9-first-task-prepared-mobile.png"), fullPage: true });
-  } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+  } finally { await json(await deleteCompany(request, company.id)); }
 });

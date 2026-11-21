@@ -1,0 +1,119 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[02:00:44] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+·[02:00:48] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[02:00:48] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[02:00:48] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"05449c52-dc4f-4e33-babb-123884f30e28","runId":"69273cba-311e-407d-8807-c2695ef1c2d7","agentId":"f49d1a49-d209-46df-8529-c24c8c636771","sourceIssueId":"56522b7e-d192-4849-a5f5-a25411fda1ee","targetIssueId":"277e29f6-fc53-4879-a778-ee1403878669","kind":"comment","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[02:00:50] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"05449c52-dc4f-4e33-babb-123884f30e28","runId":"69273cba-311e-407d-8807-c2695ef1c2d7","agentId":"f49d1a49-d209-46df-8529-c24c8c636771","sourceIssueId":"56522b7e-d192-4849-a5f5-a25411fda1ee","targetIssueId":"0e50474a-e8d3-47e9-bbe6-7d9b06c73c47","kind":"comment","count":2,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[02:00:50] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"05449c52-dc4f-4e33-babb-123884f30e28","agentId":"78793d60-fddb-4b24-a71f-77dfcca51a64","runId":"8e5bbad2-3507-4113-b4fc-f1f7fbaedd50","adapterType":"process"}[39m
+[02:00:50] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"05449c52-dc4f-4e33-babb-123884f30e28","agentId":"78793d60-fddb-4b24-a71f-77dfcca51a64","runId":"8e5bbad2-3507-4113-b4fc-f1f7fbaedd50"}[39m
+[02:00:50] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"8e5bbad2-3507-4113-b4fc-f1f7fbaedd50"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24648:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22353:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24645:15)
+    }
+[02:00:50] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"05449c52-dc4f-4e33-babb-123884f30e28","runId":"69273cba-311e-407d-8807-c2695ef1c2d7","agentId":"f49d1a49-d209-46df-8529-c24c8c636771","sourceIssueId":"56522b7e-d192-4849-a5f5-a25411fda1ee","targetIssueId":"17289413-fb59-4d3b-baad-5de05dcaab42","kind":"comment","count":3,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[02:00:51] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"05449c52-dc4f-4e33-babb-123884f30e28","agentId":"78793d60-fddb-4b24-a71f-77dfcca51a64","runId":"22105702-70a1-4338-bcb7-8b14eb6d8f0c","adapterType":"process"}[39m
+[02:00:51] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"05449c52-dc4f-4e33-babb-123884f30e28","agentId":"78793d60-fddb-4b24-a71f-77dfcca51a64","runId":"22105702-70a1-4338-bcb7-8b14eb6d8f0c"}[39m
+[02:00:51] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"22105702-70a1-4338-bcb7-8b14eb6d8f0c"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24648:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22353:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24645:15)
+    }
+[02:00:51] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"05449c52-dc4f-4e33-babb-123884f30e28","agentId":"78793d60-fddb-4b24-a71f-77dfcca51a64","runId":"ea71e33b-b9c7-40b2-8068-e08ffc584c6b","adapterType":"process"}[39m
+[02:00:51] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"05449c52-dc4f-4e33-babb-123884f30e28","agentId":"78793d60-fddb-4b24-a71f-77dfcca51a64","runId":"ea71e33b-b9c7-40b2-8068-e08ffc584c6b"}[39m
+[02:00:51] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"ea71e33b-b9c7-40b2-8068-e08ffc584c6b"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24648:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22353:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24645:15)
+    }
+[02:00:52] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"05449c52-dc4f-4e33-babb-123884f30e28","runId":"69273cba-311e-407d-8807-c2695ef1c2d7","agentId":"f49d1a49-d209-46df-8529-c24c8c636771","sourceIssueId":"56522b7e-d192-4849-a5f5-a25411fda1ee","targetIssueId":"277e29f6-fc53-4879-a778-ee1403878669","kind":"comment","count":4,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[02:00:53] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"05449c52-dc4f-4e33-babb-123884f30e28","runId":"69273cba-311e-407d-8807-c2695ef1c2d7","agentId":"f49d1a49-d209-46df-8529-c24c8c636771","sourceIssueId":"56522b7e-d192-4849-a5f5-a25411fda1ee","targetIssueId":"277e29f6-fc53-4879-a778-ee1403878669","kind":"comment","count":5,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[02:00:54] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[02:00:56] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"06181955-7b00-4b29-9573-195755f5afd2","agentId":"a4dbec5e-bfe2-45c8-8b07-756fd9c3b516","runId":"86849bad-f509-496a-958a-0d2c157f176a","adapterType":"process"}[39m
+[02:00:56] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"06181955-7b00-4b29-9573-195755f5afd2","agentId":"a4dbec5e-bfe2-45c8-8b07-756fd9c3b516","runId":"86849bad-f509-496a-958a-0d2c157f176a"}[39m
+[02:00:56] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"86849bad-f509-496a-958a-0d2c157f176a"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24648:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22353:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24645:15)
+    }
+[02:00:57] [32mINFO[39m: [36mclaimQueuedRun: cancelled stale queued run[39m [90m{"runId":"16b13bee-08e7-4238-938e-0fa52010e7ce","issueId":"6bc2f56c-e3bc-4c78-a542-4f5f77d55a3a","errorCode":"issue_terminal_status"}[39m
+[02:00:57] [32mINFO[39m: [36mclaimQueuedRun: cancelled stale queued run[39m [90m{"runId":"b2d1793e-3c8a-43e3-83df-ff28967c52dd","issueId":"6bc2f56c-e3bc-4c78-a542-4f5f77d55a3a","errorCode":"issue_terminal_status"}[39m
+[02:01:00] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"06181955-7b00-4b29-9573-195755f5afd2","agentId":"a4dbec5e-bfe2-45c8-8b07-756fd9c3b516","runId":"ad3a4584-fd74-4e2f-ae7f-520e3557f82b","adapterType":"process"}[39m
+[02:01:00] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"06181955-7b00-4b29-9573-195755f5afd2","agentId":"a4dbec5e-bfe2-45c8-8b07-756fd9c3b516","runId":"ad3a4584-fd74-4e2f-ae7f-520e3557f82b"}[39m
+[02:01:00] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"ad3a4584-fd74-4e2f-ae7f-520e3557f82b"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24648:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22353:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24645:15)
+    }
+·[02:01:02] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[02:01:03] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"f6e57d03-9c4d-467e-b758-c75fda12b4ae","issueId":"95cc119e-1869-4eeb-b2ae-53979061dd4d","companyId":"52a2c92d-e4e8-4c81-9d90-7b43823be5ef","commentId":"5c8c2ffd-b023-4575-b863-24f7d142f0ab","grantedAction":"issue:read","grant":"issue_mention_comment"}[39m
+[02:01:03] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"f6e57d03-9c4d-467e-b758-c75fda12b4ae","issueId":"95cc119e-1869-4eeb-b2ae-53979061dd4d","companyId":"52a2c92d-e4e8-4c81-9d90-7b43823be5ef","commentId":"5c8c2ffd-b023-4575-b863-24f7d142f0ab","grantedAction":"issue:comment","grant":"issue_mention_comment"}[39m
+[02:01:03] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"52a2c92d-e4e8-4c81-9d90-7b43823be5ef","runId":"9bad953c-9e87-4213-8dee-4af081b8836f","agentId":"f6e57d03-9c4d-467e-b758-c75fda12b4ae","sourceIssueId":"cec690e1-2f55-4525-9f41-e2a615b6e98a","targetIssueId":"95cc119e-1869-4eeb-b2ae-53979061dd4d","kind":"comment","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[02:01:03] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+·[02:01:04] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"52a2c92d-e4e8-4c81-9d90-7b43823be5ef","agentId":"16642945-c6ed-47ce-9aa1-48697f9a3574","runId":"d4363da4-9aa0-4af8-b016-c0c3bcec6827","adapterType":"process"}[39m
+[02:01:04] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"52a2c92d-e4e8-4c81-9d90-7b43823be5ef","agentId":"16642945-c6ed-47ce-9aa1-48697f9a3574","runId":"d4363da4-9aa0-4af8-b016-c0c3bcec6827"}[39m
+[02:01:04] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"d4363da4-9aa0-4af8-b016-c0c3bcec6827"}[39m
+    err: {
+      "type": "Error",
+      "message": "Process adapter missing command",
+      "stack":
+          Error: Process adapter missing command
+              at Object.execute (/workspace/v10-dep-qualification/server/src/adapters/process/execute.ts:20:23)
+              at /workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24648:34
+              at dispatchResolvedInteractionContinuationWithAtomicGate (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:22353:53)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:24645:15)
+    }
+·--[02:01:05] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[02:01:09] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+·[02:01:10] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[02:01:11] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+·[02:01:12] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[02:01:12] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[02:01:14] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[02:01:15] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"56e7bb81-a150-437e-b5be-f0b6053c56ee","agentId":"5b1d9617-a9c6-4806-9464-7f74d56e44eb","runId":"fc54c686-06d1-4db6-8ea9-e267d3ed132e"}[39m
+·[02:01:18] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+··
+
+ Test Files  1 passed (1)
+      Tests  9 passed | 2 skipped (11)
+   Start at  02:00:25
+   Duration  55.58s (transform 10.32s, setup 75ms, import 14.40s, tests 40.97s, environment 0ms)
+

@@ -1,0 +1,27 @@
+{
+  "observedUtc": "2026-11-12T00:06:38.641855+00:00",
+  "ownedProcesses": [
+    {
+      "pid": 823062,
+      "state": "Z",
+      "parentPid": 1
+    },
+    {
+      "pid": 823063,
+      "state": "absent"
+    },
+    {
+      "pid": 823064,
+      "state": "absent"
+    },
+    {
+      "pid": 823065,
+      "state": "absent"
+    },
+    {
+      "pid": 823066,
+      "state": "absent"
+    }
+  ],
+  "qualification": "Later read-only observation; original immediate cleanup receipt retained unchanged. Zombie is exited, unreaped by PID1; no post-run kill performed."
+}

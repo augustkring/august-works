@@ -1,0 +1,22 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > projects owned active Native health without errors, configuration or recovery effects
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > projects a shared grant reauthorization as one safe manager recovery action and withdraws it after repair
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > uses Original AI revoked-credential enrichment and withdraws the finding when its grant recovers
+ ✓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > uses the current native user for GitHub per-user reauthorization rather than another user's active grant 98ms
+ ✓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > projects the current personal grant's active refresh expiry and withdraws it after repair 69ms
+ ✓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > projects the current personal grant's GitHub access invalidation until the verified repository snapshot returns 59ms
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > uses the Original manager role/grant policy and denies viewer/admin bypass
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > lets a regular member review only their own fixed personal identity without gaining management authority
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > uses the Original fixed subject when a creator-less historical personal connection has retained grants
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > withdraws a personal recovery finding when its actual retained grant is restored
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > requires a verified account/current rollout and bounds the findings
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > withdraws a repaired connection after dashboard fan-out
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > withdraws findings when the native manager role is revoked after its first read
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 10 skipped (13)
+   Start at  12:09:44
+   Duration  20.59s (transform 10.53s, setup 79ms, import 15.02s, tests 5.36s, environment 0ms)
+

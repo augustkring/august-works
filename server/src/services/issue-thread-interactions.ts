@@ -1,4 +1,5 @@
 import { currentContinuationOrigins } from "./execution-continuation.js";
+import { activePlanCoveringTask } from "./orchestration/plan-coverage.js";
 import { assertAgentRunWriteAllowed } from "../agent-run-cancellation.js";
 import { assertConversationConnectionIntentCurrent } from "./conversation-connection-authority.js";
 import { connectionIntentDeliveries } from "@paperclipai/db";
@@ -9,6 +10,7 @@ import {
   asc,
   desc,
   eq,
+  getTableColumns,
   inArray,
   isNotNull,
   isNull,
@@ -17,6 +19,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import type { AuthorizationActor } from "./authorization.js";
 import {
   agents,
   authUsers,
@@ -137,6 +140,8 @@ export { extractGitHubPullRequestReferences } from "./github-pull-request-merge.
 export type { GitHubPullRequestReference } from "./github-pull-request-merge.js";
 
 type InteractionActor = {
+  /** Original authenticated request identity, never request-body metadata. */
+  requestActor?: AuthorizationActor;
   identityContextId?: string | null;
   agentId?: string | null;
   runId?: string | null;
@@ -345,10 +350,16 @@ type IssueWakeTarget = {
   workMode?: string;
 };
 
+/** MS1h14. An accepted Native completion review that did not complete its
+ * Task because an orchestration plan that is not finished covers the Task; the
+ * Task stays `in_review` for the plan's Human server verification. */
+type TaskCompletionHeld = { reason: "awaiting_plan_verification"; planId: string };
+
 type ResolvedInteractionResult = {
   interaction: IssueThreadInteraction;
   createdIssues: IssueWakeTarget[];
   continuationIssue?: IssueWakeTarget | null;
+  taskCompletionHeld?: TaskCompletionHeld | null;
 };
 
 type IssueThreadInteractionRow = typeof issueThreadInteractions.$inferSelect;
@@ -2024,7 +2035,7 @@ export function issueThreadInteractionService(
   }
 
   async function assertIssueWorkspaceFinalizedForAccept(args: {
-    db: Pick<Db, "select">;
+    db: Db;
     issue: { id: string; companyId: string };
     sourceRunId: string | null;
   }) {
@@ -2106,6 +2117,7 @@ export function issueThreadInteractionService(
   }): Promise<{
     interaction: IssueThreadInteraction;
     continuationIssue: IssueWakeTarget | null;
+    taskCompletionHeld: TaskCompletionHeld | null;
   }> {
     const expired = await expireStaleRequestConfirmationTarget(db, {
       row: args.current,
@@ -2225,6 +2237,7 @@ export function issueThreadInteractionService(
       );
 
       let continuationIssue: IssueWakeTarget | null = null;
+      let taskCompletionHeld: TaskCompletionHeld | null = null;
       const acceptedPlanTarget = readAcceptedPlanConfirmationTarget(
         lockedCurrent.payload,
         issueContext.id,
@@ -2251,11 +2264,24 @@ export function issueThreadInteractionService(
           )).limit(1);
         // Each explicit reviewer must be able to answer independently. Completing
         // on the first answer would cancel the other pending decisions.
-        const completedIssue = otherPending.length > 0 || issueContext.status !== "in_review" ? null : await issueService(db).update(
+        const completionCandidate = otherPending.length === 0 && issueContext.status === "in_review";
+        // MS1h14. Under an orchestration plan that is not finished, a completion
+        // Reviewer Agent's accepted review is recorded but completes nothing: the
+        // Task stays in review for the plan's Human server verification
+        // (verification-service). A Human accept keeps its existing behaviour:
+        // the 0360 guard refuses `done` and the whole accept rolls back with
+        // 409 orchestration_completion_requires_server_verification.
+        const coveringPlanId = completionCandidate && args.actor.agentId
+          ? await activePlanCoveringTask(tx as unknown as Db, issueContext.companyId, issueContext.id)
+          : null;
+        if (coveringPlanId) taskCompletionHeld = { reason: "awaiting_plan_verification", planId: coveringPlanId };
+        const completedIssue = !completionCandidate || coveringPlanId ? null : await issueService(db).update(
           args.issue.id,
           {
             status: "done",
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2286,6 +2312,8 @@ export function issueThreadInteractionService(
             assigneeAgentId: lockedCurrent.createdByAgentId,
             assigneeUserId: null,
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2309,6 +2337,8 @@ export function issueThreadInteractionService(
           {
             workMode: "standard",
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2354,6 +2384,9 @@ export function issueThreadInteractionService(
             requestedResolverPolicy: lockedCurrent.requestedResolverPolicy,
             effectiveResolverPolicy: lockedCurrent.effectiveResolverPolicy,
             ...(args.actor.resolutionDetails ?? {}),
+            ...(taskCompletionHeld
+              ? { taskCompletion: taskCompletionHeld.reason, planId: taskCompletionHeld.planId }
+              : {}),
           },
         });
       }
@@ -2361,6 +2394,7 @@ export function issueThreadInteractionService(
       return {
         interaction: acceptedInteraction,
         continuationIssue,
+        taskCompletionHeld,
       };
     });
     for (const publication of postCommitActivityPublications)
@@ -2526,6 +2560,8 @@ export function issueThreadInteractionService(
             assigneeAgentId: issueContext.assigneeAgentId,
             assigneeUserId: null,
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2981,10 +3017,17 @@ export function issueThreadInteractionService(
         woken,
       };
     },
-    listForIssue: async (issueId: string) => {
+    listForIssue: async (issueId: string, options?: {
+      onSourceVersionSelected?: (interactionId: string, sourceVersion: string) => void;
+    }) => {
       const [rows, issueStatus] = await Promise.all([
         db
-          .select()
+          .select({
+            ...getTableColumns(issueThreadInteractions),
+            ...(options?.onSourceVersionSelected ? {
+              selectedSourceVersion: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text`,
+            } : {}),
+          })
           .from(issueThreadInteractions)
           .where(eq(issueThreadInteractions.issueId, issueId))
           .orderBy(
@@ -2998,8 +3041,11 @@ export function issueThreadInteractionService(
           .then((issueRows) => issueRows[0]?.status ?? null),
       ]);
 
-      return rows.map((row) =>
-        hydrateInteraction(
+      return rows.map(({ selectedSourceVersion, ...row }) => {
+        if (typeof selectedSourceVersion === "string") {
+          options?.onSourceVersionSelected?.(row.id, selectedSourceVersion);
+        }
+        return hydrateInteraction(
           issueStatus &&
             isTerminalIssueStatus(issueStatus) &&
             row.status === "pending"
@@ -3010,8 +3056,8 @@ export function issueThreadInteractionService(
                 resolvedAt: row.updatedAt,
               }
             : row,
-        ),
-      );
+        );
+      });
     },
 
     getById: async (interactionId: string) => {
@@ -3722,6 +3768,7 @@ export function issueThreadInteractionService(
           return {
             interaction: accepted.interaction,
             continuationIssue: accepted.continuationIssue,
+            taskCompletionHeld: accepted.taskCompletionHeld,
             createdIssues: [],
           };
         }
@@ -3741,6 +3788,7 @@ export function issueThreadInteractionService(
           return {
             interaction: accepted.interaction,
             continuationIssue: accepted.continuationIssue,
+            taskCompletionHeld: accepted.taskCompletionHeld,
             createdIssues: [],
           };
         }
@@ -3931,13 +3979,14 @@ export function issueThreadInteractionService(
             createdByUserId: actor.userId ?? null,
             originIdentityContextId: interaction.sourceIdentityContextId ?? null,
             originRunId: interaction.sourceRunId ?? null,
+            actorRunId: actor.runId ?? null,
             actorAgentId: actor.agentId ?? null,
             actorUserId: actor.userId ?? null,
           } as Parameters<ReturnType<typeof issueService>["createChild"]>[1];
           const owner = issueService(tx as unknown as Db);
           const createdIssue = task.placement === "company_backlog"
-            ? await owner.create(issue.companyId, { ...createInput, allowDuplicate: true, originKind: "manual", originId: `paperclip-suggested-task:${interaction.id}` })
-            : (await owner.createChild(parentIssueId, createInput)).issue;
+            ? await owner.create(issue.companyId, { ...createInput, allowDuplicate: true, originKind: "manual", originId: `paperclip-suggested-task:${interaction.id}` }, undefined, undefined, { privacyActor: actor.requestActor })
+            : (await owner.createChild(parentIssueId, createInput, { privacyActor: actor.requestActor })).issue;
           if (task.placement === "company_backlog") {
             if (createdIssue.id !== separateTaskIds.get(task.clientKey))
               throw conflict("The proposal's Original task identity changed");

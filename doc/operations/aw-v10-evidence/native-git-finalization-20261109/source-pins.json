@@ -1,0 +1,33 @@
+{
+  "parentCommit": "649211d3bb0185eced851355b39db7b36d7b638b",
+  "scope": "Final reviewed source and frozen dependency/journal inputs; invocation manifests identify the independently tested bytes.",
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "packages/db/src/migrations/meta/_journal.json": "a1c07a3d5293a29a66a97997b7fc75e126f838e91009826a5735ea41d35c17c3",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "d19631307eb28452cf2157106821c260593d4d77534a9449cb45733282a351ee",
+    "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts": "cb2abe0c3ed0c6e1a3a4ce4c555047753c0c59a39230c45917c5127dd4845299",
+    "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts": "798531b1d315f3b03c797b1001444cca380282c223274ab67346acb38edf74db",
+    "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts": "a0f84f357af79af740118f06f5506549e015ce9036568e92725ec23783ee852e",
+    "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts": "f6b48cc67f1a0f36a4a7766e054d255f56896ab5d12022ab7bd215858b9b608b",
+    "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts": "d8cc25681f72506d6f657f8d7865301a3ce3ba456020072e7ceaeb381aa19f09",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "b0f9c7ad25d6881cf2203b0b8d0e5a74bd1e50b1c44ad76eed198973c7932920",
+    "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts": "6a9d1fba007952b52e11858c3bf29543d418c44e9ae4a70a0733a9e3252a3dfa",
+    "server/src/__tests__/manual-task-payload-source.integration.test.ts": "625460e30b70a6be8512f5000c54a75632ec17fa2cbd6f46822bcc4e6e7cf924",
+    "server/src/__tests__/v7-model-reservations.integration.test.ts": "88e08894508afa4def09eb4d2c2b9cc35de4f423398a8df92bfa96c716aeca3e",
+    "server/src/services/context/context-engine-integration.test.ts": "8ca545e13c7c242d15e1758d8108d566eebfd11b3d454d64668d5dfddebae727",
+    "server/src/services/heartbeat.ts": "76e7e4756cfcb32b28962124053b47dbb5849bdbc23f1a5cb0eec6de5d37605b",
+    "server/src/services/issues.ts": "71dcd72d72e49c3de8ce4d4b6b23c52c7702510bdd35287907a5c0ce15fb003f",
+    "server/src/services/native-direct-input.ts": "6cddb4f80d6d8b4d108f56112ef48953ee5d15bd77f54d83c892f834f52604a8",
+    "server/src/services/native-execution-failure-log.test.ts": "42190e26f014420f1775e96e7cb27f3f18d360d6dbfbba69fcbff038a68f89c3",
+    "server/src/services/native-runtime/native-execution-input.test.ts": "0d3103e7186e76fd5b5ee34a62498fb50e4f2c285e9929d06e325fa7908b905f",
+    "server/src/services/native-runtime/native-execution-input.ts": "1e59e940a1842cb4e32a5dae264196093ef99746d2e21efcd7d636e5ee0a8bac",
+    "server/src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts": "3ac03ab958167625bb249c396eb1929db64de13134de83bd5d813f72a9ce284a",
+    "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts": "db663ba6c02b9b39bf975b757a60106824535d924dd42c94adb5d2dd11a5afaf"
+  },
+  "deletedSource": {
+    "path": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
+    "parentSha256": "2673d42e7616cfbb9b35ce0fa794f1ca4e0b5d34bd1288feb716aa08ed08dd01"
+  }
+}

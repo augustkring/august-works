@@ -114,4 +114,17 @@ describe("buildQueuedCommentQueueSnapshot entry permissions", () => {
     expect(queue.entries[0]?.canEdit).toBe(false);
     expect(queue.entries[0]?.canDiscard).toBe(false);
   });
+  it("projects a known queued Comment without transporting its internal payload proof", () => {
+    const metadata = { payloadSourceSnapshot: "User-authored metadata" };
+    const comment = { id: "comment-1", updatedAt: new Date(), authorUserId: "user-1", body: "Visible body", metadata,
+      payloadSourceProtocolVersion: 1, payloadSourceSnapshot: { internal: "Native-only source closure" } };
+    const queue = buildQueuedCommentQueueSnapshot({ ...baseFacts, actorType: "user", actorId: "user-1", comments: [comment] });
+    expect(queue.entries[0]!.comment.body).toBe("Visible body");
+    expect.soft(queue.entries[0]!.comment).not.toHaveProperty("payloadSourceProtocolVersion");
+    expect.soft(queue.entries[0]!.comment).not.toHaveProperty("payloadSourceSnapshot");
+    expect(queue.entries[0]!.comment.metadata).toEqual(metadata);
+    expect(comment.payloadSourceSnapshot).toEqual({ internal: "Native-only source closure" });
+    expect(queue.entries[0]!.canEdit).toBe(true);
+  });
+
 });

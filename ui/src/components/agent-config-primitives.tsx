@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { Children, cloneElement, isValidElement, useState, useRef, useEffect, useCallback, useId, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Tooltip,
   TooltipTrigger,
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { HelpCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "../lib/utils";
 import { AGENT_ROLE_LABELS } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 
 /* ---- Help text for (?) tooltips ---- */
 export const help: Record<string, string> = {
@@ -35,7 +37,7 @@ export const help: Record<string, string> = {
   dangerouslyBypassSandbox: "Run Codex without sandbox restrictions. Required for filesystem/network access.",
   search: "Enable Codex web search capability during runs.",
   fastMode: "Enable Codex Fast mode. This burns credits/tokens much faster and is supported on GPT-6, GPT-5.6, GPT-5.5, GPT-5.4, and manual Codex model IDs.",
-  workspaceStrategy: "How Paperclip should realize an execution workspace for this agent. Keep project_primary for normal cwd execution, or use git_worktree for issue-scoped isolated checkouts.",
+  workspaceStrategy: `How ${PRODUCT_IDENTITY.productName} should realize an execution workspace for this agent. Keep project_primary for normal cwd execution, or use git_worktree for issue-scoped isolated checkouts.`,
   workspaceBaseRef: "Base git ref used when creating a worktree branch. Leave blank to use the resolved workspace ref or HEAD.",
   workspaceBranchTemplate: "Template for naming derived branches. Supports {{issue.identifier}}, {{issue.title}}, {{agent.name}}, {{project.id}}, {{workspace.repoRef}}, and {{slug}}.",
   worktreeParentDir: "Directory where derived worktrees should be created. Absolute, ~-prefixed, and repo-relative paths are supported.",
@@ -48,8 +50,8 @@ export const help: Record<string, string> = {
   envVars: "Environment variables injected into the adapter process. Use plain values or secret references.",
   secretAccess:
     "Secrets this agent can reach. Env-var bindings are injected at run start; API-access bindings are fetched on demand via the run-bound agent API and never written to the environment.",
-  bootstrapPrompt: "Only sent when Paperclip starts a fresh session. Use this for stable setup guidance that should not be repeated on every heartbeat.",
-  payloadTemplateJson: "Optional JSON merged into remote adapter request payloads before Paperclip adds its standard wake and workspace fields.",
+  bootstrapPrompt: `Only sent when ${PRODUCT_IDENTITY.productName} starts a fresh session. Use this for stable setup guidance that should not be repeated on every heartbeat.`,
+  payloadTemplateJson: `Optional JSON merged into remote adapter request payloads before ${PRODUCT_IDENTITY.productName} adds its standard wake and workspace fields.`,
   webhookUrl: "The URL that receives POST requests when the agent is invoked.",
   heartbeatInterval: "Run this agent automatically on a timer. Useful for periodic tasks like checking for new work.",
   intervalSec: "Seconds between automatic heartbeat invocations.",
@@ -72,12 +74,15 @@ export const roleLabels = AGENT_ROLE_LABELS as Record<string, string>;
 
 /* ---- Primitive components ---- */
 
-export function HintIcon({ text }: { text: string }) {
+export function HintIcon({ text, label }: { text: string; label?: string }) {
+  const { t } = useTranslation("experience");
+  // Icon-only trigger: name it after the field it explains (WCAG 4.1.2).
+  const name = label ? t("controlLabels.hintAbout", { label }) : t("controlLabels.hint");
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className="inline-flex text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-          <HelpCircle className="h-3 w-3" />
+        <button type="button" aria-label={name} className="inline-flex text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+          <HelpCircle className="h-3 w-3" aria-hidden="true" />
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-xs">
@@ -87,14 +92,37 @@ export function HintIcon({ text }: { text: string }) {
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode; configSection?: import("../adapters/types").AdapterConfigSection }) {
+const NATIVE_FIELD_CONTROLS = new Set(["input", "select", "textarea"]);
+function isNativeFieldControl(child: React.ReactNode): child is ReactElement<{ id?: string }> {
+  return isValidElement(child) && typeof child.type === "string" && NATIVE_FIELD_CONTROLS.has(child.type);
+}
+
+/**
+ * Programmatically label the field's control (WCAG 1.3.1 / 4.1.2). Pass
+ * `htmlFor` when the control is nested; otherwise the single direct native
+ * input, select or textarea child receives the generated id.
+ */
+export function Field({ label, hint, htmlFor, children }: { label: string; hint?: string; htmlFor?: string; children: React.ReactNode; configSection?: import("../adapters/types").AdapterConfigSection }) {
+  const generatedId = useId();
+  let nativeControlCount = 0;
+  Children.forEach(children, (child) => { if (isNativeFieldControl(child)) nativeControlCount += 1; });
+  const labelDirectControl = !htmlFor && nativeControlCount === 1;
+  let existingControlId: string | undefined;
+  const content = labelDirectControl
+    ? Children.map(children, (child) => {
+      if (!isNativeFieldControl(child)) return child;
+      existingControlId = child.props.id;
+      return existingControlId ? child : cloneElement(child, { id: generatedId });
+    })
+    : children;
+  const controlId = htmlFor ?? (labelDirectControl ? existingControlId ?? generatedId : undefined);
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-1">
-        <label className="text-xs text-muted-foreground">{label}</label>
-        {hint && <HintIcon text={hint} />}
+        <label className="text-xs text-muted-foreground" htmlFor={controlId}>{label}</label>
+        {hint && <HintIcon text={hint} label={label} />}
       </div>
-      {children}
+      {content}
     </div>
   );
 }
@@ -112,17 +140,19 @@ export function ToggleField({
   onChange: (v: boolean) => void;
   toggleTestId?: string;
 }) {
+  const labelId = useId();
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        {hint && <HintIcon text={hint} />}
+        <span id={labelId} className="text-xs text-muted-foreground">{label}</span>
+        {hint && <HintIcon text={hint} label={label} />}
       </div>
       {/* Gallery feedback r3: was a hand-rolled h-5 w-9 pill with a bg-green-600
           track — the app's second switch implementation. Converged on the one
           canonical ToggleSwitch (status-green on-state), DESIGN.md principle 1. */}
       <ToggleSwitch
         data-testid={toggleTestId}
+        aria-labelledby={labelId}
         checked={checked}
         onCheckedChange={onChange}
       />
@@ -153,14 +183,16 @@ export function ToggleWithNumber({
   numberPrefix?: string;
   showNumber: boolean;
 }) {
+  const labelId = useId();
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{label}</span>
-          {hint && <HintIcon text={hint} />}
+          <span id={labelId} className="text-xs text-muted-foreground">{label}</span>
+          {hint && <HintIcon text={hint} label={label} />}
         </div>
         <ToggleSwitch
+          aria-labelledby={labelId}
           checked={checked}
           onCheckedChange={onCheckedChange}
         />
@@ -175,7 +207,7 @@ export function ToggleWithNumber({
             onChange={(e) => onNumberChange(Number(e.target.value))}
           />
           <span>{numberLabel}</span>
-          {numberHint && <HintIcon text={numberHint} />}
+          {numberHint && <HintIcon text={numberHint} label={numberLabel} />}
         </div>
       )}
     </div>
@@ -453,7 +485,7 @@ export function InlineField({ label, hint, children }: { label: string; hint?: s
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-1.5 shrink-0">
         <label className="text-xs text-muted-foreground">{label}</label>
-        {hint && <HintIcon text={hint} />}
+        {hint && <HintIcon text={hint} label={label} />}
       </div>
       <div className="w-24 ml-auto">{children}</div>
     </div>
