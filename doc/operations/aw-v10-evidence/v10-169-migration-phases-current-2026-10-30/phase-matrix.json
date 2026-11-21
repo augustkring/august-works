@@ -1474,7 +1474,7 @@
     },
     {
       "path": "server/src/services/authorization.ts",
-      "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f"
+      "sha256": "979f40a6e9973841427b0a3a925f3bbfded19e1bc89d7ea25b210c0c1f9b4d41"
     },
     {
       "path": "server/src/services/board-auth.ts",
