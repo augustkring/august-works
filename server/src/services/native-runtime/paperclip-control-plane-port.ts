@@ -24,7 +24,9 @@ import {
   validatePrpEvent,
   validatePrpStructuredRunResult,
 } from "../../vendor/paperclip-runner/index.js";
-import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
+import { appendHeartbeatRunEvent, type AppendHeartbeatRunEventInput } from "../heartbeat-run-events.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { publishChatPublicationCommitSignal } from "../chat-publication-reconciliation.js";
 import { nativeSha256 } from "./canonical.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
@@ -70,6 +72,50 @@ function assertTerminal(value: unknown): asserts value is PrpTerminalState {
   ) {
     throw new Error("native_terminal_schema_invalid");
   }
+}
+
+/**
+ * APR-E2E-29. Append one provider event after the current run payload source
+ * review, in the run-identity.ts lock order: company A+M shared > Task FOR
+ * SHARE > run FOR UPDATE, then the review and the append.
+ *
+ * The review locks the run FOR SHARE and the append then locks it FOR UPDATE.
+ * Taken in that order, the append upgraded a shared row lock while another
+ * transaction could hold its own shared lock on the same run and upgrade it
+ * too (an assigned MCP source check that captures the run identity), and
+ * PostgreSQL aborted one of them with 40P01. Taking the run FOR UPDATE before
+ * the review means the append never upgrades: it waits for such a
+ * transaction to finish, or that transaction waits for the append. The review
+ * and the append run unchanged; their later requests for the same keys and
+ * rows are granted at once.
+ */
+export async function appendSourceReviewedNativeRunEvent(
+  tx: Db,
+  binding: { companyId: string; issueId: string; runId: string },
+  input: AppendHeartbeatRunEventInput,
+  sourceReview: boolean,
+  markStage: (stage: string) => void = () => {},
+) {
+  let sourceAccessElapsedMs = 0;
+  if (sourceReview) {
+    markStage("transaction_source_access_check");
+    const sourceAccessStartedAt = Date.now();
+    await lockAnalyticalCompany(tx, binding.companyId, "read");
+    await lockMemoryPrivacy(tx, binding.companyId, "read");
+    await tx.select({ id: issues.id }).from(issues)
+      .where(and(eq(issues.companyId, binding.companyId), eq(issues.id, binding.issueId))).for("share");
+    await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, binding.companyId), eq(heartbeatRuns.id, binding.runId))).for("update");
+    // This performs a fresh mixed run+native-Task source review for every
+    // provider event; the exact current owner proof stays in this append
+    // transaction before any event can become durable.
+    await assertNativeAnalyticalRunPayloadAccess(tx, binding.companyId, binding.runId);
+    sourceAccessElapsedMs = Date.now() - sourceAccessStartedAt;
+  }
+  markStage("transaction_append_run_event");
+  const eventWriteStartedAt = Date.now();
+  const result = await appendHeartbeatRunEvent(tx, input);
+  return { result, sourceAccessElapsedMs, eventWriteElapsedMs: Date.now() - eventWriteStartedAt };
 }
 
 /** Production implementation of the runner package's deliberately narrow persistence port. */
@@ -274,18 +320,7 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
       const transactionStartedAt = Date.now();
       const persisted = await this.#serializeTransaction(() => this.#db.transaction(async rawTx => {
         const tx = rawTx as unknown as Db;
-        markDiagnosticStage("transaction_source_access_check");
-        if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId) {
-          const sourceAccessStartedAt = Date.now();
-          // This performs a fresh mixed run+native-Task source review for every
-          // provider event; the exact current owner proof stays in this append
-          // transaction before any event can become durable.
-          await assertNativeAnalyticalRunPayloadAccess(tx, this.#binding.companyId, this.#binding.runId);
-          sourceAccessElapsedMs = Date.now() - sourceAccessStartedAt;
-        }
-        markDiagnosticStage("transaction_append_run_event");
-        const eventWriteStartedAt = Date.now();
-        const result = await appendHeartbeatRunEvent(tx, {
+        const appended = await appendSourceReviewedNativeRunEvent(tx, this.#binding, {
           companyId: this.#binding.companyId,
           runId: this.#binding.runId,
           agentId: this.#binding.agentId,
@@ -300,10 +335,12 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
             protocolSchemaVersion: event.schemaVersion,
             canonicalPayload: event as unknown as Record<string, unknown>,
           },
-        });
-        eventWriteElapsedMs = Date.now() - eventWriteStartedAt;
+        }, event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId,
+        markDiagnosticStage);
+        sourceAccessElapsedMs = appended.sourceAccessElapsedMs;
+        eventWriteElapsedMs = appended.eventWriteElapsedMs;
         markDiagnosticStage("transaction_callback_return");
-        return result;
+        return appended.result;
       }));
       transactionElapsedMs = Date.now() - transactionStartedAt;
       markDiagnosticStage("after_db_commit");

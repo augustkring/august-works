@@ -457,6 +457,8 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * | Native finalization reconciler resume claim             | Task FOR UPDATE > run + coordinator FOR UPDATE (D5e)  |
  * | Hidden conformance backend check                        | company A+M shared > Task FOR SHARE > run FOR SHARE   |
  * |                                                         |   (D5e, D5f)                                          |
+ * | Provider event append after source review (control-     | company A+M shared > Task FOR SHARE > run FOR UPDATE, |
+ * |   plane port, appendSourceReviewedNativeRunEvent)       |   then the review (APR-E2E-29)                        |
  *
  * D5c. The sandbox exec checks used to lock the run and then the Task. Their
  * company locks are shared, so they overlap steering acceptance (also shared)
@@ -499,6 +501,13 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * any row. assertTaskExecutionContext's later requests for the same keys are
  * granted at once: a session that holds an advisory lock always gets it
  * again, even while other sessions wait for it.
+ *
+ * APR-E2E-29. The provider event append reviewed the run's payload sources
+ * (run FOR SHARE) and then appended (run FOR UPDATE). Another transaction on
+ * the same run that also holds a shared lock and then upgrades it (an assigned
+ * MCP source check that captures the run identity) closed a cycle with it.
+ * The append now locks the run FOR UPDATE, after the company keys and its
+ * Task, before the review, so it never upgrades a shared run lock.
  *
  * The run and Task orders differ between families, so the per-request path
  * takes only the run row and waits only before it holds any lock: it cannot
