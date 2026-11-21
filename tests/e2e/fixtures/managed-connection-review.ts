@@ -439,10 +439,15 @@ export async function withManagedConnectionReview(input: {
           return finish(false);
         }
         if (role === "resolution" && callIndex === 1) {
-          // APR-E2E-1: the deferred Human note reaches the resolution Run once.
+          // APR-E2E-1: the deferred Human note reaches the resolution Run. Its
+          // first frame is a fresh session (APR-E2E-20/21), so the full closed
+          // history carries the note as a message and as the latest-request
+          // objective, and the wake batch lists it; one-time delivery is
+          // proven by the resolution wake's wakeCommentIds and by no Run of
+          // its own (asserted in the case).
           const serialized = JSON.stringify(body.messages ?? []);
-          assert.equal(serialized.split(pendingNoteBody).length - 1, 1,
-            "The resolution Run's first model request carries the deferred Human note exactly once");
+          assert(serialized.includes(pendingNoteBody),
+            "The resolution Run's first model request carries the deferred Human note");
           resolutionSawNote = true;
         }
         if (role === "resolution" && callIndex === 1) {
