@@ -64,10 +64,14 @@ describeEmbeddedPostgres("governed tool decision: deferred Human note (routes + 
 
   afterEach(async () => {
     wakeCalls.length = 0;
+    // Cases that use the real wake owner start background heartbeat wakes and
+    // Runs. Await every in-flight wake and Run execution in this process before
+    // truncating, or the truncate deadlocks with their writes (40P01).
+    await heartbeatService(db).drainActiveRunExecutions();
     await db.delete(authSessions);
     await db.delete(authUsers);
     await db.execute(sql`TRUNCATE TABLE companies CASCADE`);
-  });
+  }, 90_000);
 
   afterAll(async () => {
     await db.$client.end();
@@ -272,15 +276,7 @@ describeEmbeddedPostgres("governed tool decision: deferred Human note (routes + 
     const runContext = (runs[0]?.contextSnapshot ?? context) as Record<string, any>;
     expect(runContext.wakeCommentIds).toEqual([commentId]);
     expect(runContext.interactionId).toBe(seeded.interactionId);
-    // The real wake owner starts this Run in the background. Let it finish
-    // before the teardown truncates the tables it still locks (40P01 in CI).
-    for (const run of runs) {
-      await vi.waitFor(async () => {
-        const settled = await realHeartbeat.getRun(run.id);
-        expect(settled?.status === "queued" || settled?.status === "running").toBe(false);
-      }, { timeout: 60_000, interval: 100 });
-    }
-  }, 90_000);
+  });
 
   it.each(["approved", "rejected"] as const)("returns the Task to todo when the governed card is %s through the gateway (APR-E2E-12)", async (decision) => {
     const seeded = await seed();
