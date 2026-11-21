@@ -180,7 +180,11 @@ async function handleServerRequestBody(
       // APR-E2E-26. Record the terminal call and its outcome as durable run
       // events, mirroring the OpenCode server driver. The gateway admits a
       // provider's later self-correction only for a rejection recorded here.
-      state.emit(
+      // A duplicate delivery of the same request records nothing again.
+      const terminalCallKey = `${state.runId}\u0000${turnId}\u0000${callId}`;
+      const firstDelivery = !state.recordedTerminalCalls.has(terminalCallKey);
+      if (firstDelivery) state.recordedTerminalCalls.add(terminalCallKey);
+      if (firstDelivery) state.emit(
         "item.started",
         {
           kind: "dynamicToolCall",
@@ -194,7 +198,7 @@ async function handleServerRequestBody(
         { turnId, itemId: callId },
       );
       const rejectTerminal = (message: string) => {
-        state.emit(
+        if (firstDelivery) state.emit(
           "item.completed",
           {
             kind: "dynamicToolCall",
@@ -239,7 +243,7 @@ async function handleServerRequestBody(
           "A different semantic result was already committed.",
         );
       }
-      state.emit(
+      if (firstDelivery) state.emit(
         "item.completed",
         {
           kind: "dynamicToolCall",

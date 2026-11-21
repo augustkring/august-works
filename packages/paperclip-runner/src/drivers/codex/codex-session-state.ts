@@ -114,6 +114,13 @@ export class CodexSessionState {
   resultFingerprint: string | null = null;
   resultCallId: string | null = null;
   resultTurnId: string | null = null;
+  /**
+   * APR-E2E-26. Terminal tool calls already recorded as run events, keyed by
+   * run, turn and call id. A duplicate delivery of the same provider request
+   * records nothing again, so each call keeps exactly one call event and at
+   * most one outcome event.
+   */
+  readonly recordedTerminalCalls = new Set<string>();
   turnStartPending = false;
   /**
    * Resolves once a pending turn/start settles, on the accepted path or on a
